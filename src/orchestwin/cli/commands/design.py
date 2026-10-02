@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import costs
+from orchestwin.cli.api import design as design_api
+from orchestwin.cli.api import sections as sections_api
+from orchestwin.cli.commands import sections as sections_command
 from orchestwin.cli.console import Choice
 from orchestwin.cli.errors import (
     INTERRUPTED_STATUS,
@@ -21,12 +24,14 @@ from orchestwin.cli.flows import (
     design_change,
     design_choice,
     design_generate,
+    design_recovery,
     design_state,
     previews,
     review,
 )
 
 if TYPE_CHECKING:
+    from orchestwin.cli.api.sections import Sections
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
     from orchestwin.cli.flows.design_state import Alternative, DesignState
@@ -39,7 +44,9 @@ CHOOSE: Final = "choose"
 CHANGE: Final = "change"
 REVIEW: Final = "review"
 APPROVE: Final = "approve"
-ACTIONS: Final = (SHOW, OPEN, CHOOSE, CHANGE, REVIEW, APPROVE)
+REGENERATE: Final = design_recovery.REGENERATE
+UPDATE: Final = design_recovery.UPDATE
+ACTIONS: Final = (SHOW, OPEN, CHOOSE, CHANGE, REVIEW, APPROVE, REGENERATE)
 WITH_VALUE: Final = frozenset({OPEN, CHOOSE, CHANGE})
 MOCKUPS: Final = "mockups"
 APPLY: Final = "apply"
@@ -97,7 +104,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     except CliError as error:
         if error.code != design_generate.CONTEXT_CHANGED:
             raise
-        console.error("design.errors.DESIGN_CONTEXT_CHANGED", **error.values)
+        report_changed(context, client, project, error)
         design_state.show_summary(context, design_state.read_state(client, project))
         return error.status
 
@@ -110,16 +117,26 @@ def perform(
     value: str | None,
     rules: Sequence[str],
 ) -> int:
-    if action == REVIEW:
-        return review.run_review(context, client, project)
     state = design_state.read_state(client, project)
     prices = design_generate.Prices(client)
+    if action == REVIEW:
+        recovery = design_recovery.read(client, project, state)
+        if recovery.action is not None:
+            design_recovery.explain(context, recovery, error=True)
+            return 1
+        return review.run_review(context, client, project)
     if action == SHOW:
         return show(context, client, project, state, prices)
     if action == OPEN:
         heading(context, state)
         return open_previews(context, project, state, value, prices)
     if blocked(context, state, prices):
+        return 1
+    recovery = design_recovery.read(client, project, state)
+    if action == REGENERATE:
+        return 0 if regenerate(context, client, project, state, prices, recovery) is not None else 1
+    if recovery.action is not None:
+        design_recovery.explain(context, recovery, error=True)
         return 1
     console = context.console
     if action == CHOOSE:
@@ -157,6 +174,10 @@ def show(
         console.say("design.show_running", names=running_names(context, state))
     modelless = prices.modelless(state)
     describe(context, client, project, state, everything=True, modelless=modelless)
+    recovery = design_recovery.read(client, project, state)
+    if recovery.action is not None:
+        design_recovery.explain(context, recovery)
+        return 0
     key = next_key(state, prices, modelless)
     if key is not None:
         console.say(key)
@@ -245,7 +266,7 @@ def guided(context: CommandContext, client: StudioClient, project: ProjectFolder
             except CliError as error:
                 if error.code != design_generate.CONTEXT_CHANGED:
                     raise
-                report(context, error)
+                report_changed(context, client, project, error)
             continue
         if kind == design_state.JOB_RUNNING:
             followed = True
@@ -254,13 +275,15 @@ def guided(context: CommandContext, client: StudioClient, project: ProjectFolder
             except CliError as error:
                 if error.code != design_generate.CONTEXT_CHANGED:
                     raise
-                report(context, error)
+                report_changed(context, client, project, error)
             else:
                 reveal = reveal or outcome.reveal
                 described = described or outcome.displayed
                 explained = explained or outcome.explained
             continue
+        recovery = design_recovery.read(client, project, state)
         priced = prices.shown()
+        subscription = prices.subscription()
         modelless = prices.modelless(state)
         try:
             if reveal and state.documents:
@@ -273,7 +296,10 @@ def guided(context: CommandContext, client: StudioClient, project: ProjectFolder
             else:
                 describe(context, client, project, state, everything=False, modelless=modelless)
                 described = True
-            options = menu(context, state, priced, modelless)
+            design_recovery.explain(context, recovery)
+            options = menu(
+                context, state, priced, modelless, subscription=subscription, recovery=recovery
+            )
             if len(options) == 1:
                 return 0
             console.write()
@@ -284,7 +310,10 @@ def guided(context: CommandContext, client: StudioClient, project: ProjectFolder
         except CliError as error:
             if not recoverable(error):
                 raise
-            report(context, error)
+            if error.code == design_generate.CONTEXT_CHANGED:
+                report_changed(context, client, project, error)
+            else:
+                report(context, error)
 
 
 def describe(
@@ -314,6 +343,21 @@ def act(
     prices: design_generate.Prices,
 ) -> bool:
     console = context.console
+    if key == REGENERATE:
+        recovery = design_recovery.read(client, project, state)
+        return regenerate(context, client, project, state, prices, recovery) or False
+    if key == UPDATE:
+        recovery = design_recovery.read(client, project, state)
+        if recovery.action == UPDATE and recovery.sections is not None:
+            sections_command.update(context, client, project, recovery.sections)
+        else:
+            design_recovery.explain(context, recovery)
+        return False
+    if key != OPEN:
+        recovery = design_recovery.read(client, project, state)
+        if recovery.action is not None:
+            design_recovery.explain(context, recovery, error=True)
+            return False
     if key == MOCKUPS:
         return design_generate.draw_missing(context, client, state, prices)
     if key == OPEN:
@@ -336,6 +380,38 @@ def act(
     elif key == APPLY:
         design_change.apply_pending(context, client, project, state)
     return False
+
+
+def regenerate(
+    context: CommandContext,
+    client: StudioClient,
+    project: ProjectFolder,
+    state: DesignState,
+    prices: design_generate.Prices,
+    recovery: design_recovery.Recovery,
+) -> bool | None:
+    blocker = design_recovery.regeneration_block(
+        recovery.sections, state
+    ) or design_recovery.pending_revision(client, state)
+    if blocker is not None:
+        design_recovery.explain(
+            context,
+            design_recovery.Recovery(recovery.sections, design_recovery.BLOCKED, blocker),
+            error=True,
+        )
+        return None
+    if prices.modelless(state):
+        context.console.say("design.no_model_regenerate")
+        return None
+    context.console.say("design.regenerate_explicit")
+    return design_generate.start_design(
+        context,
+        client,
+        project,
+        state,
+        prices,
+        route=design_api.regenerations_path(state.project_id),
+    )
 
 
 def continue_running(
@@ -368,7 +444,13 @@ def continue_running(
 
 
 def menu(
-    context: CommandContext, state: DesignState, priced: bool, modelless: bool = False
+    context: CommandContext,
+    state: DesignState,
+    priced: bool,
+    modelless: bool = False,
+    *,
+    subscription: bool = False,
+    recovery: design_recovery.Recovery | None = None,
 ) -> list[Choice]:
     text = context.text
     kind = state.kind
@@ -377,8 +459,36 @@ def menu(
     options: list[Choice] = []
     if state.generated and state.documents:
         options.append(Choice(OPEN, text("design.menu_open")))
+    if recovery is not None and recovery.action is not None:
+        if recovery.action == REGENERATE and not modelless:
+            operations = ["DESIGN_PROPOSAL"]
+            minutes = None
+            if state.generated:
+                operations.extend(["MOCKUP", "MOCKUP"])
+                minutes = (
+                    costs.ESTIMATES["DESIGN_PROPOSAL"].minutes + costs.ESTIMATES["MOCKUP"].minutes
+                )
+            label = with_estimate(
+                context,
+                priced,
+                text("design.menu_regenerate"),
+                operations,
+                minutes=minutes,
+                subscription=subscription,
+            )
+            options.append(Choice(REGENERATE, label))
+        elif recovery.action == UPDATE:
+            options.append(Choice(UPDATE, text("design.menu_update_sections")))
+        options.append(Choice(LEAVE, text("design.menu_leave")))
+        return options
     if waiting and state.choosable() and not modelless:
-        label = with_estimate(context, priced, text("design.menu_choose"), [review.REVIEW])
+        label = with_estimate(
+            context,
+            priced,
+            text("design.menu_choose"),
+            [review.REVIEW],
+            subscription=subscription,
+        )
         options.append(Choice(CHOOSE, label))
     missing = state.missing_mockups()
     if waiting and missing:
@@ -389,6 +499,7 @@ def menu(
             text("design.menu_mockups", codes=codes),
             ["MOCKUP"] * len(missing),
             minutes=costs.ESTIMATES["MOCKUP"].minutes,
+            subscription=subscription,
         )
         options.append(Choice(MOCKUPS, label))
     if state.pending_change is not None:
@@ -398,17 +509,31 @@ def menu(
         and design_change.unavailable(state) is None
     ):
         label = with_estimate(
-            context, priced, text("design.menu_change"), [design_change.ITERATION, review.REVIEW]
+            context,
+            priced,
+            text("design.menu_change"),
+            [design_change.ITERATION, review.REVIEW],
+            subscription=subscription,
         )
         options.append(Choice(CHANGE, label))
     if kind == design_state.CHOSEN:
         if state.review is None and reviewable:
-            label = with_estimate(context, priced, text("design.menu_review"), [review.REVIEW])
+            label = with_estimate(
+                context,
+                priced,
+                text("design.menu_review"),
+                [review.REVIEW],
+                subscription=subscription,
+            )
             options.append(Choice(REVIEW, label))
         options.append(Choice(APPROVE, text("design.menu_approve")))
         if state.choosable() and not modelless:
             label = with_estimate(
-                context, priced, text("design.menu_choose_other"), [review.REVIEW]
+                context,
+                priced,
+                text("design.menu_choose_other"),
+                [review.REVIEW],
+                subscription=subscription,
             )
             options.append(Choice(CHOOSE, label))
     options.append(Choice(LEAVE, text("design.menu_leave")))
@@ -422,10 +547,13 @@ def with_estimate(
     operations: Sequence[str],
     *,
     minutes: float | None = None,
+    subscription: bool = False,
 ) -> str:
-    if not priced:
+    if not priced and not subscription:
         return label
-    estimate = design_generate.estimate_text(context, operations, minutes=minutes)
+    estimate = design_generate.estimate_text(
+        context, operations, minutes=minutes, subscription=subscription
+    )
     return context.text("design.priced", label=label, estimate=estimate)
 
 
@@ -496,3 +624,29 @@ def report(context: CommandContext, error: CliError) -> None:
     from orchestwin.cli.main import report_error
 
     report_error(context.console, error, NAME)
+
+
+def report_changed(
+    context: CommandContext, client: StudioClient, project: ProjectFolder, error: CliError
+) -> None:
+    console = context.console
+    found = design_sections(client, project)
+    design = None if found is None else found.section(sections_api.DESIGN)
+    if found is None or design is None or not design.behind:
+        console.error("design.errors.DESIGN_CONTEXT_CHANGED", **error.values)
+    elif design.blocked is None:
+        console.error("design.behind")
+    else:
+        blocked = sections_command.blocked_text(
+            context,
+            design.stage,
+            sections_api.block_of(design.blocked),
+            design.blocked,
+            design.codes,
+            None,
+        )
+        console.error("design.behind_blocked", blocked=blocked)
+
+
+def design_sections(client: StudioClient, project: ProjectFolder) -> Sections | None:
+    return sections_api.sections(client, project.link().project_id)

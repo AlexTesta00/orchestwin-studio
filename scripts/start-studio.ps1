@@ -28,7 +28,7 @@ if ($hosted) {
     $providersConfig = [IO.Path]::GetFullPath($providersConfig)
     $providers = Get-Content -LiteralPath $providersConfig -Raw | ConvertFrom-Json
     $dotenv = Join-Path $repo '.env'
-    $keyNames = @($providers.providers | Where-Object { $_.kind -ne 'OPENAI_COMPATIBLE_LOCAL' } | ForEach-Object { [string]$_.api_key_env } | Sort-Object -Unique)
+    $keyNames = @($providers.providers | Where-Object { $_.kind -notin @('OPENAI_COMPATIBLE_LOCAL', 'CLAUDE_CODE_CLI') } | ForEach-Object { [string]$_.api_key_env } | Sort-Object -Unique)
     foreach ($name in $keyNames) {
         if ($name -cnotmatch '^ORCHESTWIN_[A-Z0-9_]{1,48}_API_KEY$') { throw 'The providers configuration names an invalid API key variable.' }
         if (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name, 'Process'))) { continue }

@@ -16,10 +16,21 @@ const messages = {
     },
     stepper: {
       label: "Steps",
+      sectionsLabel: "Sections",
       pending: "Waiting",
       approved: "Approved",
       decision: "Decision {n} of {max}",
       current: "Your turn",
+    },
+    sections: {
+      states: {
+        NOT_STARTED: "Waiting",
+        IN_PROGRESS: "Your turn",
+        FINE: "Up to date",
+        UPDATE_AVAILABLE: "Update available",
+        TO_UPDATE: "To update",
+      },
+      version: "v{n}",
     },
     stepHeader: {
       current: "Your turn",
@@ -31,7 +42,7 @@ const messages = {
       title: "The decision is yours",
       secondary: "Ask for changes",
       requestLabel: "What would you like to change?",
-      requestPlaceholder: "Leave a note for the assistant: it will prepare a new version.",
+      requestPlaceholder: "Write what you want to change…",
       cancel: "Cancel",
       send: "Send the request",
       busy: "Working on it…",
@@ -125,7 +136,7 @@ const messages = {
   home: {
     eyebrow: "Thesis · Agentic User-Centred Design",
     title: "An idea becomes an application. You decide at every step.",
-    lead: "OrchesTwin Studio orchestrates a team of AI agents across six governed steps: it proposes the team, builds synthetic users from your brief, writes the requirements, explores the design and hands you a design package to build with your own tools. Every step closes with your approval.",
+    lead: "OrchesTwin Studio orchestrates AI across six governed steps: it looks at the project from the perspectives it needs, builds synthetic users from your brief, writes the requirements, explores the design and hands you a dossier for building the application with your own tools. Every step closes with your approval.",
     enter: "Enter the Studio",
     twinsLink: "How twins work",
     rules: {
@@ -137,7 +148,7 @@ const messages = {
       two: {
         label: "Rule two",
         title: "A hypothesis stays a hypothesis until it is verified",
-        text: "The twins' opinions, the requirements and the critiques are proposals, never proof. They become decisions only when you approve them, and they are verified on the application you build from the package.",
+        text: "The twins' opinions, the requirements and the critiques are proposals, never proof. They become decisions only when you approve them, and they are verified on the application you build from the dossier.",
       },
     },
     twins: {
@@ -174,23 +185,23 @@ const messages = {
           text: "Describe your idea in two lines: the Studio asks the right questions and composes the brief.",
         },
         team: {
-          title: "Team",
-          text: "The agent roles for this project, with the mandatory ones flagged.",
+          title: "Perspectives",
+          text: "The competences through which your project is looked at: each one adds its considerations to the requirements and the design.",
         },
         twins: {
           title: "User Twin",
           text: "Up to eight synthetic users: goals, context, accessibility.",
         },
         requirements: {
-          title: "Requirements",
+          title: "Definition",
           text: "A readable baseline: what it must do, for whom, by which criteria.",
         },
         design: {
-          title: "Design",
+          title: "Design & Evaluation",
           text: "Alternatives with the twins' critiques, then a clickable model.",
         },
         package: {
-          title: "Package",
+          title: "Dossier",
           text: "Brief, twins, requirements and the chosen design in one folder, ready for your own tools.",
         },
       },
@@ -213,7 +224,7 @@ const messages = {
         },
         stepwise: {
           title: "Step by step",
-          text: "A visible sequence of six steps with their status. You act on the current step and reread the previous ones.",
+          text: "A visible sequence of six steps with their status. The first time you go through them in order; then each one becomes a section that you can reopen.",
         },
         plain: {
           title: "No jargon",
@@ -242,8 +253,8 @@ const messages = {
       },
     },
     closing: {
-      title: "Try the full path, from the brief to the design package",
-      text: "Six steps, one human gate for each, a package ready for your development tools.",
+      title: "Try the full path, from the brief to the dossier",
+      text: "Six steps, one human gate for each, a folder ready for your development tools.",
     },
     footer: {
       thesis: "OrchesTwin Studio · thesis in Agentic User-Centred Design",

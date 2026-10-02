@@ -29,6 +29,16 @@ def test_requirements_sources_are_exact_project_keys_and_links_are_codes():
     pattern = criteria["requirements"]["items"]["pattern"]
     assert re.fullmatch(pattern, "REQ-001")
     assert not re.fullmatch(pattern, "USR-001")
+    needs = schema["$defs"]["NeedDraft"]["properties"]
+    assert needs["sources"]["items"]["enum"] == list(sources)
+    assert re.fullmatch(needs["scenarios"]["items"]["pattern"], "SCN-001")
+    assert not re.fullmatch(needs["scenarios"]["items"]["pattern"], "NED-001")
+    assert re.fullmatch(fields["needs"]["items"]["pattern"], "NED-001")
+    assert not re.fullmatch(fields["needs"]["items"]["pattern"], "REQ-001")
+    scenarios = schema["$defs"]["ScenarioDraft"]["properties"]
+    assert scenarios["sources"]["items"]["enum"] == list(sources)
+    assert scenarios["context"]["maxLength"] == scenarios["goal"]["maxLength"] == 2000
+    assert scenarios["criticalities"]["items"]["maxLength"] == 2000
 
 
 def test_design_can_reference_only_approved_requirement_codes():

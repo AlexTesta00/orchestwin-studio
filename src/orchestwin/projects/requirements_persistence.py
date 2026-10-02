@@ -19,6 +19,8 @@ from orchestwin.projects.requirements import (
 from orchestwin.projects.requirements_application import (
     RequirementsVersionAppendStatus,
 )
+from orchestwin.projects.requirements_journeys import JourneyPhase, UserJourney
+from orchestwin.projects.requirements_needs import UserNeed
 from orchestwin.projects.requirements_primitives import (
     RequirementsContextKind,
     RequirementsContextReference,
@@ -49,7 +51,7 @@ from orchestwin.projects.requirements_revisions import (
     RequirementsSpecificationDiff,
 )
 from orchestwin.projects.requirements_specifications import (
-    REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION,
+    SUPPORTED_REQUIREMENTS_SPECIFICATION_SCHEMA_VERSIONS,
     RequirementsSpecification,
     RequirementsSpecificationVersion,
 )
@@ -438,7 +440,7 @@ def specification_version_to_record(
         "project_id": version.project_id,
         "version_number": version.version_number,
         "based_on_version_number": version.based_on_version_number,
-        "schema_version": REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION,
+        "schema_version": version.specification.schema_version,
         "content_hash": version.content_hash,
         "specification_snapshot": version.specification.to_snapshot(),
         "traceability_hash": traceability.content_hash,
@@ -458,7 +460,7 @@ def specification_version_from_record(
         label="requirements schema version",
     )
 
-    if schema_version != REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION:
+    if schema_version not in SUPPORTED_REQUIREMENTS_SPECIFICATION_SCHEMA_VERSIONS:
         raise ValueError("unsupported requirements specification schema")
 
     snapshot = _mapping(
@@ -466,6 +468,8 @@ def specification_version_from_record(
         label="requirements specification snapshot",
     )
     specification = specification_from_snapshot(snapshot)
+    if schema_version != specification.schema_version:
+        raise ValueError("requirements record and snapshot schema versions do not match")
     version = RequirementsSpecificationVersion(
         id=_uuid(_required(record, "id"), label="requirements version ID"),
         project_id=_uuid(
@@ -526,18 +530,24 @@ def specification_from_snapshot(
     payload: Mapping[str, object],
 ) -> RequirementsSpecification:
     """Reconstruct one complete canonical requirements specification."""
-    if (
-        _integer(
-            _required(payload, "schema_version"),
-            label="requirements snapshot schema version",
-        )
-        != REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION
-    ):
+    schema_version = _integer(
+        _required(payload, "schema_version"), label="requirements snapshot schema version"
+    )
+    if schema_version not in SUPPORTED_REQUIREMENTS_SPECIFICATION_SCHEMA_VERSIONS:
         raise ValueError("unsupported requirements specification snapshot")
 
     context = _mapping(_required(payload, "context"), label="requirements context")
     catalog = _mapping(_required(context, "catalog"), label="requirements catalog")
     specification = RequirementsSpecification(
+        journeys=tuple(
+            _journey_from_snapshot(item)
+            for item in _mapping_sequence(payload.get("journeys", ()), label="journeys collection")
+        ),
+        schema_version=schema_version,
+        needs=tuple(
+            _need_from_snapshot(item)
+            for item in _mapping_sequence(payload.get("needs", ()), label="needs collection")
+        ),
         project_id=_uuid(
             _required(payload, "project_id"),
             label="requirements project ID",
@@ -814,6 +824,7 @@ def _user_twin_reference_from_snapshot(
 
 def _requirement_from_snapshot(payload: Mapping[str, object]) -> Requirement:
     return Requirement(
+        need_ids=_uuid_sequence(payload.get("need_ids", ()), label="requirement need IDs"),
         id=_uuid(_required(payload, "id"), label="requirement ID"),
         code=_string(_required(payload, "code"), label="requirement code"),
         title=_string(_required(payload, "title"), label="requirement title"),
@@ -844,6 +855,7 @@ def _requirement_from_snapshot(payload: Mapping[str, object]) -> Requirement:
 
 def _user_story_from_snapshot(payload: Mapping[str, object]) -> UserStory:
     return UserStory(
+        need_ids=_uuid_sequence(payload.get("need_ids", ()), label="user-story need IDs"),
         id=_uuid(_required(payload, "id"), label="user-story ID"),
         code=_string(_required(payload, "code"), label="user-story code"),
         user_twin_reference=_user_twin_reference_from_snapshot(
@@ -891,6 +903,15 @@ def _criterion_from_snapshot(payload: Mapping[str, object]) -> AcceptanceCriteri
 
 def _scenario_from_snapshot(payload: Mapping[str, object]) -> UsageScenario:
     return UsageScenario(
+        context=_optional_string(payload.get("context"), label="scenario context"),
+        goal=_optional_string(payload.get("goal"), label="scenario goal"),
+        criticalities=_string_sequence(
+            payload.get("criticalities", ()), label="scenario criticalities"
+        ),
+        sources=tuple(
+            _source_from_snapshot(item)
+            for item in _mapping_sequence(payload.get("sources", ()), label="scenario sources")
+        ),
         id=_uuid(_required(payload, "id"), label="scenario ID"),
         code=_string(_required(payload, "code"), label="scenario code"),
         title=_string(_required(payload, "title"), label="scenario title"),
@@ -1023,6 +1044,10 @@ def _artifact_from_snapshot(
     kind: RequirementsArtifactKind,
     payload: Mapping[str, object],
 ):
+    if kind is RequirementsArtifactKind.JOURNEY:
+        return _journey_from_snapshot(payload)
+    if kind is RequirementsArtifactKind.NEED:
+        return _need_from_snapshot(payload)
     if kind is RequirementsArtifactKind.REQUIREMENT:
         return _requirement_from_snapshot(payload)
 
@@ -1039,6 +1064,55 @@ def _artifact_from_snapshot(
         return _risk_from_snapshot(payload)
 
     return _done_from_snapshot(payload)
+
+
+def _need_from_snapshot(payload: Mapping[str, object]) -> UserNeed:
+    return UserNeed(
+        id=_uuid(_required(payload, "id"), label="user-need ID"),
+        code=_string(_required(payload, "code"), label="user-need code"),
+        title=_string(_required(payload, "title"), label="user-need title"),
+        statement=_string(_required(payload, "statement"), label="user-need statement"),
+        scenario_ids=_uuid_sequence(
+            _required(payload, "scenario_ids"), label="user-need scenario IDs"
+        ),
+        sources=tuple(
+            _source_from_snapshot(item)
+            for item in _mapping_sequence(_required(payload, "sources"), label="user-need sources")
+        ),
+    )
+
+
+def _journey_phase_from_snapshot(payload: Mapping[str, object]) -> JourneyPhase:
+    return JourneyPhase(
+        title=_string(_required(payload, "title"), label="journey phase title"),
+        action=_string(_required(payload, "action"), label="journey phase action"),
+        touchpoint=_optional_string(
+            _required(payload, "touchpoint"), label="journey phase touchpoint"
+        ),
+        criticalities=_string_sequence(
+            _required(payload, "criticalities"), label="journey phase criticalities"
+        ),
+        need_ids=_uuid_sequence(_required(payload, "need_ids"), label="journey phase need IDs"),
+    )
+
+
+def _journey_from_snapshot(payload: Mapping[str, object]) -> UserJourney:
+    return UserJourney(
+        id=_uuid(_required(payload, "id"), label="user-journey ID"),
+        code=_string(_required(payload, "code"), label="user-journey code"),
+        title=_string(_required(payload, "title"), label="user-journey title"),
+        scenario_id=_uuid(_required(payload, "scenario_id"), label="user-journey scenario ID"),
+        phases=tuple(
+            _journey_phase_from_snapshot(item)
+            for item in _mapping_sequence(_required(payload, "phases"), label="user-journey phases")
+        ),
+        sources=tuple(
+            _source_from_snapshot(item)
+            for item in _mapping_sequence(
+                _required(payload, "sources"), label="user-journey sources"
+            )
+        ),
+    )
 
 
 def _owned_specification_select(

@@ -542,14 +542,24 @@ function emulateVisibility(): () => void {
   };
 }
 
-function mountBrief(api: ProjectWorkflowApi, locale: SupportedLocale = "en") {
+function mountBrief(
+  api: ProjectWorkflowApi,
+  locale: SupportedLocale = "en",
+  options: { sectionsMode?: boolean } = {},
+) {
   const authorize: AuthorizedRequest = <T>(
     operation: (accessToken: string) => Promise<T>,
   ): Promise<T> => operation("access-token");
 
   return mount(ProjectClarificationFlow, {
     attachTo: document.body,
-    props: { projectId: PROJECT_ID, currentBrief: REFERENCE, api, authorize },
+    props: {
+      projectId: PROJECT_ID,
+      currentBrief: REFERENCE,
+      api,
+      authorize,
+      ...(options.sectionsMode === undefined ? {} : { sectionsMode: options.sectionsMode }),
+    },
     global: { plugins: [createPinia(), createAppI18n(locale)] },
   });
 }
@@ -737,16 +747,70 @@ describe("ProjectClarificationFlow brief and decision", () => {
 
     const bar = wrapper.findComponent(UiDecisionBar);
     expect(bar.text()).toContain(
-      "Il brief è completo. Approvandolo, la squadra inizia a lavorare.",
+      "Il brief è completo. Approvandolo, potrai preparare le prospettive.",
     );
+    expect(bar.text()).not.toMatch(/squadra|team/i);
     expect(bar.get('[data-testid="decision-secondary"]').text()).toBe("Chiedi modifiche");
     await expectAccessible(wrapper.element);
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
     await bar.get('[data-testid="decision-primary"]').trigger("click");
     await flushPromises();
     expect(calls.order).toEqual(["APPROVE"]);
     expect(calls.decide).toEqual([["APPROVE", null]]);
     expect(wrapper.findComponent(UiDecisionBar).exists()).toBe(false);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
+
+  it("says in English that the perspectives follow the approval of a complete brief", async () => {
+    const { api } = decisionApi([], pendingGate("PENDING_APPROVAL"));
+    const wrapper = mountBrief(api, "en");
+    await flushPromises();
+
+    const bar = wrapper.findComponent(UiDecisionBar);
+    expect(bar.text()).toContain(
+      "The brief is complete. Once you approve it, you can prepare the perspectives.",
+    );
+    expect(bar.text()).not.toMatch(/team|assistant/i);
+  });
+
+  it("tells the page after each decision on a proposal that the sections may have changed", async () => {
+    const budget = proposal("budget-id", "budget", "Circa 5.000 euro.");
+    const risks = proposal("risks-id", "risks", "I volontari cambiano spesso.");
+    const { api, calls } = decisionApi([budget, risks], null);
+    const wrapper = mountBrief(api);
+    await flushPromises();
+
+    await wrapper.get('[data-testid="assumption-reject"]').trigger("click");
+    await flushPromises();
+    expect(calls.reject).toEqual([]);
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
+
+    await wrapper.get('[data-testid="assumption-accept"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+
+    await wrapper.get('[data-testid="assumption-reason"]').setValue("Lo decidiamo dopo.");
+    await wrapper.get('[data-testid="assumption-reject"]').trigger("click");
+    await flushPromises();
+    expect(calls.reject).toEqual([["risks-id", "Lo decidiamo dopo."]]);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(2);
+  });
+
+  it.each([
+    ["en", false, "This step is paused."],
+    ["en", true, "This section is paused."],
+    ["it", false, "Questo passo è in pausa."],
+    ["it", true, "Questa sezione è in pausa."],
+  ] as const)(
+    "names a paused brief in %s as a step or, in sections mode %s, as a section",
+    async (locale, sectionsMode, sentence) => {
+      const { api } = decisionApi([], pendingGate("PAUSED"));
+      const wrapper = mountBrief(api, locale, { sectionsMode });
+      await flushPromises();
+
+      expect(wrapper.get('[data-testid="brief-gate-text"]').text()).toBe(sentence);
+    },
+  );
 
   it("approves a brief still to prepare with one press: it prepares it and then approves it", async () => {
     let releaseSubmit!: () => void;

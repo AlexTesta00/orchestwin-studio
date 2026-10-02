@@ -25,6 +25,7 @@ from orchestwin.knowledge.documents import (
     design_markdown,
     index_markdown,
     mockups_markdown,
+    overview_lines,
     requirements_markdown,
     team_markdown,
     twin_markdown,
@@ -37,10 +38,13 @@ from orchestwin.knowledge.feedback import (
     feedback_summary,
 )
 from orchestwin.knowledge.layout import (
+    FEEDBACK_CHANGES,
     FEEDBACK_DISCUSSIONS,
     FEEDBACK_FOLDER,
     FEEDBACK_INSIGHTS,
+    FEEDBACK_LEARNING,
     FEEDBACK_REVIEWS,
+    FEEDBACK_TESTS,
     FEEDBACK_TEXT,
     KNOWLEDGE_FOLDER_KIND,
     KNOWLEDGE_INDEX,
@@ -48,14 +52,35 @@ from orchestwin.knowledge.layout import (
     KNOWLEDGE_SCHEMA_VERSION,
     STAGE_LABELS,
     STAGE_PAYLOAD_KEYS,
-    STAGES,
+    STATE_DOCUMENT,
+    STATE_TEXT,
     VIEW_STAGES,
     schema_document,
     stage_document,
     stage_text,
 )
+from orchestwin.knowledge.research_evidence import (
+    EVIDENCE_DOCUMENT,
+    EVIDENCE_TEXT,
+    evidence_markdown,
+)
+from orchestwin.knowledge.research_evidence import present as has_evidence
 from orchestwin.knowledge.schema import SCHEMA_NAMES, has_design_additions, schema_files
 from orchestwin.knowledge.sources import KnowledgeSources
+from orchestwin.knowledge.state_documents import (
+    acceptance_runs,
+    change_reviews_document,
+    development_lines,
+    learned_observations,
+    learning_document,
+    learning_lines,
+    stale_reviews,
+    state_document,
+    state_language,
+    state_markdown,
+    test_lines,
+    test_reviews_document,
+)
 from orchestwin.knowledge.tables import knowledge_tables
 from orchestwin.knowledge.twins import PortableTwin, portable_twins
 from orchestwin.models.output_language import dominant_language
@@ -67,6 +92,8 @@ DESIGN_MOCKUPS_TEXT: Final = "design/mockups.md"
 _ENTRY_DATE_TIME: Final = (1980, 1, 1, 0, 0, 0)
 _DERIVED_FILES: Final = frozenset({KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST})
 _REQUIREMENT_KINDS: Final = (
+    ("needs", "NEED"),
+    ("journeys", "JOURNEY"),
     ("requirements", "REQUIREMENT"),
     ("user_stories", "USER_STORY"),
     ("acceptance_criteria", "ACCEPTANCE_CRITERION"),
@@ -176,10 +203,33 @@ def project_language(specification: Mapping[str, object]) -> str | None:
     return dominant_language(texts)
 
 
+def brief_language(brief: Mapping[str, object]) -> str | None:
+    texts: list[str] = []
+    for value in brief["fields"].values():
+        if isinstance(value, str):
+            texts.append(value)
+        elif isinstance(value, list):
+            texts.extend(str(item) for item in value)
+    return dominant_language(texts)
+
+
+def folder_language(sources: KnowledgeSources) -> str | None:
+    language = None
+    if "requirements" in sources.present_stages:
+        language = project_language(sources.payload("requirements"))
+    return language or brief_language(sources.payload("brief"))
+
+
+def _design_payload(sources: KnowledgeSources) -> dict[str, object] | None:
+    return sources.payload("design") if "design" in sources.present_stages else None
+
+
 def folder_diagrams(sources: KnowledgeSources) -> tuple[Diagram, ...]:
+    if "requirements" not in sources.present_stages:
+        return ()
     return project_diagrams(
         specification=sources.payload("requirements"),
-        package=sources.payload("design"),
+        package=_design_payload(sources),
         system_name=sources.project_name,
         locale=DEFAULT_DIAGRAM_LOCALE,
     )
@@ -195,9 +245,13 @@ def _views(
     diagrams: Iterable[Diagram],
 ) -> str:
     return views_markdown(
-        tables=[_relative(path, stage.value) for path in tables if path.startswith(stage.value)],
+        tables=[
+            {"title": _table_title(path), "path": _relative(path, stage.value)}
+            for path in tables
+            if path.startswith(stage.value)
+        ],
         diagrams=[
-            {**diagram.to_snapshot(), "path": _relative(diagram.path, stage.value)}
+            {"title": diagram.title, "path": _relative(diagram.path, stage.value)}
             for diagram in diagrams
             if diagram.stage is stage
         ],
@@ -206,8 +260,10 @@ def _views(
 
 
 def identifiers(sources: KnowledgeSources) -> list[dict[str, object]]:
+    if "requirements" not in sources.present_stages:
+        return []
     specification = sources.payload("requirements")
-    package = sources.payload("design")
+    package = _design_payload(sources)
     entries: list[dict[str, object]] = []
 
     def add(stage: str, kind: str, item: Mapping[str, object], scope: str | None = None) -> None:
@@ -222,8 +278,10 @@ def identifiers(sources: KnowledgeSources) -> list[dict[str, object]]:
         )
 
     for key, kind in _REQUIREMENT_KINDS:
-        for item in specification[key]:
+        for item in specification.get(key, ()):
             add("requirements", kind, item)
+    if package is None:
+        return entries
     for alternative in package["alternatives"]:
         add("design", "DESIGN_ALTERNATIVE", alternative)
         for workflow in alternative["workflows"]:
@@ -244,38 +302,73 @@ def identifiers(sources: KnowledgeSources) -> list[dict[str, object]]:
     return entries
 
 
-def content_files(sources: KnowledgeSources) -> dict[str, str]:
+def _requirement_files(
+    sources: KnowledgeSources, package: Mapping[str, object] | None
+) -> dict[str, str]:
     specification = sources.payload("requirements")
-    package = sources.payload("design")
-    codes = code_index(specification)
     diagrams = folder_diagrams(sources)
     tables = knowledge_tables(specification=specification, package=package)
-    twins = portable_twins(sources)
     files = {
-        stage_text("brief"): brief_markdown(sources.brief, sources.brief_gate),
-        stage_text("team"): team_markdown(sources.team, sources.team_gate),
-        stage_text("twins"): twins_markdown(sources.modeling, sources.modeling_gate),
         stage_text("requirements"): requirements_markdown(
-            sources.requirements, sources.requirements_gate
+            sources.requirements, sources.requirements_gate, locale=folder_language(sources) or "en"
         )
         + _views(DiagramStage.REQUIREMENTS, tables, diagrams),
-        stage_text("design"): design_markdown(sources.design, sources.design_gate, codes)
-        + _views(DiagramStage.DESIGN, tables, diagrams),
-        DESIGN_CRITIQUES_TEXT: critiques_markdown(sources.design),
-        DESIGN_MOCKUPS_TEXT: mockups_markdown(sources.design),
-        MOCKUP_HTML_FILE: mockup_html(sources.design, language=project_language(specification)),
-        FEEDBACK_TEXT: feedback_markdown(sources),
     }
-    for stage in STAGES:
-        files[stage_document(stage)] = json_text(stage_document_payload(sources, stage))
-    for twin in twins:
-        files[twin.document_path] = json_text(twin.document)
-        files[twin.text_path] = twin_markdown(twin.document)
-    for path, document in feedback_documents(sources).items():
-        files[path] = json_text(document)
+    if package is not None:
+        files.update(
+            {
+                stage_text("design"): design_markdown(
+                    sources.design, sources.design_gate, code_index(specification)
+                )
+                + _views(DiagramStage.DESIGN, tables, diagrams),
+                DESIGN_CRITIQUES_TEXT: critiques_markdown(sources.design),
+                DESIGN_MOCKUPS_TEXT: mockups_markdown(sources.design),
+                MOCKUP_HTML_FILE: mockup_html(
+                    sources.design, language=project_language(specification)
+                ),
+                FEEDBACK_TEXT: feedback_markdown(sources),
+            }
+        )
+        for path, document in feedback_documents(sources).items():
+            files[path] = json_text(document)
     files.update(tables)
     files.update({diagram.path: diagram.source for diagram in diagrams})
-    files.update(schema_files(design_additions=has_design_additions(package)))
+    return files
+
+
+def content_files(sources: KnowledgeSources) -> dict[str, str]:
+    present = sources.present_stages
+    package = _design_payload(sources)
+    files = {
+        stage_text("brief"): brief_markdown(sources.brief, sources.brief_gate),
+        STATE_DOCUMENT: json_text(state_document(sources)),
+        STATE_TEXT: state_markdown(sources, language=folder_language(sources)),
+        FEEDBACK_CHANGES: json_text(change_reviews_document(sources)),
+        FEEDBACK_TESTS: json_text(test_reviews_document(sources)),
+    }
+    if "team" in present:
+        files[stage_text("team")] = team_markdown(sources.team, sources.team_gate)
+    if "twins" in present:
+        files[stage_text("twins")] = twins_markdown(
+            sources.modeling, sources.modeling_gate, language=folder_language(sources)
+        )
+        files[FEEDBACK_LEARNING] = json_text(learning_document(sources))
+    if "requirements" in present:
+        files.update(_requirement_files(sources, package))
+    for stage in present:
+        files[stage_document(stage)] = json_text(stage_document_payload(sources, stage))
+    for twin in portable_twins(sources):
+        files[twin.document_path] = json_text(twin.document)
+        files[twin.text_path] = twin_markdown(twin.document, language=folder_language(sources))
+    files.update(
+        schema_files(design_additions=package is not None and has_design_additions(package))
+    )
+    if has_evidence(sources.research_evidence):
+        files[EVIDENCE_DOCUMENT] = json_text(sources.research_evidence)
+        files[EVIDENCE_TEXT] = evidence_markdown(
+            sources.research_evidence, language=folder_language(sources)
+        )
+        files.update(schema_files(research_evidence=True, only_evidence=True))
     return files
 
 
@@ -290,7 +383,7 @@ def _stage_entries(sources: KnowledgeSources) -> dict[str, dict[str, object]]:
             "text": stage_text(stage),
             "gate": gate_document(sources.gate(stage)),
         }
-        for stage in STAGES
+        for stage in sources.present_stages
     }
 
 
@@ -299,8 +392,11 @@ def _table_title(path: str) -> str:
     return name.replace("-", " ").capitalize()
 
 
-def _view_entries(files: Mapping[str, str], diagrams: Iterable[Diagram]) -> dict[str, object]:
+def _view_entries(
+    files: Mapping[str, str], diagrams: Iterable[Diagram], stages: Iterable[str]
+) -> dict[str, object]:
     drawn = tuple(diagrams)
+    present = set(stages)
     texts = {
         "requirements": [(stage_text("requirements"), STAGE_LABELS["requirements"])],
         "design": [
@@ -335,7 +431,50 @@ def _view_entries(files: Mapping[str, str], diagrams: Iterable[Diagram]) -> dict
             "mockups": [{"path": path, "title": title} for path, title in mockups[stage]],
         }
         for stage in VIEW_STAGES
+        if stage in present
     }
+
+
+def _progress_entry(sources: KnowledgeSources) -> dict[str, object]:
+    return {
+        "approved": list(sources.present_stages),
+        "pending": sources.pending_stage,
+        "complete": sources.complete,
+    }
+
+
+def _state_entry(sources: KnowledgeSources) -> dict[str, object]:
+    state = sources.state
+    commit = None if state.aligned is None else state.aligned.get("commit")
+    return {
+        "document": STATE_DOCUMENT,
+        "text": STATE_TEXT,
+        "changes": len(state.changes),
+        "pending_changes": state.pending_changes,
+        "stale_reviews": stale_reviews(sources),
+        "aligned_commit": None if commit is None else str(commit),
+        "open_tasks": state.open_tasks,
+    }
+
+
+def _feedback_entry(sources: KnowledgeSources) -> dict[str, object]:
+    exported = "design" in sources.present_stages
+    entry: dict[str, object] = {
+        "folder": FEEDBACK_FOLDER,
+        "text": FEEDBACK_TEXT if exported else None,
+        "reviews_document": FEEDBACK_REVIEWS if exported else None,
+        "discussions_document": FEEDBACK_DISCUSSIONS if exported else None,
+        "insights_document": FEEDBACK_INSIGHTS if exported else None,
+        **feedback_summary(sources),
+        "changes": FEEDBACK_CHANGES,
+        "change_reviews": len(sources.state.runs),
+        "tests": FEEDBACK_TESTS,
+        "test_runs": len(acceptance_runs(sources)),
+    }
+    if "twins" in sources.present_stages:
+        entry["learned"] = FEEDBACK_LEARNING
+        entry["learned_observations"] = learned_observations(sources)
+    return entry
 
 
 def folder_manifest(
@@ -346,7 +485,7 @@ def folder_manifest(
     version_number: int,
     created_at: datetime,
 ) -> dict[str, object]:
-    return {
+    result = {
         "schema_version": KNOWLEDGE_SCHEMA_VERSION,
         "kind": KNOWLEDGE_FOLDER_KIND,
         "manifest": KNOWLEDGE_MANIFEST,
@@ -360,23 +499,44 @@ def folder_manifest(
         "project": {
             "id": str(sources.project_id),
             "name": sources.project_name,
-            "language": project_language(sources.payload("requirements")),
+            "language": folder_language(sources),
         },
         "stages": _stage_entries(sources),
+        "progress": _progress_entry(sources),
+        "state": _state_entry(sources),
         "twins": [twin.summary() for twin in twins],
-        "views": _view_entries(files, folder_diagrams(sources)),
-        "feedback": {
-            "folder": FEEDBACK_FOLDER,
-            "text": FEEDBACK_TEXT,
-            "reviews_document": FEEDBACK_REVIEWS,
-            "discussions_document": FEEDBACK_DISCUSSIONS,
-            "insights_document": FEEDBACK_INSIGHTS,
-            **feedback_summary(sources),
-        },
+        "views": _view_entries(files, folder_diagrams(sources), sources.present_stages),
+        "feedback": _feedback_entry(sources),
         "identifiers": identifiers(sources),
-        "schemas": {name: schema_document(name) for name in SCHEMA_NAMES},
+        "schemas": {
+            name: schema_document(name)
+            for name in (
+                *SCHEMA_NAMES,
+                *(("evidence",) if has_evidence(sources.research_evidence) else ()),
+            )
+        },
         "files": file_digests(files),
     }
+    if has_evidence(sources.research_evidence):
+        result["research_evidence"] = {
+            "document": EVIDENCE_DOCUMENT,
+            "text": EVIDENCE_TEXT,
+            "sources": len(sources.research_evidence.get("evidence", ())),
+            "citations": len(sources.research_evidence.get("citations", ())),
+        }
+    return result
+
+
+def folder_overview(sources: KnowledgeSources) -> list[str]:
+    present = sources.present_stages
+    return overview_lines(
+        language=state_language(folder_language(sources)),
+        project_name=sources.project_name,
+        brief=sources.payload("brief"),
+        twins=sources.payload("twins") if "twins" in present else None,
+        specification=sources.payload("requirements") if "requirements" in present else None,
+        package=_design_payload(sources),
+    )
 
 
 def build_knowledge_folder(
@@ -399,7 +559,15 @@ def build_knowledge_folder(
         created_at=created_at,
     )
     files[KNOWLEDGE_MANIFEST] = json_text(manifest)
-    files[KNOWLEDGE_INDEX] = index_markdown(manifest)
+    files[KNOWLEDGE_INDEX] = index_markdown(
+        manifest,
+        overview=folder_overview(sources),
+        development=[
+            *development_lines(sources),
+            *test_lines(sources),
+            *learning_lines(sources),
+        ],
+    )
     return KnowledgeFolder(
         project_id=sources.project_id,
         project_name=sources.project_name,
@@ -439,13 +607,16 @@ __all__ = [
     "KnowledgeArchive",
     "KnowledgeFolder",
     "KnowledgeFolderError",
+    "brief_language",
     "build_knowledge_folder",
     "content_files",
     "file_digests",
     "folder_archive",
     "folder_content_hash",
     "folder_diagrams",
+    "folder_language",
     "folder_manifest",
+    "folder_overview",
     "gate_document",
     "identifiers",
     "json_text",

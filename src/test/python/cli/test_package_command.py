@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from orchestwin.cli import folder as knowledge
+from orchestwin.cli import messages
 from orchestwin.cli.commands.package import moment_text
 from orchestwin.cli.http import Reply, UrlTransport, unreachable
 from orchestwin.cli.messages import known
@@ -263,18 +264,54 @@ def test_the_state_before_anything_is_published(tmp_path: Path) -> None:
     ]
 
 
-def test_publish_names_the_step_that_is_missing(tmp_path: Path) -> None:
+def test_publish_brings_the_approved_steps_before_the_design(tmp_path: Path) -> None:
     with FakeStudio(language="it") as studio:
-        seeded(tmp_path, studio, through="requirements")
-        design = ut(tmp_path, "--lang", "it", "package", "publish")
-    with FakeStudio(language="en") as studio:
-        seeded(tmp_path / "second", studio, through="twins")
-        requirements = run_ut(
-            ["package", "publish"],
-            tmp_path / "second",
-            transport=UrlTransport(),
-        )
+        project = seeded(tmp_path, studio, through="requirements")
+        run = ut(tmp_path, "--lang", "it", "package", "publish")
+        versions = studio.project(project.id).knowledge_versions()
 
+    assert run.status == 0, run.errors
+    assert run.output.splitlines()[-1] == (
+        "Pubblicata la versione 1 della cartella di conoscenza e scaricata in orchestwin/. "
+        f"File: {versions[0]['file_count']}."
+    )
+    folder = knowledge.verify(knowledge_folder(tmp_path))
+    assert folder.package_version == 1
+    assert folder.manifest["progress"] == {
+        "approved": ["brief", "team", "twins", "requirements"],
+        "pending": "design",
+        "complete": False,
+    }
+    summary = knowledge.summary(knowledge_folder(tmp_path))
+    assert summary is not None
+    assert summary.progress == ("brief", "team", "twins", "requirements")
+    assert (summary.pending, summary.complete) == ("design", False)
+
+
+def test_publish_names_the_step_that_is_missing(tmp_path: Path) -> None:
+    with FakeStudio(language="en") as studio:
+        seeded(tmp_path, studio, through="twins")
+        studio.fail_next(
+            "POST",
+            "/projects/{project_id}/knowledge-packages",
+            status=409,
+            body={"detail": {"code": "BRIEF_APPROVAL_REQUIRED"}},
+        )
+        brief = ut(tmp_path, "package", "publish")
+        studio.fail_next(
+            "POST",
+            "/projects/{project_id}/knowledge-packages",
+            status=409,
+            body={"detail": {"code": "DESIGN_APPROVAL_REQUIRED"}},
+        )
+        design = ut(tmp_path, "--lang", "it", "package", "publish")
+
+    assert brief.status == 1
+    assert brief.output.splitlines() == progress(PUBLISHING["en"], NOT_COMPLETED)
+    assert brief.errors == (
+        "The knowledge folder cannot be published yet: the brief is not approved. "
+        "Approve it with `ut init`, then try again.\n"
+    )
     assert design.status == 1
     assert design.output.splitlines() == progress(PUBLISHING["it"], NOT_COMPLETED, "it")
     assert design.errors == (
@@ -282,12 +319,40 @@ def test_publish_names_the_step_that_is_missing(tmp_path: Path) -> None:
         "Sceglilo e approvalo con `ut design`, poi riprova.\n"
     )
     assert not knowledge_folder(tmp_path).exists()
-    assert requirements.status == 1
-    assert requirements.output.splitlines() == progress(PUBLISHING["en"], NOT_COMPLETED)
-    assert requirements.errors == (
-        "The knowledge folder cannot be published yet: the requirements are not approved. "
-        "Approve them with `ut init`, then try again.\n"
-    )
+
+
+BEHIND_SECTIONS = {
+    "TEAM_OUTDATED": ("Perspectives", "Prospettive", "`ut init`"),
+    "USER_TWINS_OUTDATED": ("User Twin", "User Twin", "`ut sections update`"),
+    "REQUIREMENTS_OUTDATED": ("Definition", "Definizione", "`ut sections update`"),
+    "DESIGN_OUTDATED": ("Design & Evaluation", "Design e valutazione", "`ut sections update`"),
+}
+
+
+@pytest.mark.parametrize("code", list(BEHIND_SECTIONS))
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_a_section_behind_names_the_section_and_the_command_that_updates_it(
+    tmp_path: Path, code: str, language: str
+) -> None:
+    with FakeStudio(language="en") as studio:
+        seeded(tmp_path, studio)
+        studio.fail_next(
+            "POST",
+            "/projects/{project_id}/knowledge-packages",
+            status=409,
+            body={"detail": {"code": code}},
+        )
+        run = ut(tmp_path, "--lang", language, "package", "publish")
+
+    english, italian, command = BEHIND_SECTIONS[code]
+    sentence = run.errors.rstrip("\n")
+    assert run.status == 1
+    assert run.output.splitlines() == progress(PUBLISHING[language], NOT_COMPLETED, language)
+    assert sentence == messages.text(f"package.errors.{code}", language)
+    assert (english if language == "en" else italian) in sentence
+    assert sentence.endswith(".") and command in sentence
+    assert not any(word in sentence.lower() for word in ("approv", "squadr", "team", "confirm"))
+    assert not knowledge_folder(tmp_path).exists()
 
 
 def test_publish_creates_a_version_and_then_says_nothing_changed(tmp_path: Path) -> None:

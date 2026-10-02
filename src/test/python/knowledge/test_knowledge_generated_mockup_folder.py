@@ -87,7 +87,7 @@ def sections(document: str) -> dict[str, tuple[str, str]]:
     return {parts[index]: (parts[index + 1], parts[index + 2]) for index in range(1, len(parts), 3)}
 
 
-def test_a_folder_without_additions_keeps_every_byte_and_its_content_hash() -> None:
+def test_a_folder_without_design_additions_keeps_the_expected_base_files() -> None:
     sources = real_sources()
     folder = build_knowledge_folder(sources, version_number=3, created_at=PUBLISHED_AT)
     design = folder.files[schema_document("design")]
@@ -110,7 +110,7 @@ def test_every_file_of_a_folder_with_the_additions_is_listed_hashed_and_valid(na
     manifest = json.loads(folder.files[KNOWLEDGE_MANIFEST])
 
     assert folder.entries == plain.entries
-    assert manifest["schema_version"] == 2
+    assert manifest["schema_version"] == 3
     assert manifest == folder.manifest
     assert set(manifest["files"]) == set(folder.files) - {KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST}
     for path, value in manifest["files"].items():
@@ -172,7 +172,7 @@ def test_the_published_design_schema_describes_the_additions_only_when_they_trav
 
     Draft202012Validator.check_schema(extended)
     assert extended == knowledge_schemas(design_additions=True)["design"]
-    assert extended["$id"] == base["$id"] == "urn:orchestwin:knowledge-folder:2:design"
+    assert extended["$id"] == base["$id"] == "urn:orchestwin:knowledge-folder:3:design"
     assert set(extended["$defs"]) - set(base["$defs"]) == ADDITION_DEFINITIONS
     assert critique["dependentRequired"] == {"quote": ["verdict"], "verdict": ["quote"]}
     assert {critique["properties"][name]["maxLength"] for name in ("verdict", "quote")} == {60, 240}

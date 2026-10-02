@@ -32,6 +32,7 @@ class StructuredGenerationProviderKind(StrEnum):
     UNSLOTH_DIRECT_LOCAL = "UNSLOTH_DIRECT_LOCAL"
     ANTHROPIC_HOSTED = "ANTHROPIC_HOSTED"
     OPENAI_COMPATIBLE_HOSTED = "OPENAI_COMPATIBLE_HOSTED"
+    CLAUDE_CODE_CLI = "CLAUDE_CODE_CLI"
 
 
 class StructuredGenerationStatus(StrEnum):
@@ -50,6 +51,7 @@ _HOSTED_PROVIDER_KINDS: Final = frozenset(
     {
         StructuredGenerationProviderKind.ANTHROPIC_HOSTED,
         StructuredGenerationProviderKind.OPENAI_COMPATIBLE_HOSTED,
+        StructuredGenerationProviderKind.CLAUDE_CODE_CLI,
     }
 )
 

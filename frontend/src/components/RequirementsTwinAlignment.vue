@@ -40,32 +40,31 @@ const emit = defineEmits<{ realigned: [payload: RequirementsRealignmentPayload] 
 
 const messages = {
   en: {
-    title: "The twins have changed",
-    doneTitle: "The requirements follow the current twins",
+    title: "Requirements to update",
+    doneTitle: "The requirements follow the current versions",
     ready:
-      "These requirements were written for the previous twins. Update them so that they follow the current twins: their content stays the same, and then you approve them again.",
+      "Something upstream changed (twins, brief or perspectives): the requirements stay the same and are re-anchored to the new versions.",
     update: "Update the requirements",
     running: "Updating the requirements…",
     done: "Version {version} of the requirements is ready with the same content. Approve it again below.",
     twins:
-      "Approve the twins in the User Twin step first; then come back here to update the requirements.",
+      "Bring the twins up to date and approve them in User Twin first; then come back here to update the requirements.",
     revision:
       "A proposed change to these requirements is waiting for your decision. Apply it or discard it below; then update the requirements.",
     blocked: "These requirements cannot be updated automatically.",
     reasons: {
-      REQUIREMENTS_CONTEXT_CHANGED:
-        "The brief or the team changed as well, so these requirements cannot be updated automatically.",
       TWIN_NO_LONGER_AVAILABLE:
         "These requirements mention a twin that is no longer part of the project, so they cannot be updated automatically.",
     },
     failed: "The requirements could not be updated. Try again.",
     errors: {
       REQUIREMENTS_NOT_FOUND: "The requirements were not found. Reload the page and try again.",
-      USER_TWINS_REQUIRED: "Approve the twins in the User Twin step first, then try again.",
+      USER_TWINS_REQUIRED:
+        "Bring the twins up to date and approve them in User Twin first, then try again.",
       USER_TWINS_APPROVAL_REQUIRED:
-        "Approve the twins in the User Twin step first, then try again.",
+        "Bring the twins up to date and approve them in User Twin first, then try again.",
       REQUIREMENTS_ALREADY_ALIGNED:
-        "The requirements already follow the current twins: there is nothing to update.",
+        "The requirements already follow the current versions: there is nothing to update.",
       REQUIREMENTS_REVISION_PENDING:
         "A proposed change to these requirements is waiting for your decision. Apply it or discard it below, then try again.",
       PERSISTENCE_REJECTED:
@@ -74,30 +73,29 @@ const messages = {
     details: "Details",
   },
   it: {
-    title: "I twin sono cambiati",
-    doneTitle: "I requisiti seguono i twin attuali",
+    title: "Requisiti da aggiornare",
+    doneTitle: "I requisiti seguono le versioni attuali",
     ready:
-      "Questi requisiti sono stati scritti per i twin precedenti. Aggiornali perché seguano i twin attuali: il contenuto resta lo stesso, poi li approvi di nuovo.",
+      "Qualcosa a monte è cambiato (twin, brief o prospettive): i requisiti restano gli stessi e vengono riagganciati alle versioni nuove.",
     update: "Aggiorna i requisiti",
     running: "Aggiorno i requisiti…",
     done: "La versione {version} dei requisiti è pronta con lo stesso contenuto. Approvala di nuovo qui sotto.",
-    twins: "Approva prima i twin nel passo User Twin, poi torna qui per aggiornare i requisiti.",
+    twins:
+      "Prima aggiorna e approva i twin in User Twin, poi torna qui per aggiornare i requisiti.",
     revision:
       "Una modifica proposta a questi requisiti aspetta la tua decisione. Applicala o scartala qui sotto, poi aggiorna i requisiti.",
     blocked: "Questi requisiti non si possono aggiornare automaticamente.",
     reasons: {
-      REQUIREMENTS_CONTEXT_CHANGED:
-        "Sono cambiati anche il brief o la squadra, quindi questi requisiti non si possono aggiornare automaticamente.",
       TWIN_NO_LONGER_AVAILABLE:
         "Questi requisiti citano un twin che non fa più parte del progetto, quindi non si possono aggiornare automaticamente.",
     },
     failed: "Non è stato possibile aggiornare i requisiti. Riprova.",
     errors: {
       REQUIREMENTS_NOT_FOUND: "Non ho trovato i requisiti. Ricarica la pagina e riprova.",
-      USER_TWINS_REQUIRED: "Approva prima i twin nel passo User Twin, poi riprova.",
-      USER_TWINS_APPROVAL_REQUIRED: "Approva prima i twin nel passo User Twin, poi riprova.",
+      USER_TWINS_REQUIRED: "Prima aggiorna e approva i twin in User Twin, poi riprova.",
+      USER_TWINS_APPROVAL_REQUIRED: "Prima aggiorna e approva i twin in User Twin, poi riprova.",
       REQUIREMENTS_ALREADY_ALIGNED:
-        "I requisiti seguono già i twin attuali: non c'è niente da aggiornare.",
+        "I requisiti seguono già le versioni attuali: non c'è niente da aggiornare.",
       REQUIREMENTS_REVISION_PENDING:
         "Una modifica proposta a questi requisiti aspetta la tua decisione. Applicala o scartala qui sotto, poi riprova.",
       PERSISTENCE_REJECTED:

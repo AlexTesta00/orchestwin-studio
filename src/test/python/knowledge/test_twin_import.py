@@ -409,10 +409,25 @@ def test_the_origin_project_name_is_whitespace_normalized():
 
 
 def test_documents_of_another_kind_or_folder_format_are_not_supported():
-    for key, value in (("kind", "orchestwin.user-persona"), ("schema_version", 1)):
+    for key, value in (
+        ("kind", "orchestwin.user-persona"),
+        ("schema_version", 1),
+        ("schema_version", 4),
+        ("schema_version", True),
+    ):
         error = rejection({**folder_document(), key: value})
 
         assert (error.code, error.detail) == ("TWIN_DOCUMENT_UNSUPPORTED", key)
+
+
+@pytest.mark.parametrize("version", [2, 3])
+def test_documents_of_the_folder_formats_two_and_three_are_accepted(version: int):
+    document = {**folder_document(), "schema_version": version}
+
+    parsed = parse_twin_document(document)
+
+    assert folder_document()["schema_version"] == 3
+    assert parsed == parse_twin_document(folder_document())
 
 
 def test_a_document_without_its_kind_or_project_name_is_invalid():

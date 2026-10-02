@@ -29,6 +29,7 @@ WITHOUT_DRAWING = {
     "generated_mockups": False,
     "iterations": False,
     "model": None,
+    "paid": True,
     "static_check": False,
 }
 
@@ -109,17 +110,24 @@ def design_session(
     job_polls: int = 2,
     twins: int = 2,
     team_without: Sequence[str] = (),
+    billing: str | None = None,
+    requirements_schema_version: int = 2,
 ) -> Iterator[Session]:
     with FakeStudio(
         language=language,
         hosted=hosted,
         budget_usd=budget_usd,
+        billing=billing,
         job_polls=job_polls,
         twins=twins,
     ) as studio:
         studio.add_account(EMAIL, PASSWORD)
         project = studio.seed_project(
-            owner=EMAIL, name=PROJECT, through=through, team_without=team_without
+            owner=EMAIL,
+            name=PROJECT,
+            through=through,
+            team_without=team_without,
+            requirements_schema_version=requirements_schema_version,
         )
         login = run_ut(
             ["login", "--studio", studio.address, "--email", EMAIL, "--password-stdin"],
@@ -180,6 +188,21 @@ def prototype_package(session: Session, code: str) -> dict[str, object]:
     assert version is not None
     other = session.studio.seed_project(owner=EMAIL, name="Other", through="design")
     prototype = copy.deepcopy(other.current("design")["package"]["prototype"])
+    source = other.current("requirements")["specification"]
+    target = session.project.current("requirements")["specification"]
+    references = {
+        item["id"]: next(entry["id"] for entry in target[group] if entry["code"] == item["code"])
+        for group in ("requirements", "user_stories", "acceptance_criteria")
+        for item in source[group]
+    }
+    for item in [
+        *prototype["screens"],
+        *prototype["transitions"],
+        *(element for screen in prototype["screens"] for element in screen["elements"]),
+    ]:
+        for key in ("requirement_ids", "user_story_ids", "acceptance_criterion_ids"):
+            if key in item:
+                item[key] = sorted(references[identifier] for identifier in item[key])
     chosen = session.alternative(code)
     prototype["design_alternative_id"] = chosen
     package = copy.deepcopy(version["package"])
@@ -216,6 +239,7 @@ def start_iteration(session: Session, request: str, rules: Sequence[str] = ()) -
 def test_the_paths_of_the_design_routes() -> None:
     assert design_api.design_path("p") == "/projects/p/design"
     assert design_api.proposals_path("p") == "/projects/p/design/proposals"
+    assert design_api.regenerations_path("p") == "/projects/p/design/regenerations"
     assert design_api.evaluations_path("p") == "/projects/p/design/evaluations"
     assert design_api.mockup_job_path("p", "j") == "/projects/p/design/mockups/jobs/j"
     assert design_api.iteration_job_path("p", "j") == "/projects/p/design/iterations/jobs/j"
@@ -291,6 +315,21 @@ def test_an_older_studio_without_the_budget_route_counts_as_one_with_a_model(
 
     assert older == design_api.ModelRuntime(model=True, budget=False)
     assert broken.value.code == "BUDGET_STORE_FAILED"
+
+
+@pytest.mark.parametrize(
+    ("billing", "expected"),
+    [("SUBSCRIPTION", "SUBSCRIPTION"), ("MIXED", "MIXED"), ("API", "API"), (None, "API")],
+)
+def test_the_billing_is_read_with_the_budget(
+    tmp_path: Path, billing: str | None, expected: str
+) -> None:
+    with design_session(tmp_path, billing=billing) as session:
+        found = design_api.model_runtime(session.client())
+        reads = session.count("GET", "/model-runtime/budget")
+
+    assert found == design_api.ModelRuntime(model=True, budget=True, billing=expected)
+    assert reads == 1
 
 
 def test_capabilities_that_cannot_be_read_count_as_unavailable(tmp_path: Path) -> None:

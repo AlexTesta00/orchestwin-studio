@@ -27,6 +27,8 @@ class TraceabilityNodeKind(StrEnum):
     REQUIREMENT = "REQUIREMENT"
     ACCEPTANCE_CRITERION = "ACCEPTANCE_CRITERION"
     SCENARIO = "SCENARIO"
+    NEED = "NEED"
+    JOURNEY = "JOURNEY"
     RISK = "RISK"
     DEFINITION_OF_DONE = "DEFINITION_OF_DONE"
 
@@ -35,6 +37,9 @@ class TraceabilityLinkKind(StrEnum):
     """Semantic relationships between requirements artifacts."""
 
     ACTS_AS = "ACTS_AS"
+    PARTICIPATES_IN = "PARTICIPATES_IN"
+    REVEALS = "REVEALS"
+    EXPANDS = "EXPANDS"
     MOTIVATES = "MOTIVATES"
     VERIFIED_BY = "VERIFIED_BY"
     EXERCISES = "EXERCISES"
@@ -124,6 +129,28 @@ class TraceabilityLink:
 
 _ALLOWED_LINK_SHAPES: Final = frozenset(
     {
+        (TraceabilityLinkKind.EXPANDS, TraceabilityNodeKind.SCENARIO, TraceabilityNodeKind.JOURNEY),
+        (TraceabilityLinkKind.REVEALS, TraceabilityNodeKind.JOURNEY, TraceabilityNodeKind.NEED),
+        (
+            TraceabilityLinkKind.PARTICIPATES_IN,
+            TraceabilityNodeKind.USER_TWIN,
+            TraceabilityNodeKind.SCENARIO,
+        ),
+        (
+            TraceabilityLinkKind.REVEALS,
+            TraceabilityNodeKind.SCENARIO,
+            TraceabilityNodeKind.NEED,
+        ),
+        (
+            TraceabilityLinkKind.MOTIVATES,
+            TraceabilityNodeKind.NEED,
+            TraceabilityNodeKind.REQUIREMENT,
+        ),
+        (
+            TraceabilityLinkKind.MOTIVATES,
+            TraceabilityNodeKind.NEED,
+            TraceabilityNodeKind.USER_STORY,
+        ),
         (
             TraceabilityLinkKind.ACTS_AS,
             TraceabilityNodeKind.USER_TWIN,
@@ -361,6 +388,62 @@ def build_requirements_traceability(
     specification = version.specification
     nodes: list[TraceabilityNode] = []
     links: list[TraceabilityLink] = []
+
+    for journey in specification.journeys:
+        reference = _reference(TraceabilityNodeKind.JOURNEY, journey.id)
+        nodes.append(TraceabilityNode(reference=reference, display_code=journey.code))
+        links.append(
+            TraceabilityLink(
+                kind=TraceabilityLinkKind.EXPANDS,
+                source=_reference(TraceabilityNodeKind.SCENARIO, journey.scenario_id),
+                target=reference,
+            )
+        )
+        links.extend(
+            TraceabilityLink(
+                kind=TraceabilityLinkKind.REVEALS,
+                source=reference,
+                target=_reference(TraceabilityNodeKind.NEED, need_id),
+            )
+            for need_id in sorted(
+                {value for phase in journey.phases for value in phase.need_ids},
+                key=lambda value: value.hex,
+            )
+        )
+
+    if specification.schema_version == 2:
+        for need in specification.needs:
+            need_reference = _reference(TraceabilityNodeKind.NEED, need.id)
+            nodes.append(TraceabilityNode(reference=need_reference, display_code=need.code))
+            links.extend(
+                TraceabilityLink(
+                    kind=TraceabilityLinkKind.REVEALS,
+                    source=_reference(TraceabilityNodeKind.SCENARIO, scenario_id),
+                    target=need_reference,
+                )
+                for scenario_id in need.scenario_ids
+            )
+        for kind, artifacts in (
+            (TraceabilityNodeKind.REQUIREMENT, specification.requirements),
+            (TraceabilityNodeKind.USER_STORY, specification.user_stories),
+        ):
+            for artifact in artifacts:
+                links.extend(
+                    TraceabilityLink(
+                        kind=TraceabilityLinkKind.MOTIVATES,
+                        source=_reference(TraceabilityNodeKind.NEED, need_id),
+                        target=_reference(kind, artifact.id),
+                    )
+                    for need_id in artifact.need_ids
+                )
+        links.extend(
+            TraceabilityLink(
+                kind=TraceabilityLinkKind.PARTICIPATES_IN,
+                source=_reference(TraceabilityNodeKind.USER_TWIN, scenario.actor.twin_id),
+                target=_reference(TraceabilityNodeKind.SCENARIO, scenario.id),
+            )
+            for scenario in specification.scenarios
+        )
 
     for twin in specification.user_twin_references:
         nodes.append(

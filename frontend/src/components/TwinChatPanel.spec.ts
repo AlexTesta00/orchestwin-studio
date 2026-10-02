@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TwinChatApiError, type TwinChatApi } from "@/api/twinChat";
 import { createAppI18n } from "@/i18n";
 import { expectAccessible } from "@/test/axe";
-import type { TwinConversationPayload } from "@/types/twinChat";
+import type { AskTwinInput, TwinConversationPayload } from "@/types/twinChat";
 import type { UserTwinVersionPayload } from "@/types/userModeling";
 import TwinChatPanel from "./TwinChatPanel.vue";
 
@@ -127,6 +127,62 @@ describe("twin chat panel", () => {
     expect(api.conversation).toHaveBeenCalledWith("project-1", "twin-1", "token");
     expect(wrapper.findAll("[data-testid='twin-chat-turn']")).toHaveLength(1);
     expect(wrapper.get("[data-testid='twin-chat-stale']").text()).toContain("versione 1");
+  });
+
+  it("starts a new conversation with the new version of the twin at the first question", async () => {
+    const started = conversation([
+      { ...answered.turns[0]!, id: "turn-2", question: "E adesso?", reply: "Adesso va meglio." },
+    ]);
+    const api: TwinChatApi = {
+      conversation: vi.fn().mockResolvedValue({ ...answered, twin_version_number: 1 }),
+      ask: vi.fn(async (_projectId: string, _twinId: string, input: AskTwinInput) => {
+        if (input.expected_turn_count !== 0) {
+          throw new TwinChatApiError("The twin chat request failed", {
+            status: 409,
+            code: "TWIN_CONVERSATION_CHANGED",
+            payload: null,
+          });
+        }
+        return started;
+      }),
+    };
+    const wrapper = mountPanel(api);
+    await flushPromises();
+
+    expect(wrapper.get("[data-testid='twin-chat-stale']").text()).toContain("versione 1");
+    expect(wrapper.get("[data-testid='twin-chat-turn']").text()).toContain(
+      "Quanto tempo hai per registrare un ospite?",
+    );
+
+    await wrapper.get("[data-testid='twin-chat-question']").setValue("E adesso?");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(vi.mocked(api.ask).mock.calls[0]?.[2]).toEqual({
+      question: "E adesso?",
+      expected_turn_count: 0,
+    });
+    expect(wrapper.find("[data-testid='twin-chat-error']").exists()).toBe(false);
+    expect(wrapper.find("[data-testid='twin-chat-stale']").exists()).toBe(false);
+    const turns = wrapper.findAll("[data-testid='twin-chat-turn']");
+    expect(turns).toHaveLength(1);
+    expect(turns[0]!.text()).toContain("Adesso va meglio.");
+  });
+
+  it("continues the conversation held with the current version of the twin", async () => {
+    const api = fakeApi(answered);
+    const wrapper = mountPanel(api);
+    await flushPromises();
+
+    expect(wrapper.find("[data-testid='twin-chat-stale']").exists()).toBe(false);
+    await wrapper.get("[data-testid='twin-chat-question']").setValue("E poi?");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(vi.mocked(api.ask).mock.calls[0]?.[2]).toEqual({
+      question: "E poi?",
+      expected_turn_count: 1,
+    });
   });
 
   it("shows the request error without losing the question", async () => {

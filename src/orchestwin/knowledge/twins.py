@@ -60,6 +60,7 @@ def _persona_of(
         if (
             persona["persona_id"] == reference["persona_id"]
             and persona["version_number"] == reference["version_number"]
+            and persona["content_hash"] == reference["content_hash"]
         ):
             return persona
     raise ValueError("user twin references a persona version outside its snapshot")
@@ -104,6 +105,8 @@ def portable_twin_documents(
 
 
 def portable_twins(sources: KnowledgeSources) -> tuple[PortableTwin, ...]:
+    if sources.modeling is None or sources.modeling_gate is None:
+        return ()
     return portable_twin_documents(
         project_id=sources.project_id,
         project_name=sources.project_name,

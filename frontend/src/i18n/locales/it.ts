@@ -16,10 +16,21 @@ const messages = {
     },
     stepper: {
       label: "Passi",
+      sectionsLabel: "Sezioni",
       pending: "In attesa",
       approved: "Approvato",
       decision: "Decisione {n} di {max}",
       current: "Tocca a te",
+    },
+    sections: {
+      states: {
+        NOT_STARTED: "In attesa",
+        IN_PROGRESS: "Tocca a te",
+        FINE: "A posto",
+        UPDATE_AVAILABLE: "Aggiornamento disponibile",
+        TO_UPDATE: "Da aggiornare",
+      },
+      version: "v{n}",
     },
     stepHeader: {
       current: "Tocca a te",
@@ -31,7 +42,7 @@ const messages = {
       title: "La decisione è tua",
       secondary: "Chiedi modifiche",
       requestLabel: "Che cosa vuoi cambiare?",
-      requestPlaceholder: "Scrivi una nota per l'assistente: ne preparerà una nuova versione.",
+      requestPlaceholder: "Scrivi che cosa vuoi cambiare…",
       cancel: "Annulla",
       send: "Invia la richiesta",
       busy: "Operazione in corso…",
@@ -125,7 +136,7 @@ const messages = {
   home: {
     eyebrow: "Tesi · Agentic User-Centred Design",
     title: "Un'idea diventa un'applicazione. Tu decidi a ogni passo.",
-    lead: "OrchesTwin Studio orchestra una squadra di agenti AI lungo sei passi governati: propone la squadra, costruisce utenti sintetici a partire dal tuo brief, scrive i requisiti, esplora il design e ti consegna un pacchetto di design da realizzare con i tuoi strumenti. Ogni passo si chiude con la tua approvazione.",
+    lead: "OrchesTwin Studio orchestra l'AI lungo sei passi governati: guarda il progetto dalle prospettive che gli servono, costruisce utenti sintetici a partire dal tuo brief, scrive i requisiti, esplora il design e ti consegna un dossier per realizzare l'applicazione con i tuoi strumenti. Ogni passo si chiude con la tua approvazione.",
     enter: "Entra nello Studio",
     twinsLink: "Come funzionano i twin",
     rules: {
@@ -137,7 +148,7 @@ const messages = {
       two: {
         label: "Regola due",
         title: "Un'ipotesi resta tale finché non è verificata",
-        text: "Le opinioni dei twin, i requisiti e le critiche sono proposte, mai prove. Diventano decisioni solo quando le approvi e si verificano sull'applicazione che realizzi dal pacchetto.",
+        text: "Le opinioni dei twin, i requisiti e le critiche sono proposte, mai prove. Diventano decisioni solo quando le approvi e si verificano sull'applicazione che realizzi dal dossier.",
       },
     },
     twins: {
@@ -174,23 +185,23 @@ const messages = {
           text: "Descrivi la tua idea in due righe: lo Studio ti fa le domande giuste e compone il brief.",
         },
         team: {
-          title: "Squadra",
-          text: "I ruoli degli agenti per questo progetto, con quelli obbligatori segnalati.",
+          title: "Prospettive",
+          text: "Le competenze con cui guardare il tuo progetto: ognuna porta le sue considerazioni nei requisiti e nel design.",
         },
         twins: {
           title: "User Twin",
           text: "Fino a otto utenti sintetici: obiettivi, contesto, accessibilità.",
         },
         requirements: {
-          title: "Requisiti",
+          title: "Definizione",
           text: "Una base leggibile: cosa deve fare, per chi, con quali criteri.",
         },
         design: {
-          title: "Design",
+          title: "Design e valutazione",
           text: "Alternative con le critiche dei twin, poi un modello cliccabile.",
         },
         package: {
-          title: "Pacchetto",
+          title: "Dossier",
           text: "Brief, twin, requisiti e design scelto in una cartella, pronta per i tuoi strumenti.",
         },
       },
@@ -213,7 +224,7 @@ const messages = {
         },
         stepwise: {
           title: "A passi",
-          text: "Una sequenza visibile di sei passi con il loro stato. Si agisce sul passo corrente, i precedenti si rileggono.",
+          text: "Una sequenza visibile di sei passi con il loro stato. La prima volta li percorri in ordine, poi ognuno diventa una sezione che puoi riaprire.",
         },
         plain: {
           title: "Senza gergo",
@@ -242,8 +253,8 @@ const messages = {
       },
     },
     closing: {
-      title: "Prova il percorso completo, dal brief al pacchetto di design",
-      text: "Sei passi, un cancello umano per ciascuno, un pacchetto pronto per i tuoi strumenti di sviluppo.",
+      title: "Prova il percorso completo, dal brief al dossier",
+      text: "Sei passi, un cancello umano per ciascuno, una cartella pronta per i tuoi strumenti di sviluppo.",
     },
     footer: {
       thesis: "OrchesTwin Studio · tesi in Agentic User-Centred Design",

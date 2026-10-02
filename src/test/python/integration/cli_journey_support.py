@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import http.client
 import io
 import json
 import os
 import re
+import selectors
+import shutil
 import socket
 import subprocess
 import sys
@@ -13,22 +16,53 @@ import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Coroutine, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import IO, Final
+from uuid import UUID, uuid4
+
+from pydantic import SecretStr
 
 from orchestwin.api.design import DesignPackagePayload
 from orchestwin.api.requirements import RequirementsSpecificationPayload
 from orchestwin.artifacts.visual_catalog import ARCHETYPES
+from orchestwin.cli.browser import BrowserProgram, discovery, find_browsers
 from orchestwin.cli.environment import Environment
 from orchestwin.cli.http import Reply, UrlTransport, origin_of, unreachable
 from orchestwin.cli.main import main
 from orchestwin.cli.messages import text
 from orchestwin.models.design_mockups import MockupDraft, bind_mockup
+from orchestwin.persistence import DatabaseRuntime, DatabaseSettings, create_database_runtime
+from orchestwin.projects.acceptance_tests import (
+    SnapshotSummary,
+    TestPlan,
+    TestReview,
+    TestRun,
+    application_from_snapshot,
+    browser_from_snapshot,
+    build_test_run,
+    critique_from_snapshot,
+    not_covered_from_snapshot,
+    path_from_snapshot,
+    path_result_from_snapshot,
+)
+from orchestwin.projects.code_changes import (
+    ChangeReviewRun,
+    alignment_verdict_from_snapshot,
+    twin_critique_from_snapshot,
+)
+from orchestwin.projects.persistence.acceptance_tests import (
+    AcceptanceTestWriteStatus,
+    SqlAlchemyAcceptanceTestRepository,
+)
+from orchestwin.projects.persistence.code_changes import (
+    CodeChangeWriteStatus,
+    SqlAlchemyCodeChangeRepository,
+)
 
 HOST: Final = "127.0.0.1"
 API_PREFIX: Final = "/api/v1"
@@ -55,9 +89,44 @@ TERMINAL_COLUMNS: Final = "160"
 ACCESS_LINE: Final = re.compile(r'^INFO:\s+\S+:\d+ - "')
 CELL_GAP: Final = re.compile(r" {2,}")
 EMPTY_CELL: Final = "-"
+KNOWLEDGE: Final = "orchestwin"
+PROJECT_NAME: Final = "Tip splitter"
+IDEA: Final = "A small web app that splits a restaurant bill and the tip among friends."
+BRIEF_ANSWERS: Final[Mapping[str, object]] = {
+    "problem": "Friends waste time working out who owes what after a dinner.",
+    "target_users": ["Groups of friends who eat out together"],
+    "goals": ["Split a bill fairly in less than a minute"],
+    "functional_requirements": [
+        "Enter the total of the bill",
+        "Choose the tip percentage",
+        "Show how much each person pays",
+    ],
+}
+GIT: Final = "git"
+GIT_NAME: Final = "Test"
+GIT_EMAIL: Final = "test@example.com"
+GIT_BRANCH: Final = "main"
+GIT_HOME: Final = "git-home"
+GIT_SECONDS: Final = 60.0
+GIT_OPTIONS: Final = (
+    "-c",
+    "core.autocrlf=false",
+    "-c",
+    f"user.name={GIT_NAME}",
+    "-c",
+    f"user.email={GIT_EMAIL}",
+)
+GIT_CLEARED: Final = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY")
+STUDIO_VARIABLE_PREFIX: Final = "ORCHESTWIN_"
+BROWSER_VARIABLES: Final = frozenset(discovery.VARIABLES.values())
+ACCOUNT_PATH: Final = "/auth/me"
 
 
 class StudioFailure(RuntimeError):
+    pass
+
+
+class GitFailure(RuntimeError):
     pass
 
 
@@ -134,6 +203,19 @@ class Run:
 
     def shows(self, sentence: str) -> bool:
         return flat(sentence) in flat(f"{self.output}\n{self.errors}")
+
+    def order_gaps(self, *sentences: str) -> list[str]:
+        written = flat(self.output)
+        position = 0
+        gaps: list[str] = []
+        for sentence in sentences:
+            wanted = flat(sentence)
+            found = written.find(wanted, position)
+            if found < 0:
+                gaps.append(f"missing, or not in this order: {sentence}")
+                continue
+            position = found + len(wanted)
+        return gaps
 
     def writes(self) -> list[Exchange]:
         return [
@@ -435,6 +517,50 @@ class Terminal:
         directory: Path,
         answers: Sequence[str] = (),
         offline: bool = False,
+        sleep: Callable[[float], None] = short_wait,
+    ) -> Run:
+        return self._run(
+            arguments,
+            directory=directory,
+            variables={},
+            answers=answers,
+            offline=offline,
+            sleep=sleep,
+        )
+
+    def session_document(self) -> Mapping[str, object]:
+        if not self.sessions_file.is_file():
+            return {}
+        document = json.loads(self.sessions_file.read_bytes().decode("utf-8"))
+        return document if isinstance(document, dict) else {}
+
+    def run_on_machine(
+        self,
+        arguments: Sequence[str],
+        *,
+        directory: Path,
+        machine: Mapping[str, str],
+        answers: Sequence[str] = (),
+        sleep: Callable[[float], None] = short_wait,
+    ) -> Run:
+        return self._run(
+            arguments,
+            directory=directory,
+            variables=machine_variables(machine),
+            answers=answers,
+            offline=False,
+            sleep=sleep,
+        )
+
+    def _run(
+        self,
+        arguments: Sequence[str],
+        *,
+        directory: Path,
+        variables: Mapping[str, str],
+        answers: Sequence[str],
+        offline: bool,
+        sleep: Callable[[float], None],
     ) -> Run:
         directory.mkdir(parents=True, exist_ok=True)
         transport = RecordingTransport(self.origin, offline=offline)
@@ -446,6 +572,7 @@ class Terminal:
             stdout=stdout,
             stderr=stderr,
             variables={
+                **variables,
                 CONFIG_VARIABLE: str(self.config),
                 "NO_COLOR": "1",
                 "COLUMNS": TERMINAL_COLUMNS,
@@ -456,7 +583,7 @@ class Terminal:
             interactive=False,
             now=utc_now,
             monotonic=time.monotonic,
-            sleep=short_wait,
+            sleep=sleep,
             read_secret=no_secret,
             open_browser=browser.open,
             transport=transport,
@@ -476,12 +603,6 @@ class Terminal:
         self.runs.append(run)
         return run
 
-    def session_document(self) -> Mapping[str, object]:
-        if not self.sessions_file.is_file():
-            return {}
-        document = json.loads(self.sessions_file.read_bytes().decode("utf-8"))
-        return document if isinstance(document, dict) else {}
-
 
 @dataclass
 class Journey:
@@ -499,6 +620,379 @@ class Journey:
 
     def report(self) -> str:
         return "\n\n".join(self.problems)
+
+
+@dataclass
+class Scene:
+    origin: str
+    port: int
+    api: StudioApi
+    terminal: Terminal
+    outside: Path
+    project: Path
+    answers: Path
+    project_id: str = ""
+
+    @property
+    def base(self) -> str:
+        return f"/projects/{self.project_id}"
+
+    @property
+    def local(self) -> Path:
+        return self.project / ".orchestwin"
+
+    @property
+    def knowledge(self) -> Path:
+        return self.project / KNOWLEDGE
+
+    def ut(
+        self,
+        *arguments: str,
+        directory: Path | None = None,
+        answers: Sequence[str] = (),
+        offline: bool = False,
+        sleep: Callable[[float], None] = short_wait,
+    ) -> Run:
+        return self.terminal.run(
+            arguments,
+            directory=self.project if directory is None else directory,
+            answers=answers,
+            offline=offline,
+            sleep=sleep,
+        )
+
+    def document(self, path: str) -> object:
+        return self.api.document(f"{self.base}{path}")
+
+    def folders(self) -> list[Mapping]:
+        return self.document("/knowledge-packages")["versions"]
+
+    def folder_numbers(self) -> list[int]:
+        return [item["version_number"] for item in self.folders()]
+
+    def ut_on_machine(
+        self,
+        *arguments: str,
+        machine: Mapping[str, str],
+        directory: Path | None = None,
+        answers: Sequence[str] = (),
+        sleep: Callable[[float], None] = short_wait,
+    ) -> Run:
+        return self.terminal.run_on_machine(
+            arguments,
+            directory=self.project if directory is None else directory,
+            machine=machine,
+            answers=answers,
+            sleep=sleep,
+        )
+
+
+def journey_scene(root: Path, origin: str, port: int, api: StudioApi) -> Scene:
+    return Scene(
+        origin=origin,
+        port=port,
+        api=api,
+        terminal=Terminal(root, origin),
+        outside=root / "outside",
+        project=root / "project",
+        answers=write_json(
+            root / "answers.json",
+            {"name": PROJECT_NAME, "idea": IDEA, "answers": dict(BRIEF_ANSWERS)},
+        ),
+    )
+
+
+def stay_on_the_studio(scene: Scene) -> None:
+    assert scene.terminal.refused == []
+    ports = {
+        urllib.parse.urlsplit(exchange.url).port
+        for run in scene.terminal.runs
+        for exchange in run.exchanges
+    }
+    assert ports == {scene.port}
+    assert not ports & FORBIDDEN_PORTS
+
+
+def choose_through_the_api(scene: Scene, design: Mapping, alternative_id: str) -> None:
+    requirements = scene.document("/requirements/current")
+    package = chosen_package(design, requirements, alternative_id)
+    proposed = scene.api.request("POST", f"{scene.base}/design/revisions", {"package": package})
+    assert proposed.status == 201, f"the prepared choice answered {proposed.status} {proposed.code}"
+    diff = proposed.json()["diff"]["id"]
+    decided = scene.api.request(
+        "POST", f"{scene.base}/design/revisions/{diff}/decision", {"decision": "APPROVE"}
+    )
+    assert decided.status == 200, f"the prepared choice answered {decided.status} {decided.code}"
+
+
+def git_available() -> bool:
+    return shutil.which(GIT) is not None
+
+
+def git_variables(root: Path) -> dict[str, str]:
+    home = root / GIT_HOME
+    home.mkdir(parents=True, exist_ok=True)
+    return {
+        "HOME": str(home),
+        "GIT_CONFIG_GLOBAL": str(home / "gitconfig"),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CEILING_DIRECTORIES": str(root),
+        "GIT_AUTHOR_NAME": GIT_NAME,
+        "GIT_AUTHOR_EMAIL": GIT_EMAIL,
+        "GIT_COMMITTER_NAME": GIT_NAME,
+        "GIT_COMMITTER_EMAIL": GIT_EMAIL,
+    }
+
+
+class Repository:
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    def git(self, *arguments: str, moment: datetime | None = None) -> str:
+        variables = dict(os.environ)
+        if moment is not None:
+            stamp = moment.isoformat()
+            variables.update({"GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp})
+        completed = subprocess.run(
+            [GIT, *GIT_OPTIONS, *arguments],
+            cwd=self.root,
+            env=variables,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=GIT_SECONDS,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise GitFailure(
+                f"git {' '.join(arguments)} ended with {completed.returncode}: "
+                f"{completed.stderr.strip()}"
+            )
+        return completed.stdout
+
+    def create(self) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.git("init", "-q", "-b", GIT_BRANCH)
+
+    def commit(self, message: str, files: Mapping[str, str], moment: datetime) -> str:
+        for path, content in files.items():
+            target = self.root.joinpath(*path.split("/"))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content.encode("utf-8"))
+        self.git("add", "--", *files)
+        self.git("commit", "-q", "-m", message, moment=moment)
+        return self.git("rev-parse", "HEAD").strip()
+
+
+def machine_variables(machine: Mapping[str, str]) -> dict[str, str]:
+    return {
+        name: value
+        for name, value in machine.items()
+        if not name.upper().startswith(STUDIO_VARIABLE_PREFIX) or name.upper() in BROWSER_VARIABLES
+    }
+
+
+def installed_browsers(machine: Mapping[str, str], home: Path) -> tuple[BrowserProgram, ...]:
+    environment = Environment(
+        stdin=io.StringIO(),
+        stdout=io.StringIO(),
+        stderr=io.StringIO(),
+        variables=machine_variables(machine),
+        home=home,
+        working_directory=home,
+        platform=sys.platform,
+        interactive=False,
+        now=utc_now,
+        monotonic=time.monotonic,
+        sleep=short_wait,
+        read_secret=no_secret,
+        open_browser=Browser().open,
+        transport=UrlTransport(),
+        system_language=LANGUAGE,
+    )
+    return find_browsers(environment)
+
+
+def insert_test_plan(scene: Scene, plan: Mapping[str, object], *, database_url: str) -> None:
+    account = scene.api.document(ACCOUNT_PATH)
+    stored = stored_plan(
+        plan, project_id=UUID(scene.project_id), owner_user_id=UUID(str(account["id"]))
+    )
+    status = run_coroutine(store_test_plan(database_url, stored))
+    if status is not AcceptanceTestWriteStatus.RECORDED:
+        raise StudioFailure(f"the test plan was not stored: {status}")
+
+
+def stored_plan(plan: Mapping[str, object], *, project_id: UUID, owner_user_id: UUID) -> TestPlan:
+    reference = plan["reference"]
+    application = application_from_snapshot(plan["application"])
+    return TestPlan(
+        id=UUID(str(plan["id"])),
+        project_id=project_id,
+        owner_user_id=owner_user_id,
+        created_at=datetime.fromisoformat(str(plan["created_at"])),
+        locale=str(plan["locale"]),
+        requirements_version_number=reference["requirements_version_number"],
+        design_version_number=reference["design_version_number"],
+        alternative_code=reference["alternative_code"],
+        application=application,
+        criteria=tuple(plan["criteria"]),
+        paths=tuple(path_from_snapshot(item) for item in plan["paths"]),
+        not_covered=tuple(not_covered_from_snapshot(item) for item in plan["not_covered"]),
+        replan_of=tuple(plan["replan_of"]),
+        snapshot_summary=SnapshotSummary(
+            url=application.address, title="", elements=0, text_length=0
+        ),
+        cost_microusd=plan["cost_microusd"],
+    )
+
+
+async def store_test_plan(database_url: str, plan: TestPlan) -> AcceptanceTestWriteStatus:
+    runtime = database_runtime(database_url)
+    try:
+        async with runtime.session_factory() as session, session.begin():
+            repository = SqlAlchemyAcceptanceTestRepository(
+                session, owner_user_id=plan.owner_user_id
+            )
+            return await repository.create_plan(plan)
+    finally:
+        await runtime.dispose()
+
+
+def approved_reference(scene: Scene) -> dict[str, object]:
+    reference = scene.document("/alignment")["reference"]
+    requirements, design = reference["requirements"], reference["design"]
+    if requirements is None or design is None:
+        raise StudioFailure("the requirements and the design are not both approved")
+    return {
+        "requirements_version_number": requirements["version_number"],
+        "design_version_number": design["version_number"],
+        "alternative_code": design["alternative_code"],
+    }
+
+
+def insert_change_review(
+    scene: Scene, commit: str, review: Mapping[str, object], *, database_url: str
+) -> dict[str, object]:
+    account = scene.api.document(ACCOUNT_PATH)
+    run = run_coroutine(
+        store_change_review(
+            database_url,
+            owner_user_id=UUID(str(account["id"])),
+            project_id=UUID(scene.project_id),
+            commit=commit,
+            review=review,
+            reference=approved_reference(scene),
+        )
+    )
+    return run.to_snapshot()
+
+
+async def store_change_review(
+    database_url: str,
+    *,
+    owner_user_id: UUID,
+    project_id: UUID,
+    commit: str,
+    review: Mapping[str, object],
+    reference: Mapping[str, object],
+) -> ChangeReviewRun:
+    runtime = database_runtime(database_url)
+    try:
+        async with runtime.session_factory() as session, session.begin():
+            repository = SqlAlchemyCodeChangeRepository(session, owner_user_id=owner_user_id)
+            change = await repository.get(project_id, commit)
+            if change is None:
+                raise StudioFailure(f"the commit {commit} is not recorded in the Studio")
+            run = ChangeReviewRun(
+                id=uuid4(),
+                change_id=change.id,
+                project_id=project_id,
+                owner_user_id=owner_user_id,
+                commit=change.commit,
+                reviewed_at=utc_now(),
+                locale=str(review["locale"]),
+                requirements_version_number=reference["requirements_version_number"],
+                design_version_number=reference["design_version_number"],
+                alternative_code=reference["alternative_code"],
+                critiques=tuple(twin_critique_from_snapshot(item) for item in review["critiques"]),
+                alignment=alignment_verdict_from_snapshot(review["alignment"]),
+            )
+            status = await repository.create_run(run)
+    finally:
+        await runtime.dispose()
+    if status is not CodeChangeWriteStatus.RECORDED:
+        raise StudioFailure(f"the review of the commit {commit} was not stored: {status}")
+    return run
+
+
+def insert_test_run_review(
+    scene: Scene,
+    plan: Mapping[str, object],
+    run: Mapping[str, object],
+    review: Mapping[str, object],
+    *,
+    database_url: str,
+) -> dict[str, object]:
+    account = scene.api.document(ACCOUNT_PATH)
+    stored = stored_plan(
+        plan, project_id=UUID(scene.project_id), owner_user_id=UUID(str(account["id"]))
+    )
+    recorded = build_test_run(
+        run_id=uuid4(),
+        plans=(stored,),
+        started_at=datetime.fromisoformat(str(run["started_at"])),
+        finished_at=datetime.fromisoformat(str(run["finished_at"])),
+        recorded_at=utc_now(),
+        application=application_from_snapshot(run["application"]),
+        browsers=tuple(browser_from_snapshot(item) for item in run["browsers"]),
+        results=tuple(path_result_from_snapshot(item) for item in run["results"]),
+        not_covered=tuple(not_covered_from_snapshot(item) for item in run["not_covered"]),
+    )
+    reviewed = TestReview(
+        id=uuid4(),
+        run_id=recorded.id,
+        project_id=recorded.project_id,
+        owner_user_id=recorded.owner_user_id,
+        reviewed_at=utc_now(),
+        locale=str(review["locale"]),
+        critiques=tuple(critique_from_snapshot(item) for item in review["critiques"]),
+    )
+    statuses = run_coroutine(store_test_run_review(database_url, recorded, reviewed))
+    if statuses != (AcceptanceTestWriteStatus.RECORDED, AcceptanceTestWriteStatus.RECORDED):
+        raise StudioFailure(f"the test run and its review were not stored: {statuses}")
+    return recorded.with_review(reviewed).to_snapshot()
+
+
+async def store_test_run_review(
+    database_url: str, run: TestRun, review: TestReview
+) -> tuple[AcceptanceTestWriteStatus, AcceptanceTestWriteStatus]:
+    runtime = database_runtime(database_url)
+    try:
+        async with runtime.session_factory() as session, session.begin():
+            repository = SqlAlchemyAcceptanceTestRepository(
+                session, owner_user_id=run.owner_user_id
+            )
+            recorded = await repository.create_run(run)
+            reviewed = await repository.create_review(review)
+            return recorded, reviewed
+    finally:
+        await runtime.dispose()
+
+
+def database_runtime(database_url: str) -> DatabaseRuntime:
+    return create_database_runtime(DatabaseSettings(url=SecretStr(database_url), _env_file=None))
+
+
+def run_coroutine(coroutine: Coroutine[object, object, object]) -> object:
+    if sys.platform == "win32":
+        return asyncio.run(coroutine, loop_factory=selector_loop)
+    return asyncio.run(coroutine)
+
+
+def selector_loop() -> asyncio.AbstractEventLoop:
+    return asyncio.SelectorEventLoop(selectors.SelectSelector())
 
 
 def table_rows(output: str) -> list[list[str]]:

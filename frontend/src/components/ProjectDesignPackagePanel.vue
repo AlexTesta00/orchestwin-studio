@@ -2,8 +2,11 @@
 import { computed, provide, ref, watch } from "vue";
 
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
+import ProjectAcceptanceTestsPanel from "./ProjectAcceptanceTestsPanel.vue";
+import ProjectDevelopmentPanel from "./ProjectDevelopmentPanel.vue";
 import UiAgentMessage from "./UiAgentMessage.vue";
 import UiButton from "./UiButton.vue";
+import UiCommandLine from "./UiCommandLine.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 
 import { apiClient } from "../api/client";
@@ -13,12 +16,31 @@ import { useDesignStore } from "../stores/design";
 import { useKnowledgePackagesStore, type AuthorizedRequest } from "../stores/knowledgePackages";
 import { useUserModelingStore } from "../stores/userModeling";
 import type { DeclarativePrototypePayload, DesignAlternativePayload } from "../types/design";
-import type { KnowledgePackageVersionPayload } from "../types/knowledgePackages";
+import type { KnowledgePackageVersionPayload, KnowledgeStage } from "../types/knowledgePackages";
 
 type Locale = "en" | "it";
+type HeroState = "complete" | "partial" | "waiting";
 
 const HERO_IMAGE = "/home/pacchetto.webp";
 const AGENT_AVATAR = "/team/fe.webp";
+const STAGE_KEYS: readonly KnowledgeStage[] = ["brief", "team", "twins", "requirements", "design"];
+const TWINS_STAGE = STAGE_KEYS.indexOf("twins");
+const DESIGN_STAGE = STAGE_KEYS.indexOf("design");
+const FOLDER_NAME_LIMIT = 40;
+const TERMINAL_STEPS = [
+  { key: "login", command: "ut login --studio {address}" },
+  { key: "folder", command: "mkdir {folder}; cd {folder}" },
+  { key: "link", command: "ut init --project {project} --mode design-code" },
+  { key: "editor", command: "code ." },
+] as const;
+const DEVELOPMENT_STEPS = [
+  { key: "git", command: "git init" },
+  { key: "code", command: "ut code" },
+  { key: "test", command: "ut test --static ." },
+  { key: "align", command: "ut align" },
+  { key: "learn", command: "ut twins update" },
+  { key: "status", command: "ut status" },
+] as const;
 
 const props = withDefaults(
   defineProps<{
@@ -28,11 +50,17 @@ const props = withDefaults(
     authorize?: AuthorizedRequest;
     api?: KnowledgePackagesApi;
     saveExport?: (blob: Blob, fileName: string) => void;
+    studioAddress?: string;
+    sectionsMode?: boolean;
   }>(),
   {
     locale: "en",
+    studioAddress: () => window.location.origin,
+    sectionsMode: false,
   },
 );
+
+const emit = defineEmits<{ "sections-changed": [] }>();
 
 defineSlots<{
   preview?(props: {
@@ -51,17 +79,27 @@ const messages = {
     agentRole: "Interface developer",
     agentReady:
       "I gathered the five approved steps into a folder ready for your development tools.",
+    agentPartial:
+      "I gather the steps approved so far into a folder ready for your development tools; the next ones join it when you approve them.",
     agentWaiting:
-      "When the five steps are approved, I will gather them into a folder ready for your development tools.",
+      "As soon as the brief is approved, I will gather the approved steps into a folder ready for your development tools.",
     eyebrow: "Knowledge folder",
     title: "The project is ready",
+    titlePartial: "The folder is taking shape",
     titleWaiting: "The folder is not ready yet",
     intro:
-      "The five steps are approved. The folder holds the brief, the team, the twins, the requirements and the chosen design as text, tables and diagrams.",
+      "The five steps are approved. The folder holds the brief, the perspectives, the twins, the requirements and the chosen design as text, tables and diagrams.",
+    introPartial:
+      "The folder holds the steps approved so far as text, tables and diagrams. You can prepare it now and again after each approval.",
     introWaiting:
-      "The folder will hold the brief, the team, the twins, the requirements and the chosen design as text, tables and diagrams.",
-    notReady: "The folder can be prepared when all five steps are approved.",
-    pendingSteps: "Still waiting: {steps}.",
+      "The folder will hold the brief, the perspectives, the twins, the requirements and the chosen design as text, tables and diagrams.",
+    notReady: "The folder can be prepared as soon as the brief is approved.",
+    held: ["{count} of {total} steps", "{count} of {total} steps"],
+    partial: [
+      "The folder holds {held}: {steps} is still to approve.",
+      "The folder holds {held}: {steps} are still to approve.",
+    ],
+    partialRule: "Each step joins the folder when you approve it.",
     prepare: "Prepare and download the folder",
     preparing: "Preparing the folder…",
     latest: "{files} files · version {number}",
@@ -69,15 +107,15 @@ const messages = {
     reused: "Nothing changed since version {number}: the same folder was downloaded again: {file}",
     failed: "The folder could not be prepared.",
     downloadFailed: "The folder could not be downloaded.",
+    behind:
+      "{section} is behind: use «Update and confirm» at the top of the page, then publish again.",
+    behindStep:
+      "The {section} step is behind: open it and bring it up to date, then publish again.",
+    perspectivesBehind: "The brief changed: prepare the perspectives again, then publish again.",
     outdated: {
-      TEAM_OUTDATED:
-        "The team follows an earlier version of the brief. Open the Team step, update the team and approve it again.",
-      USER_TWINS_OUTDATED:
-        "The twins follow an earlier version of the brief or of the team. Open the User Twins step and approve them again.",
-      REQUIREMENTS_OUTDATED:
-        "The requirements follow an earlier version of the twins. Open the Requirements step, update them to the current twins and approve them again.",
-      DESIGN_OUTDATED:
-        "The design follows an earlier version of the requirements. Open the Design step, regenerate the alternatives and approve the design again.",
+      USER_TWINS_OUTDATED: "User Twin",
+      REQUIREMENTS_OUTDATED: "Definition",
+      DESIGN_OUTDATED: "Design & Evaluation",
     },
     contents: "What it contains",
     twins: ["twin, in its own reusable file", "twins, each in its own reusable file"],
@@ -91,7 +129,7 @@ const messages = {
       "{reviews} twin reviews · {decisions} decisions of yours · {discussions} approved discussions",
     countedLater: "Diagrams, tables and observations are counted when you prepare the folder.",
     design: "The chosen design",
-    noDesign: "The chosen design appears here once the design step is approved.",
+    noDesign: "The chosen design appears here once Design & Evaluation is approved.",
     noPreview: "No preview",
     path: "The steps and their versions",
     stageVersion: "version {number}",
@@ -99,8 +137,31 @@ const messages = {
     approved: "approved",
     pending: "pending",
     howTo: "How to use it",
+    terminalWay: "From the terminal, with `ut`",
+    terminalSteps: {
+      login: "Log in to the Studio from the terminal. You need this only once on this computer.",
+      folder: "Create an empty folder for the project and go into it.",
+      link: "Link the folder to this project: `ut` downloads the knowledge folder here.",
+      editor:
+        "Open the folder in Visual Studio Code: the OrchesTwin panel shows the state of the project and runs the same commands.",
+    },
+    developmentWay: "Then, during development",
+    developmentSteps: {
+      git: "Put the folder under git: `ut align` works on the commits.",
+      code: "Have your coding agent write the application, with the requirements and the design as context.",
+      test: "Check the acceptance criteria in the browsers of this computer (with `--url` if the application has an address of its own).",
+      align:
+        "Have the twins review the commits and bring code, design and requirements back in line.",
+      learn: "Have the twins propose what they learned from the development.",
+      status: "See where the project stands.",
+    },
+    zipWay: "Without `ut`: download the zip",
+    folder: "project",
+    copyCommand: "Copy",
+    commandCopied: "Copied",
+    commandNotCopied: "Could not copy",
     steps: [
-      "Extract the archive inside your project, for example in a folder named orchestwin.",
+      "Download the folder with the button above and extract it into your project, in a folder named orchestwin.",
       "Open ORCHESTWIN.md: it is the index and explains every file.",
       "Build with your own tools. Requirements, screens and elements have stable codes to quote in your work.",
       "When the scope changes, come back to the Studio, approve the new version and download the folder again.",
@@ -112,25 +173,38 @@ const messages = {
     noHistory: "No version has been prepared yet.",
     version: "Version {number}",
     versionMeta: "{date} · {files} files",
+    versionNext: "{held}, next: {step}",
     download: "Download",
     downloadVersion: "Download version {number}",
     earlier: "Earlier versions ({count})",
+    terminal:
+      "Development goes on from the terminal: `ut align` checks the commits against the design and `ut watch` follows them.",
   },
   it: {
     agentRole: "Sviluppatore dell'interfaccia",
     agentReady:
       "Ho raccolto i cinque passi approvati in una cartella pronta per i tuoi strumenti di sviluppo.",
+    agentPartial:
+      "Raccolgo i passi approvati finora in una cartella pronta per i tuoi strumenti di sviluppo; i prossimi si aggiungono quando li approvi.",
     agentWaiting:
-      "Quando i cinque passi saranno approvati, li raccoglierò in una cartella pronta per i tuoi strumenti di sviluppo.",
+      "Appena il brief è approvato, raccoglierò i passi approvati in una cartella pronta per i tuoi strumenti di sviluppo.",
     eyebrow: "Cartella di conoscenza",
     title: "Il progetto è pronto",
+    titlePartial: "La cartella prende forma",
     titleWaiting: "La cartella non è ancora pronta",
     intro:
-      "I cinque passi sono approvati. La cartella raccoglie brief, squadra, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+      "I cinque passi sono approvati. La cartella raccoglie brief, prospettive, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+    introPartial:
+      "La cartella raccoglie i passi approvati finora in forma di testo, tabelle e diagrammi. Puoi prepararla subito e di nuovo dopo ogni approvazione.",
     introWaiting:
-      "La cartella raccoglierà brief, squadra, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
-    notReady: "La cartella si può preparare quando tutti e cinque i passi sono approvati.",
-    pendingSteps: "Sono ancora in attesa: {steps}.",
+      "La cartella raccoglierà brief, prospettive, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+    notReady: "La cartella si può preparare appena il brief è approvato.",
+    held: ["{count} passo su {total}", "{count} passi su {total}"],
+    partial: [
+      "La cartella contiene {held}: resta da approvare {steps}.",
+      "La cartella contiene {held}: restano da approvare {steps}.",
+    ],
+    partialRule: "Ogni passo entra nella cartella quando lo approvi.",
     prepare: "Prepara e scarica la cartella",
     preparing: "Preparo la cartella…",
     latest: "{files} file · versione {number}",
@@ -139,15 +213,16 @@ const messages = {
       "Non è cambiato nulla dalla versione {number}: ho scaricato di nuovo la stessa cartella: {file}",
     failed: "Non è stato possibile preparare la cartella.",
     downloadFailed: "Non è stato possibile scaricare la cartella.",
+    behind:
+      "{section} è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi pubblica di nuovo.",
+    behindStep:
+      "Il passo {section} è rimasto indietro: aprilo e aggiornalo, poi pubblica di nuovo.",
+    perspectivesBehind:
+      "Il brief è cambiato: prepara di nuovo le prospettive, poi pubblica di nuovo.",
     outdated: {
-      TEAM_OUTDATED:
-        "La squadra segue una versione precedente del brief. Apri il passo Squadra, aggiorna la squadra e approvala di nuovo.",
-      USER_TWINS_OUTDATED:
-        "I twin seguono una versione precedente del brief o della squadra. Apri il passo User Twin e approvali di nuovo.",
-      REQUIREMENTS_OUTDATED:
-        "I requisiti seguono una versione precedente dei twin. Apri il passo Requisiti, aggiornali ai twin attuali e approvali di nuovo.",
-      DESIGN_OUTDATED:
-        "Il design segue una versione precedente dei requisiti. Apri il passo Design, rigenera le alternative e approva di nuovo il design.",
+      USER_TWINS_OUTDATED: "User Twin",
+      REQUIREMENTS_OUTDATED: "Definizione",
+      DESIGN_OUTDATED: "Design e valutazione",
     },
     contents: "Che cosa contiene",
     twins: ["twin, in un file riutilizzabile", "twin, ciascuno in un file riutilizzabile"],
@@ -161,7 +236,7 @@ const messages = {
       "{reviews} revisioni dei twin · {decisions} tue decisioni · {discussions} discussioni approvate",
     countedLater: "Diagrammi, tabelle e osservazioni si contano quando prepari la cartella.",
     design: "Il design scelto",
-    noDesign: "Il design scelto compare qui dopo l'approvazione del passo Design.",
+    noDesign: "Il design scelto compare qui dopo l'approvazione di Design e valutazione.",
     noPreview: "Nessuna anteprima",
     path: "I passi e le loro versioni",
     stageVersion: "versione {number}",
@@ -169,8 +244,30 @@ const messages = {
     approved: "approvato",
     pending: "in attesa",
     howTo: "Come usarla",
+    terminalWay: "Dal terminale, con `ut`",
+    terminalSteps: {
+      login: "Accedi allo Studio dal terminale. Serve una volta sola su questo computer.",
+      folder: "Crea una cartella vuota per il progetto ed entraci.",
+      link: "Collega la cartella a questo progetto: `ut` scarica qui la cartella di conoscenza.",
+      editor:
+        "Apri la cartella in Visual Studio Code: il pannello OrchesTwin mostra lo stato del progetto e lancia gli stessi comandi.",
+    },
+    developmentWay: "Poi, durante lo sviluppo",
+    developmentSteps: {
+      git: "Metti la cartella sotto git: `ut align` lavora sui commit.",
+      code: "Fai scrivere l'applicazione al tuo agente di programmazione, con requisiti e design come contesto.",
+      test: "Verifica i criteri di accettazione nei browser di questo computer (con `--url` se l'applicazione ha un suo indirizzo).",
+      align: "Fai esaminare i commit ai twin e riallinea codice, design e requisiti.",
+      learn: "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
+      status: "Guarda a che punto è il progetto.",
+    },
+    zipWay: "Senza `ut`: scarica lo zip",
+    folder: "progetto",
+    copyCommand: "Copia",
+    commandCopied: "Copiato",
+    commandNotCopied: "Copia non riuscita",
     steps: [
-      "Estrai l'archivio dentro il tuo progetto, per esempio in una cartella chiamata orchestwin.",
+      "Scarica la cartella con il pulsante qui sopra ed estraila nel tuo progetto, in una cartella chiamata orchestwin.",
       "Apri ORCHESTWIN.md: è l'indice e spiega ogni file.",
       "Realizza il progetto con i tuoi strumenti. Requisiti, schermate ed elementi hanno codici stabili da citare nel lavoro.",
       "Quando lo scopo cambia, torna nello Studio, approva la nuova versione e scarica di nuovo la cartella.",
@@ -182,9 +279,47 @@ const messages = {
     noHistory: "Non hai ancora preparato nessuna versione.",
     version: "Versione {number}",
     versionMeta: "{date} · {files} file",
+    versionNext: "{held}, il prossimo è {step}",
     download: "Scarica",
     downloadVersion: "Scarica la versione {number}",
     earlier: "Versioni precedenti ({count})",
+    terminal:
+      "Lo sviluppo continua dal terminale: `ut align` confronta i commit con il design e `ut watch` li segue.",
+  },
+} as const;
+
+const sectionMessages = {
+  en: {
+    agentReady:
+      "I gathered the five approved sections into a folder ready for your development tools.",
+    agentPartial:
+      "I gather the sections approved so far into a folder ready for your development tools; the next ones join it when you approve them.",
+    agentWaiting:
+      "As soon as the brief is approved, I will gather the approved sections into a folder ready for your development tools.",
+    intro:
+      "The five sections are approved. The folder holds the brief, the perspectives, the twins, the requirements and the chosen design as text, tables and diagrams.",
+    introPartial:
+      "The folder holds the sections approved so far as text, tables and diagrams. You can prepare it now and again after each approval.",
+    held: ["{count} of {total} sections", "{count} of {total} sections"],
+    partialRule: "Each section joins the folder when you approve it.",
+    path: "The sections and their versions",
+    versionNext: "{held}, next: {step}",
+  },
+  it: {
+    agentReady:
+      "Ho raccolto le cinque sezioni approvate in una cartella pronta per i tuoi strumenti di sviluppo.",
+    agentPartial:
+      "Raccolgo le sezioni approvate finora in una cartella pronta per i tuoi strumenti di sviluppo; le prossime si aggiungono quando le approvi.",
+    agentWaiting:
+      "Appena il brief è approvato, raccoglierò le sezioni approvate in una cartella pronta per i tuoi strumenti di sviluppo.",
+    intro:
+      "Le cinque sezioni sono approvate. La cartella raccoglie brief, prospettive, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+    introPartial:
+      "La cartella raccoglie le sezioni approvate finora in forma di testo, tabelle e diagrammi. Puoi prepararla subito e di nuovo dopo ogni approvazione.",
+    held: ["{count} sezione su {total}", "{count} sezioni su {total}"],
+    partialRule: "Ogni sezione entra nella cartella quando la approvi.",
+    path: "Le sezioni e le loro versioni",
+    versionNext: "{held}, la prossima è {step}",
   },
 } as const;
 
@@ -193,30 +328,85 @@ const design = useDesignStore();
 const modeling = useUserModelingStore();
 const packages = useKnowledgePackagesStore();
 
-const copy = computed(() => messages[props.locale]);
+const copy = computed(() =>
+  props.sectionsMode
+    ? { ...messages[props.locale], ...sectionMessages[props.locale] }
+    : messages[props.locale],
+);
 const busy = ref(false);
 const error = ref<string | null>(null);
 const outcome = ref<{ reused: boolean; number: number; file: string } | null>(null);
 
-const ready = computed(
-  () => props.stages.length > 0 && props.stages.every((stage) => stage.approved),
-);
-const pendingStages = computed(() =>
-  new Intl.ListFormat(props.locale === "it" ? "it-IT" : "en-GB", {
+const heldCount = computed(() => {
+  const missing = props.stages.findIndex((stage) => !stage.approved);
+  return missing < 0 ? props.stages.length : missing;
+});
+const ready = computed(() => heldCount.value > 0);
+const complete = computed(() => ready.value && heldCount.value === props.stages.length);
+const twinsApproved = computed(() => props.stages[TWINS_STAGE]?.approved === true);
+const designApproved = computed(() => props.stages[DESIGN_STAGE]?.approved === true);
+const heroState = computed<HeroState>(() => {
+  if (complete.value) {
+    return "complete";
+  }
+  return ready.value ? "partial" : "waiting";
+});
+const hero = computed(() => {
+  const text = copy.value;
+  const states = {
+    complete: { agent: text.agentReady, title: text.title, intro: text.intro },
+    partial: { agent: text.agentPartial, title: text.titlePartial, intro: text.introPartial },
+    waiting: { agent: text.agentWaiting, title: text.titleWaiting, intro: text.introWaiting },
+  };
+  return states[heroState.value];
+});
+const partialNote = computed(() => {
+  if (heroState.value !== "partial") {
+    return null;
+  }
+  const missing = props.stages.slice(heldCount.value).map((stage) => stage.label);
+  const [one, many] = copy.value.partial;
+  const steps = new Intl.ListFormat(props.locale === "it" ? "it-IT" : "en-GB", {
     style: "long",
     type: "conjunction",
-  }).format(props.stages.filter((stage) => !stage.approved).map((stage) => stage.label)),
-);
+  }).format(missing);
+  return fill(missing.length === 1 ? one : many, {
+    held: heldText(heldCount.value, props.stages.length),
+    steps,
+  });
+});
 const versions = computed<KnowledgePackageVersionPayload[]>(() =>
   packages.projectId === props.projectId ? packages.versions : [],
 );
 const latest = computed(() => versions.value[0] ?? null);
 const earlier = computed(() => versions.value.slice(1));
+const folderName = computed(
+  () => folderSlug(latest.value?.project_name ?? "") || copy.value.folder,
+);
+const terminalSteps = computed(() => {
+  const values = {
+    address: props.studioAddress,
+    folder: folderName.value,
+    project: props.projectId,
+  };
+  return TERMINAL_STEPS.map((step) => ({
+    key: step.key,
+    text: copy.value.terminalSteps[step.key],
+    command: fill(step.command, values),
+  }));
+});
+const developmentSteps = computed(() =>
+  DEVELOPMENT_STEPS.map((step) => ({
+    key: step.key,
+    text: copy.value.developmentSteps[step.key],
+    command: step.command,
+  })),
+);
 const loadingHistory = computed(
   () => packages.projectId === props.projectId && packages.pending.load,
 );
 const selectedAlternative = computed(() =>
-  design.projectId === props.projectId ? design.selectedAlternative : null,
+  design.projectId === props.projectId && designApproved.value ? design.selectedAlternative : null,
 );
 const prototype = computed(() => {
   const candidate = design.current?.package.prototype ?? null;
@@ -225,7 +415,8 @@ const prototype = computed(() => {
     : null;
 });
 const twins = computed(() => {
-  const current = modeling.projectId === props.projectId ? modeling.currentTwins : [];
+  const current =
+    twinsApproved.value && modeling.projectId === props.projectId ? modeling.currentTwins : [];
   if (current.length > 0) {
     return current.map((twin) => ({ id: twin.id, name: twin.profile.name }));
   }
@@ -262,6 +453,16 @@ function fill(template: string, values: Record<string, string | number>): string
   return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
 }
 
+function folderSlug(name: string): string {
+  const slug = name
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+  return Array.from(slug).slice(0, FOLDER_NAME_LIMIT).join("").replace(/-+$/, "");
+}
+
 function plural(count: number, key: "twins" | "diagrams" | "tables" | "findings"): string {
   const [one, many] = copy.value[key];
   return count === 1 ? one : many;
@@ -272,6 +473,25 @@ function versionMeta(version: KnowledgePackageVersionPayload): string {
     date: dateFormat.value.format(new Date(version.created_at)),
     files: version.file_count,
   });
+}
+
+function heldText(count: number, total: number): string {
+  const [one, many] = copy.value.held;
+  return fill(count === 1 ? one : many, { count, total });
+}
+
+function versionProgress(version: KnowledgePackageVersionPayload): string {
+  const held = heldText(version.progress.approved.length, STAGE_KEYS.length);
+  const pending = version.progress.pending;
+  const step = pending === null ? undefined : props.stages[STAGE_KEYS.indexOf(pending)]?.label;
+  return step === undefined ? held : fill(copy.value.versionNext, { held, step });
+}
+
+function commandParts(text: string): { key: number; text: string; command: boolean }[] {
+  return text
+    .split("`")
+    .map((part, index) => ({ key: index, text: part, command: index % 2 === 1 }))
+    .filter((part) => part.text.length > 0);
 }
 
 function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
@@ -297,11 +517,18 @@ function failureMessage(fallback: string): string {
   if (code === null) {
     return fallback;
   }
-  if (code.endsWith("_APPROVAL_REQUIRED")) {
+  if (code === "BRIEF_APPROVAL_REQUIRED") {
     return copy.value.notReady;
   }
-  const outdated: Readonly<Record<string, string>> = copy.value.outdated;
-  return outdated[code] ?? fallback;
+  if (code === "TEAM_OUTDATED") {
+    return copy.value.perspectivesBehind;
+  }
+  const sections: Readonly<Record<string, string>> = copy.value.outdated;
+  const section = sections[code];
+  if (section === undefined) {
+    return fallback;
+  }
+  return fill(props.sectionsMode ? copy.value.behind : copy.value.behindStep, { section });
 }
 
 async function fetchVersion(number: number): Promise<string> {
@@ -317,6 +544,7 @@ async function prepare(): Promise<void> {
 
   try {
     const publication = await packages.publish(props.projectId, authorizedRequest, props.api);
+    emit("sections-changed");
     const file = await fetchVersion(publication.version.version_number);
     outcome.value = {
       reused: publication.reused,
@@ -357,7 +585,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
 <template>
   <div class="grid gap-4 text-on-night" data-surface="night" data-testid="design-package">
     <UiAgentMessage :role-label="copy.agentRole" :avatar="AGENT_AVATAR" class="mb-1">
-      {{ ready ? copy.agentReady : copy.agentWaiting }}
+      {{ hero.agent }}
     </UiAgentMessage>
 
     <section
@@ -389,12 +617,12 @@ watch(() => props.projectId, loadHistory, { immediate: true });
             id="design-package-title"
             class="mt-3 mb-2.5 font-display text-[clamp(22px,2.4vw,32px)] leading-[1.12] font-extralight tracking-display text-balance uppercase"
           >
-            {{ ready ? copy.title : copy.titleWaiting }}
+            {{ hero.title }}
           </h2>
           <p
             class="m-0 mb-6 text-[15px] leading-[1.55] text-on-night-2 @3xl:max-w-[calc(52cqw-2rem)]"
           >
-            {{ ready ? copy.intro : copy.introWaiting }}
+            {{ hero.intro }}
           </p>
           <p
             v-if="!ready"
@@ -402,9 +630,6 @@ watch(() => props.projectId, loadHistory, { immediate: true });
             data-testid="package-not-ready"
           >
             {{ copy.notReady }}
-            <template v-if="pendingStages">
-              {{ fill(copy.pendingSteps, { steps: pendingStages }) }}
-            </template>
           </p>
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
             <UiButton
@@ -424,6 +649,13 @@ watch(() => props.projectId, loadHistory, { immediate: true });
               {{ fill(copy.latest, { files: latest.file_count, number: latest.version_number }) }}
             </span>
           </div>
+          <p
+            v-if="partialNote"
+            class="m-0 mt-4 text-sm leading-normal text-on-night-2 @3xl:max-w-[calc(52cqw-2rem)]"
+            data-testid="package-partial"
+          >
+            {{ partialNote }} {{ copy.partialRule }}
+          </p>
           <div aria-live="polite">
             <p
               v-if="outcome"
@@ -563,7 +795,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
 
         <details
           class="group mt-4 border-t border-on-night/10 pt-1"
-          :open="!ready"
+          :open="!complete"
           data-testid="package-path"
         >
           <summary
@@ -605,16 +837,27 @@ watch(() => props.projectId, loadHistory, { immediate: true });
       <section
         class="rounded-tile border border-night-line bg-night-raised p-6"
         aria-labelledby="package-howto-title"
+        data-testid="package-howto"
       >
         <h2 id="package-howto-title" class="m-0 mb-4 text-lg leading-tight font-semibold">
           {{ copy.howTo }}
         </h2>
-        <ol class="m-0 grid list-none gap-3.5 p-0">
+        <h3 class="m-0 mb-3 text-[15px] leading-snug font-semibold" data-testid="package-cli-title">
+          <template v-for="part in commandParts(copy.terminalWay)" :key="part.key">
+            <code
+              v-if="part.command"
+              class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+              >{{ part.text }}</code
+            >
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </h3>
+        <ol class="m-0 list-none space-y-4 p-0" data-testid="package-cli-steps">
           <li
-            v-for="(step, index) in copy.steps"
-            :key="step"
-            class="flex gap-3 text-[15px] leading-normal text-on-night-2"
-            data-testid="package-step"
+            v-for="(step, index) in terminalSteps"
+            :key="step.key"
+            class="flex gap-3"
+            data-testid="package-cli-step"
           >
             <span
               class="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full border-[1.5px] border-on-night/50 text-xs font-semibold text-on-night"
@@ -622,9 +865,100 @@ watch(() => props.projectId, loadHistory, { immediate: true });
             >
               {{ index + 1 }}
             </span>
-            <span>{{ step }}</span>
+            <div class="min-w-0 flex-1">
+              <p
+                class="m-0 mb-2 text-[15px] leading-normal text-on-night-2"
+                data-testid="package-cli-text"
+              >
+                <template v-for="part in commandParts(step.text)" :key="part.key">
+                  <code
+                    v-if="part.command"
+                    class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                    >{{ part.text }}</code
+                  >
+                  <template v-else>{{ part.text }}</template>
+                </template>
+              </p>
+              <UiCommandLine
+                :command="step.command"
+                :copy-label="copy.copyCommand"
+                :copied-label="copy.commandCopied"
+                :failed-label="copy.commandNotCopied"
+              />
+            </div>
           </li>
         </ol>
+        <template v-if="designApproved">
+          <h3
+            class="m-0 mt-6 mb-3 text-[15px] leading-snug font-semibold"
+            data-testid="package-development-title"
+          >
+            {{ copy.developmentWay }}
+          </h3>
+          <ul class="m-0 list-none space-y-4 p-0" data-testid="package-development-steps">
+            <li
+              v-for="step in developmentSteps"
+              :key="step.key"
+              data-testid="package-development-step"
+            >
+              <p
+                class="m-0 mb-2 text-[15px] leading-normal text-on-night-2"
+                data-testid="package-development-text"
+              >
+                <template v-for="part in commandParts(step.text)" :key="part.key">
+                  <code
+                    v-if="part.command"
+                    class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                    >{{ part.text }}</code
+                  >
+                  <template v-else>{{ part.text }}</template>
+                </template>
+              </p>
+              <UiCommandLine
+                :command="step.command"
+                :copy-label="copy.copyCommand"
+                :copied-label="copy.commandCopied"
+                :failed-label="copy.commandNotCopied"
+              />
+            </li>
+          </ul>
+        </template>
+        <details class="group mt-6 border-t border-on-night/10 pt-1" data-testid="package-zip">
+          <summary
+            class="flex min-h-11 cursor-pointer list-none items-center gap-2.5 text-sm font-semibold text-petrol-on-night-2 [&::-webkit-details-marker]:hidden"
+          >
+            <span
+              aria-hidden="true"
+              class="inline-block h-1.5 w-1.5 shrink-0 -rotate-45 border-r-[1.5px] border-b-[1.5px] border-petrol-on-night-2 transition-transform duration-150 group-open:rotate-45"
+            />
+            <span>
+              <template v-for="part in commandParts(copy.zipWay)" :key="part.key">
+                <code
+                  v-if="part.command"
+                  class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                  >{{ part.text }}</code
+                >
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </span>
+          </summary>
+          <ol class="m-0 grid list-none gap-3.5 p-0 pt-2 pb-1">
+            <li
+              v-for="(step, index) in copy.steps"
+              :key="step"
+              class="flex gap-3 text-[15px] leading-normal text-on-night-2"
+              data-testid="package-step"
+            >
+              <span
+                class="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full border-[1.5px] border-on-night/50 text-xs font-semibold text-on-night"
+                aria-hidden="true"
+              >
+                {{ index + 1 }}
+              </span>
+              <span>{{ step }}</span>
+            </li>
+          </ol>
+        </details>
       </section>
     </div>
 
@@ -651,7 +985,8 @@ watch(() => props.projectId, loadHistory, { immediate: true });
             <strong class="font-semibold text-on-night" data-testid="package-version-title">
               {{ fill(copy.version, { number: latest.version_number }) }}
             </strong>
-            · {{ versionMeta(latest) }}
+            · {{ versionMeta(latest) }} ·
+            <span data-testid="package-version-progress">{{ versionProgress(latest) }}</span>
           </p>
           <UiButton
             variant="outline"
@@ -693,7 +1028,8 @@ watch(() => props.projectId, loadHistory, { immediate: true });
               <strong class="font-semibold text-on-night" data-testid="package-version-title">
                 {{ fill(copy.version, { number: version.version_number }) }}
               </strong>
-              · {{ versionMeta(version) }}
+              · {{ versionMeta(version) }} ·
+              <span data-testid="package-version-progress">{{ versionProgress(version) }}</span>
             </p>
             <UiButton
               variant="outline"
@@ -707,6 +1043,34 @@ watch(() => props.projectId, loadHistory, { immediate: true });
           </li>
         </ol>
       </details>
+      <p
+        v-if="designApproved"
+        class="m-0 mt-3 border-t border-on-night/10 pt-3 text-sm leading-normal text-on-night-2"
+        data-testid="package-terminal"
+      >
+        <template v-for="part in commandParts(copy.terminal)" :key="part.key">
+          <code
+            v-if="part.command"
+            class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+            >{{ part.text }}</code
+          >
+          <template v-else>{{ part.text }}</template>
+        </template>
+      </p>
     </section>
+
+    <ProjectDevelopmentPanel
+      v-if="designApproved"
+      :project-id="projectId"
+      :locale="locale"
+      :authorize="authorizedRequest"
+    />
+
+    <ProjectAcceptanceTestsPanel
+      v-if="designApproved"
+      :project-id="projectId"
+      :locale="locale"
+      :authorize="authorizedRequest"
+    />
   </div>
 </template>

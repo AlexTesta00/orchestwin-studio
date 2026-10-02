@@ -33,11 +33,18 @@ from orchestwin.models.anthropic_hosted import (
     build_anthropic_adapter,
     create_anthropic_client,
 )
+from orchestwin.models.claude_code_cli import (
+    ProcessRunner,
+    build_claude_code_adapter,
+    claude_code_executable,
+    claude_code_readiness,
+)
 from orchestwin.models.design_runtime import DesignRuntime, DesignRuntimeMode
 from orchestwin.models.generation_budget import GenerationBudget
 from orchestwin.models.generation_routing import RoutingProposalGenerator
 from orchestwin.models.hosted_configuration import (
     AnthropicProviderEntry,
+    ClaudeCodeProviderEntry,
     HostedConfigurationError,
     HostedModelConfiguration,
     HostedModelEntry,
@@ -302,6 +309,21 @@ class HostedProviderCheck:
 
 
 @dataclass(frozen=True)
+class ClaudeCodeProviderCheck:
+    provider_id: str
+    executable: str | None
+    models: tuple[tuple[str, HostedModelConfiguration], ...]
+    run: ProcessRunner | None = field(default=None, repr=False)
+
+    async def observe(self):
+        return await claude_code_readiness(
+            self.executable,
+            models=tuple((entry_id, item.model) for entry_id, item in self.models),
+            run=self.run,
+        )
+
+
+@dataclass(frozen=True)
 class LocalProposalCheck:
     entry_id: str
     configuration: ProposalModelConfiguration
@@ -321,9 +343,15 @@ class RealModelRuntime:
     schema_version: int = 1
     providers: ProvidersConfiguration | None = None
     budget: GenerationBudget | None = None
-    _hosted_checks: tuple[HostedProviderCheck, ...] = field(default=(), repr=False)
+    _hosted_checks: tuple[HostedProviderCheck | ClaudeCodeProviderCheck, ...] = field(
+        default=(), repr=False
+    )
     _local_checks: tuple[LocalProposalCheck, ...] = field(default=(), repr=False)
     _clients: tuple[Any, ...] = field(default=(), repr=False)
+
+    @property
+    def billing(self):
+        return None if self.providers is None else self.providers.billing()
 
     def _assert_unchanged(self):
         _assert_sealed_files(self._files)
@@ -508,7 +536,7 @@ def _local_proposal_generator(provider, evaluator):
 
 
 def _build_hosted_runtime(
-    path, raw, config, *, env_file, anthropic_client_factory, openai_model_fetch
+    path, raw, config, *, env_file, anthropic_client_factory, openai_model_fetch, claude_code_run
 ):
     providers_raw = _read(config.providers_config_file)
     providers = parse_providers_configuration(providers_raw)
@@ -526,6 +554,7 @@ def _build_hosted_runtime(
     clients = {}
     generators = {}
     probes = {}
+    claude_code = {}
     local_checks = []
     for entry in providers.models:
         provider = providers.provider(entry.provider)
@@ -542,19 +571,28 @@ def _build_hosted_runtime(
             generators[entry.id] = generator
             continue
         configuration = providers.hosted_model(entry.id)
-        key = keys[provider.id]
-        if isinstance(provider, AnthropicProviderEntry):
-            if provider.id not in clients:
-                clients[provider.id] = anthropic_client_factory(key.value)
-            client = clients[provider.id]
-            port = build_anthropic_adapter(configuration, client=client, api_key=key.value)
-            probe = _anthropic_probe(client)
+        if isinstance(provider, ClaudeCodeProviderEntry):
+            if provider.id not in claude_code:
+                claude_code[provider.id] = (claude_code_executable(provider.executable), [])
+            executable, served = claude_code[provider.id]
+            port = build_claude_code_adapter(
+                configuration, executable=executable, run=claude_code_run
+            )
+            served.append((entry.id, configuration))
         else:
-            port = build_openai_hosted_adapter(configuration, api_key=key.value)
-            probe = _openai_probe(key.value, openai_model_fetch)
-        probes.setdefault(provider.id, (provider, key, probe, []))[3].append(
-            (entry.id, configuration)
-        )
+            key = keys[provider.id]
+            if isinstance(provider, AnthropicProviderEntry):
+                if provider.id not in clients:
+                    clients[provider.id] = anthropic_client_factory(key.value)
+                client = clients[provider.id]
+                port = build_anthropic_adapter(configuration, client=client, api_key=key.value)
+                probe = _anthropic_probe(client)
+            else:
+                port = build_openai_hosted_adapter(configuration, api_key=key.value)
+                probe = _openai_probe(key.value, openai_model_fetch)
+            probes.setdefault(provider.id, (provider, key, probe, []))[3].append(
+                (entry.id, configuration)
+            )
         generators[entry.id] = ProposalGenerator(
             configuration,
             _ConfigurationSealedPort(port, _sealed_hashes(manifest_files)),
@@ -564,15 +602,26 @@ def _build_hosted_runtime(
     routing = RoutingProposalGenerator(generators, providers.routes)
     if evaluator is not None:
         evaluator = replace(evaluator, generation_lock=lock)
-    hosted_checks = tuple(
-        HostedProviderCheck(
-            provider_id=provider.id,
-            kind=provider.provider_kind.value,
-            key=key,
-            models=tuple(models),
-            probe=probe,
-        )
-        for provider, key, probe, models in probes.values()
+    hosted_checks = (
+        *(
+            HostedProviderCheck(
+                provider_id=provider.id,
+                kind=provider.provider_kind.value,
+                key=key,
+                models=tuple(models),
+                probe=probe,
+            )
+            for provider, key, probe, models in probes.values()
+        ),
+        *(
+            ClaudeCodeProviderCheck(
+                provider_id=provider_id,
+                executable=executable,
+                models=tuple(served),
+                run=claude_code_run,
+            )
+            for provider_id, (executable, served) in claude_code.items()
+        ),
     )
     return RealModelRuntime(
         routing.configuration,
@@ -616,6 +665,7 @@ def build_real_model_runtime(
     env_file: str | Path | None = ".env",
     anthropic_client_factory: Callable[[str], Any] = create_anthropic_client,
     openai_model_fetch: Callable[..., tuple[int, bytes]] | None = None,
+    claude_code_run: ProcessRunner | None = None,
 ):
     try:
         if path is None:
@@ -632,6 +682,7 @@ def build_real_model_runtime(
                 env_file=env_file,
                 anthropic_client_factory=anthropic_client_factory,
                 openai_model_fetch=openai_model_fetch,
+                claude_code_run=claude_code_run,
             )
         config = RealModelConfiguration.model_validate(document)
         _Overrides().validate_against(config)

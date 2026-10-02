@@ -111,7 +111,7 @@ def test_origin_names_the_project_and_the_package_the_folder_came_from() -> None
         "project_name": "Lista ospiti workshop",
         "package_version": 3,
         "package_content_hash": folder.content_hash,
-        "schema_version": 2,
+        "schema_version": 3,
     }
     assert plan(folder).origin == origin
 
@@ -265,6 +265,22 @@ def test_comparison_notices_a_changed_text_a_lost_item_and_a_changed_view() -> N
     assert changed[0].startswith("folder.requirements.specification.requirements[0].statement: ")
     assert lost == ["folder.design.package.alternatives[0].advantages: 2 items against 1"]
     assert view_differences(folder.files, views) == ["requirements/tables/requirements.csv"]
+
+
+def test_reading_and_comparing_cover_only_the_stages_that_are_present() -> None:
+    documents = {
+        stage: document
+        for stage, document in real_documents().items()
+        if stage in ("brief", "team", "twins")
+    }
+    changed = json.loads(json.dumps(documents))
+    changed["team"]["proposal"]["members"].pop()
+
+    assert list(stage_versions(documents)) == ["brief", "team", "twins"]
+    assert list(comparable_documents(documents)) == ["brief", "team", "twins"]
+    assert document_differences(documents, documents) == []
+    assert document_differences(documents, changed)[0].startswith("folder.team.proposal.members: ")
+    assert entity_labels(documents)[str(REAL_PROJECT_ID)] == "project"
 
 
 def test_labels_name_entities_by_code_and_twins_by_name() -> None:

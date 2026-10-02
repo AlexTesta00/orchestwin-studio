@@ -18,6 +18,7 @@ import type {
   HumanGateEventPayload,
   HumanGatePayload,
   HumanGateStatus,
+  RequirementPriority,
   RequirementsReadinessPayload,
   RequirementsRevisionDecisionRequest,
   RequirementsRevisionPayload,
@@ -550,7 +551,7 @@ function readyApi(
 function mountFlow(
   api: RequirementsApi,
   autoLoad = false,
-  options: { locale?: "en" | "it"; attach?: boolean } = {},
+  options: { locale?: "en" | "it"; attach?: boolean; sectionsMode?: boolean } = {},
 ) {
   const locale = options.locale ?? "en";
   return mount(ProjectRequirementsFlow, {
@@ -560,6 +561,7 @@ function mountFlow(
       autoLoad,
       authorize,
       api,
+      ...(options.sectionsMode === undefined ? {} : { sectionsMode: options.sectionsMode }),
     },
     global: { plugins: [createAppI18n(locale)] },
     ...(options.attach ? { attachTo: document.body } : {}),
@@ -621,7 +623,109 @@ function noteOf(wrapper: ReturnType<typeof mountFlow>): string {
   return (wrapper.get('[data-testid="decision-note"]').element as HTMLTextAreaElement).value;
 }
 
+function rowOf(wrapper: ReturnType<typeof mountFlow>, code: string) {
+  return wrapper.get(`[data-testid="requirement-row"][data-requirements-item="${code}"]`);
+}
+
+async function openRow(wrapper: ReturnType<typeof mountFlow>, code: string): Promise<void> {
+  await rowOf(wrapper, code).get('[data-testid="requirement-toggle"]').trigger("click");
+}
+
+function spokenText(element: Element): string {
+  const copy = element.cloneNode(true) as Element;
+  copy.querySelectorAll('[aria-hidden="true"]').forEach((hidden) => hidden.remove());
+  return (copy.textContent ?? "").trim();
+}
+
+function expandedOf(wrapper: ReturnType<typeof mountFlow>): (string | undefined)[] {
+  return wrapper
+    .findAll('[data-testid="requirement-toggle"]')
+    .map((toggle) => toggle.attributes("aria-expanded"));
+}
+
+function prioritized(
+  priorities: readonly RequirementPriority[],
+): RequirementsSpecificationVersionPayload {
+  return {
+    ...VERSION,
+    specification: {
+      ...VERSION.specification,
+      requirements: priorities.map((priority, index) => ({
+        ...VERSION.specification.requirements[0]!,
+        id: `00000000-0000-4000-8000-0000000004${String(index).padStart(2, "0")}`,
+        code: `REQ-${String(index + 1).padStart(3, "0")}`,
+        title: `Requirement ${index + 1}`,
+        priority,
+      })),
+    },
+  };
+}
+
 describe("ProjectRequirementsFlow", () => {
+  it("opens a need selected from the diagram and preserves schema 2 when proposing a requirement edit", async () => {
+    const version: RequirementsSpecificationVersionPayload = structuredClone(RICH_VERSION);
+    const twin = version.specification.user_twin_references[0]!;
+    version.specification.schema_version = 2;
+    version.specification.scenarios = [
+      {
+        id: "scenario-32",
+        code: "SCN-001",
+        title: "Guest arrives",
+        actor: twin,
+        context: "At reception",
+        goal: "Recognize the guest",
+        trigger: "Guest arrives",
+        preconditions: [],
+        steps: ["Find the guest"],
+        criticalities: [],
+        sources: version.specification.requirements[0]!.sources,
+        expected_outcome: "Guest found",
+        requirement_ids: [REQUIREMENT_ID],
+        acceptance_criterion_ids: [],
+      },
+    ];
+    version.specification.needs = [
+      {
+        id: "need-32",
+        code: "NED-001",
+        title: "Recognize guests",
+        statement: "Recognize arriving guests",
+        scenario_ids: ["scenario-32"],
+        sources: version.specification.requirements[0]!.sources,
+      },
+    ];
+    for (const item of [
+      ...version.specification.requirements,
+      ...version.specification.user_stories,
+    ])
+      item.need_ids = ["need-32"];
+    const api = readyApi(null, version);
+    const wrapper = mount(ProjectRequirementsFlow, {
+      props: { projectId: PROJECT_ID, locale: "en", autoLoad: true, authorize, api },
+      global: { plugins: [createAppI18n("en")], stubs: { ProjectDiagramsView: true } },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(api.calls).not.toContain("generate");
+    expect(wrapper.get('[data-testid="definition-needs-item"]').attributes("open")).toBeUndefined();
+    await wrapper.get('[data-testid="artifact-view-diagram"]').trigger("click");
+    wrapper.getComponent({ name: "ProjectDiagramsView" }).vm.$emit("select-node", "NED-001");
+    await flushPromises();
+    expect(wrapper.get('[data-testid="definition-needs-item"]').attributes("open")).toBeDefined();
+    expect(document.activeElement?.getAttribute("data-requirements-item")).toBe("NED-001");
+    await openRow(wrapper, "REQ-001");
+    await rowOf(wrapper, "REQ-001").get('[data-testid="edit-requirement"]').trigger("click");
+    await wrapper
+      .get('[data-testid="requirement-edit-form"] input')
+      .setValue("Search arriving guests");
+    await wrapper.get('[data-testid="requirement-edit-form"]').trigger("submit");
+    await flushPromises();
+    expect(api.proposedSpecification?.schema_version).toBe(2);
+    expect(api.proposedSpecification?.needs).toEqual(version.specification.needs);
+    expect(api.proposedSpecification?.scenarios).toEqual(version.specification.scenarios);
+    expect(api.proposedSpecification?.requirements[0]?.need_ids).toEqual(["need-32"]);
+    wrapper.unmount();
+  });
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.spyOn(requirementsAlignmentApi, "status").mockResolvedValue(ALIGNED);
@@ -661,7 +765,9 @@ describe("ProjectRequirementsFlow", () => {
     const empty = wrapper.get('[data-testid="requirements-empty"]');
     expect(empty.get('[data-testid="agent-message"]').text()).toContain("Analista delle esigenze");
     expect(empty.text()).toContain("Approva prima i profili dei tuoi utenti");
-    expect(wrapper.get('[data-testid="generate-requirements"]').text()).toBe("Prepara i requisiti");
+    expect(wrapper.get('[data-testid="generate-requirements"]').text()).toBe(
+      "Prepara la definizione",
+    );
     expect(
       wrapper.get('[data-testid="generate-requirements"]').attributes("disabled"),
     ).toBeDefined();
@@ -673,7 +779,8 @@ describe("ProjectRequirementsFlow", () => {
     const wrapper = mountFlow(api, true);
 
     await flushPromises();
-    await wrapper.get('[data-testid="edit-requirement"]').trigger("click");
+    await openRow(wrapper, "REQ-001");
+    await rowOf(wrapper, "REQ-001").get('[data-testid="edit-requirement"]').trigger("click");
     expect(
       wrapper
         .find('[data-testid="requirement-row"] [data-testid="requirement-edit-form"]')
@@ -725,14 +832,14 @@ describe("ProjectRequirementsFlow", () => {
     await flushPromises();
     const bar = wrapper.get('[data-testid="decision-bar"]');
     expect(bar.text()).toContain("The decision is yours");
-    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the requirements");
+    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the definition");
     await wrapper.get('[data-testid="decision-primary"]').trigger("click");
     await flushPromises();
 
     expect(api.decideGateCalls).toEqual(["APPROVE"]);
     expect(api.submitCalls).toBe(0);
     expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toContain(
-      "Requirements approved by you",
+      "Definition approved by you",
     );
     expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="step-technical-details"]').text()).toContain(
@@ -754,8 +861,9 @@ describe("ProjectRequirementsFlow", () => {
     expect(api.submitCalls).toBe(1);
     expect(api.decideGateCalls).toEqual(["APPROVE"]);
     expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
-      "Requirements approved by you. Next: the design.",
+      "Definition approved by you. Next: Design & Evaluation.",
     );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
 
   it("does not send a revision request without a reason", async () => {
@@ -815,7 +923,7 @@ describe("ProjectRequirementsFlow", () => {
 
     expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="requirements-gate-paused"]').text()).toContain(
-      "The approval of these requirements is paused.",
+      "The approval of this definition is paused.",
     );
     await wrapper.get('[data-testid="resume-requirements-gate"]').trigger("click");
     await flushPromises();
@@ -854,21 +962,31 @@ describe("ProjectRequirementsFlow", () => {
 
   it("shows the requirements by priority, who asked for them and how they are checked", async () => {
     const api = readyApi(null, RICH_VERSION);
-    const wrapper = mountFlow(api, true);
+    const wrapper = mountFlow(api, true, { attach: true });
     await flushPromises();
 
     expect(wrapper.get('[data-testid="requirements-summary"]').text()).toBe(
-      "Prepared by the Needs analyst · 2 requirements, 1 story, 1 acceptance criterion",
+      "Prepared by the Needs analyst · 0 usage scenarios, 0 needs, 1 story, 2 requirements, 1 acceptance criterion",
     );
     expect(wrapper.findAll('[data-testid="requirements-groups"] h2').map((h) => h.text())).toEqual([
-      "Must do",
-      "Should do",
+      "Functional requirements",
+      "Non-functional requirements",
     ]);
     const rows = wrapper.findAll('[data-testid="requirement-row"]');
     expect(rows.map((row) => row.attributes("data-requirements-item"))).toEqual([
       "REQ-001",
       "REQ-002",
     ]);
+    expect(
+      rows.map((row) => spokenText(row.get('[data-testid="requirement-toggle"]').element)),
+    ).toEqual(["Create reservations", "Works on tablets"]);
+    expect(rows.map((row) => row.get('[data-testid="requirement-detail"]').isVisible())).toEqual([
+      false,
+      false,
+    ]);
+
+    await wrapper.get('[data-testid="requirements-toggle-all"]').trigger("click");
+
     expect(rows[0]!.get('[data-testid="requirement-meta"]').text()).toContain("Asked by");
     expect(rows[0]!.get('[data-testid="requirement-twin"]').text()).toBe("Receptionist Twin");
     expect(rows[0]!.get('[data-testid="requirement-twin"]').classes()).toContain("border-dashed");
@@ -885,6 +1003,10 @@ describe("ProjectRequirementsFlow", () => {
     );
     expect(notice.find("button").exists()).toBe(false);
 
+    const checks = wrapper.get('[data-testid="requirements-checks"]');
+    expect(checks.attributes("open")).toBeUndefined();
+    await checks.get("summary").trigger("click");
+    expect(checks.attributes("open")).toBeDefined();
     expect(
       wrapper
         .findAll('[data-testid="requirements-check"]')
@@ -898,12 +1020,13 @@ describe("ProjectRequirementsFlow", () => {
       ],
       ["When it is finished · DOD-001", "Every essential requirement has a passing check."],
     ]);
-    const stories = wrapper.get('[data-testid="requirements-stories"]');
+    const stories = wrapper.get('[data-testid="definition-stories-item"]');
     expect(stories.attributes("open")).toBeUndefined();
-    expect(stories.get("summary").text()).toContain("1 story");
+    expect(stories.get("summary").text()).toContain("book a room quickly");
     expect(wrapper.get('[data-testid="decision-bar"]').text()).toContain(
       "One requirement has no way to be checked yet: if you approve now, it stays unchecked.",
     );
+    wrapper.unmount();
   });
 
   it("counts the gaps in words and lists the codes in Italian", async () => {
@@ -928,7 +1051,7 @@ describe("ProjectRequirementsFlow", () => {
       "REQ-002 e REQ-003 sono senza criterio di verifica; REQ-002 e REQ-003 non sono legati a una storia.",
     );
     expect(wrapper.get('[data-testid="requirements-summary"]').text()).toBe(
-      "Preparati dall'Analista delle esigenze · 3 requisiti, 1 storia, 1 criterio di verifica",
+      "Preparati dall'Analista delle esigenze · 0 scenari d'uso, 0 bisogni, 1 storia, 3 requisiti, 1 criterio di verifica",
     );
   });
 
@@ -959,7 +1082,7 @@ describe("ProjectRequirementsFlow", () => {
 
     expect(wrapper.findComponent({ name: "ProjectDiagramsView" }).exists()).toBe(false);
     expect(wrapper.get('[data-testid="requirements-text-view"]').isVisible()).toBe(true);
-    expect(wrapper.get('[data-testid="requirements-stories"]').attributes("open")).toBeDefined();
+    expect(wrapper.get('[data-testid="definition-stories-item"]').attributes("open")).toBeDefined();
     const story = wrapper.get('[data-requirements-item="USR-001"]');
     expect(document.activeElement).toBe(story.element);
     expect(story.classes()).toContain("ring-petrol-on-night/60");
@@ -968,6 +1091,7 @@ describe("ProjectRequirementsFlow", () => {
     wrapper.getComponent({ name: "ProjectDiagramsView" }).vm.$emit("select-node", "AC-001");
     await flushPromises();
 
+    expect(wrapper.get('[data-testid="requirements-checks"]').attributes("open")).toBeDefined();
     expect(document.activeElement?.getAttribute("data-requirements-item")).toBe("AC-001");
     wrapper.unmount();
   });
@@ -1140,7 +1264,7 @@ describe("ProjectRequirementsFlow", () => {
     );
     expect(wrapper.text()).not.toContain("GATE_BLOCKED");
     expect(wrapper.find('[data-testid="requirements-readiness"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the requirements");
+    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the definition");
   });
 
   it("approves with the same button when only the approval failed the first time", async () => {
@@ -1157,7 +1281,7 @@ describe("ProjectRequirementsFlow", () => {
     expect(api.submitCalls).toBe(1);
     expect(decide).toHaveBeenCalledTimes(1);
     expect(wrapper.get('[data-testid="requirements-error"]').text()).toBe(
-      "The requirements are ready for your approval, but the approval did not go through. Press “Approve the requirements” again.",
+      "The requirements are ready for your approval, but the approval did not go through. Press “Approve the definition” again.",
     );
     expect(wrapper.find('[data-testid="requirements-readiness"]').exists()).toBe(false);
 
@@ -1224,7 +1348,8 @@ describe("ProjectRequirementsFlow", () => {
 
     const content = details.get('[data-testid="step-technical-details-content"]');
     expect(content.text()).toContain(VERSION.content_hash);
-    expect(content.text()).toContain("decision 1 of 3");
+    expect(content.text()).toContain("Waiting for your approval · Decision no. 1");
+    expect(content.text()).not.toContain("1 of 3");
     expect(content.text()).toContain("Sources: functional_requirements[0]");
     expect(content.text()).toContain("Receptionist Twin v1");
     expect(content.find('[data-testid="version-comparison"]').exists()).toBe(false);
@@ -1245,7 +1370,10 @@ describe("ProjectRequirementsFlow", () => {
     const wrapper = mountFlow(api, true, { attach: true });
     await flushPromises();
     await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
-    (wrapper.get('[data-testid="requirements-stories"]').element as HTMLDetailsElement).open = true;
+    (wrapper.get('[data-testid="definition-stories-item"]').element as HTMLDetailsElement).open =
+      true;
+    (wrapper.get('[data-testid="requirements-checks"]').element as HTMLDetailsElement).open = true;
+    await wrapper.get('[data-testid="requirements-toggle-all"]').trigger("click");
 
     await expectAccessible(wrapper.element);
     wrapper.unmount();
@@ -1260,7 +1388,7 @@ describe("ProjectRequirementsFlow", () => {
       "true",
     );
     expect(wrapper.get('[data-testid="artifact-view-switch"]').attributes("aria-label")).toBe(
-      "Vista dei requisiti",
+      "Vista della definizione",
     );
     const text = wrapper.get('[data-testid="requirements-text-view"]');
     expect(text.isVisible()).toBe(true);
@@ -1357,6 +1485,7 @@ describe("ProjectRequirementsFlow", () => {
     const wrapper = mountFlow(api, true);
     await flushPromises();
 
+    await openRow(wrapper, "REQ-001");
     await wrapper.get('[data-testid="edit-requirement"]').trigger("click");
     await wrapper.get('[data-testid="submit-requirements-revision"]').trigger("submit");
     await flushPromises();
@@ -1429,9 +1558,386 @@ describe("ProjectRequirementsFlow", () => {
     expect(wrapper.get('[data-testid="requirements-twin-alignment-done"]').text()).toContain(
       "Version 2 of the requirements is ready with the same content. Approve it again below.",
     );
-    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the requirements");
+    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the definition");
     expect(wrapper.get('[data-testid="decision-primary"]').attributes("disabled")).toBeUndefined();
     await expectAccessible(wrapper.element);
+  });
+});
+
+describe("ProjectRequirementsFlow and the titles first", () => {
+  it.each(["en", "it"] as const)(
+    "requests journeys explicitly through the existing owner revision in %s",
+    async (locale) => {
+      const api = readyApi(PENDING_GATE);
+      api.changeOutcome = "proposed";
+      const request = vi.spyOn(api, "requestChange");
+      const generated = vi.spyOn(api, "generate");
+      const wrapper = mountFlow(api, true, { locale });
+      await flushPromises();
+      expect(request).not.toHaveBeenCalled();
+      expect(generated).not.toHaveBeenCalled();
+      const button = wrapper.get('[data-testid="definition-request-journeys"]');
+      expect(button.text()).toBe(locale === "it" ? "Richiedi journey" : "Request journeys");
+      await button.trigger("click");
+      await flushPromises();
+      expect(request).toHaveBeenCalledWith(
+        PROJECT_ID,
+        expect.stringContaining("journey"),
+        "access-token",
+        true,
+      );
+      expect(api.calls).toEqual(["decide:REQUEST_REVISION", "request-change"]);
+      expect(wrapper.find('[data-testid="requirements-pending-change"]').exists()).toBe(true);
+      expect(generated).not.toHaveBeenCalled();
+      wrapper.unmount();
+    },
+  );
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.spyOn(requirementsAlignmentApi, "status").mockResolvedValue(ALIGNED);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it.each([
+    [
+      "several things it must do and several it should do",
+      "en",
+      ["MUST", "MUST", "MUST", "SHOULD", "COULD"],
+      "In short: 3 things the application must do and 2 it should do. The titles are below: open a row to read the detail or propose a change.",
+    ],
+    [
+      "several things it must do and several it should do",
+      "it",
+      ["MUST", "MUST", "MUST", "SHOULD", "COULD"],
+      "In breve: 3 cose che l'applicazione deve fare e 2 che dovrebbe fare. Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    [
+      "one thing it must do and one it should do",
+      "en",
+      ["MUST", "SHOULD"],
+      "In short: 1 thing the application must do and 1 it should do. The titles are below: open a row to read the detail or propose a change.",
+    ],
+    [
+      "one thing it must do and one it should do",
+      "it",
+      ["MUST", "SHOULD"],
+      "In breve: 1 cosa che l'applicazione deve fare e 1 che dovrebbe fare. Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    [
+      "only things it must do",
+      "en",
+      ["MUST", "MUST"],
+      "In short: 2 things the application must do. The titles are below: open a row to read the detail or propose a change.",
+    ],
+    [
+      "only things it must do",
+      "it",
+      ["MUST", "MUST"],
+      "In breve: 2 cose che l'applicazione deve fare. Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    [
+      "a single thing it must do",
+      "en",
+      ["MUST"],
+      "In short: 1 thing the application must do. The title is below: open the row to read the detail or propose a change.",
+    ],
+    [
+      "a single thing it must do",
+      "it",
+      ["MUST"],
+      "In breve: 1 cosa che l'applicazione deve fare. Qui sotto trovi il titolo: apri la riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    [
+      "only things it should do",
+      "en",
+      ["SHOULD", "WONT_FOR_NOW"],
+      "In short: 2 things the application should do. The titles are below: open a row to read the detail or propose a change.",
+    ],
+    [
+      "only things it should do",
+      "it",
+      ["SHOULD", "WONT_FOR_NOW"],
+      "In breve: 2 cose che l'applicazione dovrebbe fare. Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    [
+      "a single thing it should do",
+      "en",
+      ["COULD"],
+      "In short: 1 thing the application should do. The title is below: open the row to read the detail or propose a change.",
+    ],
+    [
+      "a single thing it should do",
+      "it",
+      ["COULD"],
+      "In breve: 1 cosa che l'applicazione dovrebbe fare. Qui sotto trovi il titolo: apri la riga per leggere il dettaglio o proporre una modifica.",
+    ],
+  ] as const)(
+    "opens the text with a digest of %s in %s",
+    async (_case, locale, priorities, sentence) => {
+      const wrapper = mountFlow(readyApi(null, prioritized(priorities)), true, { locale });
+      await flushPromises();
+
+      const text = wrapper.get('[data-testid="requirements-text-view"]');
+      const digest = text.get('[data-testid="requirements-digest"]');
+      expect(digest.text()).toBe(sentence);
+      expect(text.element.firstElementChild?.contains(digest.element)).toBe(true);
+      expect(
+        wrapper
+          .get('[data-testid="requirements-summary"]')
+          .element.compareDocumentPosition(digest.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(wrapper.find('[data-testid="requirements-toggle-all"]').exists()).toBe(
+        priorities.length > 1,
+      );
+    },
+  );
+
+  it("shows each requirement as a closed row with its code and title that opens on click", async () => {
+    const wrapper = mountFlow(readyApi(null, RICH_VERSION), true, { attach: true, locale: "it" });
+    await flushPromises();
+
+    const row = rowOf(wrapper, "REQ-001");
+    const toggle = row.get('[data-testid="requirement-toggle"]');
+    const detail = row.get('[data-testid="requirement-detail"]');
+    expect(toggle.element.tagName).toBe("BUTTON");
+    expect(toggle.attributes("type")).toBe("button");
+    expect(spokenText(toggle.element)).toBe("Create reservations");
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(toggle.attributes("aria-controls")).toBe(detail.attributes("id"));
+    expect(detail.isVisible()).toBe(false);
+    expect(row.get("p").isVisible()).toBe(false);
+
+    await toggle.trigger("click");
+
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(detail.isVisible()).toBe(true);
+    expect(detail.get("p").text()).toBe("The system must create reservations.");
+    const meta = detail.get('[data-testid="requirement-meta"]');
+    expect(meta.text()).toContain("Chiesto da");
+    expect(meta.get('[data-testid="requirement-twin"]').text()).toBe("Receptionist Twin");
+    expect(meta.text()).toContain("Verifica: AC-001");
+    expect(detail.get('[data-testid="edit-requirement"]').text()).toBe("Proponi modifica");
+    expect(expandedOf(wrapper)).toEqual(["true", "false"]);
+
+    await toggle.trigger("click");
+
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(detail.isVisible()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it.each([
+    ["en", "Open every detail", "Close every detail"],
+    ["it", "Apri tutti i dettagli", "Chiudi tutti i dettagli"],
+  ] as const)("opens and closes every row at once in %s", async (locale, openAll, closeAll) => {
+    const wrapper = mountFlow(readyApi(null, RICH_VERSION), true, { attach: true, locale });
+    await flushPromises();
+
+    const all = wrapper.get('[data-testid="requirements-toggle-all"]');
+    const details = () =>
+      wrapper.findAll('[data-testid="requirement-detail"]').map((detail) => detail.isVisible());
+    expect(all.element.tagName).toBe("BUTTON");
+    expect(all.attributes("type")).toBe("button");
+    expect(all.text()).toBe(openAll);
+    expect(all.attributes("aria-expanded")).toBe("false");
+    expect(
+      all.element.compareDocumentPosition(
+        wrapper.get('[data-testid="requirements-groups"]').element,
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await all.trigger("click");
+
+    expect(expandedOf(wrapper)).toEqual(["true", "true"]);
+    expect(details()).toEqual([true, true]);
+    expect(all.text()).toBe(closeAll);
+    expect(all.attributes("aria-expanded")).toBe("true");
+
+    await all.trigger("click");
+
+    expect(expandedOf(wrapper)).toEqual(["false", "false"]);
+    expect(details()).toEqual([false, false]);
+    expect(all.text()).toBe(openAll);
+    expect(all.attributes("aria-expanded")).toBe("false");
+
+    await openRow(wrapper, "REQ-001");
+    expect(all.text()).toBe(openAll);
+    await openRow(wrapper, "REQ-002");
+    expect(all.text()).toBe(closeAll);
+    expect(all.attributes("aria-expanded")).toBe("true");
+    wrapper.unmount();
+  });
+
+  it("opens the row of a requirement and the block of the checks that the diagram points to", async () => {
+    const wrapper = mount(ProjectRequirementsFlow, {
+      props: {
+        projectId: PROJECT_ID,
+        locale: "it",
+        autoLoad: true,
+        authorize,
+        api: readyApi(null, RICH_VERSION),
+      },
+      global: { plugins: [createAppI18n("it")], stubs: { ProjectDiagramsView: true } },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="artifact-view-diagram"]').trigger("click");
+    wrapper.getComponent({ name: "ProjectDiagramsView" }).vm.$emit("select-node", "REQ-002");
+    await flushPromises();
+
+    const row = rowOf(wrapper, "REQ-002");
+    const detail = row.get('[data-testid="requirement-detail"]');
+    expect(wrapper.get('[data-testid="requirements-text-view"]').isVisible()).toBe(true);
+    expect(expandedOf(wrapper)).toEqual(["false", "true"]);
+    expect(detail.isVisible()).toBe(true);
+    expect(detail.text()).toContain("The desk can use the app on a tablet.");
+    expect(document.activeElement).toBe(row.element);
+    expect(row.classes()).toContain("ring-petrol-on-night/60");
+    const checks = wrapper.get('[data-testid="requirements-checks"]');
+    expect(checks.attributes("open")).toBeUndefined();
+
+    await wrapper.get('[data-testid="artifact-view-diagram"]').trigger("click");
+    wrapper.getComponent({ name: "ProjectDiagramsView" }).vm.$emit("select-node", "AC-001");
+    await flushPromises();
+
+    const card = checks.get('[data-requirements-item="AC-001"]');
+    expect(checks.attributes("open")).toBeDefined();
+    expect(card.isVisible()).toBe(true);
+    expect(document.activeElement).toBe(card.element);
+    expect(card.classes()).toContain("ring-petrol-on-night/60");
+    expect(expandedOf(wrapper)).toEqual(["false", "true"]);
+    wrapper.unmount();
+  });
+
+  it("proposes a change from inside an open row and keeps the row open", async () => {
+    const api = readyApi(null, RICH_VERSION);
+    const wrapper = mountFlow(api, true, { attach: true, locale: "it" });
+    await flushPromises();
+
+    await openRow(wrapper, "REQ-001");
+    const row = rowOf(wrapper, "REQ-001");
+    await row.get('[data-testid="edit-requirement"]').trigger("click");
+
+    const form = row.get('[data-testid="requirement-edit-form"]');
+    expect(form.isVisible()).toBe(true);
+    expect(row.find('[data-testid="edit-requirement"]').exists()).toBe(false);
+    await form
+      .get('[data-testid="requirement-statement"]')
+      .setValue("The system must create guest reservations.");
+    await form.get('[data-testid="submit-requirements-revision"]').trigger("submit");
+    await flushPromises();
+
+    expect(api.proposedSpecification?.requirements.map((item) => item.statement)).toEqual([
+      "The system must create guest reservations.",
+      "The desk can use the app on a tablet.",
+    ]);
+    expect(wrapper.get('[data-testid="requirements-pending-change"]').text()).toContain(
+      "Prima · REQ-001",
+    );
+    expect(row.find('[data-testid="requirement-edit-form"]').exists()).toBe(false);
+    expect(expandedOf(wrapper)).toEqual(["true", "false"]);
+    expect(row.get('[data-testid="requirement-detail"]').isVisible()).toBe(true);
+    expect(row.get('[data-testid="edit-requirement"]').text()).toBe("Proponi modifica");
+    wrapper.unmount();
+  });
+
+  it("opens by itself the row of a requirement with a change waiting for a decision", async () => {
+    const api = readyApi(PENDING_GATE, RICH_VERSION);
+    api.diffs = [DIFF];
+    const readiness = vi.spyOn(api, "readiness");
+    const wrapper = mountFlow(api, true, { attach: true });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="requirements-pending-change"]').text()).toContain(
+      "Before · REQ-001",
+    );
+    expect(expandedOf(wrapper)).toEqual(["true", "false"]);
+    const row = rowOf(wrapper, "REQ-001");
+    expect(row.get('[data-testid="requirement-detail"]').isVisible()).toBe(true);
+
+    await row.get('[data-testid="requirement-toggle"]').trigger("click");
+    await wrapper.setProps({ upstream: "twins-1:APPROVED" });
+    await wrapper.setProps({ upstream: "twins-2:APPROVED" });
+    await flushPromises();
+
+    expect(readiness).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('[data-testid="requirements-pending-change"]').exists()).toBe(true);
+    expect(expandedOf(wrapper)).toEqual(["false", "false"]);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      "Acceptance criteria, risks and completion conditions (3)",
+      "They serve whoever writes the code and the automatic checks of ut test.",
+    ],
+    [
+      "it",
+      "Criteri di verifica, rischi e condizioni di fine lavoro (3)",
+      "Servono a chi scrive il codice e ai controlli automatici di ut test.",
+    ],
+  ] as const)(
+    "keeps the criteria, the risks and the completion conditions in a collapsed block in %s",
+    async (locale, summary, purpose) => {
+      const wrapper = mountFlow(readyApi(null, RICH_VERSION), true, { attach: true, locale });
+      await flushPromises();
+
+      const checks = wrapper.get('[data-testid="requirements-checks"]');
+      const cards = () =>
+        wrapper.findAll('[data-testid="requirements-check"]').map((card) => card.isVisible());
+      expect(checks.element.tagName).toBe("DETAILS");
+      expect(checks.attributes("open")).toBeUndefined();
+      expect(spokenText(checks.get("summary").element)).toBe(summary);
+      expect(cards()).toEqual([false, false, false]);
+      expect(
+        wrapper
+          .get('[data-testid="requirements-groups"]')
+          .element.compareDocumentPosition(checks.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        wrapper
+          .get('[data-testid="definition-stories-item"]')
+          .element.compareDocumentPosition(checks.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+
+      await checks.get("summary").trigger("click");
+      await flushPromises();
+
+      expect(checks.attributes("open")).toBeDefined();
+      const content = checks.element.querySelector("summary + div");
+      expect(content?.firstElementChild?.getAttribute("data-testid")).toBe(
+        "requirements-checks-purpose",
+      );
+      const first = checks.get('[data-testid="requirements-checks-purpose"]');
+      expect(first.text()).toBe(purpose);
+      expect(first.findAll("code").map((item) => item.text())).toEqual(["ut test"]);
+      expect(cards()).toEqual([true, true, true]);
+      wrapper.unmount();
+    },
+  );
+
+  it("has no axe violations on the text with every row closed and with one row open", async () => {
+    const wrapper = mountFlow(readyApi(PENDING_GATE, RICH_VERSION), true, {
+      attach: true,
+      locale: "it",
+    });
+    await flushPromises();
+
+    const text = wrapper.get('[data-testid="requirements-text-view"]');
+    expect(expandedOf(wrapper)).toEqual(["false", "false"]);
+    await expectAccessible(text.element);
+
+    await openRow(wrapper, "REQ-002");
+
+    expect(expandedOf(wrapper)).toEqual(["false", "true"]);
+    await expectAccessible(text.element);
+    wrapper.unmount();
   });
 });
 
@@ -1483,7 +1989,7 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
     expect(wrapper.find('[data-testid="requirements-gate-closed"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="decision-note"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="decision-bar"]').text()).toContain(
-      "La nuova versione aspetta qui sopra: applicala, poi approva qui i requisiti.",
+      "La nuova versione aspetta qui sopra: applicala, poi approva qui la definizione.",
     );
     expect(wrapper.get('[data-testid="decision-primary"]').attributes("disabled")).toBeDefined();
     wrapper.unmount();
@@ -1546,6 +2052,7 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
       "Add the search by name.",
     );
     expect(wrapper.get('[data-testid="decision-primary"]').attributes("disabled")).toBeDefined();
+    expect(expandedOf(wrapper)).toEqual(["true"]);
 
     await change.get('[data-testid="approve-requirements-diff"]').trigger("click");
     await flushPromises();
@@ -1558,11 +2065,11 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
       "access-token",
     );
     expect(wrapper.find('[data-testid="requirements-pending-change"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="requirements-text-view"]').text()).toContain(
-      "The system must create guest reservations.",
-    );
+    const detail = rowOf(wrapper, "REQ-001").get('[data-testid="requirement-detail"]');
+    expect(detail.isVisible()).toBe(true);
+    expect(detail.text()).toContain("The system must create guest reservations.");
     const primary = wrapper.get('[data-testid="decision-primary"]');
-    expect(primary.text()).toBe("Approve the requirements");
+    expect(primary.text()).toBe("Approve the definition");
     expect(primary.attributes("disabled")).toBeUndefined();
     expect(wrapper.get('[data-testid="step-technical-details"]').text()).toContain(
       "Version 2 · waiting for your decision",
@@ -1764,6 +2271,7 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
     expect(wrapper.find('[data-testid="requirements-change"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="requirements-error"]').exists()).toBe(false);
 
+    await openRow(wrapper, "REQ-001");
     await wrapper.get('[data-testid="edit-requirement"]').trigger("click");
     await wrapper.get('[data-testid="submit-requirements-revision"]').trigger("submit");
     await flushPromises();
@@ -1794,6 +2302,194 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
     await flushPromises();
 
     await expectAccessible(wrapper.element);
+    wrapper.unmount();
+  });
+});
+
+describe("ProjectRequirementsFlow in sections mode", () => {
+  const APPROVED_GATE: HumanGatePayload = {
+    ...PENDING_GATE,
+    status: "APPROVED",
+    event_sequence: 2,
+  };
+
+  const CHECKED_VERSION: RequirementsSpecificationVersionPayload = {
+    ...VERSION,
+    specification: {
+      ...RICH_SPECIFICATION,
+      requirements: [RICH_SPECIFICATION.requirements[0]!],
+    },
+  };
+
+  function approvedApi(): FakeApi {
+    const api = new FakeApi();
+    api.readinessResult = {
+      status: "READY_FOR_DESIGN_EXPLORATION",
+      version: VERSION,
+      gate: APPROVED_GATE,
+      approved_current_specification: true,
+    };
+    api.historyResult = [VERSION];
+    return api;
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.spyOn(requirementsAlignmentApi, "status").mockResolvedValue(ALIGNED);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("offers no change request on an approved specification outside sections mode", async () => {
+    const wrapper = mountFlow(approvedApi(), true, { attach: true });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
+      "Definition approved by you. Next: Design & Evaluation.",
+    );
+    expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="decision-secondary"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      "You approved this definition. You can still ask for a change in words: the new version comes back here for your approval.",
+      "Ask for changes",
+      "Approve the definition",
+    ],
+    [
+      "it",
+      "Hai approvato questa definizione. Puoi ancora chiedere una modifica a parole: la nuova versione torna qui per la tua approvazione.",
+      "Chiedi modifiche",
+      "Approva la definizione",
+    ],
+  ] as const)(
+    "offers in %s the change in words on an approved specification in sections mode",
+    async (locale, sentence, secondary, primary) => {
+      const wrapper = mountFlow(approvedApi(), true, { attach: true, locale, sectionsMode: true });
+      await flushPromises();
+
+      const bar = wrapper.get('[data-testid="decision-bar"]');
+      expect(bar.text()).toContain(sentence);
+      expect(bar.get('[data-testid="decision-secondary"]').text()).toBe(secondary);
+      expect(bar.get('[data-testid="decision-primary"]').text()).toBe(primary);
+      expect(bar.get('[data-testid="decision-primary"]').attributes("disabled")).toBeDefined();
+      expect(wrapper.find('[data-testid="requirements-readiness"]').exists()).toBe(true);
+      await expectAccessible(wrapper.element);
+      wrapper.unmount();
+    },
+  );
+
+  it("asks the analyst for the change without recording a request and approves the new version with one gesture", async () => {
+    const api = approvedApi();
+    api.changeOutcome = "proposed";
+    api.nextVersion = VERSION_2;
+    const decideRevision = api.decideRevision.bind(api);
+    vi.spyOn(api, "decideRevision").mockImplementation(async (...args) => {
+      const result = await decideRevision(...args);
+      api.readinessResult = {
+        ...api.readinessResult,
+        status: "REQUIREMENTS_APPROVAL_REQUIRED",
+        approved_current_specification: false,
+      };
+      return result;
+    });
+    const wrapper = mountFlow(api, true, { attach: true, sectionsMode: true });
+    await flushPromises();
+
+    await askFor(wrapper, "Add the search by name.");
+
+    expect(api.calls).toEqual(["request-change"]);
+    expect(api.changeRequests).toEqual(["Add the search by name."]);
+    expect(api.decideGateCalls).toEqual([]);
+    const change = wrapper.get('[data-testid="requirements-pending-change"]');
+    expect(change.get('[data-testid="requirements-change-request"] blockquote').text()).toBe(
+      "Add the search by name.",
+    );
+    expect(wrapper.get('[data-testid="decision-bar"]').text()).toContain(
+      "The new version is waiting above: apply it, then approve the definition here.",
+    );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+
+    await change.get('[data-testid="approve-requirements-diff"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.emitted("sections-changed")).toHaveLength(2);
+    const primary = wrapper.get('[data-testid="decision-primary"]');
+    expect(primary.text()).toBe("Approve the definition");
+    expect(primary.attributes("disabled")).toBeUndefined();
+
+    await primary.trigger("click");
+    await flushPromises();
+
+    expect(api.calls).toEqual(["request-change", "submit", "decide:APPROVE"]);
+    expect(wrapper.find('[data-testid="requirements-readiness"]').exists()).toBe(true);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(3);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      false,
+      "When you approve, the designer prepares the design alternatives and the twins try them.",
+    ],
+    [
+      "en",
+      true,
+      "When you approve, the sections that follow are updated with one gesture, without losing their content.",
+    ],
+    ["it", false, "Approvando, il designer prepara le alternative di design e i twin le provano."],
+    [
+      "it",
+      true,
+      "Approvando, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
+    ],
+  ] as const)(
+    "says in %s what follows the approval, in sections mode %s",
+    async (locale, sectionsMode, sentence) => {
+      const wrapper = mountFlow(readyApi(PENDING_GATE, CHECKED_VERSION), true, {
+        locale,
+        sectionsMode,
+      });
+      await flushPromises();
+
+      expect(wrapper.get('[data-testid="decision-bar"]').text()).toContain(sentence);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["en", "Perspectives", /\bTeam\b/],
+    ["it", "Prospettive", /Squadra/],
+  ] as const)(
+    "names in %s the perspectives the requirements follow in the technical details",
+    async (locale, label, old) => {
+      const wrapper = mountFlow(readyApi(PENDING_GATE), true, { locale });
+      await flushPromises();
+
+      await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
+      const content = wrapper.get('[data-testid="step-technical-details-content"]');
+      expect(content.findAll("dt").map((item) => item.text())).toContain(label);
+      expect(content.text()).not.toMatch(old);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["en", "The Definition could not be loaded."],
+    ["it", "Non è stato possibile caricare la Definizione."],
+  ] as const)("says in %s that the Definition could not be loaded", async (locale, sentence) => {
+    const api = new FakeApi();
+    vi.spyOn(api, "readiness").mockRejectedValue("offline");
+    const wrapper = mountFlow(api, true, { locale });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="requirements-error"]').text()).toContain(sentence);
     wrapper.unmount();
   });
 });
@@ -2012,8 +2708,8 @@ describe("ProjectRequirementsFlow and a refused proposal", () => {
   const FEW_FACTS = { code: "PROPOSAL_REJECTED", proposal_issue: "GROUNDED_INPUT_REQUIRED" };
   const NO_REASON = { code: "PROPOSAL_REJECTED" };
   const ANALYST_MISSING = {
-    en: "The team of this project has no needs analyst, so the requirements cannot be prepared. Go back to the Team step, add the analyst and approve the team again.",
-    it: "La squadra di questo progetto non ha un analista delle esigenze, quindi i requisiti non si possono preparare. Torna al passo Squadra, aggiungi l’analista e approva di nuovo la squadra.",
+    en: "The Product perspective is missing: open Perspectives and prepare them again.",
+    it: "Manca la prospettiva Prodotto: apri Prospettive e preparale di nuovo.",
   };
   const FACTS_MISSING = {
     en: "The approved steps do not give the model enough facts for this proposal. Add details to the brief or to the earlier steps, then try again.",
@@ -2139,7 +2835,7 @@ describe("ProjectRequirementsFlow and a refused proposal", () => {
     { how: "through a job", background: true, locale: "en" },
     { how: "through a job", background: true, locale: "it" },
   ] as const)(
-    "says that the team has no analyst when the first proposal is refused $how ($locale)",
+    "says that the Product perspective is missing when the first proposal is refused $how ($locale)",
     async ({ background, locale }) => {
       const wrapper = await proposeRefused(NO_ANALYST, background, locale);
 

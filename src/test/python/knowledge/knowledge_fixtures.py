@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
@@ -12,9 +13,24 @@ from orchestwin.artifacts.design_finding_validations import (
     create_finding_validation,
 )
 from orchestwin.artifacts.design_gate import design_artifact_reference
-from orchestwin.knowledge.layout import STAGES
+from orchestwin.knowledge.folder import file_digests, folder_content_hash, json_text
+from orchestwin.knowledge.layout import (
+    FEEDBACK_CHANGES,
+    FEEDBACK_LEARNING,
+    FEEDBACK_TESTS,
+    FEEDBACK_TEXT,
+    KNOWLEDGE_INDEX,
+    KNOWLEDGE_MANIFEST,
+    SCHEMA_FOLDER,
+    STAGES,
+    STATE_DOCUMENT,
+    STATE_TEXT,
+    schema_document,
+)
+from orchestwin.knowledge.schema import schema_name_for_path
 from orchestwin.knowledge.sources import KnowledgeFeedback, KnowledgeSources, knowledge_feedback
 from orchestwin.knowledge.stage_documents import stage_versions
+from orchestwin.knowledge.state import ProjectStateSources
 from orchestwin.projects.brief_gate import project_brief_artifact_reference
 from orchestwin.projects.requirements_gate import requirements_artifact_reference
 from orchestwin.twins.user_modeling_gate import user_modeling_artifact_reference
@@ -235,50 +251,659 @@ def real_documents() -> dict[str, dict[str, object]]:
     }
 
 
+STAGE_GATES = {
+    "brief": ("brief", HumanGateType.PROJECT_BRIEF, project_brief_artifact_reference, 1000),
+    "team": ("team", HumanGateType.AGENT_TEAM, agent_team_artifact_reference, 2000),
+    "twins": ("modeling", HumanGateType.USER_MODELING, user_modeling_artifact_reference, 3000),
+    "requirements": (
+        "requirements",
+        HumanGateType.REQUIREMENTS,
+        requirements_artifact_reference,
+        4000,
+    ),
+    "design": ("design", HumanGateType.DESIGN, design_artifact_reference, 5000),
+}
+ALIGNED_COMMIT = "9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e"
+PENDING_COMMIT = "4f2a9c1e7b3d5a8f0c6e2b9d1a7f3c5e8b0d2a46"
+STALE_COMMIT = "7c3e1a9b5d2f8e4a6c0b9d7f1e3a5c8b2d4f6a19"
+FIRST_COMMIT = "0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c"
+CHANGE_RUN = "00000000-0000-4000-8000-00000000d001"
+STALE_RUN = "00000000-0000-4000-8000-00000000d003"
+TEST_RUN = "00000000-0000-4000-8000-00000000e101"
+TWIN_UPDATE = "00000000-0000-4000-8000-00000000f001"
+RECEPTION_TWIN = "e98bf864-69ba-4198-85f9-d4e932c54a3d"
+VOLUNTEER_TWIN = "f921405b-21d5-4ef6-b99c-fe0dcb1033b5"
+RECEPTION_NAME = "Addetti all'accoglienza"
+VOLUNTEER_NAME = "Organizzatori volontari"
+SCHEMA_ID = "urn:orchestwin:knowledge-folder"
+OLDER_DOCUMENTS = frozenset({"twin", "reviews", "discussions", "insights"})
+TEST_SECTIONS = {
+    STATE_TEXT: ("\n## Acceptance tests", "\n## Verifica dei criteri"),
+    FEEDBACK_TEXT: ("\n## Critiques on the acceptance tests",),
+}
+LEARNING_SECTIONS = {
+    STATE_TEXT: ("\n## What the twins learned", "\n## Cosa hanno imparato i twin"),
+    FEEDBACK_TEXT: ("\n## Learned during development",),
+}
+CURRENT_REFERENCE = {
+    "requirements_version_number": 2,
+    "design_version_number": 4,
+    "alternative_code": "DES-002",
+}
+EARLIER_REFERENCE = {**CURRENT_REFERENCE, "design_version_number": 3}
+SERVED_AT = "http://127.0.0.1:41234/"
+
+
 def sources_of(versions, *, project_id: UUID, **changes) -> KnowledgeSources:
-    values = {
+    values: dict[str, object] = {
         "project_id": project_id,
         "project_name": PROJECT_NAME,
-        "brief": versions["brief"],
-        "brief_gate": approved_gate(
-            versions["brief"],
-            HumanGateType.PROJECT_BRIEF,
-            project_brief_artifact_reference(versions["brief"]),
-            1000,
-        ),
-        "team": versions["team"],
-        "team_gate": approved_gate(
-            versions["team"],
-            HumanGateType.AGENT_TEAM,
-            agent_team_artifact_reference(versions["team"]),
-            2000,
-        ),
-        "modeling": versions["twins"],
-        "modeling_gate": approved_gate(
-            versions["twins"],
-            HumanGateType.USER_MODELING,
-            user_modeling_artifact_reference(versions["twins"]),
-            3000,
-        ),
-        "requirements": versions["requirements"],
-        "requirements_gate": approved_gate(
-            versions["requirements"],
-            HumanGateType.REQUIREMENTS,
-            requirements_artifact_reference(versions["requirements"]),
-            4000,
-        ),
-        "design": versions["design"],
-        "design_gate": approved_gate(
-            versions["design"],
-            HumanGateType.DESIGN,
-            design_artifact_reference(versions["design"]),
-            5000,
-        ),
         "feedback": KnowledgeFeedback(),
     }
+    for stage, version in versions.items():
+        name, gate_type, reference, base = STAGE_GATES[stage]
+        values[name] = version
+        values[f"{name}_gate"] = approved_gate(version, gate_type, reference(version), base)
     values.update(changes)
     return KnowledgeSources(**values)
 
 
 def real_sources(**changes) -> KnowledgeSources:
     return sources_of(stage_versions(real_documents()), project_id=REAL_PROJECT_ID, **changes)
+
+
+def partial_sources(through: str, **changes) -> KnowledgeSources:
+    kept = STAGES[: STAGES.index(through) + 1]
+    versions = {
+        stage: version
+        for stage, version in stage_versions(real_documents()).items()
+        if stage in kept
+    }
+    return sources_of(versions, project_id=REAL_PROJECT_ID, **changes)
+
+
+def change_run() -> dict[str, object]:
+    return {
+        "id": CHANGE_RUN,
+        "commit": PENDING_COMMIT,
+        "reviewed_at": "2026-09-28T11:30:00+00:00",
+        "locale": "it-IT",
+        "reference": {
+            "requirements_version_number": 2,
+            "design_version_number": 4,
+            "alternative_code": "DES-002",
+        },
+        "critiques": [
+            {
+                "twin_id": RECEPTION_TWIN,
+                "twin_name": "Addetti all'accoglienza",
+                "verdict": "CONCERN",
+                "summary": "Il messaggio per il nome vuoto compare solo dopo il salvataggio.",
+                "findings": [
+                    {
+                        "severity": "MEDIUM",
+                        "text": "Il campo del nome non spiega che cosa manca.",
+                        "about": {
+                            "requirement": "REQ-003",
+                            "screen": "SCR-002",
+                            "file": "src/app.js",
+                        },
+                        "action": "Mostrare il messaggio accanto al campo del nome.",
+                    },
+                    {
+                        "severity": "LOW",
+                        "text": "Il pulsante di conferma è piccolo sul tablet.",
+                        "about": {"requirement": None, "screen": "SCR-002", "file": None},
+                        "action": None,
+                    },
+                ],
+            },
+            {
+                "twin_id": VOLUNTEER_TWIN,
+                "twin_name": "Organizzatori volontari",
+                "verdict": "FINE",
+                "summary": "La lista si aggiorna subito e resta leggibile.",
+                "findings": [
+                    {
+                        "severity": "LOW",
+                        "text": "Il numero progressivo potrebbe essere più evidente.",
+                        "about": {"requirement": "REQ-002", "screen": "SCR-001", "file": None},
+                        "action": "Rendere il numero in grassetto.",
+                    }
+                ],
+            },
+        ],
+        "alignment": {
+            "status": "CODE_DRIFT",
+            "summary": "Il controllo del nome vuoto non segue il requisito REQ-003.",
+            "affected": {"requirements": ["REQ-003"], "screens": ["SCR-002"]},
+            "design_request": None,
+            "requirements_request": None,
+            "code_tasks": ["Mostrare il messaggio di errore accanto al campo del nome."],
+        },
+        "cost_microusd": 650000,
+    }
+
+
+def _done(path: str, browser: str, index: int) -> dict[str, object]:
+    return {
+        "index": index,
+        "status": "DONE",
+        "detail": None,
+        "url": SERVED_AT,
+        "title": "Lista ospiti",
+        "screenshot": f"{path}/{browser}/{index:02d}.png",
+    }
+
+
+def test_run() -> dict[str, object]:
+    guest_name = {"role": "textbox", "name": "Nome ospite"}
+    add = {"role": "button", "name": "Aggiungi"}
+    return {
+        "id": TEST_RUN,
+        "started_at": "2026-09-29T10:00:00+00:00",
+        "finished_at": "2026-09-29T10:05:00+00:00",
+        "recorded_at": "2026-09-29T10:05:30+00:00",
+        "application": {"kind": "STATIC", "address": "dist"},
+        "browsers": [
+            {"name": "chrome", "version": "151.0.7922.76"},
+            {"name": "firefox", "version": "156.0.1"},
+        ],
+        "reference": {
+            "requirements_version_number": 2,
+            "design_version_number": 4,
+            "alternative_code": "DES-002",
+        },
+        "summary": {"passed": 1, "failed": 1, "blocked": 0, "not_covered": 1, "not_run": 0},
+        "criteria": [
+            {"code": "AC-001", "status": "PASSED", "paths": ["TP-001"]},
+            {"code": "AC-002", "status": "FAILED", "paths": ["TP-002"]},
+            {"code": "AC-003", "status": "NOT_COVERED", "paths": []},
+        ],
+        "not_covered": [
+            {
+                "criterion": "AC-003",
+                "reason": "La leggibilità sul tablet va giudicata da una persona.",
+            }
+        ],
+        "results": [
+            {
+                "path": {
+                    "code": "TP-001",
+                    "heading": "Aggiungere un ospite e vederlo subito nella lista",
+                    "criteria": ["AC-001"],
+                    "steps": [
+                        {"action": "OPEN", "target": None, "value": "/", "expect": None},
+                        {
+                            "action": "TYPE",
+                            "target": guest_name,
+                            "value": "Maria Rossi",
+                            "expect": None,
+                        },
+                        {
+                            "action": "CLICK",
+                            "target": add,
+                            "value": None,
+                            "expect": {
+                                "kind": "TEXT_VISIBLE",
+                                "target": None,
+                                "text": "Maria Rossi",
+                            },
+                        },
+                    ],
+                },
+                "browser": "chrome",
+                "status": "PASSED",
+                "seconds": 4.2,
+                "steps": [_done("TP-001", "chrome", index) for index in (1, 2, 3)],
+                "page_text": "Lista ospiti 1. Maria Rossi Nome ospite Aggiungi",
+            },
+            {
+                "path": {
+                    "code": "TP-002",
+                    "heading": "Rifiutare un nome vuoto con un messaggio accanto al campo",
+                    "criteria": ["AC-002"],
+                    "steps": [
+                        {"action": "OPEN", "target": None, "value": "/", "expect": None},
+                        {
+                            "action": "CLICK",
+                            "target": add,
+                            "value": None,
+                            "expect": {
+                                "kind": "TEXT_VISIBLE",
+                                "target": None,
+                                "text": "Inserisci un nome",
+                            },
+                        },
+                        {
+                            "action": "CHECK",
+                            "target": None,
+                            "value": None,
+                            "expect": {"kind": "VALUE_IS", "target": guest_name, "text": ""},
+                        },
+                    ],
+                },
+                "browser": "firefox",
+                "status": "FAILED",
+                "seconds": 6.8,
+                "steps": [
+                    _done("TP-002", "firefox", 1),
+                    {
+                        **_done("TP-002", "firefox", 2),
+                        "status": "FAILED",
+                        "detail": "TEXT_VISIBLE: Inserisci un nome",
+                    },
+                    {
+                        "index": 3,
+                        "status": "SKIPPED",
+                        "detail": None,
+                        "url": None,
+                        "title": None,
+                        "screenshot": None,
+                    },
+                ],
+                "page_text": "Lista ospiti Nessun ospite Nome ospite Aggiungi",
+            },
+        ],
+        "critiques": [
+            {
+                "twin_id": RECEPTION_TWIN,
+                "twin_name": "Addetti all'accoglienza",
+                "verdict": "CONCERN",
+                "summary": "Un nome vuoto viene accettato senza nessun messaggio.",
+                "findings": [
+                    {
+                        "severity": "HIGH",
+                        "text": "Un ospite senza nome entra nella lista.",
+                        "about": {
+                            "criterion": "AC-002",
+                            "requirement": "REQ-003",
+                            "screen": "SCR-002",
+                        },
+                        "action": "Mostrare un messaggio accanto al campo del nome.",
+                    },
+                    {
+                        "severity": "LOW",
+                        "text": "Nessuno ha provato la lista sul tablet.",
+                        "about": {"criterion": "AC-003", "requirement": None, "screen": None},
+                        "action": None,
+                    },
+                ],
+            },
+            {
+                "twin_id": VOLUNTEER_TWIN,
+                "twin_name": "Organizzatori volontari",
+                "verdict": "FINE",
+                "summary": "L'aggiunta di un ospite funziona in tutti e due i browser.",
+                "findings": [],
+            },
+        ],
+        "reviewed_at": "2026-09-29T10:20:00+00:00",
+        "cost_microusd": 500000,
+    }
+
+
+def _without(path: str, text: str, sections: Mapping[str, tuple[str, ...]]) -> str:
+    for heading in sections.get(path, ()):
+        text = text.split(heading, 1)[0]
+    return text
+
+
+def _earlier_task(task: Mapping[str, object]) -> bool:
+    origin = task.get("origin")
+    kind = origin.get("kind") if isinstance(origin, Mapping) else "CODE_CHANGE"
+    return (
+        kind == "CODE_CHANGE"
+        and task.get("status") != "DROPPED"
+        and task.get("from_commit") is not None
+    )
+
+
+def _state_before_learning(text: str) -> str:
+    document = json.loads(text)
+    document["tasks"] = [task for task in document["tasks"] if _earlier_task(task)]
+    for task in document["tasks"]:
+        for key in ("origin", "closed_at", "note"):
+            task.pop(key, None)
+        task["about"].pop("criteria", None)
+    for change in document["changes"]:
+        if isinstance(change["review"], dict):
+            for key in ("reference", "stale"):
+                change["review"].pop(key, None)
+    return json_text(document)
+
+
+def files_before_learning(files: Mapping[str, str]) -> dict[str, str]:
+    dropped = {KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST, FEEDBACK_LEARNING, schema_document("learning")}
+    earlier: dict[str, str] = {}
+    for path, text in files.items():
+        if path in dropped:
+            continue
+        if path == STATE_DOCUMENT:
+            text = _state_before_learning(text)
+        earlier[path] = _without(path, text, LEARNING_SECTIONS)
+    manifest = json.loads(files[KNOWLEDGE_MANIFEST])
+    del manifest["state"]["stale_reviews"]
+    for key in ("learned", "learned_observations"):
+        manifest["feedback"].pop(key, None)
+    del manifest["schemas"]["learning"]
+    manifest["files"] = file_digests(earlier)
+    manifest["package"]["content_hash"] = folder_content_hash(earlier)
+    return {
+        **earlier,
+        KNOWLEDGE_MANIFEST: json_text(manifest),
+        KNOWLEDGE_INDEX: files[KNOWLEDGE_INDEX],
+    }
+
+
+def files_before_tests(files: Mapping[str, str]) -> dict[str, str]:
+    files = files_before_learning(files)
+    dropped = {KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST, FEEDBACK_TESTS, schema_document("tests")}
+    earlier = {
+        path: _without(path, text, TEST_SECTIONS)
+        for path, text in files.items()
+        if path not in dropped
+    }
+    manifest = json.loads(files[KNOWLEDGE_MANIFEST])
+    for key in ("tests", "test_runs"):
+        del manifest["feedback"][key]
+    del manifest["schemas"]["tests"]
+    manifest["files"] = file_digests(earlier)
+    manifest["package"]["content_hash"] = folder_content_hash(earlier)
+    return {
+        **earlier,
+        KNOWLEDGE_MANIFEST: json_text(manifest),
+        KNOWLEDGE_INDEX: files[KNOWLEDGE_INDEX],
+    }
+
+
+def schema_two_files(files: Mapping[str, str]) -> dict[str, str]:
+    dropped = {
+        KNOWLEDGE_INDEX,
+        KNOWLEDGE_MANIFEST,
+        STATE_DOCUMENT,
+        STATE_TEXT,
+        FEEDBACK_CHANGES,
+        FEEDBACK_TESTS,
+        FEEDBACK_LEARNING,
+        schema_document("state"),
+        schema_document("changes"),
+        schema_document("tests"),
+        schema_document("learning"),
+    }
+    older: dict[str, str] = {}
+    for path, text in files.items():
+        if path in dropped:
+            continue
+        if path.startswith(f"{SCHEMA_FOLDER}/"):
+            text = text.replace(f"{SCHEMA_ID}:3:", f"{SCHEMA_ID}:2:")
+        elif path == FEEDBACK_TEXT:
+            text = text.split("\n## Critiques on the code changes", 1)[0]
+        elif schema_name_for_path(path) in OLDER_DOCUMENTS:
+            text = json_text({**json.loads(text), "schema_version": 2})
+        older[path] = text
+    manifest = json.loads(files[KNOWLEDGE_MANIFEST])
+    manifest["schema_version"] = 2
+    for key in ("progress", "state"):
+        del manifest[key]
+    for key in (
+        "changes",
+        "change_reviews",
+        "tests",
+        "test_runs",
+        "learned",
+        "learned_observations",
+    ):
+        manifest["feedback"].pop(key, None)
+    for name in ("state", "changes", "tests", "learning"):
+        manifest["schemas"].pop(name, None)
+    manifest["files"] = file_digests(older)
+    manifest["package"]["content_hash"] = folder_content_hash(older)
+    return {
+        **older,
+        KNOWLEDGE_MANIFEST: json_text(manifest),
+        KNOWLEDGE_INDEX: files[KNOWLEDGE_INDEX],
+    }
+
+
+def state_sources() -> ProjectStateSources:
+    return ProjectStateSources(
+        aligned={
+            "commit": ALIGNED_COMMIT,
+            "decided_at": "2026-09-28T10:00:00+00:00",
+            "requirements_version_number": 2,
+            "design_version_number": 4,
+        },
+        changes=(
+            {
+                "commit": PENDING_COMMIT,
+                "parent": ALIGNED_COMMIT,
+                "committed_at": "2026-09-28T11:00:00+00:00",
+                "author": "Alex Testa",
+                "message": "Controllo del nome vuoto\n\nIl messaggio compare dopo il salvataggio.",
+                "files": [
+                    {"path": "src/app.js", "kind": "MODIFIED", "added": 12, "removed": 3},
+                    {"path": "src/messages.js", "kind": "ADDED", "added": 20, "removed": 0},
+                ],
+                "recorded_at": "2026-09-28T11:05:00+00:00",
+                "review": {
+                    "run_id": CHANGE_RUN,
+                    "reviewed_at": "2026-09-28T11:30:00+00:00",
+                    "verdict": "CODE_DRIFT",
+                    "summary": "Il controllo del nome vuoto non segue il requisito REQ-003.",
+                },
+                "decision": {
+                    "kind": "CODE_TASKS",
+                    "decided_at": "2026-09-28T11:40:00+00:00",
+                    "note": None,
+                },
+            },
+            {
+                "commit": ALIGNED_COMMIT,
+                "parent": FIRST_COMMIT,
+                "committed_at": "2026-09-28T09:30:00+00:00",
+                "author": None,
+                "message": "Prima versione della lista ospiti",
+                "files": [{"path": "index.html", "kind": "ADDED", "added": 40, "removed": 0}],
+                "recorded_at": "2026-09-28T09:35:00+00:00",
+                "review": None,
+                "decision": {
+                    "kind": "ALIGNED",
+                    "decided_at": "2026-09-28T10:00:00+00:00",
+                    "note": "Primo punto allineato.",
+                },
+            },
+        ),
+        runs=(change_run(),),
+        tasks=(
+            {
+                "code": "TSK-001",
+                "text": "Mostrare il messaggio di errore accanto al campo del nome.",
+                "about": {"requirements": ["REQ-003"], "screens": ["SCR-002"]},
+                "from_commit": PENDING_COMMIT,
+                "created_at": "2026-09-28T11:40:00+00:00",
+                "status": "OPEN",
+            },
+        ),
+        tests=(test_run(),),
+    )
+
+
+def task_origin(
+    kind: str,
+    *,
+    commit: str | None = None,
+    test_run_id: str | None = None,
+    finding: str | None = None,
+) -> dict[str, object]:
+    twin = finding is not None
+    return {
+        "kind": kind,
+        "commit": commit,
+        "test_run_id": test_run_id,
+        "twin_id": RECEPTION_TWIN if twin else None,
+        "twin_name": RECEPTION_NAME if twin else None,
+        "finding": finding,
+    }
+
+
+def code_task(
+    number: int,
+    text: str,
+    source: dict[str, object],
+    *,
+    about: tuple[list[str], list[str], list[str]] = ([], [], []),
+    created_at: str = "2026-09-29T11:00:00+00:00",
+    status: str = "OPEN",
+    closed_at: str | None = None,
+    note: str | None = None,
+) -> dict[str, object]:
+    requirements, screens, criteria = about
+    return {
+        "code": f"TSK-{number:03d}",
+        "text": text,
+        "about": {"requirements": requirements, "screens": screens, "criteria": criteria},
+        "origin": source,
+        "from_commit": source["commit"],
+        "created_at": created_at,
+        "status": status,
+        "closed_at": closed_at,
+        "note": note,
+    }
+
+
+def development_tasks() -> tuple[dict[str, object], ...]:
+    return (
+        dict(state_sources().tasks[0]),
+        code_task(
+            2,
+            "Ingrandire il pulsante di conferma sul tablet.",
+            task_origin(
+                "CODE_CHANGE",
+                commit=PENDING_COMMIT,
+                finding="Il pulsante di conferma è piccolo sul tablet.",
+            ),
+            about=([], ["SCR-002"], []),
+            created_at="2026-09-28T11:40:00+00:00",
+        ),
+        code_task(
+            3,
+            "Mostrare un messaggio accanto al campo del nome.",
+            task_origin(
+                "TEST_RUN", test_run_id=TEST_RUN, finding="Un ospite senza nome entra nella lista."
+            ),
+            about=(["REQ-003"], ["SCR-002"], ["AC-002"]),
+            created_at="2026-09-29T10:30:00+00:00",
+        ),
+        code_task(
+            4,
+            "Aggiungere il logo del workshop in alto.",
+            task_origin("OWNER"),
+            about=([], ["SCR-001"], []),
+        ),
+        code_task(
+            5,
+            "Scrivere il titolo della pagina in italiano.",
+            task_origin("OWNER"),
+            created_at="2026-09-29T11:05:00+00:00",
+            status="DONE",
+            closed_at="2026-09-29T12:00:00+00:00",
+        ),
+        code_task(
+            6,
+            "Provare la lista sul tablet.",
+            task_origin(
+                "TEST_RUN", test_run_id=TEST_RUN, finding="Nessuno ha provato la lista sul tablet."
+            ),
+            about=([], [], ["AC-003"]),
+            created_at="2026-09-29T11:10:00+00:00",
+            status="DROPPED",
+            closed_at="2026-09-29T12:30:00+00:00",
+            note="La prova sul tablet la fa una persona.",
+        ),
+    )
+
+
+def stale_change() -> dict[str, object]:
+    return {
+        "commit": STALE_COMMIT,
+        "parent": ALIGNED_COMMIT,
+        "committed_at": "2026-09-28T10:20:00+00:00",
+        "author": "Alex Testa",
+        "message": "Filtro della lista per tavolo",
+        "files": [{"path": "src/app.js", "kind": "MODIFIED", "added": 30, "removed": 4}],
+        "recorded_at": "2026-09-28T10:25:00+00:00",
+        "review": {
+            "run_id": STALE_RUN,
+            "reviewed_at": "2026-09-28T10:40:00+00:00",
+            "verdict": "DESIGN_OUTDATED",
+            "summary": "Il filtro per tavolo non è nel design approvato.",
+            "reference": dict(EARLIER_REFERENCE),
+        },
+        "decision": {
+            "kind": "DESIGN_CHANGE",
+            "decided_at": "2026-09-28T10:45:00+00:00",
+            "note": None,
+        },
+    }
+
+
+def learned_entry() -> dict[str, object]:
+    return {
+        "twin_id": RECEPTION_TWIN,
+        "twin_name": RECEPTION_NAME,
+        "profile_version_number": 1,
+        "development_version_number": 3,
+        "label": "1.3",
+        "observations": [
+            {
+                "code": "OBS-001",
+                "statement": "Gli addetti lavorano in piedi e tengono il tablet con una mano sola.",
+                "basis": "I rilievi sul pulsante di conferma piccolo, tornati su due commit.",
+                "source": "TWIN_CRITIQUE",
+                "about": {"requirement": None, "screen": "SCR-002"},
+                "contradicts_profile": "Il profilo dice che gli addetti lavorano seduti al banco.",
+                "added_in_version": 1,
+                "approved_at": "2026-09-29T11:00:00+00:00",
+                "update_id": TWIN_UPDATE,
+            },
+            {
+                "code": "OBS-003",
+                "statement": "Gli addetti leggono la lista da due metri, mentre accolgono gli ospiti.",
+                "basis": None,
+                "source": "OWNER",
+                "about": {"requirement": "REQ-002", "screen": "SCR-001"},
+                "contradicts_profile": None,
+                "added_in_version": 3,
+                "approved_at": "2026-09-30T09:00:00+00:00",
+                "update_id": None,
+            },
+        ],
+        "retired": [
+            {
+                "code": "OBS-002",
+                "statement": "Gli addetti preferiscono usare il telefono.",
+                "retired_in_version": 2,
+                "retired_at": "2026-09-29T15:00:00+00:00",
+                "reason": "Non vale per tutte le sedi.",
+            }
+        ],
+    }
+
+
+def development_sources() -> ProjectStateSources:
+    earlier = state_sources()
+    pending, aligned = earlier.changes
+    reviewed = {**pending["review"], "reference": dict(CURRENT_REFERENCE)}
+    return ProjectStateSources(
+        aligned={**earlier.aligned, "design_version_number": 3},
+        changes=(
+            {**pending, "parent": STALE_COMMIT, "review": reviewed},
+            stale_change(),
+            aligned,
+        ),
+        runs=earlier.runs,
+        tasks=development_tasks(),
+        tests=earlier.tests,
+        learning=(learned_entry(),),
+    )

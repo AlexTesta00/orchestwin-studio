@@ -63,8 +63,10 @@ from orchestwin.projects.requirements_specifications import (
     RequirementsSpecificationVersion,
 )
 from orchestwin.twins.persistence.repositories import (
+    SqlAlchemyPersonaVersionRepository,
     SqlAlchemyUserModelingSnapshotRepository,
 )
+from orchestwin.twins.representation import snapshot_matches_archetypes
 from orchestwin.workflow.gates import HumanGateType
 from orchestwin.workflow.persistence.repositories import (
     SqlAlchemyHumanGateRepository,
@@ -319,6 +321,25 @@ class SqlAlchemyRequirementsGovernanceAdapter:
                 owner_user_id=owner_user_id,
                 gate_type=HumanGateType.USER_MODELING,
             )
+            if user_modeling_version is not None:
+                personas = await SqlAlchemyPersonaVersionRepository(
+                    session, owner_user_id=owner_user_id
+                ).list_current(project_id=project_id)
+                snapshot = user_modeling_version.snapshot
+                current = (
+                    brief_version is not None
+                    and team_version is not None
+                    and snapshot.project_brief_reference.artifact_id == brief_version.id
+                    and snapshot.project_brief_reference.version_number
+                    == brief_version.version_number
+                    and snapshot.project_brief_reference.content_hash == brief_version.content_hash
+                    and snapshot.agent_team_reference.artifact_id == team_version.id
+                    and snapshot.agent_team_reference.version_number == team_version.version_number
+                    and snapshot.agent_team_reference.content_hash == team_version.content_hash
+                    and snapshot_matches_archetypes(user_modeling_version, personas)
+                )
+                if not current:
+                    user_modeling_gate = None
 
             brief = None if brief_version is None else _brief_input(brief_version)
             team = (

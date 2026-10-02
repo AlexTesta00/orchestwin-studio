@@ -5,6 +5,11 @@ import { defineComponent, h, vShow, withDirectives } from "vue";
 
 import { createAppI18n } from "@/i18n";
 import { createDesignApi, type DesignApi } from "../api/design";
+import {
+  DesignAlignmentApiError,
+  type DesignAlignmentApi,
+  type DesignAlignmentPayload,
+} from "../api/designAlignment";
 import type { DesignIterationsApi } from "../api/designIterations";
 import type { DesignLoopApi } from "../api/designLoop";
 import { DesignMockupsApiError, type DesignMockupsApi } from "../api/designMockups";
@@ -206,6 +211,58 @@ const GENERATED_SELECTED: DesignPackageVersionPayload = {
   },
 };
 
+const REANCHORED_DESIGN_VERSION: DesignPackageVersionPayload = {
+  ...GENERATED_SELECTED,
+  id: "00000000-0000-4000-8000-0000000001a0",
+  version_number: 3,
+  based_on_version_number: 2,
+  content_hash: "a".repeat(64),
+  package: {
+    ...GENERATED_SELECTED.package,
+    grounding: {
+      ...GENERATED_SELECTED.package.grounding,
+      requirements_reference: {
+        ...DESIGN_REQUIREMENTS,
+        artifact_id: REQUIREMENTS_V2.id,
+        version_number: REQUIREMENTS_V2.version_number,
+        content_hash: REQUIREMENTS_V2.content_hash,
+      },
+    },
+  },
+};
+
+function alignment(overrides: Partial<DesignAlignmentPayload> = {}): DesignAlignmentPayload {
+  return {
+    aligned: false,
+    issue: null,
+    design_version_number: 2,
+    grounded_requirements_version_number: 1,
+    requirements_version_number: 2,
+    missing_codes: [],
+    uncovered_codes: [],
+    ...overrides,
+  };
+}
+
+function alignmentRouteMissing(): DesignAlignmentApiError {
+  return new DesignAlignmentApiError("The design alignment request failed", {
+    status: 404,
+    code: null,
+    payload: { detail: "Not Found" },
+  });
+}
+
+function fakeAlignmentApi(answer: DesignAlignmentPayload | Error) {
+  return {
+    status: vi.fn(async (): Promise<DesignAlignmentPayload> => {
+      if (answer instanceof Error) {
+        throw answer;
+      }
+      return answer;
+    }),
+  } satisfies Pick<DesignAlignmentApi, "status">;
+}
+
 function mockupResult(
   alternativeId: string,
   version: DesignPackageVersionPayload = GENERATED_UNSELECTED,
@@ -368,6 +425,28 @@ function fakeUsageApi(cost = 412000) {
     })),
     budget: vi.fn(async () => {
       throw new Error("not used in this spec");
+    }),
+  } satisfies ModelUsageApi;
+}
+
+function fakeSubscriptionUsageApi() {
+  const paid = fakeUsageApi(412000);
+  return {
+    ...paid,
+    usage: vi.fn(async () => {
+      const report = await paid.usage();
+      return {
+        items: [
+          {
+            ...report.items[0]!,
+            generation_id: "generation-usage-2",
+            provider_kind: "CLAUDE_CODE_CLI" as const,
+            cost_microusd: null,
+          },
+          ...report.items,
+        ],
+        totals: { ...report.totals, generations: 2 },
+      };
     }),
   } satisfies ModelUsageApi;
 }
@@ -725,6 +804,26 @@ class FakeDesignApi implements DesignApi {
   }
 }
 
+function approvedReadiness(version: DesignPackageVersionPayload): DesignReadinessPayload {
+  return {
+    status: "READY_FOR_ARCHITECTURE_PLANNING",
+    version,
+    gate: {
+      ...PENDING_DESIGN_GATE,
+      status: "APPROVED",
+      artifact: {
+        ...PENDING_DESIGN_GATE.artifact,
+        artifact_id: version.id,
+        version: version.version_number,
+        content_hash: version.content_hash,
+      },
+    },
+    has_package: true,
+    package_ready_for_gate: true,
+    approved_current_package: true,
+  };
+}
+
 function designToPrepare(version: DesignPackageVersionPayload): FakeDesignApi {
   const api = new FakeDesignApi(version);
   const prepared = api.readinessResult;
@@ -755,6 +854,8 @@ interface MountOptions {
   locale?: "en" | "it";
   loop?: DesignLoopApi;
   requirementsApi?: FakeRequirementsGate;
+  alignmentApi?: Pick<DesignAlignmentApi, "status">;
+  sectionsMode?: boolean;
   mockupsApi?: DesignMockupsApi;
   iterationsApi?: DesignIterationsApi;
   pinsApi?: DesignReviewPinsApi;
@@ -777,6 +878,8 @@ function mountFlow(api: FakeDesignApi, options: MountOptions = {}) {
       loopApi: options.loop ?? loopApi,
       requirementsApi:
         options.requirementsApi ?? new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1)),
+      alignmentApi: options.alignmentApi ?? fakeAlignmentApi(alignmentRouteMissing()),
+      ...(options.sectionsMode === undefined ? {} : { sectionsMode: options.sectionsMode }),
       mockupsApi: options.mockupsApi ?? fakeMockupsApi(),
       ...(options.iterationsApi === undefined ? {} : { iterationsApi: options.iterationsApi }),
       ...(options.pinsApi === undefined ? {} : { pinsApi: options.pinsApi }),
@@ -864,11 +967,16 @@ describe("ProjectDesignFlow", () => {
     expect(wrapper.get('[data-testid="design-preview"]').text()).toContain(
       "Model-generated draft · not applied",
     );
+    expect(wrapper.get('[data-testid="design-preview"]').text()).toContain(
+      "the application is built from the knowledge folder with your own tools.",
+    );
     expect(api.proposedPackage).toBeNull();
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
 
     await card(wrapper, "DES-002").get('[data-testid="alternative-choose"]').trigger("click");
     await flushPromises();
 
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
     expect(api.proposeRevision).toHaveBeenCalledTimes(1);
     expect(api.proposedPackage?.owner_selected_alternative_id).toBe(SECOND_DESIGN_ALTERNATIVE_ID);
     expect(api.proposedPackage?.prototype?.design_alternative_id).toBe(
@@ -990,6 +1098,7 @@ describe("ProjectDesignFlow", () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="design-next-step"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="design-regenerate"]').exists()).toBe(true);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(3);
   });
 
   it("explains a rejected regeneration in plain words instead of showing its code", async () => {
@@ -1480,6 +1589,43 @@ describe("ProjectDesignFlow", () => {
     },
   );
 
+  it.each([
+    [
+      "say that it is not paid",
+      { ...GENERATED, paid: false },
+      "en",
+      false,
+      "Drawing uses your Claude subscription: it spends no credit.",
+    ],
+    [
+      "say that it is not paid, in Italian",
+      { ...GENERATED, paid: false },
+      "it",
+      false,
+      "Il disegno usa il tuo abbonamento di Claude: non spende credito.",
+    ],
+    [
+      "say that it is paid",
+      { ...GENERATED, paid: true },
+      "en",
+      true,
+      "Drawing uses the hosted model and has a cost.",
+    ],
+    ["do not say", GENERATED, "en", true, "Drawing uses the hosted model and has a cost."],
+  ] as const)(
+    "says under the drawing of a mockup what it spends when the capabilities %s",
+    async (_label, capabilities, locale, paid, note) => {
+      const api = new FakeDesignApi(GENERATED_UNSELECTED);
+      const wrapper = mountFlow(api, { locale, mockupsApi: fakeMockupsApi({ capabilities }) });
+      await flushPromises();
+
+      expect(wrapper.getComponent(DesignAlternativeComparison).props("paid")).toBe(paid);
+      for (const code of ["DES-001", "DES-002"]) {
+        expect(card(wrapper, code).get('[data-testid="alternative-draw-cost"]').text()).toBe(note);
+      }
+    },
+  );
+
   it("names the screens and the elements of the applied mockup in the texts of the review", async () => {
     const api = new FakeDesignApi(GENERATED_SELECTED);
     const loop = fakeLoopApi();
@@ -1529,6 +1675,7 @@ describe("ProjectDesignFlow", () => {
     const wrapper = mountFlow(api, { loop, mockupsApi, pinsApi, locale: "it", attach: true });
     await flushPromises();
 
+    await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
     const list = wrapper.get('[data-testid="design-observation-list"]');
     expect(list.text()).toContain("Da «Desk» non si capisce come arrivare a «Booking».");
     expect(list.text()).toContain("Dove: Desk · Guest name");
@@ -1849,6 +1996,7 @@ describe("ProjectDesignFlow", () => {
       "«I see the next arrival, but the flow slows me down at peak times.»",
     );
     expect(cells[0]?.attributes("aria-pressed")).toBe("true");
+    await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
     const list = () => wrapper.get('[data-testid="design-observation-list"]');
     expect(list().get("h3").text()).toBe("Receptionist Twin su DES-001 · Guided reservation flow");
 
@@ -1867,6 +2015,211 @@ describe("ProjectDesignFlow", () => {
     expect(list().get('[data-testid="design-observation-avatar"] img').attributes("src")).toBe(
       matrixImage,
     );
+  });
+
+  it.each([
+    [
+      "en",
+      "Read every observation of Receptionist Twin on DES-001 · Guided reservation flow (6)",
+      "6 observations",
+    ],
+    [
+      "it",
+      "Leggi tutte le osservazioni di Receptionist Twin su DES-001 · Guided reservation flow (6)",
+      "6 osservazioni",
+    ],
+  ] as const)(
+    "keeps the observations of the cell chosen by default closed when the step loads (%s)",
+    async (locale, sentence, count) => {
+      const api = new FakeDesignApi(GENERATED_UNSELECTED);
+      const wrapper = mountFlow(api, { locale });
+      await flushPromises();
+
+      const toggle = wrapper.get('[data-testid="design-observations-toggle"]');
+      expect(toggle.element.tagName).toBe("BUTTON");
+      expect(toggle.attributes("type")).toBe("button");
+      expect(toggle.attributes("aria-expanded")).toBe("false");
+      expect(toggle.get('[data-testid="design-observations-label"]').text()).toBe(sentence);
+      const region = wrapper.get(`[id="${toggle.attributes("aria-controls")}"]`);
+      expect(region.attributes("data-testid")).toBe("design-observations-region");
+      expect(region.element.children).toHaveLength(0);
+      expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="design-critique-list"]').exists()).toBe(false);
+      const cells = wrapper.findAll('[data-testid="design-twin-matrix-cell"]');
+      expect(cells.map((cell) => cell.attributes("aria-pressed"))).toEqual(["true", "false"]);
+      expect(cells[0]?.get('[data-testid="design-twin-matrix-count"]').text()).toBe(count);
+    },
+  );
+
+  it.each([
+    [
+      "en",
+      "Close the observations",
+      "Receptionist Twin on DES-001 · Guided reservation flow",
+      "Read every observation of Receptionist Twin on DES-001 · Guided reservation flow (6)",
+    ],
+    [
+      "it",
+      "Chiudi le osservazioni",
+      "Receptionist Twin su DES-001 · Guided reservation flow",
+      "Leggi tutte le osservazioni di Receptionist Twin su DES-001 · Guided reservation flow (6)",
+    ],
+  ] as const)(
+    "opens the observations with their button and closes them again (%s)",
+    async (locale, close, heading, sentence) => {
+      const api = new FakeDesignApi(GENERATED_UNSELECTED);
+      const wrapper = mountFlow(api, { locale });
+      await flushPromises();
+
+      const toggle = () => wrapper.get('[data-testid="design-observations-toggle"]');
+      const label = () => wrapper.get('[data-testid="design-observations-label"]').text();
+      await toggle().trigger("click");
+      expect(toggle().attributes("aria-expanded")).toBe("true");
+      expect(label()).toBe(close);
+      const region = wrapper.get(`[id="${toggle().attributes("aria-controls")}"]`);
+      const list = region.get('[data-testid="design-observation-list"]');
+      expect(list.get("h3").text()).toBe(heading);
+      expect(list.findAll('[data-testid="design-critique-list"]')).toHaveLength(6);
+      expect(list.findAll('[data-testid="design-critique-item"]')).toHaveLength(6);
+
+      await toggle().trigger("click");
+      expect(toggle().attributes("aria-expanded")).toBe("false");
+      expect(label()).toBe(sentence);
+      expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+    },
+  );
+
+  it("opens the observations when the person clicks a cell of the matrix and keeps them open on another cell", async () => {
+    const api = new FakeDesignApi(GENERATED_UNSELECTED);
+    const wrapper = mountFlow(api);
+    await flushPromises();
+
+    const toggle = () => wrapper.get('[data-testid="design-observations-toggle"]');
+    const label = () => wrapper.get('[data-testid="design-observations-label"]').text();
+    const list = () => wrapper.get('[data-testid="design-observation-list"]');
+    const cell = (alternativeId: string) =>
+      wrapper
+        .findAll('[data-testid="design-twin-matrix-cell"]')
+        .find((item) => item.attributes("data-alternative") === alternativeId)!;
+
+    await cell(SECOND_DESIGN_ALTERNATIVE_ID).trigger("click");
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    expect(cell(SECOND_DESIGN_ALTERNATIVE_ID).attributes("aria-pressed")).toBe("true");
+    expect(list().get("h3").text()).toBe(
+      "Receptionist Twin on DES-002 · Reservation operations dashboard",
+    );
+    expect(list().text()).toContain("Dense tiles may hide the next arrival.");
+
+    await cell(DESIGN_ALTERNATIVE_ID).trigger("click");
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    expect(list().get("h3").text()).toBe("Receptionist Twin on DES-001 · Guided reservation flow");
+
+    await cell(SECOND_DESIGN_ALTERNATIVE_ID).trigger("click");
+    await toggle().trigger("click");
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+    expect(label()).toBe(
+      "Read every observation of Receptionist Twin on DES-002 · Reservation operations dashboard (6)",
+    );
+
+    await cell(SECOND_DESIGN_ALTERNATIVE_ID).trigger("click");
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    expect(list().get("h3").text()).toBe(
+      "Receptionist Twin on DES-002 · Reservation operations dashboard",
+    );
+  });
+
+  it("opens the observations again by itself when a decision taken in them fails after the person closed them", async () => {
+    const api = new FakeDesignApi(GENERATED_SELECTED);
+    const loop = fakeLoopApi();
+    vi.mocked(loop.runs).mockResolvedValue([
+      evaluationRun(TWIN_ID, GENERATED_SELECTED, [
+        finding("UTF-001", "The guest name lacks a format hint.", TWIN_ID),
+      ]),
+    ]);
+    let refuse: (error: Error) => void = () => undefined;
+    loop.validate = vi.fn(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          refuse = reject;
+        }),
+    );
+    const wrapper = mountFlow(api, { loop, locale: "it" });
+    await flushPromises();
+
+    const toggle = () => wrapper.get('[data-testid="design-observations-toggle"]');
+    const list = () => wrapper.get('[data-testid="design-observation-list"]');
+    expect(wrapper.get('[data-testid="design-observations-label"]').text()).toBe(
+      "Leggi tutte le osservazioni di Receptionist Twin su DES-001 · Guided reservation flow (1)",
+    );
+    await toggle().trigger("click");
+    await list().get('[data-testid="design-observation-confirm"]').trigger("click");
+    expect(list().get('[data-testid="design-observation-saving"]').text()).toBe(
+      "Salvo la tua decisione…",
+    );
+
+    await toggle().trigger("click");
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+
+    refuse(new Error("Design loop API request failed with status 503"));
+    await flushPromises();
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    const error = list().get('[data-testid="design-observation-error"]');
+    expect(error.attributes("role")).toBe("alert");
+    expect(error.text()).toBe("Non è stato possibile salvare la tua decisione. Riprova.");
+    expect(list().get('[data-testid="design-observation"]').attributes("data-decision")).toBe(
+      "NONE",
+    );
+  });
+
+  it("opens the observations again by itself when bringing one into the project fails after the person closed them", async () => {
+    const api = new FakeDesignApi(GENERATED_UNSELECTED);
+    const loop = fakeLoopApi();
+    let refuse: (error: Error) => void = () => undefined;
+    vi.mocked(loop.applyInsight).mockImplementation(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          refuse = reject;
+        }),
+    );
+    const wrapper = mountFlow(api, { loop });
+    await flushPromises();
+
+    const toggle = () => wrapper.get('[data-testid="design-observations-toggle"]');
+    const list = () => wrapper.get('[data-testid="design-observation-list"]');
+    await wrapper.findAll('[data-testid="design-twin-matrix-cell"]')[1]!.trigger("click");
+    await list()
+      .get('[data-testid="design-critique-bring"] [data-target="REQUIREMENTS"]')
+      .trigger("click");
+    expect(list().get('[role="status"]').text()).toBe("Bringing it into the project…");
+
+    await toggle().trigger("click");
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+
+    refuse(new Error("Design loop API request failed with status 503"));
+    await flushPromises();
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    expect(list().get("h3").text()).toBe(
+      "Receptionist Twin on DES-002 · Reservation operations dashboard",
+    );
+    expect(list().get('[role="alert"]').text()).toBe(
+      "The insight could not be brought into the project. Try again.",
+    );
+  });
+
+  it("starts with the observations closed again when another project is opened", async () => {
+    const api = new FakeDesignApi(GENERATED_UNSELECTED);
+    const wrapper = mountFlow(api);
+    await flushPromises();
+    await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(true);
+
+    await wrapper.setProps({ projectId: "00000000-0000-4000-8000-000000000199" });
+    await flushPromises();
+
+    expect(
+      wrapper.get('[data-testid="design-observations-toggle"]').attributes("aria-expanded"),
+    ).toBe("false");
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
   });
 
   it("records the decisions on the findings of the review and brings a concern into the project", async () => {
@@ -1897,6 +2250,7 @@ describe("ProjectDesignFlow", () => {
     const wrapper = mountFlow(api, { loop, locale: "it" });
     await flushPromises();
 
+    await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
     const list = () => wrapper.get('[data-testid="design-observation-list"]');
     expect(list().text()).toContain("The guest name lacks a format hint.");
     await list().get('[data-testid="design-observation-confirm"]').trigger("click");
@@ -1984,9 +2338,10 @@ describe("ProjectDesignFlow", () => {
     await flushPromises();
 
     expect(pinsApi.pins).toHaveBeenCalledWith(DESIGN_PROJECT_ID, "run-1", "access-token");
-    expect(
-      wrapper.findAll('[data-testid="design-observation-number"]').map((item) => item.text()),
-    ).toEqual(["1", "2"]);
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="design-observations-label"]').text()).toBe(
+      "Read every observation of Receptionist Twin on DES-001 · Guided reservation flow (2)",
+    );
 
     await card(wrapper, "DES-001").get('[data-testid="alternative-open"]').trigger("click");
     await flushPromises();
@@ -2012,6 +2367,11 @@ describe("ProjectDesignFlow", () => {
     document.body.querySelector<HTMLElement>("[data-testid='mockup-dialog-close']")?.click();
     await flushPromises();
     expect(document.body.querySelector("[data-testid='mockup-dialog']")).toBeNull();
+
+    await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
+    expect(
+      wrapper.findAll('[data-testid="design-observation-number"]').map((item) => item.text()),
+    ).toEqual(["1", "2"]);
   });
 
   it("asks for changes with a rule that stays valid and shows the designer at work", async () => {
@@ -2028,7 +2388,9 @@ describe("ProjectDesignFlow", () => {
 
     const bar = barOf(wrapper);
     expect(bar.get('[data-testid="decision-primary"]').text()).toBe("Approva il design scelto");
-    expect(bar.text()).toContain("Approvi DES-001 · Guided reservation flow.");
+    expect(bar.text()).toContain(
+      "Approvi DES-001 · Guided reservation flow. La cartella di conoscenza conterrà questo design e il parere dei twin.",
+    );
     await bar.get('[data-testid="decision-secondary"]').trigger("click");
     const note = wrapper.get('[data-testid="decision-note"]');
     expect(note.attributes("placeholder")).toBe(
@@ -2120,8 +2482,10 @@ describe("ProjectDesignFlow", () => {
     expect(barOf(wrapper).text()).toContain("A new version is waiting above");
     expect(barOf(wrapper).find('[data-testid="decision-secondary"]').exists()).toBe(false);
 
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
     await panel.get('[data-testid="design-iteration-apply"]').trigger("click");
     await flushPromises();
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
     expect(api.proposals).toEqual([proposal.package]);
     expect(api.decisions).toEqual(["APPROVE"]);
     expect(wrapper.find('[data-testid="design-iteration-ready"]').exists()).toBe(false);
@@ -2149,8 +2513,21 @@ describe("ProjectDesignFlow", () => {
     expect(api.gateActions.map((item) => item.action)).toEqual(["APPROVE"]);
     expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="design-readiness"]').text()).toBe(
-      "Design approvato da te. Ora il pacchetto.",
+      "Design approvato da te. Ora il Dossier.",
     );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+  });
+
+  it("says in English that the Dossier follows the approved design", async () => {
+    const api = new FakeDesignApi(SELECTED_DESIGN_VERSION);
+    api.readinessResult = approvedReadiness(SELECTED_DESIGN_VERSION);
+    const wrapper = mountFlow(api);
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="design-readiness"]').text()).toBe(
+      "Design approved by you. Next: the Dossier.",
+    );
+    expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
   });
 
   it("approves with the same button when only the approval failed the first time", async () => {
@@ -2183,6 +2560,9 @@ describe("ProjectDesignFlow", () => {
     const note = wrapper.get('[data-testid="decision-note"]');
     expect(note.attributes("placeholder")).toBe(
       "Write what is wrong: the request is recorded with your note. For a different design, choose the other alternative or regenerate the alternatives.",
+    );
+    expect(barOf(wrapper).text()).toContain(
+      "The current design does not change: your note stays in the history of the design.",
     );
     expect(wrapper.find('[data-testid="design-request-rule"]').exists()).toBe(false);
     await note.setValue("The dashboard is too dense.");
@@ -2249,6 +2629,58 @@ describe("ProjectDesignFlow", () => {
     expect(details.text()).toContain("10,234 in · 17,890 out · 3,120 reasoning");
   });
 
+  it.each([
+    [
+      "en",
+      "Cost of the generations",
+      "· subscription · generation-usage-2",
+      "· $0.412 · generation-usage-1",
+      "$0.412",
+    ],
+    ["it", "Costo delle generazioni", "· abbonamento · generation-usage-2", "0,412", "0,412"],
+  ] as const)(
+    "shows a generation made on the Claude subscription without an amount and the cost of the paid ones (%s)",
+    async (locale, costLabel, subscriptionLine, paidLine, cost) => {
+      const api = new FakeDesignApi(GENERATED_UNSELECTED);
+      const wrapper = mountFlow(api, {
+        locale,
+        usageApi: fakeSubscriptionUsageApi(),
+        mockupsApi: fakeMockupsApi({ capabilities: GENERATED }),
+      });
+      await flushPromises();
+
+      await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
+      const details = wrapper.get('[data-testid="step-technical-details-content"]');
+      const [subscription, paid] = details
+        .findAll("li")
+        .filter((item) => item.text().includes("generation-usage-"));
+      expect(subscription?.text()).toContain(subscriptionLine);
+      expect(subscription?.text()).not.toMatch(/\$|USD/);
+      expect(paid?.text()).toContain(paidLine);
+      const labels = details.findAll("dt").map((item) => item.text());
+      expect(labels).toContain(costLabel);
+      expect(details.findAll("dd")[labels.indexOf(costLabel)]?.text()).toContain(cost);
+    },
+  );
+
+  it.each([
+    ["en", "Approved · Decision no. 1"],
+    ["it", "Approvato · Decisione n. 1"],
+  ] as const)(
+    "numbers the decision on the design in %s without a limit of attempts",
+    async (locale, approval) => {
+      const api = new FakeDesignApi(GENERATED_SELECTED);
+      api.readinessResult = approvedReadiness(GENERATED_SELECTED);
+      const wrapper = mountFlow(api, { locale });
+      await flushPromises();
+
+      await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
+      const details = wrapper.get('[data-testid="step-technical-details-content"]');
+      expect(details.text()).toContain(approval);
+      expect(details.text()).not.toMatch(/ of 3| di 3/);
+    },
+  );
+
   it("tells only in the technical details what the Studio repaired in a drawn mockup", async () => {
     const api = new FakeDesignApi(GENERATED_UNSELECTED);
     const repaired = mockupResult(DESIGN_ALTERNATIVE_ID, GENERATED_UNSELECTED, {
@@ -2301,6 +2733,271 @@ describe("ProjectDesignFlow", () => {
     });
     await flushPromises();
     await expectAccessible(wrapper.element, { iframes: false });
+  });
+
+  it.each([
+    ["the opinions of the twins", GENERATED_UNSELECTED, []],
+    [
+      "the findings of the review",
+      GENERATED_SELECTED,
+      [
+        evaluationRun(TWIN_ID, GENERATED_SELECTED, [
+          finding("UTF-001", "The guest name lacks a format hint.", TWIN_ID),
+          { ...finding("UTF-002", "The totals are hard to find.", TWIN_ID), severity: "critical" },
+        ]),
+      ],
+    ],
+  ] as const)(
+    "has no axe violations with the observations of %s closed and open",
+    async (_label, version, runs) => {
+      const api = new FakeDesignApi(version);
+      const loop = fakeLoopApi();
+      vi.mocked(loop.runs).mockResolvedValue([...runs]);
+      const wrapper = mountFlow(api, { loop, locale: "it" });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+      await expectAccessible(wrapper.element);
+
+      await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
+      expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(true);
+      await expectAccessible(wrapper.element);
+    },
+  );
+});
+
+describe("ProjectDesignFlow in sections mode", () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    while (mounted.length > 0) {
+      mounted.pop()?.unmount();
+    }
+    document.body.innerHTML = "";
+  });
+
+  function drawnMockups() {
+    return fakeMockupsApi({
+      capabilities: GENERATED,
+      documents: {
+        [`${DESIGN_ALTERNATIVE_ID}|applied`]: mockupDocument(DESIGN_ALTERNATIVE_ID, "applied"),
+      },
+    });
+  }
+
+  it.each([
+    [
+      "en",
+      "You approved this design. You can still ask for changes in words: the new version comes back here for your approval.",
+      "Ask for changes",
+      "The designer is drawing the new version you asked for: the approved design stays as it is until you apply it.",
+    ],
+    [
+      "it",
+      "Hai approvato questo design. Puoi ancora chiedere modifiche a parole: la nuova versione torna qui per la tua approvazione.",
+      "Chiedi modifiche",
+      "Il designer sta disegnando la nuova versione che hai chiesto: il design approvato resta com'è finché non la applichi.",
+    ],
+  ] as const)(
+    "offers in %s the change in words on an approved design only in sections mode",
+    async (locale, sentence, secondary, drawing) => {
+      const api = new FakeDesignApi(GENERATED_SELECTED);
+      api.readinessResult = approvedReadiness(GENERATED_SELECTED);
+      const iterationsApi = fakeIterationsApi(() => job(null));
+      const wrapper = mountFlow(api, { mockupsApi: drawnMockups(), iterationsApi, locale });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="design-readiness"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
+
+      await wrapper.setProps({ sectionsMode: true });
+
+      const bar = barOf(wrapper);
+      expect(bar.text()).toContain(sentence);
+      expect(bar.get('[data-testid="decision-primary"]').attributes("disabled")).toBeDefined();
+      expect(bar.get('[data-testid="decision-secondary"]').text()).toBe(secondary);
+      await expectAccessible(wrapper.element, { iframes: false });
+
+      await bar.get('[data-testid="decision-secondary"]').trigger("click");
+      await wrapper.get('[data-testid="decision-note"]').setValue("Metti la ricerca in alto");
+      await wrapper.get('[data-testid="decision-send"]').trigger("click");
+      await flushPromises();
+
+      expect(iterationsApi.startJob.mock.calls[0]?.[1]).toEqual({
+        design_version_id: GENERATED_SELECTED.id,
+        design_content_hash: GENERATED_SELECTED.content_hash,
+        request: "Metti la ricerca in alto",
+        assertions: [],
+      });
+      expect(api.gateActions).toEqual([]);
+      expect(wrapper.get('[data-testid="design-iteration-panel"]').attributes("data-phase")).toBe(
+        "drawing",
+      );
+      expect(barOf(wrapper).text()).toContain(drawing);
+    },
+  );
+
+  it("keeps the review and the discussion of an approved design available as today", async () => {
+    const api = new FakeDesignApi(GENERATED_SELECTED);
+    api.readinessResult = approvedReadiness(GENERATED_SELECTED);
+    const wrapper = mountFlow(api, { mockupsApi: drawnMockups(), sectionsMode: true });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="design-evaluate"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="design-discussion-panel"]').exists()).toBe(true);
+  });
+
+  it.each([
+    [
+      "en",
+      "The design was re-anchored to the new Definition: you can ask the twins for a new evaluation.",
+    ],
+    [
+      "it",
+      "Il design è stato riagganciato alla Definizione nuova: puoi chiedere ai twin una nuova valutazione.",
+    ],
+  ] as const)(
+    "says in %s next to the review that a re-anchored design can be evaluated again and starts no review by itself",
+    async (locale, sentence) => {
+      const api = new FakeDesignApi(REANCHORED_DESIGN_VERSION);
+      api.readinessResult = approvedReadiness(REANCHORED_DESIGN_VERSION);
+      api.historyResult = [GENERATED_SELECTED, REANCHORED_DESIGN_VERSION];
+      const loop = reviewingLoopApi();
+      vi.mocked(loop.runs).mockResolvedValue([evaluationRun(TWIN_ID, GENERATED_SELECTED)]);
+      const wrapper = mountFlow(api, {
+        loop,
+        locale,
+        sectionsMode: true,
+        requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V2)),
+        alignmentApi: fakeAlignmentApi(
+          alignment({
+            aligned: true,
+            issue: "ALREADY_ALIGNED",
+            grounded_requirements_version_number: 2,
+          }),
+        ),
+      });
+      await flushPromises();
+
+      const notice = wrapper.get('[data-testid="design-reanchored-review"]');
+      expect(notice.text()).toBe(sentence);
+      const panel = wrapper.getComponent(ProjectDesignEvaluationPanel);
+      expect(notice.element.nextElementSibling).toBe(panel.element);
+      expect(panel.props("autoEvaluateVersionId")).toBeNull();
+      expect(loop.evaluate).not.toHaveBeenCalled();
+      await expectAccessible(wrapper.element);
+
+      await panel.get('[data-testid="design-evaluate"]').trigger("click");
+      await flushPromises();
+
+      expect(loop.evaluate).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(loop.evaluate).mock.calls[0]?.[1]).toMatchObject({
+        design_version_id: REANCHORED_DESIGN_VERSION.id,
+        mode: "TWIN_REVIEW",
+      });
+    },
+  );
+
+  it("says nothing about a re-anchoring for a version that only changed the design", async () => {
+    const iterated: DesignPackageVersionPayload = {
+      ...GENERATED_SELECTED,
+      id: "00000000-0000-4000-8000-0000000001a1",
+      version_number: 3,
+      based_on_version_number: 2,
+      content_hash: "b".repeat(64),
+    };
+    const api = new FakeDesignApi(iterated);
+    api.historyResult = [GENERATED_SELECTED, iterated];
+    const loop = reviewingLoopApi();
+    vi.mocked(loop.runs).mockResolvedValue([evaluationRun(TWIN_ID, GENERATED_SELECTED)]);
+    const wrapper = mountFlow(api, { loop, sectionsMode: true });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="design-reanchored-review"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="design-evaluation-panel"]').exists()).toBe(true);
+    expect(loop.evaluate).not.toHaveBeenCalled();
+  });
+
+  it("says nothing about a re-anchoring once the re-anchored design has its own review", async () => {
+    const api = new FakeDesignApi(REANCHORED_DESIGN_VERSION);
+    api.readinessResult = approvedReadiness(REANCHORED_DESIGN_VERSION);
+    api.historyResult = [GENERATED_SELECTED, REANCHORED_DESIGN_VERSION];
+    const loop = fakeLoopApi();
+    vi.mocked(loop.runs).mockResolvedValue([
+      evaluationRun(TWIN_ID, GENERATED_SELECTED),
+      { ...evaluationRun(TWIN_ID, REANCHORED_DESIGN_VERSION), id: "run-2" },
+    ]);
+    const wrapper = mountFlow(api, { loop, sectionsMode: true });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="design-reanchored-review"]').exists()).toBe(false);
+  });
+
+  it.each([
+    [
+      "it",
+      "Il design è agganciato alla Definizione v1; ora c'è la v2. Le alternative restano: usa «Aggiorna e conferma» qui sopra per riagganciarlo.",
+    ],
+    [
+      "en",
+      "The design is anchored to Definition v1; now there is v2. The alternatives stay: use «Update and confirm» above to re-anchor it.",
+    ],
+  ] as const)(
+    "tells in %s to re-anchor an approved design above instead of regenerating it",
+    async (locale, sentence) => {
+      const api = new FakeDesignApi(GENERATED_SELECTED);
+      api.readinessResult = approvedReadiness(GENERATED_SELECTED);
+      const alignmentApi = fakeAlignmentApi(alignment());
+      const wrapper = mountFlow(api, {
+        locale,
+        sectionsMode: true,
+        requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V2)),
+        alignmentApi,
+      });
+      await flushPromises();
+
+      expect(alignmentApi.status).toHaveBeenCalledWith(DESIGN_PROJECT_ID, "access-token");
+      expect(wrapper.get('[data-testid="design-next-step-reanchor"]').text()).toContain(sentence);
+      expect(wrapper.find('[data-testid="design-regenerate"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="design-next-regenerate"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
+    },
+  );
+
+  it("keeps the regeneration as the way out when the design cites a requirement that is gone", async () => {
+    const api = new FakeDesignApi(GENERATED_SELECTED);
+    api.readinessResult = approvedReadiness(GENERATED_SELECTED);
+    const loop = fakeLoopApi();
+    vi.mocked(loop.regenerate).mockImplementation(async () => {
+      api.readinessResult = { ...api.readinessResult, version: REGENERATED_DESIGN_VERSION };
+      return {
+        status: "CREATED",
+        version: REGENERATED_DESIGN_VERSION,
+        issue: null,
+        proposal_issue: null,
+        persistence_status: "APPENDED",
+      };
+    });
+    const wrapper = mountFlow(api, {
+      loop,
+      sectionsMode: true,
+      requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V2)),
+      alignmentApi: fakeAlignmentApi(
+        alignment({ issue: "REQUIREMENT_NO_LONGER_AVAILABLE", missing_codes: ["REQ-003"] }),
+      ),
+    });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="design-next-step"]').text()).toContain(
+      "Design & Evaluation cannot be updated by itself: the design cites REQ-003, which the Definition no longer contains: regenerate the alternatives in the Design & Evaluation step.",
+    );
+    await wrapper.get('[data-testid="design-next-regenerate"]').trigger("click");
+    await flushPromises();
+    expect(loop.regenerate).toHaveBeenCalledTimes(1);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
 });
 
@@ -2659,8 +3356,8 @@ describe("ProjectDesignFlow and a refused first proposal", () => {
   const NO_DESIGNER = { code: "PROPOSAL_REJECTED", proposal_issue: "UX_DESIGNER_REQUIRED" };
   const NO_REASON = { code: "PROPOSAL_REJECTED" };
   const DESIGNER_MISSING = {
-    en: "The team of this project has no UX/UI designer, so the design alternatives cannot be prepared. Go back to the Team step, add the designer and approve the team again.",
-    it: "La squadra di questo progetto non ha un designer UX/UI, quindi le alternative di design non si possono preparare. Torna al passo Squadra, aggiungi il designer e approva di nuovo la squadra.",
+    en: "The User experience (UX) perspective is missing: open Perspectives and prepare them again.",
+    it: "Manca la prospettiva Esperienza d'uso (UX): apri Prospettive e preparale di nuovo.",
   };
   const NOT_PREPARED = {
     en: "The model could not prepare this proposal from the approved steps. Your project is unchanged. You can try again.",
@@ -2746,7 +3443,7 @@ describe("ProjectDesignFlow and a refused first proposal", () => {
     { how: "through a job", background: true, locale: "en" },
     { how: "through a job", background: true, locale: "it" },
   ] as const)(
-    "says that the team has no designer when the proposal is refused $how ($locale)",
+    "says that the UX perspective is missing when the proposal is refused $how ($locale)",
     async ({ background, locale }) => {
       const wrapper = await generateRefused(NO_DESIGNER, background, locale);
 

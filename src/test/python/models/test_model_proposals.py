@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 
+from orchestwin.agents.catalog import AgentIdentifier
 from orchestwin.agents.selection_rules import TeamRoleConstraintKind
 from orchestwin.models.model_proposals import (
     HOSTED_PROFILE_NAME_INSTRUCTION,
@@ -40,6 +41,7 @@ from orchestwin.models.structured_generation import (
     ModelRuntimeIdentity,
     StructuredGenerationProviderKind,
 )
+from orchestwin.models.team_proposals import TeamProposalGenerationStatus
 from orchestwin.models.user_modeling import (
     PersonaProposalRequest,
     UserModelingBriefInput,
@@ -58,13 +60,14 @@ LOCAL = StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL
 HOSTED = StructuredGenerationProviderKind.ANTHROPIC_HOSTED
 LOCAL_PROFILE_SHA256 = {
     "personas": "b52ccbbab2904fdf6144a1e99a46c6cd848ca7aa89fb32c76af5871c4e8d03ef",
-    "user_twins": "aa03bc4d36bf72a5e0e32e9b3e96a1140d6515372bd7f89ecfd8ce9a4fe7179e",
+    "user_twins": "10378fed1fdf7d4ed93016ffde2557be4be5a470247f7e8b2e117fd9015424c3",
 }
 ROLE_AS_NAME = (
     "name is the role of the represented people as a short noun phrase of at most six words, in "
     "the language of the brief, with a capital first letter; it never contains the words Twin or "
     "Persona and never a colon."
 )
+CONTRADICTION = "Una app con database ma senza backend. No integrations."
 
 
 class CompletionTransport:
@@ -187,6 +190,66 @@ def test_team_ignores_redundant_mandatory_suggestions(tmp_path):
     result = asyncio.run(ModelTeamProposalAdapter(generator).propose(request))
     assert result.proposal.suggested_agent_ids == ()
     assert result.proposal.mandatory_agent_ids == request.constraints.mandatory_agent_ids
+
+
+def contradictory_request():
+    request = team_fixtures.build_request(description=CONTRADICTION)
+    kinds = {item.agent_id: item.kind for item in request.constraints.role_constraints}
+    assert request.constraints.conflicting_agent_ids == (AgentIdentifier.BACKEND_ENGINEER,)
+    assert kinds[AgentIdentifier.INTEGRATION_ENGINEER] is TeamRoleConstraintKind.IMPOSSIBLE
+    assert kinds[AgentIdentifier.MOBILE_ENGINEER] is TeamRoleConstraintKind.OPTIONAL
+    return request
+
+
+def test_a_contradiction_reaches_the_model_and_comes_back_with_the_proposal(tmp_path):
+    request = contradictory_request()
+    generator, transport = make_generator(
+        tmp_path,
+        {
+            "rationale": "The staff work on the move.",
+            "suggestions": [{"agent_id": "MOBILE_ENGINEER", "rationale": "Phones at the desk."}],
+        },
+    )
+
+    result = asyncio.run(ModelTeamProposalAdapter(generator).propose(request))
+    selected = result.proposal.selected_agent_ids
+
+    assert len(transport.calls) == 1
+    assert result.status is TeamProposalGenerationStatus.PROPOSED
+    assert result.issues == request.constraints.issues
+    assert [issue.agent_id for issue in result.issues] == [AgentIdentifier.BACKEND_ENGINEER]
+    assert result.proposal.suggested_agent_ids == (AgentIdentifier.MOBILE_ENGINEER,)
+    assert result.proposal.mandatory_agent_ids == request.constraints.mandatory_agent_ids
+    assert AgentIdentifier.BACKEND_ENGINEER not in selected
+    assert AgentIdentifier.INTEGRATION_ENGINEER not in selected
+
+
+@pytest.mark.parametrize(
+    "agent_id",
+    [AgentIdentifier.BACKEND_ENGINEER, AgentIdentifier.INTEGRATION_ENGINEER],
+    ids=["contested", "impossible"],
+)
+def test_a_contested_or_impossible_suggestion_is_still_refused(tmp_path, agent_id):
+    generator, transport = make_generator(
+        tmp_path,
+        {
+            "rationale": "One more specialist.",
+            "suggestions": [{"agent_id": agent_id.value, "rationale": "The brief names it."}],
+        },
+    )
+
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(ModelTeamProposalAdapter(generator).propose(contradictory_request()))
+    assert len(transport.calls) == 1
+
+
+def test_a_brief_without_a_contradiction_returns_no_issues(tmp_path):
+    generator, _ = make_generator(tmp_path, {"rationale": "Valid", "suggestions": []})
+
+    result = asyncio.run(ModelTeamProposalAdapter(generator).propose(team_fixtures.build_request()))
+
+    assert result.status is TeamProposalGenerationStatus.PROPOSED
+    assert result.issues == ()
 
 
 @pytest.mark.parametrize("stage", ["requirements", "design"])
@@ -537,6 +600,106 @@ def test_twins_bind_confirmed_persona_and_current_context(tmp_path):
         asyncio.run(ModelUserModelingAdapter(generator).propose_user_twins(request))
 
 
+def test_new_twin_declarations_are_inferred_and_contract_requires_their_content(tmp_path):
+    request, output = twin_input_output()
+    generator, transport = make_generator(tmp_path, output)
+    result = asyncio.run(ModelUserModelingAdapter(generator).propose_user_twins(request))
+    declarations = result.proposals[0].profile.observations[-4:]
+    assert [o.observation_key for o in declarations] == [
+        "user_twin.description",
+        "user_twin.represents",
+        "user_twin.does_not_represent",
+        "user_twin.evidence_gaps",
+    ]
+    for observation in declarations:
+        assert observation.epistemic_status.value == "MODEL_INFERRED"
+        assert observation.human_validation is HumanValidationRequirement.REQUIRED
+        assert all(
+            r.source_kind.value != "EMPIRICAL_RESEARCH" for r in observation.provenance.references
+        )
+    assert declarations[1].value.items == (
+        request.persona_versions[0].profile.observations[0].value.text,
+    )
+    assert declarations[2].value.kind.value == "UNKNOWN"
+    assert "empirical" in declarations[3].value.items[0]
+    payload = transport.calls[0]["payload"]
+    assert payload["response_format"]["json_schema"]["name"] == "proposal-user-twins-v5"
+    assert payload["metadata"]["orchestwin_prompt_version_ref"] == "proposal-user-twins-v5"
+    assert "Include all four declaration fields in new drafts" in USER_TWINS_INSTRUCTION
+    assert "Never invent demographics" in USER_TWINS_INSTRUCTION
+    assert "contested claims" in USER_TWINS_INSTRUCTION
+
+
+def test_legacy_twin_drafts_can_omit_declarations_without_inventing_new_claims(tmp_path):
+    from orchestwin.models.profile_drafts import UserTwinModelOutput
+
+    request, output = twin_input_output()
+    output["proposals"][0]["observations"] = output["proposals"][0]["observations"][:-4]
+    draft = UserTwinModelOutput.model_validate_json(json.dumps(output))
+    assert len(draft.proposals[0].observations) == 16
+    generator, _ = make_generator(tmp_path, output)
+    result = asyncio.run(ModelUserModelingAdapter(generator).propose_user_twins(request))
+    assert len(result.proposals[0].profile.observations) == 16
+    assert all(
+        item["observation_key"]
+        not in {
+            "user_twin.description",
+            "user_twin.represents",
+            "user_twin.does_not_represent",
+            "user_twin.evidence_gaps",
+        }
+        for item in result.proposals[0].profile.to_snapshot()["observations"]
+    )
+
+
+@pytest.mark.parametrize("kind", ["UNKNOWN", "ABSTAINED"])
+def test_twin_declarations_preserve_explicit_uncertainty(tmp_path, kind):
+    request, output = twin_input_output()
+    for observation in output["proposals"][0]["observations"][-4:]:
+        observation["value"] = {
+            "kind": kind,
+            "text": None,
+            "items": [],
+            "reason": "No user research is supplied." if kind == "ABSTAINED" else None,
+        }
+    generator, _ = make_generator(tmp_path, output)
+    result = asyncio.run(ModelUserModelingAdapter(generator).propose_user_twins(request))
+    assert all(o.value.kind.value == kind for o in result.proposals[0].profile.observations[-4:])
+
+
+@pytest.mark.parametrize("change", ["text", "item_count", "item_length", "reason"])
+def test_twin_declaration_bounds_are_enforced_by_schema_and_parser(tmp_path, change):
+    from orchestwin.models.profile_drafts import UserTwinModelOutput
+
+    request, output = twin_input_output()
+    if change == "text":
+        output["proposals"][0]["observations"][-4]["value"] = {
+            "kind": "TEXT",
+            "text": "x" * 601,
+            "items": [],
+            "reason": None,
+        }
+    else:
+        output["proposals"][0]["observations"][-3]["value"] = {
+            "kind": "ABSTAINED" if change == "reason" else "ITEMS",
+            "text": None,
+            "items": []
+            if change == "reason"
+            else ([str(i) for i in range(7)] if change == "item_count" else ["x" * 201]),
+            "reason": "x" * 241 if change == "reason" else None,
+        }
+    with pytest.raises(ValueError):
+        UserTwinModelOutput.model_validate_json(json.dumps(output))
+    generator, transport = make_generator(tmp_path, output)
+    with pytest.raises(ProposalGenerationError):
+        asyncio.run(ModelUserModelingAdapter(generator).propose_user_twins(request))
+    definitions = transport.calls[0]["payload"]["response_format"]["json_schema"]["schema"]["$defs"]
+    assert definitions["DeclarationValueTEXT"]["properties"]["text"]["maxLength"] == 600
+    assert definitions["DeclarationValueITEMS"]["properties"]["items"]["maxItems"] == 6
+    assert definitions["DeclarationValueITEMS"]["properties"]["items"]["items"]["maxLength"] == 200
+    assert definitions["DeclarationValueABSTAINED"]["properties"]["reason"]["maxLength"] == 240
+
+
 @pytest.mark.parametrize("change", ["approval", "provenance", "missing", "order", "confidence"])
 def test_compact_twin_drafts_cannot_bypass_profile_governance(tmp_path, change):
     request, output = twin_input_output()
@@ -546,7 +709,7 @@ def test_compact_twin_drafts_cannot_bypass_profile_governance(tmp_path, change):
     elif change == "provenance":
         profile["observations"][0]["provenance"] = {"references": []}
     elif change == "missing":
-        profile["observations"].pop()
+        profile["observations"].pop(0)
     elif change == "order":
         profile["observations"].reverse()
     else:

@@ -19,6 +19,12 @@ import {
 
 const TEAM_IMAGES = /^\/team\/(a11y|an|ar|copy|fe|qa|ur|ux)\.webp$/u;
 
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
+
 function persona(personaId: string): PersonaVersionPayload {
   return {
     id: `${personaId}-version`,
@@ -86,6 +92,28 @@ describe("TwinIdentity", () => {
     expect(roleSteps("UX_RESEARCHER_USER_MODELER")).toEqual([3, 5]);
     expect(roleSteps("UX_UI_DESIGNER")).toEqual([5]);
     expect(roleSteps("__proto__")).toEqual([]);
+  });
+
+  it("names no step by its old name and speaks of no team for step 2, in both languages", () => {
+    const stepTwo = AGENT_IDENTIFIERS.filter((role) => roleSteps(role).includes(2));
+    expect(stepTwo).toContain("TEAM_SELECTOR");
+    for (const locale of ["it", "en"] as const) {
+      const texts = [
+        ...stepTwo.flatMap((role) => {
+          const identity = twinIdentity(role, "", locale);
+          return [identity.name, identity.description];
+        }),
+        twinIdentity(undefined, "persona", locale).description,
+        twinIdentity("UNKNOWN_ROLE", "", locale).description,
+      ];
+      expect(texts.filter((text) => OLD_STEP_NAMES.test(text))).toEqual([]);
+      expect(texts.filter((text) => TEAM_WORDS.test(text))).toEqual([]);
+    }
+    expect(twinIdentity("TEAM_SELECTOR", "", "it").name).toBe("Organizzatore delle prospettive");
+    expect(twinIdentity("TEAM_SELECTOR", "", "en").name).toBe("Perspectives planner");
+    expect(twinIdentity(undefined, "persona", "en").description).toBe(
+      "Represents a point of view of your product's users.",
+    );
   });
 
   it("keeps a visible name beside a decorative robot", () => {

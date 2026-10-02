@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
@@ -10,10 +11,13 @@ import pytest
 from orchestwin.cli import folder as knowledge
 from orchestwin.cli.api import twin_chat
 from orchestwin.cli.http import Reply, UrlTransport, unreachable
+from orchestwin.cli.messages import known, text
 from orchestwin.cli.project import ProjectFolder
+from orchestwin.knowledge.state import ProjectStateSources
+from src.test.python.knowledge.knowledge_fixtures import files_before_learning
 
-from .support.fake_studio import FakeProject, FakeStudio
-from .support.folders import valid_archive
+from .support.fake_studio import FakeProject, FakeStudio, RecordedRequest
+from .support.folders import learned_entries, state_archive, valid_archive, valid_files
 from .support.terminal import (
     PROJECT_ID,
     START,
@@ -51,6 +55,10 @@ LABELS = {
     "technical_literacy": "Technical literacy",
     "risk_sensitivity": "Risk sensitivity",
     "assumptions": "Assumptions",
+    "description": "Description",
+    "represents": "Represents",
+    "does_not_represent": "Does not represent",
+    "evidence_gaps": "Evidence gaps",
 }
 SECTIONS = (
     ("Goals", ("goals",)),
@@ -73,6 +81,10 @@ END = {
     "it": "Conversazione finita: domande e risposte restano salvate nello Studio.",
     "en": "Conversation ended: questions and answers stay saved in the Studio.",
 }
+LEARNING = "/projects/{project_id}/twin-learning"
+OBSERVATIONS = "/projects/{project_id}/user-twins/{twin_id}/observations"
+NOT_FOUND = {"detail": "Not Found"}
+UPDATE_ID = "6b8f0f5e-0000-4000-8000-0000000000a1"
 
 
 class Offline:
@@ -143,6 +155,7 @@ def role_of(version: Mapping[str, object]) -> str | None:
 
 def listed(project: FakeProject) -> list[list[str]]:
     rows = []
+    labels = [str(entry["label"]) for entry in project.twin_learning()]
     for number, version in enumerate(versions(project), start=1):
         goals = observed(version, "goals")
         rows.append(
@@ -151,9 +164,52 @@ def listed(project: FakeProject) -> list[list[str]]:
                 str(version["profile"]["name"]),
                 role_of(version) or "-",
                 goals[0] if goals else "-",
+                labels[number - 1],
             ]
         )
     return rows
+
+
+def say(key: str, language: str = "en", /, **values: object) -> str:
+    assert known(key), key
+    return text(key, language, **values)
+
+
+def posted(studio: FakeStudio, suffix: str) -> list[RecordedRequest]:
+    return [
+        request
+        for request in studio.requests
+        if request.method == "POST" and request.path.endswith(suffix)
+    ]
+
+
+def publication(version: int, language: str = "en") -> list[str]:
+    lines: list[str] = []
+    for key in ("common.folder_publishing", "common.folder_downloading"):
+        label = say(key, language)
+        lines.extend(
+            [
+                say("common.progress_started", language, label=label),
+                say("common.progress_done", language, label=label, elapsed="0 s"),
+            ]
+        )
+    return [*lines, say("twins.folder_updated", language, version=version)]
+
+
+def learned_section(output: str) -> list[str]:
+    lines = output.splitlines()
+    start = next(
+        index
+        for index, line in enumerate(lines)
+        if line.startswith(("Learned during the development", "Appreso durante lo sviluppo"))
+    )
+    section: list[str] = []
+    for line in lines[start:]:
+        if line.startswith("  ") and section:
+            section[-1] = f"{section[-1]} {line.strip()}"
+        else:
+            section.append(line)
+    return section
 
 
 def choice(version: Mapping[str, object]) -> str:
@@ -326,7 +382,12 @@ ABSTAINING_TWIN = {
 }
 
 
-def scripted_twins(twins: Sequence[Mapping[str, object]], *, runs: int) -> ScriptedTransport:
+def scripted_twins(
+    twins: Sequence[Mapping[str, object]],
+    *,
+    runs: int,
+    learning: Mapping[str, object] | None = None,
+) -> ScriptedTransport:
     transport = ScriptedTransport()
     for _ in range(runs):
         transport.expect(
@@ -339,6 +400,12 @@ def scripted_twins(twins: Sequence[Mapping[str, object]], *, runs: int) -> Scrip
             f"{BASE}/user-modeling/snapshots/current",
             body={"id": "snapshot-2", "snapshot": {"twin_versions": list(twins)}},
         )
+        transport.expect(
+            "GET",
+            f"{BASE}/twin-learning",
+            status=404 if learning is None else 200,
+            body=NOT_FOUND if learning is None else learning,
+        )
     return transport
 
 
@@ -350,9 +417,10 @@ def test_the_list_in_italian_follows_the_order_of_the_studio(tmp_path: Path) -> 
         assert studio.errors == []
 
     assert len(rows) == 3
+    assert [row[-1] for row in rows] == ["1.0", "1.0", "1.0"]
     assert (run.status, run.errors) == (0, "")
     assert run.output.splitlines()[:2] == ["User Twin di «Calcolo mancia»", "=" * 29]
-    assert table(run.output) == [["N.", "Nome", "Ruolo", "Che cosa vuole"], *rows]
+    assert table(run.output) == [["N.", "Nome", "Ruolo", "Che cosa vuole", "Versione"], *rows]
     assert run.output.splitlines()[-2:] == [
         "Per vedere un twin per intero: `ut twins show 1`.",
         "Per fargli una domanda: `ut twins ask 1`.",
@@ -367,7 +435,7 @@ def test_without_an_action_the_twins_are_listed_in_english(tmp_path: Path) -> No
 
     assert run.status == 0
     assert run.output.splitlines()[0] == 'User Twins of "Calcolo mancia"'
-    assert table(run.output) == [["No.", "Name", "Role", "What they want"], *rows]
+    assert table(run.output) == [["No.", "Name", "Role", "What they want", "Version"], *rows]
     assert "To ask it a question: `ut twins ask 1`." in run.output
 
 
@@ -388,6 +456,10 @@ def test_show_prints_the_twin_of_the_studio_with_every_observation(tmp_path: Pat
     head = [name, "=" * len(name), *([] if role == name else [f"Role: {role}"]), *sections]
     lines = run.output.splitlines()
     assert run.status == 0
+    assert "Basis: Provisional" in lines
+    assert "Does not represent: Unknown [Unknown]" in lines
+    assert "Evidence gaps: Unknown [Unknown]" in lines
+    lines = lines[:2] + lines[9:]
     assert lines[: len(head) + 2] == [*head, "", "Every observation, with its origin"]
     observations = version["profile"]["observations"]
     items = observation_items(run.output)
@@ -411,7 +483,7 @@ def test_show_prints_every_part_of_a_twin_and_the_origin_of_each_observation(
     both = run_ut(["twins"], tmp_path, transport=transport, variables=WIDE)
 
     assert (english.status, english.errors) == (0, "")
-    assert english.output.splitlines() == [
+    assert english.output.splitlines()[:2] + english.output.splitlines()[9:] == [
         "Marta Twin",
         "==========",
         "Role: Cameriera del turno serale",
@@ -447,7 +519,7 @@ def test_show_prints_every_part_of_a_twin_and_the_origin_of_each_observation(
         "- Mood: Calma (origin: NEW_STATUS)",
     ]
     assert italian.status == 0
-    assert italian.output.splitlines() == [
+    assert italian.output.splitlines()[:2] + italian.output.splitlines()[9:] == [
         "Marta Twin",
         "==========",
         "Ruolo: Cameriera del turno serale",
@@ -484,9 +556,9 @@ def test_show_prints_every_part_of_a_twin_and_the_origin_of_each_observation(
         "- Mood: Calma (origine: NEW_STATUS)",
     ]
     assert table(both.output) == [
-        ["No.", "Name", "Role", "What they want"],
-        ["1", "Marta Twin", "Cameriera del turno serale", "Chiudere il conto in fretta"],
-        ["2", "Cassiere del bar Twin", "Cassiere del bar", "-"],
+        ["No.", "Name", "Role", "What they want", "Version"],
+        ["1", "Marta Twin", "Cameriera del turno serale", "Chiudere il conto in fretta", "2"],
+        ["2", "Cassiere del bar Twin", "Cassiere del bar", "-", "1"],
     ]
     transport.assert_done()
 
@@ -654,11 +726,12 @@ def test_twins_not_approved_yet_name_the_command_that_approves_them(tmp_path: Pa
     assert italian.status == 1
     assert italian.output == ""
     assert italian.errors == (
-        "I twin di questo progetto non sono ancora approvati, oppure vanno approvati di nuovo "
-        "dopo un cambiamento del brief o della squadra. Confermali con `ut init`, poi riprova.\n"
+        "I twin di questo progetto non sono ancora approvati, oppure sono rimasti indietro dopo "
+        "un cambiamento del brief o delle prospettive. Se sono indietro aggiornali con "
+        "`ut sections update`, altrimenti confermali con `ut init`; poi riprova.\n"
     )
     assert english.status == 1
-    assert "Confirm them with `ut init`, then try again." in english.errors
+    assert "otherwise confirm them with `ut init`. Then try again." in english.errors
 
 
 def test_without_sign_in_the_twins_come_from_the_knowledge_folder(tmp_path: Path) -> None:
@@ -675,14 +748,21 @@ def test_without_sign_in_the_twins_come_from_the_knowledge_folder(tmp_path: Path
         "con `ut login`."
     )
     assert table(listed_run.output) == [
-        ["N.", "Nome", "Ruolo", "Che cosa vuole"],
+        ["N.", "Nome", "Ruolo", "Che cosa vuole", "Versione"],
         [
             "1",
             "Addetti all'accoglienza",
             "Addetti all'accoglienza",
             "Verificare la presenza degli ospiti",
+            "1.0",
         ],
-        ["2", "Organizzatori volontari", "Organizzatori volontari", "Aggiungere ospiti per nome"],
+        [
+            "2",
+            "Organizzatori volontari",
+            "Organizzatori volontari",
+            "Aggiungere ospiti per nome",
+            "1.0",
+        ],
     ]
     assert "Per fargli una domanda" not in listed_run.output
     assert shown.status == 0
@@ -834,3 +914,537 @@ def test_twins_outside_a_linked_folder_is_not_linked(tmp_path: Path) -> None:
 
     assert run.status == 6
     assert "This folder is not linked to a project of the Studio." in run.errors
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_the_help_names_the_actions_that_follow_what_the_twins_learn(
+    tmp_path: Path, language: str
+) -> None:
+    def helped(*arguments: str) -> str:
+        run = run_ut(
+            ["--lang", language, "twins", *arguments, "--help"],
+            tmp_path,
+            transport=NoNetwork(),
+            variables=WIDE,
+        )
+        assert (run.status, run.errors) == (0, "")
+        return " ".join(run.output.split())
+
+    whole = helped()
+    update = helped("update")
+    learn = helped("learn")
+    forget = helped("forget")
+
+    for key in (
+        "twins.help",
+        "twins.option_action",
+        "twins.help_update",
+        "twins.help_learn",
+        "twins.help_forget",
+    ):
+        assert say(key, language) in whole, key
+    assert say("twins.option_update_twin", language) in update
+    assert say("twins.option_text", language) in learn
+    assert say("twins.option_code", language) in forget
+    assert say("twins.option_reason", language) in forget
+
+
+def learned_observation(
+    code: str,
+    statement: str,
+    source: str,
+    approved_at: str,
+    *,
+    contradicts: str | None = None,
+) -> dict[str, object]:
+    return {
+        "code": code,
+        "statement": statement,
+        "basis": "A finding on the acceptance tests." if source == "TWIN_CRITIQUE" else None,
+        "source": source,
+        "about": {"requirement": None, "screen": None},
+        "contradicts_profile": contradicts,
+        "added_in_version": 1,
+        "approved_at": approved_at,
+        "update_id": UPDATE_ID if source == "TWIN_CRITIQUE" else None,
+    }
+
+
+def retired_observation(code: str) -> dict[str, object]:
+    return {
+        "code": code,
+        "statement": f"Statement of {code}.",
+        "retired_in_version": 4,
+        "retired_at": "2026-09-30T09:00:00+00:00",
+        "reason": None,
+    }
+
+
+CONTRADICTION = "The profile says they read it up close."
+MARTA_LEARNING = {
+    "twin_id": "twin-1",
+    "twin_name": "Marta Twin",
+    "profile_version_number": 2,
+    "development_version_number": 5,
+    "label": "2.5",
+    "observations": [
+        learned_observation(
+            "OBS-001",
+            "Waiters read the total from a distance.",
+            "TWIN_CRITIQUE",
+            "2026-09-29T23:30:00-02:00",
+            contradicts=CONTRADICTION,
+        ),
+        learned_observation(
+            "OBS-004", "Waiters split the bill by seat.", "OWNER", "2026-09-30T08:00:00+00:00"
+        ),
+        learned_observation("OBS-005", "Waiters work in pairs.", "IMPORTED", "not a date"),
+    ],
+    "retired": [retired_observation("OBS-002"), retired_observation("OBS-003")],
+    "pending_update": {"id": UPDATE_ID, "status": "PROPOSED"},
+    "new_material": {"changes": 0, "tests": 0},
+}
+CASHIER_LEARNING = {
+    "twin_id": "twin-2",
+    "twin_name": "Cassiere del bar Twin",
+    "profile_version_number": 1,
+    "development_version_number": 0,
+    "label": "1.0",
+    "observations": [],
+    "retired": [],
+    "pending_update": None,
+    "new_material": {"changes": 1, "tests": 0},
+}
+LEARNING_DOCUMENT = {
+    "project_id": PROJECT_ID,
+    "update_available": True,
+    "twins": [MARTA_LEARNING, CASHIER_LEARNING],
+}
+
+
+def test_the_list_gives_the_label_and_the_learned_observations_of_every_twin(
+    tmp_path: Path,
+) -> None:
+    transport = scripted_twins([RICH_TWIN, ABSTAINING_TWIN], runs=2, learning=LEARNING_DOCUMENT)
+    store_session(tmp_path)
+    link_folder(tmp_path / "project")
+
+    english = run_ut(["twins"], tmp_path, transport=transport, variables=WIDE)
+    italian = run_ut(["--lang", "it", "twins"], tmp_path, transport=transport, variables=WIDE)
+
+    assert table(english.output) == [
+        ["No.", "Name", "Role", "What they want", "Version", "Learned"],
+        [
+            "1",
+            "Marta Twin",
+            "Cameriera del turno serale",
+            "Chiudere il conto in fretta",
+            "2.5",
+            "3",
+        ],
+        ["2", "Cassiere del bar Twin", "Cassiere del bar", "-", "1.0", "0"],
+    ]
+    assert english.output.splitlines()[-3:] == [
+        say("twins.hint_pending", name="Marta Twin", number=1),
+        say("twins.hint_show", number=1),
+        say("twins.hint_ask", number=1),
+    ]
+    assert table(italian.output)[0] == [
+        "N.",
+        "Nome",
+        "Ruolo",
+        "Che cosa vuole",
+        "Versione",
+        "Apprese",
+    ]
+    assert say("twins.hint_pending", "it", name="Marta Twin", number=1) in italian.output
+    transport.assert_done()
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_show_ends_with_what_the_twin_learned_during_the_development(
+    tmp_path: Path, language: str
+) -> None:
+    transport = scripted_twins([RICH_TWIN, ABSTAINING_TWIN], runs=1, learning=LEARNING_DOCUMENT)
+    store_session(tmp_path)
+    link_folder(tmp_path / "project")
+
+    run = run_ut(
+        ["--lang", language, "twins", "show", "1"], tmp_path, transport=transport, variables=WIDE
+    )
+
+    first = say(
+        "twins.learned_observation",
+        language,
+        code="OBS-001",
+        statement="Waiters read the total from a distance.",
+        origin=say("twins.learned_from_critiques", language, date="2026-09-30"),
+    )
+    assert run.status == 0
+    assert learned_section(run.output) == [
+        say("twins.section_learned", language, label="2.5"),
+        "- " + say("twins.learned_contradiction", language, line=first, text=CONTRADICTION),
+        "- "
+        + say(
+            "twins.learned_observation",
+            language,
+            code="OBS-004",
+            statement="Waiters split the bill by seat.",
+            origin=say("twins.learned_from_owner", language, date="2026-09-30"),
+        ),
+        "- "
+        + say(
+            "twins.learned_observation",
+            language,
+            code="OBS-005",
+            statement="Waiters work in pairs.",
+            origin=say("twins.learned_on", language, date="not a date"),
+        ),
+        say("twins.learned_retired", language, count=2),
+        say("twins.learned_pending", language, number=1),
+    ]
+    transport.assert_done()
+
+
+def test_with_the_studio_the_list_and_show_follow_what_the_twins_learned(tmp_path: Path) -> None:
+    owner = "Owners count the tips at closing time."
+    with FakeStudio(language="en", twins=2) as studio:
+        project = seeded(tmp_path, studio)
+        project.seed_change()
+        project.seed_learning(0)
+        project.seed_learning(1, [owner], source="OWNER")
+        project.seed_change()
+        project.seed_update(0)
+        entries = project.twin_learning()
+        listing = ut(tmp_path, "twins")
+        first = ut(tmp_path, "twins", "show", "1")
+        second = ut(tmp_path, "--lang", "it", "twins", "show", "2")
+
+    names = [str(entry["twin_name"]) for entry in entries]
+    statements = [str(item["statement"]) for item in entries[0]["observations"]]
+    assert [row[4:] for row in table(listing.output)] == [
+        ["Version", "Learned"],
+        ["1.1", "2"],
+        ["1.1", "1"],
+    ]
+    assert say("twins.hint_pending", name=names[0], number=1) in listing.output
+    assert learned_section(first.output) == [
+        say("twins.section_learned", label="1.1"),
+        *(
+            "- "
+            + say(
+                "twins.learned_observation",
+                code=code,
+                statement=statement,
+                origin=say("twins.learned_from_critiques", date="2026-09-29"),
+            )
+            for code, statement in zip(("OBS-001", "OBS-002"), statements, strict=True)
+        ),
+        say("twins.learned_pending", number=1),
+    ]
+    assert learned_section(second.output) == [
+        say("twins.section_learned", "it", label="1.1"),
+        "- "
+        + say(
+            "twins.learned_observation",
+            "it",
+            code="OBS-003",
+            statement=owner,
+            origin=say("twins.learned_from_owner", "it", date="2026-09-29"),
+        ),
+    ]
+
+
+def test_a_twin_that_learned_nothing_names_the_commands_that_teach_it(tmp_path: Path) -> None:
+    with FakeStudio(language="en", twins=1) as studio:
+        seeded(tmp_path, studio)
+        run = ut(tmp_path, "twins", "show", "1")
+        italian = ut(tmp_path, "--lang", "it", "twins", "show", "1")
+
+    assert run.output.splitlines()[-3:] == [
+        "",
+        say("twins.section_learned", label="1.0"),
+        say("twins.learned_none"),
+    ]
+    assert italian.output.splitlines()[-1] == say("twins.learned_none", "it")
+
+
+def test_a_studio_older_than_the_twin_learning_shows_the_profile_version_alone(
+    tmp_path: Path,
+) -> None:
+    with FakeStudio(language="en", twins=2) as studio:
+        project = seeded(tmp_path, studio)
+        studio.fail_next("GET", LEARNING, status=404, body=NOT_FOUND)
+        listing = ut(tmp_path, "twins")
+        studio.fail_next("GET", LEARNING, status=405, body={"detail": "Method Not Allowed"})
+        shown = ut(tmp_path, "twins", "show", "1")
+        rows = listed(project)
+
+    assert table(listing.output) == [
+        ["No.", "Name", "Role", "What they want", "Version"],
+        *([*row[:4], "1"] for row in rows),
+    ]
+    assert shown.status == 0
+    assert say("twins.section_learned", label="1.0") not in shown.output
+    assert "Learned during the development" not in shown.output
+
+
+def test_offline_the_labels_and_what_the_twins_learned_come_from_the_folder(
+    tmp_path: Path,
+) -> None:
+    project = link_folder(tmp_path / "project")
+    archive = state_archive(state=ProjectStateSources(learning=learned_entries()))
+    knowledge.unpack(archive, project.knowledge)
+    reception = learned_entries()[0]
+
+    listing = run_ut(["--lang", "it", "twins"], tmp_path, transport=NoNetwork(), variables=WIDE)
+    shown = run_ut(["twins", "show", "1"], tmp_path, transport=NoNetwork(), variables=WIDE)
+
+    assert listing.status == 0
+    assert [row[4:] for row in table(listing.output)] == [
+        ["Versione", "Apprese"],
+        ["1.3", "2"],
+        ["1.0", "0"],
+    ]
+    assert "ut twins update" not in listing.output
+    assert shown.status == 0
+    observations = reception["observations"]
+    assert learned_section(shown.output) == [
+        say("twins.section_learned", label="1.3"),
+        "- "
+        + say(
+            "twins.learned_observation",
+            code="OBS-001",
+            statement=observations[0]["statement"],
+            origin=say("twins.learned_from_critiques", date="2026-09-29"),
+        ),
+        "- "
+        + say(
+            "twins.learned_observation",
+            code="OBS-003",
+            statement=observations[1]["statement"],
+            origin=say("twins.learned_from_owner", date="2026-09-29"),
+        ),
+        say("twins.learned_retired", count=1),
+    ]
+
+
+def test_offline_a_folder_without_the_learning_gives_the_profile_version_alone(
+    tmp_path: Path,
+) -> None:
+    project = link_folder(tmp_path / "project")
+    for name, content in files_before_learning(valid_files()).items():
+        target = project.knowledge.joinpath(*name.split("/"))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content.encode("utf-8"))
+
+    listing = run_ut(["twins"], tmp_path, transport=NoNetwork(), variables=WIDE)
+    shown = run_ut(["twins", "show", "2"], tmp_path, transport=NoNetwork(), variables=WIDE)
+
+    assert listing.status == 0
+    assert [row[4:] for row in table(listing.output)] == [["Version"], ["1"], ["1"]]
+    assert shown.status == 0
+    assert shown.output.splitlines()[1] == "Organizzatori volontari"
+    assert "Learned during the development" not in shown.output
+
+
+def test_learn_and_forget_change_the_label_and_publish_the_folder(tmp_path: Path) -> None:
+    statement = "People read the bill standing up."
+    with FakeStudio(language="en", twins=2) as studio:
+        project = seeded(tmp_path, studio)
+        twin = str(project.twin_learning()[0]["twin_name"])
+        learned = ut(tmp_path, "twins", "learn", "1", "People", "read the bill", "standing up.")
+        forgotten = ut(tmp_path, "twins", "forget", "1", "obs-001", "--reason", " Not at  night. ")
+        shown = ut(tmp_path, "twins", "show", "1")
+        entries = project.twin_learning()
+        bodies = [json.loads(request.body) for request in posted(studio, "/observations")]
+        retirements = [json.loads(request.body) for request in posted(studio, "/retire")]
+        paths = [request.path for request in posted(studio, "/retire")]
+
+    assert (learned.status, learned.errors) == (0, "")
+    assert learned.output.splitlines() == [
+        say("twins.learn_done", name=twin, code="OBS-001", label="1.1"),
+        "",
+        *publication(1),
+    ]
+    assert (forgotten.status, forgotten.errors) == (0, "")
+    assert forgotten.output.splitlines() == [
+        say("twins.forget_done", name=twin, code="OBS-001", label="1.2"),
+        "",
+        *publication(2),
+    ]
+    assert bodies == [{"statement": statement, "about": None}]
+    assert retirements == [{"reason": "Not at night."}]
+    assert paths[0].endswith("/observations/OBS-001/retire")
+    assert entries[0]["retired"][0]["reason"] == "Not at night."
+    assert learned_section(shown.output) == [
+        say("twins.section_learned", label="1.2"),
+        say("twins.learned_none_active"),
+        say("twins.learned_retired", count=1),
+    ]
+
+
+def test_learn_and_forget_speak_italian_and_publish_the_folder(tmp_path: Path) -> None:
+    with FakeStudio(language="it", twins=1) as studio:
+        project = seeded(tmp_path, studio)
+        twin = str(project.twin_learning()[0]["twin_name"])
+        run = ut(tmp_path, "--lang", "it", "twins", "learn", twin[:8], "Chi paga", "sta in piedi.")
+        forgotten = ut(tmp_path, "--lang", "it", "twins", "forget", "1", "OBS-001")
+        shown = ut(tmp_path, "--lang", "it", "twins", "show", "1")
+        retirements = [json.loads(request.body) for request in posted(studio, "/retire")]
+
+    assert (run.status, run.errors) == (0, "")
+    assert run.output.splitlines() == [
+        say("twins.learn_done", "it", name=twin, code="OBS-001", label="1.1"),
+        "",
+        *publication(1, "it"),
+    ]
+    assert (forgotten.status, forgotten.errors) == (0, "")
+    assert forgotten.output.splitlines() == [
+        say("twins.forget_done", "it", name=twin, code="OBS-001", label="1.2"),
+        "",
+        *publication(2, "it"),
+    ]
+    assert retirements == [{"reason": None}]
+    assert learned_section(shown.output) == [
+        say("twins.section_learned", "it", label="1.2"),
+        say("twins.learned_none_active", "it"),
+        say("twins.learned_retired", "it", count=1),
+    ]
+
+
+def many_statements(count: int) -> list[str]:
+    return [f"Observation written by the owner, number {number}." for number in range(count)]
+
+
+@pytest.mark.parametrize(
+    ("arguments", "code", "values"),
+    [
+        (("learn", "1", "One more thing."), "TWIN_OBSERVATIONS_LIMIT", {}),
+        (("learn", "1", "One more thing."), "TWIN_UPDATE_PENDING", {}),
+        (("forget", "1", "OBS-001"), "TWIN_UPDATE_PENDING", {}),
+        (("forget", "1", "OBS-999"), "TWIN_OBSERVATION_NOT_FOUND", {"observation": "OBS-999"}),
+    ],
+)
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_the_refusals_of_learn_and_forget_become_sentences(
+    tmp_path: Path,
+    arguments: tuple[str, ...],
+    code: str,
+    values: dict[str, object],
+    language: str,
+) -> None:
+    with FakeStudio(language=language, twins=1) as studio:
+        project = seeded(tmp_path, studio)
+        if code == "TWIN_OBSERVATIONS_LIMIT":
+            project.seed_learning(0, many_statements(20), source="OWNER")
+        if code == "TWIN_UPDATE_PENDING":
+            project.seed_change()
+            project.seed_learning(0)
+            project.seed_change()
+            project.seed_update(0)
+        twin = str(project.twin_learning()[0]["twin_name"])
+        before = project.twin_learning()
+        run = ut(tmp_path, "--lang", language, "twins", *arguments)
+        after = project.twin_learning()
+        publications = posted(studio, "/knowledge-packages")
+
+    sentence = say(f"twins.errors.{code}", language, name=twin, number=1, limit=20, **values)
+    assert (run.status, run.output) == (1, "")
+    assert run.errors == sentence + "\n"
+    assert (before, publications) == (after, [])
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_the_limit_names_the_observation_with_the_word_of_the_usage(
+    tmp_path: Path, language: str
+) -> None:
+    run = run_ut(
+        ["--lang", language, "twins", "forget", "--help"],
+        tmp_path,
+        transport=NoNetwork(),
+        variables=WIDE,
+    )
+    sentence = say("twins.errors.TWIN_OBSERVATIONS_LIMIT", language, name="Ada", number=1, limit=20)
+
+    usage = run.output.splitlines()[0]
+    assert run.status == 0
+    assert usage.startswith("usage: ut twins forget ")
+    assert usage.endswith(" TWIN CODE")
+    assert "`ut twins forget 1 CODE`" in sentence
+
+
+@pytest.mark.parametrize(
+    ("status", "code"), [(404, "USER_TWIN_NOT_FOUND"), (409, "USER_MODELING_APPROVAL_REQUIRED")]
+)
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_a_twin_the_studio_no_longer_takes_is_named(
+    tmp_path: Path, status: int, code: str, language: str
+) -> None:
+    with FakeStudio(language=language, twins=1) as studio:
+        seeded(tmp_path, studio)
+        studio.fail_next("POST", OBSERVATIONS, status=status, body={"detail": {"code": code}})
+        run = ut(tmp_path, "--lang", language, "twins", "learn", "1", "Chi paga sta in piedi.")
+
+    assert (run.status, run.output) == (1, "")
+    assert run.errors == say(f"twins.errors.{code}", language) + "\n"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "code", "values"),
+    [
+        (("learn", "1"), "TWINS_TEXT_EMPTY", {}),
+        (("learn", "1", "  ", "\t"), "TWINS_TEXT_EMPTY", {}),
+        (("learn", "1", "x" * 401), "TWINS_TEXT_TOO_LONG", {"limit": 400}),
+        (("forget", "1", "OBS-1"), "TWINS_CODE_INVALID", {"observation": "OBS-1"}),
+        (("forget", "1", "TSK-001"), "TWINS_CODE_INVALID", {"observation": "TSK-001"}),
+        (
+            ("forget", "1", "OBS-001", "--reason", "y" * 301),
+            "TWINS_REASON_TOO_LONG",
+            {"limit": 300},
+        ),
+    ],
+)
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_a_wrong_text_or_code_is_refused_before_any_request(
+    tmp_path: Path, arguments: tuple[str, ...], code: str, values: dict[str, object], language: str
+) -> None:
+    run = run_ut(["--lang", language, "twins", *arguments], tmp_path, transport=NoNetwork())
+
+    assert (run.status, run.output) == (2, "")
+    assert run.errors == say(f"twins.errors.{code}", language, **values) + "\n"
+
+
+def test_learn_and_forget_need_a_studio_that_keeps_the_learning(tmp_path: Path) -> None:
+    with FakeStudio(language="en", twins=1) as studio:
+        seeded(tmp_path, studio)
+        studio.fail_next("GET", LEARNING, status=404, body=NOT_FOUND, times=2)
+        learned = ut(tmp_path, "twins", "learn", "1", "People stand.")
+        forgotten = ut(tmp_path, "twins", "forget", "1", "OBS-001")
+        publications = posted(studio, "/knowledge-packages")
+
+    for run in (learned, forgotten):
+        assert (run.status, run.output) == (1, "")
+        assert run.errors == say("twins.update_unsupported") + "\n"
+    assert posted(studio, "/observations") == []
+    assert publications == []
+
+
+def test_learn_names_a_twin_that_matches_nothing(tmp_path: Path) -> None:
+    with FakeStudio(language="en", twins=2) as studio:
+        seeded(tmp_path, studio)
+        run = ut(tmp_path, "twins", "learn", "Zeta", "People stand.")
+
+    assert run.status == 1
+    assert run.errors == say("twins.no_match", value="Zeta") + "\n"
+    assert posted(studio, "/observations") == []
+
+
+def test_learning_needs_the_sign_in(tmp_path: Path) -> None:
+    link_folder(tmp_path / "project")
+
+    run = run_ut(["twins", "learn", "1", "People stand."], tmp_path, transport=NoNetwork())
+    update = run_ut(["twins", "update"], tmp_path, transport=NoNetwork())
+
+    assert (run.status, update.status) == (3, 3)
+    assert run.errors == say("errors.NOT_SIGNED_IN", studio="http://127.0.0.1:8000") + "\n"

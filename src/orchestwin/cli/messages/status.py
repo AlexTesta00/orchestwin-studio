@@ -1,6 +1,18 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "status.next_prepare_twins": {
+        "it": "Prepara di nuovo i twin con `ut init`.",
+        "en": "Prepare the twins again with `ut init`.",
+    },
+    "status.next_prepare_design": {
+        "it": "Prepara di nuovo il design con `ut design regenerate`.",
+        "en": "Prepare the design again with `ut design regenerate`.",
+    },
+    "status.next_update_sections": {
+        "it": "Aggiorna le sezioni con `ut sections update`.",
+        "en": "Update the sections with `ut sections update`.",
+    },
     "status.help": {
         "it": "Mostra a che punto è il progetto",
         "en": "Show where the project stands",
@@ -53,6 +65,46 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Cartella di conoscenza: non ancora pubblicata.",
         "en": "Knowledge folder: not published yet.",
     },
+    "status.next_folder_current": {
+        "it": "La cartella di conoscenza è aggiornata: lo sviluppo continua con questi comandi:",
+        "en": "The knowledge folder is up to date: the development goes on with these commands:",
+    },
+    "status.alignment": {
+        "it": "Sviluppo: commit registrati: {recorded}; dopo il punto allineato: {pending}; "
+        "commit allineato: {commit}; compiti aperti per il codice: {tasks}.",
+        "en": "Development: commits recorded: {recorded}; after the aligned point: {pending}; "
+        "aligned commit: {commit}; open tasks for the code: {tasks}.",
+    },
+    "status.alignment_not_aligned": {
+        "it": "Sviluppo: commit registrati: {recorded}; nessuno ancora allineato (in attesa: "
+        "{pending}); compiti aperti per il codice: {tasks}.",
+        "en": "Development: commits recorded: {recorded}; none aligned yet (waiting: {pending}); "
+        "open tasks for the code: {tasks}.",
+    },
+    "status.alignment_none": {
+        "it": "Sviluppo: nessun commit registrato finora. Dopo il primo commit lancia `ut align`.",
+        "en": "Development: no commit recorded yet. After your first commit launch `ut align`.",
+    },
+    "status.stale_reviews": {
+        "it": "Esami da rifare perché i requisiti o il design sono cambiati: {count} "
+        "(`ut align --recheck`).",
+        "en": "Reviews to do again because the requirements or the design changed: {count} "
+        "(`ut align --recheck`).",
+    },
+    "status.learning": {
+        "it": "Cosa hanno imparato i twin durante lo sviluppo: {twins}.",
+        "en": "What the twins learned during the development: {twins}.",
+    },
+    "status.learning_twin": {
+        "it": "{name} (versione {label}, osservazioni: {count})",
+        "en": "{name} (version {label}, observations: {count})",
+    },
+    "status.tests": {
+        "it": "Verifica dei criteri: ultima esecuzione il {date}: {passed} superati, {failed} "
+        "falliti, {blocked} bloccati, {not_covered} non coperti.",
+        "en": "Acceptance tests: latest run on {date}: {passed} passed, {failed} failed, "
+        "{blocked} blocked, {not_covered} not covered.",
+    },
     "status.folder_unreadable": {
         "it": "La cartella di conoscenza qui non si legge ({code}): controllala con "
         "`ut package verify`.",
@@ -70,6 +122,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "status.credit_only": {
         "it": "Credito rimasto nello Studio: {remaining} USD.",
         "en": "Credit left in the Studio: {remaining} USD.",
+    },
+    "status.subscription": {
+        "it": "Le generazioni usano l'abbonamento di Claude: nessun credito speso.",
+        "en": "Generations run on the Claude subscription: no credit is spent.",
     },
     "status.offline_requested": {
         "it": "Stato letto da questa cartella, come chiesto con --offline.",

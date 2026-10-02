@@ -9,7 +9,7 @@ import secrets
 import shutil
 import zipfile
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -24,6 +24,8 @@ GITATTRIBUTES_CONTENT: Final = b"* -text\n"
 MANIFEST_NAME: Final = "orchestwin.json"
 INDEX_NAME: Final = "ORCHESTWIN.md"
 FOLDER_STAGES: Final = ("brief", "team", "twins", "requirements", "design")
+PARTIAL_SCHEMA_VERSION: Final = 3
+COMPLETE_SCHEMA_VERSION: Final = 2
 ENTRY_DATE_TIME: Final = (1980, 1, 1, 0, 0, 0)
 ENTRY_PERMISSIONS: Final = 0o644 << 16
 LINE_ENDINGS: Final = "LINE_ENDINGS"
@@ -37,6 +39,14 @@ class StageSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class StateSummary:
+    changes: int
+    pending_changes: int
+    aligned_commit: str | None
+    open_tasks: int
+
+
+@dataclass(frozen=True, slots=True)
 class FolderSummary:
     project_id: str
     project_name: str
@@ -46,6 +56,11 @@ class FolderSummary:
     language: str | None
     file_count: int
     stages: tuple[StageSummary, ...]
+    schema_version: int = COMPLETE_SCHEMA_VERSION
+    progress: tuple[str, ...] = FOLDER_STAGES
+    pending: str | None = None
+    complete: bool = True
+    state: StateSummary | None = None
 
     def stage(self, name: str) -> StageSummary | None:
         return next((entry for entry in self.stages if entry.stage == name), None)
@@ -187,7 +202,9 @@ def summary_from(document: object) -> FolderSummary | None:
         return None
     created = package.get("created_at")
     language = project.get("language")
-    return FolderSummary(
+    schema = document.get("schema_version")
+    schema_version = schema if _integer(schema) else COMPLETE_SCHEMA_VERSION
+    base = FolderSummary(
         project_id=identifier,
         project_name=name,
         version_number=version,
@@ -196,6 +213,20 @@ def summary_from(document: object) -> FolderSummary | None:
         language=language if isinstance(language, str) else None,
         file_count=len(files) + 2,
         stages=tuple(_stage_summary(stage, stages.get(stage)) for stage in FOLDER_STAGES),
+        schema_version=schema_version,
+    )
+    if schema_version < PARTIAL_SCHEMA_VERSION:
+        return base
+    progress = _progress(document.get("progress"))
+    if progress is None:
+        return None
+    approved, pending, complete = progress
+    return replace(
+        base,
+        progress=approved,
+        pending=pending,
+        complete=complete,
+        state=_state(document.get("state")),
     )
 
 
@@ -204,6 +235,38 @@ def not_verified(folder: Path, code: str, path: str, *, reason: str | None = Non
     if reason is not None:
         values["reason"] = reason
     return CliError("FOLDER_NOT_VERIFIED", values=values)
+
+
+def _progress(value: object) -> tuple[tuple[str, ...], str | None, bool] | None:
+    if not isinstance(value, dict):
+        return None
+    approved = value.get("approved")
+    pending = value.get("pending")
+    complete = value.get("complete")
+    if (
+        not isinstance(approved, list)
+        or not all(item in FOLDER_STAGES for item in approved)
+        or (pending is not None and pending not in FOLDER_STAGES)
+        or not isinstance(complete, bool)
+    ):
+        return None
+    ordered = tuple(stage for stage in FOLDER_STAGES if stage in approved)
+    return ordered, pending, complete
+
+
+def _state(value: object) -> StateSummary | None:
+    if not isinstance(value, dict):
+        return None
+    counts = [value.get(name) for name in ("changes", "pending_changes", "open_tasks")]
+    aligned = value.get("aligned_commit")
+    if not all(_integer(count) and count >= 0 for count in counts) or not (
+        aligned is None or isinstance(aligned, str)
+    ):
+        return None
+    changes, pending, tasks = counts
+    return StateSummary(
+        changes=changes, pending_changes=pending, aligned_commit=aligned, open_tasks=tasks
+    )
 
 
 def _stage_summary(stage: str, entry: object) -> StageSummary:

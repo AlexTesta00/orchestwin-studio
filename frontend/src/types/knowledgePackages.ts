@@ -21,6 +21,23 @@ export interface PackageFeedbackPayload {
   decisions: number;
   discussions: number;
   insights: number;
+  change_reviews: number;
+  test_runs?: number;
+  learned_observations?: number;
+}
+
+export interface PackageProgressPayload {
+  approved: KnowledgeStage[];
+  pending: KnowledgeStage | null;
+  complete: boolean;
+}
+
+export interface PackageStatePayload {
+  changes: number;
+  pending_changes: number;
+  aligned_commit: string | null;
+  open_tasks: number;
+  stale_reviews?: number;
 }
 
 export interface KnowledgePackageVersionPayload {
@@ -36,6 +53,8 @@ export interface KnowledgePackageVersionPayload {
   archive_size: number;
   created_at: string;
   stages: PackageStagePayload[];
+  progress: PackageProgressPayload;
+  state: PackageStatePayload;
   twins: PackageTwinPayload[];
   feedback: PackageFeedbackPayload;
   diagram_count: number;

@@ -8,6 +8,7 @@ import {
   provide,
   reactive,
   ref,
+  shallowRef,
   watch,
 } from "vue";
 
@@ -16,6 +17,7 @@ import ArtifactViewSwitch, { type ArtifactView } from "./ArtifactViewSwitch.vue"
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import ProjectDiagramsView from "./ProjectDiagramsView.vue";
 import RequirementsTableView from "./RequirementsTableView.vue";
+import RequirementsDefinitionView from "./RequirementsDefinitionView.vue";
 import RequirementsTraceabilityView from "./RequirementsTraceabilityView.vue";
 import RequirementsTwinAlignment from "./RequirementsTwinAlignment.vue";
 import RequirementsVersionComparison from "./RequirementsVersionComparison.vue";
@@ -84,6 +86,7 @@ const props = withDefaults(
     api?: RequirementsApi;
     upstream?: UpstreamValue;
     active?: boolean;
+    sectionsMode?: boolean;
   }>(),
   {
     locale: "en",
@@ -91,8 +94,11 @@ const props = withDefaults(
     prerequisiteReady: true,
     upstream: null,
     active: true,
+    sectionsMode: false,
   },
 );
+
+const emit = defineEmits<{ "sections-changed": [] }>();
 
 provide(
   surfaceKey,
@@ -109,7 +115,9 @@ const viewPanelId = "requirements-view-panel";
 const editingRequirementId = ref<string | null>(null);
 const gateReason = ref("");
 const diffReasons = reactive<Record<string, string>>({});
-const storiesOpen = ref(false);
+const definitionView = ref<InstanceType<typeof RequirementsDefinitionView> | null>(null);
+const checksOpen = ref(false);
+const openRequirementIds = shallowRef<ReadonlySet<string>>(new Set());
 const highlighted = ref<string | null>(null);
 const decisionBar = ref<InstanceType<typeof UiDecisionBar> | null>(null);
 const barTarget = ref<HTMLElement | null>(null);
@@ -131,10 +139,10 @@ let visibility: ResizeObserver | null = null;
 
 const messages = {
   en: {
-    loading: "Loading the requirements…",
-    updating: "Updating the requirements…",
-    generating: "The needs analyst is writing the requirements…",
-    generate: "Prepare the requirements",
+    loading: "Loading the definition…",
+    updating: "Updating the definition…",
+    generating: "The needs analyst is writing the definition…",
+    generate: "Prepare the definition",
     analyst: "Needs analyst",
     noSpecification:
       "I am ready to turn your brief and your twins into requirements: what the app must do, for whom, and how we will check it.",
@@ -145,7 +153,29 @@ const messages = {
     storyCount: ["story", "stories"],
     criterionCount: ["acceptance criterion", "acceptance criteria"],
     scenarioCount: ["usage scenario", "usage scenarios"],
-    viewLabel: "Views of the requirements",
+    needCount: ["need", "needs"],
+    functionalGroup: "Functional requirements",
+    nonFunctional: "Non-functional requirements",
+    constraints: "Constraints",
+    viewLabel: "Views of the definition",
+    digestBoth: [
+      "In short: {must} thing the application must do and {should} it should do.",
+      "In short: {must} things the application must do and {should} it should do.",
+    ],
+    digestMust: [
+      "In short: {must} thing the application must do.",
+      "In short: {must} things the application must do.",
+    ],
+    digestShould: [
+      "In short: {should} thing the application should do.",
+      "In short: {should} things the application should do.",
+    ],
+    digestRows: [
+      "The title is below: open the row to read the detail or propose a change.",
+      "The titles are below: open a row to read the detail or propose a change.",
+    ],
+    openAll: "Open every detail",
+    closeAll: "Close every detail",
     mustGroup: "Must do",
     shouldGroup: "Should do",
     askedBy: "Asked by",
@@ -173,6 +203,8 @@ const messages = {
     doneLabel: "When it is finished",
     mitigation: "Remedy",
     onlyIf: "Only if {condition}.",
+    checksTitle: "Acceptance criteria, risks and completion conditions ({count})",
+    checksPurpose: "They serve whoever writes the code and the automatic checks of `ut test`.",
     storiesTitle: "Stories and usage scenarios",
     benefit: "Why",
     trigger: "Starts when",
@@ -216,9 +248,13 @@ const messages = {
     unchanged:
       "The analyst found nothing to change with this request. Try to describe the change in another way.",
     reasonRequired: "A reason is required to reject or to discard.",
-    approveGate: "Approve the requirements",
+    approveGate: "Approve the definition",
     barDefault:
       "When you approve, the designer prepares the design alternatives and the twins try them.",
+    barDefaultSections:
+      "When you approve, the sections that follow are updated with one gesture, without losing their content.",
+    barApproved:
+      "You approved this definition. You can still ask for a change in words: the new version comes back here for your approval.",
     barPending:
       "A proposed change is waiting above: if you approve now, it stays out of this version.",
     barGaps: [
@@ -227,17 +263,21 @@ const messages = {
     ],
     barRewriting:
       "The analyst is writing the requirements again: when the new version arrives, you decide whether to apply it.",
-    barWaiting: "The new version is waiting above: apply it, then approve the requirements here.",
+    barWaiting: "The new version is waiting above: apply it, then approve the definition here.",
     barRevision:
       "To approve, you need a new version: ask the analyst for one or propose the change on a requirement.",
     submitFailed:
       "The requirements could not be brought to your approval, so nothing was approved. Try again in a moment.",
     approveFailed:
-      "The requirements are ready for your approval, but the approval did not go through. Press “Approve the requirements” again.",
+      "The requirements are ready for your approval, but the approval did not go through. Press “Approve the definition” again.",
     requestFailed:
       "Your request for changes could not be recorded. Your note is still there: try again in a moment.",
     requestPlaceholder:
       "Write what is wrong: the request is recorded with your note. Then you can propose the change on the requirements.",
+    requestJourneys: "Request journeys",
+    journeyCount: ["journey", "journeys"],
+    journeyRequest:
+      "Add user journeys for the existing scenarios, with ordered phases, actions, grounded touchpoints and linked needs. Preserve the rest of the Definition.",
     changePlaceholder:
       "Write what to change: the analyst writes the requirements again and you decide whether to apply the new version.",
     moreActions: "Other choices on the approval",
@@ -245,7 +285,7 @@ const messages = {
     rejectGate: "Reject the requirements",
     pause: "Pause the approval",
     cancelGate: "Cancel the approval",
-    pausedText: "The approval of these requirements is paused.",
+    pausedText: "The approval of this definition is paused.",
     resume: "Resume the approval",
     revisionTitle: "You asked for changes",
     rejectedTitle: "You rejected these requirements",
@@ -253,7 +293,7 @@ const messages = {
     closedText:
       "To change them, propose the change on each requirement: the new version comes back here for your approval.",
     yourNote: "Your note",
-    ready: "Requirements approved by you. Next: the design.",
+    ready: "Definition approved by you. Next: Design & Evaluation.",
     version: "Version",
     statusPending: "waiting for your decision",
     statusApproved: "approved",
@@ -265,9 +305,9 @@ const messages = {
     basedOn: "Based on version",
     created: "Created",
     approval: "Approval",
-    decisionCounter: "decision {n} of {max}",
+    decisionCounter: "Decision no. {n}",
     brief: "Brief",
-    team: "Team",
+    team: "Perspectives",
     twins: "User Twins",
     catalog: "Requirements catalogue",
     none: "None",
@@ -280,13 +320,13 @@ const messages = {
     applied: "Applied",
     discarded: "Discarded",
     openInText: "{code} · {title}: read it in the text",
-    loadError: "The Requirements stage could not be loaded.",
+    loadError: "The Definition could not be loaded.",
   },
   it: {
-    loading: "Carico i requisiti…",
-    updating: "Aggiorno i requisiti…",
-    generating: "L'analista delle esigenze sta scrivendo i requisiti…",
-    generate: "Prepara i requisiti",
+    loading: "Carico la definizione…",
+    updating: "Aggiorno la definizione…",
+    generating: "L'analista delle esigenze sta scrivendo la definizione…",
+    generate: "Prepara la definizione",
     analyst: "Analista delle esigenze",
     noSpecification:
       "Sono pronto a trasformare il tuo brief e i tuoi twin in requisiti: cosa deve fare l'app, per chi e come lo verificheremo.",
@@ -296,7 +336,29 @@ const messages = {
     storyCount: ["storia", "storie"],
     criterionCount: ["criterio di verifica", "criteri di verifica"],
     scenarioCount: ["scenario d'uso", "scenari d'uso"],
-    viewLabel: "Vista dei requisiti",
+    needCount: ["bisogno", "bisogni"],
+    functionalGroup: "Requisiti funzionali",
+    nonFunctional: "Requisiti non funzionali",
+    constraints: "Vincoli",
+    viewLabel: "Vista della definizione",
+    digestBoth: [
+      "In breve: {must} cosa che l'applicazione deve fare e {should} che dovrebbe fare.",
+      "In breve: {must} cose che l'applicazione deve fare e {should} che dovrebbe fare.",
+    ],
+    digestMust: [
+      "In breve: {must} cosa che l'applicazione deve fare.",
+      "In breve: {must} cose che l'applicazione deve fare.",
+    ],
+    digestShould: [
+      "In breve: {should} cosa che l'applicazione dovrebbe fare.",
+      "In breve: {should} cose che l'applicazione dovrebbe fare.",
+    ],
+    digestRows: [
+      "Qui sotto trovi il titolo: apri la riga per leggere il dettaglio o proporre una modifica.",
+      "Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    openAll: "Apri tutti i dettagli",
+    closeAll: "Chiudi tutti i dettagli",
     mustGroup: "Deve fare",
     shouldGroup: "Dovrebbe fare",
     askedBy: "Chiesto da",
@@ -324,6 +386,8 @@ const messages = {
     doneLabel: "Quando è finito",
     mitigation: "Rimedio",
     onlyIf: "Solo se {condition}.",
+    checksTitle: "Criteri di verifica, rischi e condizioni di fine lavoro ({count})",
+    checksPurpose: "Servono a chi scrive il codice e ai controlli automatici di `ut test`.",
     storiesTitle: "Storie e scenari d'uso",
     benefit: "Perché",
     trigger: "Inizia quando",
@@ -373,8 +437,12 @@ const messages = {
     unchanged:
       "L'analista non ha trovato nulla da cambiare con questa richiesta. Prova a descrivere la modifica in un altro modo.",
     reasonRequired: "Per respingere o scartare serve una motivazione.",
-    approveGate: "Approva i requisiti",
+    approveGate: "Approva la definizione",
     barDefault: "Approvando, il designer prepara le alternative di design e i twin le provano.",
+    barDefaultSections:
+      "Approvando, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
+    barApproved:
+      "Hai approvato questa definizione. Puoi ancora chiedere una modifica a parole: la nuova versione torna qui per la tua approvazione.",
     barPending:
       "Una modifica proposta aspetta qui sopra: se approvi ora, resta fuori da questa versione.",
     barGaps: [
@@ -383,17 +451,21 @@ const messages = {
     ],
     barRewriting:
       "L'analista sta riscrivendo i requisiti: quando arriva la nuova versione, decidi tu se applicarla.",
-    barWaiting: "La nuova versione aspetta qui sopra: applicala, poi approva qui i requisiti.",
+    barWaiting: "La nuova versione aspetta qui sopra: applicala, poi approva qui la definizione.",
     barRevision:
       "Per approvare serve una nuova versione: chiedila all'analista o proponi la modifica su un requisito.",
     submitFailed:
       "Non è stato possibile portare i requisiti alla tua approvazione: non è stato approvato nulla. Riprova tra poco.",
     approveFailed:
-      "I requisiti sono pronti per la tua approvazione, ma l'approvazione non è andata a buon fine. Premi di nuovo «Approva i requisiti».",
+      "I requisiti sono pronti per la tua approvazione, ma l'approvazione non è andata a buon fine. Premi di nuovo «Approva la definizione».",
     requestFailed:
       "Non è stato possibile registrare la tua richiesta di modifiche. La nota è ancora lì: riprova tra poco.",
     requestPlaceholder:
       "Scrivi che cosa non va: la richiesta viene registrata con la tua nota. Poi potrai proporre la modifica sui requisiti.",
+    requestJourneys: "Richiedi journey",
+    journeyCount: ["journey", "journey"],
+    journeyRequest:
+      "Aggiungi journey per gli scenari esistenti, con fasi ordinate, azioni, punti di contatto fondati e bisogni collegati. Conserva il resto della Definizione.",
     changePlaceholder:
       "Scrivi che cosa cambiare: l'analista riscrive i requisiti e decidi tu se applicare la nuova versione.",
     moreActions: "Altre scelte sull'approvazione",
@@ -401,7 +473,7 @@ const messages = {
     rejectGate: "Respingi i requisiti",
     pause: "Metti in pausa",
     cancelGate: "Annulla l'approvazione",
-    pausedText: "L'approvazione di questi requisiti è in pausa.",
+    pausedText: "L'approvazione di questa definizione è in pausa.",
     resume: "Riprendi l'approvazione",
     revisionTitle: "Hai chiesto modifiche",
     rejectedTitle: "Hai respinto questi requisiti",
@@ -409,7 +481,7 @@ const messages = {
     closedText:
       "Per cambiarli, proponi la modifica sul requisito: la nuova versione torna qui per la tua approvazione.",
     yourNote: "La tua nota",
-    ready: "Requisiti approvati da te. Ora il design.",
+    ready: "Definizione approvata da te. Ora Design e valutazione.",
     version: "Versione",
     statusPending: "in attesa della tua decisione",
     statusApproved: "approvata",
@@ -421,9 +493,9 @@ const messages = {
     basedOn: "Basata sulla versione",
     created: "Creata il",
     approval: "Approvazione",
-    decisionCounter: "decisione {n} di {max}",
+    decisionCounter: "Decisione n. {n}",
     brief: "Brief",
-    team: "Squadra",
+    team: "Prospettive",
     twins: "User Twin",
     catalog: "Catalogo dei requisiti",
     none: "Nessuno",
@@ -436,7 +508,7 @@ const messages = {
     applied: "Applicata",
     discarded: "Scartata",
     openInText: "{code} · {title}: leggilo nel testo",
-    loadError: "Non è stato possibile caricare la fase dei requisiti.",
+    loadError: "Non è stato possibile caricare la Definizione.",
   },
 } as const;
 
@@ -448,7 +520,6 @@ const specification = computed<RequirementsSpecificationPayload | null>(
 );
 const requirements = computed(() => specification.value?.requirements ?? []);
 const stories = computed(() => specification.value?.user_stories ?? []);
-const scenarios = computed(() => specification.value?.scenarios ?? []);
 
 const criteriaByRequirement = computed(() => {
   const codes = new Map<string, string[]>();
@@ -474,21 +545,22 @@ const withoutStories = computed(() =>
     .filter((requirement) => !storyRequirementIds.value.has(requirement.id))
     .map((requirement) => requirement.code),
 );
-const collapsedCodes = computed(
-  () => new Set([...stories.value, ...scenarios.value].map((item) => item.code)),
-);
-
 const requirementGroups = computed(() =>
   [
     {
-      key: "must",
-      title: copy.value.mustGroup,
-      items: requirements.value.filter((item) => item.priority === "MUST"),
+      key: "functional",
+      title: copy.value.functionalGroup,
+      items: requirements.value.filter((item) => item.kind === "FUNCTIONAL"),
     },
     {
-      key: "should",
-      title: copy.value.shouldGroup,
-      items: requirements.value.filter((item) => item.priority !== "MUST"),
+      key: "non-functional",
+      title: copy.value.nonFunctional,
+      items: requirements.value.filter((item) => item.kind === "NON_FUNCTIONAL"),
+    },
+    {
+      key: "constraints",
+      title: copy.value.constraints,
+      items: requirements.value.filter((item) => item.kind === "CONSTRAINT"),
     },
   ].filter((group) => group.items.length > 0),
 );
@@ -502,13 +574,44 @@ const summaryLine = computed(() => {
 
   const text = copy.value;
   const counts = [
-    counted(value.requirements.length, text.requirementCount),
+    counted(value.scenarios.length, text.scenarioCount),
+    counted((value.needs ?? []).length, text.needCount),
     counted(value.user_stories.length, text.storyCount),
+    counted(value.requirements.length, text.requirementCount),
     counted(value.acceptance_criteria.length, text.criterionCount),
+    ...((value.journeys ?? []).length > 0
+      ? [counted(value.journeys!.length, text.journeyCount)]
+      : []),
   ];
 
   return `${text.preparedBy} · ${counts.join(", ")}`;
 });
+
+const digest = computed(() => {
+  const total = requirements.value.length;
+
+  if (total === 0) {
+    return null;
+  }
+
+  const text = copy.value;
+  const must = requirements.value.filter((item) => item.priority === "MUST").length;
+  const should = total - must;
+  const lead =
+    should === 0
+      ? formOf(must, text.digestMust)
+      : must === 0
+        ? formOf(should, text.digestShould)
+        : formOf(must, text.digestBoth);
+
+  return `${fill(lead, { must, should })} ${formOf(total, text.digestRows)}`;
+});
+
+const allRequirementsOpen = computed(
+  () =>
+    requirements.value.length > 0 &&
+    requirements.value.every((requirement) => openRequirementIds.value.has(requirement.id)),
+);
 
 const coverageNotice = computed(() => {
   const missingCriteria = withoutCriteria.value;
@@ -564,14 +667,9 @@ const checkCards = computed<CheckCard[]>(() => {
     })),
   ];
 });
-
-const storiesSummary = computed(() =>
-  [
-    stories.value.length > 0 ? counted(stories.value.length, copy.value.storyCount) : null,
-    scenarios.value.length > 0 ? counted(scenarios.value.length, copy.value.scenarioCount) : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(", "),
+const checkCodes = computed(() => new Set(checkCards.value.map((card) => card.code)));
+const checksTitle = computed(() =>
+  fill(copy.value.checksTitle, { count: checkCards.value.length }),
 );
 
 const diagramLinks = computed<DiagramLink[]>(() => {
@@ -589,6 +687,8 @@ const diagramLinks = computed<DiagramLink[]>(() => {
   });
 
   return [
+    ...(value.needs ?? []).map((item) => link(item.code, item.title)),
+    ...(value.journeys ?? []).map((item) => link(item.code, item.title)),
     ...value.requirements.map((item) => link(item.code, item.title)),
     ...value.user_stories.map((item) => link(item.code, item.goal)),
     ...value.acceptance_criteria.map((item) => link(item.code, item.statement)),
@@ -697,10 +797,11 @@ const changeRequestText = computed(() => {
 const pendingItems = computed(() =>
   pendingDiffs.value.map((diff) => ({ diff, request: requestOf(diff) })),
 );
+const approvedChanges = computed(() => props.sectionsMode && decisionState.value === "approved");
 const barVisible = computed(
   () =>
     decisionState.value === "approve" ||
-    (decisionState.value === "revision" && !changeUnavailable.value),
+    ((decisionState.value === "revision" || approvedChanges.value) && !changeUnavailable.value),
 );
 const closedVisible = computed(
   () =>
@@ -718,17 +819,24 @@ const barDescription = computed(() => {
     return pendingDiffs.value.length > 0 ? text.barWaiting : text.barRevision;
   }
 
+  if (decisionState.value === "approved") {
+    return pendingDiffs.value.length > 0 ? text.barWaiting : text.barApproved;
+  }
+
   if (pendingDiffs.value.length > 0) {
     return text.barPending;
   }
 
   const missing = withoutCriteria.value.length;
-  return missing > 0 ? countSentence(missing, text.barGaps) : text.barDefault;
+
+  if (missing > 0) {
+    return countSentence(missing, text.barGaps);
+  }
+
+  return props.sectionsMode ? text.barDefaultSections : text.barDefault;
 });
 const decisionCounter = computed(() =>
-  copy.value.decisionCounter
-    .replace("{n}", String(store.gate?.iteration ?? 1))
-    .replace("{max}", String(store.gate?.max_iterations ?? 1)),
+  copy.value.decisionCounter.replace("{n}", String(store.gate?.iteration ?? 1)),
 );
 const statusSummary = computed(() => {
   const text = copy.value;
@@ -801,6 +909,21 @@ function counted(count: number, [singular, plural]: readonly [string, string]): 
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function formOf(count: number, [one, many]: readonly [string, string]): string {
+  return count === 1 ? one : many;
+}
+
+function fill(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
+}
+
+function commandParts(text: string): { key: number; text: string; command: boolean }[] {
+  return text
+    .split("`")
+    .map((part, index) => ({ key: index, text: part, command: index % 2 === 1 }))
+    .filter((part) => part.text.length > 0);
+}
+
 function countSentence(count: number, [one, many]: readonly [string, string]): string {
   return count === 1
     ? one
@@ -845,6 +968,38 @@ function itemClass(code: string): string {
   return highlighted.value === code ? "bg-petrol-on-night/12 ring-1 ring-petrol-on-night/60" : "";
 }
 
+function detailIdOf(requirement: RequirementPayload): string {
+  return `requirement-detail-${requirement.id}`;
+}
+
+function isRequirementOpen(requirement: RequirementPayload): boolean {
+  return openRequirementIds.value.has(requirement.id);
+}
+
+function openRequirements(ids: readonly string[]): void {
+  const closed = ids.filter((id) => !openRequirementIds.value.has(id));
+
+  if (closed.length > 0) {
+    openRequirementIds.value = new Set([...openRequirementIds.value, ...closed]);
+  }
+}
+
+function toggleRequirement(requirement: RequirementPayload): void {
+  const next = new Set(openRequirementIds.value);
+
+  if (!next.delete(requirement.id)) {
+    next.add(requirement.id);
+  }
+
+  openRequirementIds.value = next;
+}
+
+function toggleAllRequirements(): void {
+  openRequirementIds.value = allRequirementsOpen.value
+    ? new Set()
+    : new Set(requirements.value.map((requirement) => requirement.id));
+}
+
 function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
   if (props.authorize !== undefined) {
     return props.authorize(operation);
@@ -877,11 +1032,22 @@ async function load(): Promise<void> {
   await run(() => store.load(props.projectId, authorizedRequest, api.value));
 }
 
+function changed(): void {
+  emit("sections-changed");
+}
+
+async function reloadAndTell(): Promise<void> {
+  await load();
+  changed();
+}
+
 async function generate(): Promise<void> {
   if (!props.prerequisiteReady || store.isBusy || requirementsJob.value !== null) return;
   dismissRequirementsJob();
   const generated = await run(() => store.generate(props.projectId, authorizedRequest, api.value));
-  if (!generated && isGenerationInterrupted(store.error?.code)) {
+  if (generated) {
+    changed();
+  } else if (isGenerationInterrupted(store.error?.code)) {
     localError.value = null;
   }
 }
@@ -894,7 +1060,7 @@ const {
   projectId: () => props.projectId,
   operations: ["REQUIREMENTS_PROPOSAL", CHANGE_OPERATION],
   authorize: authorizedRequest,
-  onSettled: load,
+  onSettled: reloadAndTell,
 });
 
 const proposalJob = computed(() =>
@@ -1028,6 +1194,7 @@ async function submitRevision(): Promise<void> {
 
   if (applied) {
     cancelEdit();
+    changed();
   }
 }
 
@@ -1037,6 +1204,12 @@ function formatRequirementSources(requirement: RequirementPayload): string {
     .join(", ");
 
   return sources.length === 0 ? copy.value.none : sources;
+}
+
+function needLinks(requirement: RequirementPayload) {
+  return (specification.value?.needs ?? []).filter((need) =>
+    requirement.need_ids?.includes(need.id),
+  );
 }
 
 function formatRequirementTwins(requirement: RequirementPayload): string {
@@ -1077,6 +1250,7 @@ async function decideDiff(
 
   if (decided) {
     changeFailure.value = null;
+    changed();
   }
 }
 
@@ -1101,7 +1275,7 @@ async function decideGate(action: RequirementsGateDecisionAction): Promise<boole
     return false;
   }
 
-  return run(() =>
+  const decided = await run(() =>
     store.decideGate(
       props.projectId,
       action,
@@ -1110,6 +1284,12 @@ async function decideGate(action: RequirementsGateDecisionAction): Promise<boole
       api.value,
     ),
   );
+
+  if (decided) {
+    changed();
+  }
+
+  return decided;
 }
 
 async function approve(): Promise<void> {
@@ -1149,22 +1329,31 @@ async function recordRequest(reason: string): Promise<boolean> {
     store.decideGate(props.projectId, "REQUEST_REVISION", authorizedRequest, reason, api.value),
   );
 
-  if (!requested) {
+  if (requested) {
+    changed();
+  } else {
     localError.value = copy.value.requestFailed;
   }
 
   return requested;
 }
 
-async function askForChange(request: string): Promise<void> {
+async function askForChange(request: string, includeJourneys = false): Promise<void> {
   const projectId = props.projectId;
   changeText.value = request;
-  const asked = store.requestChange(projectId, request, authorizedRequest, api.value);
+  const asked = store.requestChange(
+    projectId,
+    request,
+    authorizedRequest,
+    api.value,
+    includeJourneys,
+  );
   void revealChange();
 
   try {
     await asked;
     await decisionBar.value?.completeRequest();
+    changed();
   } catch (error) {
     if (props.projectId !== projectId) {
       return;
@@ -1195,7 +1384,7 @@ async function askForChange(request: string): Promise<void> {
   }
 }
 
-async function requestChanges(note: string): Promise<void> {
+async function requestChanges(note: string, includeJourneys = false): Promise<void> {
   const request = note.trim();
 
   if (request.length === 0 || deciding.value || store.isBusy || changeRunning.value) {
@@ -1218,7 +1407,11 @@ async function requestChanges(note: string): Promise<void> {
       if (!(await recordRequest(request))) {
         return;
       }
-    } else if (decisionState.value !== "revision") {
+    } else if (
+      decisionState.value !== "revision" &&
+      !approvedChanges.value &&
+      !(includeJourneys && decisionState.value === "approved")
+    ) {
       return;
     }
 
@@ -1227,7 +1420,7 @@ async function requestChanges(note: string): Promise<void> {
       return;
     }
 
-    await askForChange(request);
+    await askForChange(request, includeJourneys);
   } finally {
     deciding.value = false;
   }
@@ -1239,6 +1432,10 @@ function envelopeSummary(envelope: RequirementsArtifactEnvelope | null): string 
   }
 
   switch (envelope.kind) {
+    case "JOURNEY":
+      return envelope.journey?.title ?? copy.value.none;
+    case "NEED":
+      return envelope.need?.statement ?? copy.value.none;
     case "REQUIREMENT":
       return envelope.requirement?.statement ?? copy.value.none;
     case "USER_STORY":
@@ -1262,9 +1459,9 @@ function diffStatusLabel(status: RequirementsSpecificationDiffPayload["status"])
   return status === "APPROVED" ? copy.value.applied : copy.value.discarded;
 }
 
-function onStoriesToggle(event: Event): void {
+function onChecksToggle(event: Event): void {
   if (event.target instanceof HTMLDetailsElement) {
-    storiesOpen.value = event.target.open;
+    checksOpen.value = event.target.open;
   }
 }
 
@@ -1278,10 +1475,20 @@ function prefersReducedMotion(): boolean {
 async function openItem(code: string): Promise<void> {
   view.value = "text";
 
-  if (collapsedCodes.value.has(code)) {
-    storiesOpen.value = true;
+  definitionView.value?.openItem(code);
+
+  if (checkCodes.value.has(code)) {
+    checksOpen.value = true;
   }
 
+  const requirement = requirements.value.find((item) => item.code === code);
+
+  if (requirement !== undefined) {
+    openRequirements([requirement.id]);
+  }
+
+  await nextTick();
+  definitionView.value?.openItem(code);
   await nextTick();
   const target = [
     ...(root.value?.querySelectorAll<HTMLElement>("[data-requirements-item]") ?? []),
@@ -1351,6 +1558,22 @@ watchUpstream(
   },
 );
 
+watch(
+  pendingDiffs,
+  (pending, previous) => {
+    const known = new Set((previous ?? []).map((diff) => diff.id));
+
+    openRequirements(
+      pending
+        .filter((diff) => !known.has(diff.id))
+        .flatMap((diff) => diff.operations)
+        .filter((operation) => operation.artifact_kind === "REQUIREMENT")
+        .map((operation) => operation.artifact_id),
+    );
+  },
+  { immediate: true },
+);
+
 onMounted(() => {
   refreshBarTarget();
   void refreshAfterRender();
@@ -1393,7 +1616,7 @@ onBeforeUnmount(() => {
       :locale="locale"
       :refresh-key="`${current.content_hash}:${store.pendingDiffs.length}:${upstreamReloads}`"
       :authorize="authorize"
-      @realigned="load"
+      @realigned="reloadAndTell"
     />
 
     <UiStateBlock
@@ -1622,6 +1845,47 @@ onBeforeUnmount(() => {
         class="grid gap-4"
         data-testid="requirements-text-view"
       >
+        <div
+          v-if="digest !== null"
+          class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3"
+        >
+          <p
+            class="m-0 min-w-0 flex-[1_1_320px] text-[15px] leading-normal text-on-night-2"
+            data-testid="requirements-digest"
+          >
+            {{ digest }}
+          </p>
+          <UiButton
+            v-if="requirements.length > 1"
+            variant="outline"
+            class="shrink-0"
+            :aria-expanded="allRequirementsOpen ? 'true' : 'false'"
+            data-testid="requirements-toggle-all"
+            @click="toggleAllRequirements"
+          >
+            {{ allRequirementsOpen ? copy.closeAll : copy.openAll }}
+          </UiButton>
+        </div>
+
+        <RequirementsDefinitionView
+          ref="definitionView"
+          :highlighted="highlighted"
+          :specification="specification"
+          :locale="locale"
+          @select-item="openItem"
+        />
+
+        <UiButton
+          v-if="['approve', 'revision', 'approved'].includes(decisionState)"
+          variant="outline"
+          class="justify-self-start"
+          :disabled="store.isBusy || deciding || changeRunning || pendingDiffs.length > 0"
+          data-testid="definition-request-journeys"
+          @click="requestChanges(copy.journeyRequest, true)"
+        >
+          {{ copy.requestJourneys }}
+        </UiButton>
+
         <section
           class="rounded-tile border border-night-line bg-night-raised px-5 pt-2 pb-2 sm:px-6"
           data-testid="requirements-groups"
@@ -1635,46 +1899,91 @@ onBeforeUnmount(() => {
                 v-for="requirement in group.items"
                 :key="requirement.id"
                 :class="[
-                  '-mx-3 grid gap-3 rounded-field border-b border-on-night/8 px-3 py-4 transition-colors duration-500 last:border-b-0 sm:grid-cols-[76px_minmax(0,1fr)_auto] sm:gap-4',
+                  '-mx-3 rounded-field border-b border-on-night/8 transition-colors duration-500 last:border-b-0',
                   itemClass(requirement.code),
                 ]"
                 :data-requirements-item="requirement.code"
                 tabindex="-1"
                 data-testid="requirement-row"
               >
-                <span class="font-mono text-xs text-on-night-3 sm:pt-[3px]">
-                  {{ requirement.code }}
-                </span>
-                <div class="min-w-0">
-                  <p class="m-0 text-base font-semibold">{{ requirement.title }}</p>
-                  <p class="m-0 mt-0.5 text-[15px] leading-normal">{{ requirement.statement }}</p>
-                  <div
-                    class="mt-2.5 flex flex-wrap items-center gap-2 text-[13px] text-on-night-3"
-                    data-testid="requirement-meta"
+                <button
+                  type="button"
+                  class="flex min-h-12 w-full cursor-pointer items-start gap-3 rounded-field px-3 py-3 text-left transition-colors duration-150 hover:bg-night-hover"
+                  :aria-expanded="isRequirementOpen(requirement) ? 'true' : 'false'"
+                  :aria-controls="detailIdOf(requirement)"
+                  data-testid="requirement-toggle"
+                  @click="toggleRequirement(requirement)"
+                >
+                  <span
+                    :class="[
+                      'inline-block w-3 shrink-0 text-xs leading-6 text-on-night-3 transition-transform duration-150',
+                      isRequirementOpen(requirement) ? 'rotate-90' : '',
+                    ]"
+                    aria-hidden="true"
+                    >▸</span
                   >
-                    <template v-if="twinNames(requirement).length > 0">
-                      <span>{{ copy.askedBy }}</span>
-                      <span
-                        v-for="name in twinNames(requirement)"
-                        :key="name"
-                        :title="name"
-                        class="inline-flex min-h-6 items-center rounded-pill border border-dashed border-violet-on-night px-2 text-xs font-medium whitespace-nowrap text-violet-on-night-2"
-                        data-testid="requirement-twin"
-                        >{{ name }}</span
-                      >
-                      <span class="sr-only">{{ copy.twinsHypothesis }}</span>
-                      <span aria-hidden="true">·</span>
-                    </template>
-                    <span v-if="criteriaOf(requirement).length > 0">
-                      {{ copy.verification }}: {{ criteriaOf(requirement).join(", ") }}
-                    </span>
-                    <span v-else class="font-medium text-warn-on-night">
-                      {{ copy.noVerification }}
-                    </span>
+                  <span class="min-w-0 flex-1 text-base font-semibold">{{
+                    requirement.title
+                  }}</span>
+                </button>
+                <div
+                  v-show="isRequirementOpen(requirement)"
+                  :id="detailIdOf(requirement)"
+                  class="grid gap-4 pr-3 pb-4 pl-9 sm:pl-32"
+                  data-testid="requirement-detail"
+                >
+                  <div class="min-w-0">
+                    <p class="m-0 text-[15px] leading-normal">{{ requirement.statement }}</p>
+                    <p
+                      v-if="needLinks(requirement).length > 0"
+                      class="m-0 mt-2 text-sm leading-normal"
+                    >
+                      <strong>{{ locale === "it" ? "Bisogni" : "Needs" }}:</strong>{{ " " }}
+                      <template v-for="(need, index) in needLinks(requirement)" :key="need.id">
+                        <span v-if="index > 0"> · </span>
+                        <button
+                          type="button"
+                          class="cursor-pointer underline"
+                          @click="openItem(need.code)"
+                        >
+                          {{ need.title }}
+                        </button>
+                      </template>
+                    </p>
+                    <p
+                      v-if="requirement.sources.length > 0"
+                      class="m-0 mt-2 text-sm leading-normal"
+                    >
+                      {{ copy.sourcesLabel }}: {{ formatRequirementSources(requirement) }}
+                    </p>
+                    <div
+                      class="mt-2.5 flex flex-wrap items-center gap-2 text-[13px] text-on-night-3"
+                      data-testid="requirement-meta"
+                    >
+                      <template v-if="twinNames(requirement).length > 0">
+                        <span>{{ copy.askedBy }}</span>
+                        <span
+                          v-for="name in twinNames(requirement)"
+                          :key="name"
+                          :title="name"
+                          class="inline-flex min-h-6 items-center rounded-pill border border-dashed border-violet-on-night px-2 text-xs font-medium whitespace-nowrap text-violet-on-night-2"
+                          data-testid="requirement-twin"
+                          >{{ name }}</span
+                        >
+                        <span class="sr-only">{{ copy.twinsHypothesis }}</span>
+                        <span aria-hidden="true">·</span>
+                      </template>
+                      <span v-if="criteriaOf(requirement).length > 0">
+                        {{ copy.verification }}: {{ criteriaOf(requirement).join(", ") }}
+                      </span>
+                      <span v-else class="font-medium text-warn-on-night">
+                        {{ copy.noVerification }}
+                      </span>
+                    </div>
                   </div>
                   <form
                     v-if="editingRequirementId === requirement.id"
-                    class="mt-4 grid gap-4 rounded-field border border-night-line-strong bg-night-panel p-4"
+                    class="grid gap-4 rounded-field border border-night-line-strong bg-night-panel p-4"
                     data-testid="requirement-edit-form"
                     @submit.prevent="submitRevision"
                   >
@@ -1731,53 +2040,27 @@ onBeforeUnmount(() => {
                       <UiButton variant="quiet" @click="cancelEdit">{{ copy.cancel }}</UiButton>
                     </div>
                   </form>
+                  <UiButton
+                    v-else
+                    variant="outline"
+                    class="justify-self-start"
+                    data-testid="edit-requirement"
+                    @click="startEdit(requirement)"
+                  >
+                    {{ copy.edit }}
+                  </UiButton>
                 </div>
-                <UiButton
-                  v-if="editingRequirementId !== requirement.id"
-                  variant="outline"
-                  class="self-start justify-self-start"
-                  data-testid="edit-requirement"
-                  @click="startEdit(requirement)"
-                >
-                  {{ copy.edit }}
-                </UiButton>
               </li>
             </ul>
           </template>
         </section>
 
-        <div
-          v-if="checkCards.length > 0"
-          class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"
-          data-testid="requirements-checks"
-        >
-          <div
-            v-for="card in checkCards"
-            :key="card.code"
-            :class="[
-              'rounded-panel border border-night-line bg-night-raised p-[18px] transition-colors duration-500',
-              itemClass(card.code),
-            ]"
-            :data-requirements-item="card.code"
-            tabindex="-1"
-            data-testid="requirements-check"
-          >
-            <p class="m-0 font-mono text-[11px] tracking-[0.06em] text-on-night-3 uppercase">
-              {{ card.label }} · {{ card.code }}
-            </p>
-            <p class="m-0 mt-2 text-sm leading-normal">{{ card.text }}</p>
-            <p v-if="card.note !== null" class="m-0 mt-1.5 text-sm leading-normal text-on-night-2">
-              {{ card.note }}
-            </p>
-          </div>
-        </div>
-
         <details
-          v-if="stories.length + scenarios.length > 0"
+          v-if="checkCards.length > 0"
           class="group rounded-tile border border-night-line bg-night-raised"
-          :open="storiesOpen"
-          data-testid="requirements-stories"
-          @toggle="onStoriesToggle"
+          :open="checksOpen"
+          data-testid="requirements-checks"
+          @toggle="onChecksToggle"
         >
           <summary
             class="flex min-h-12 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-0.5 px-5 py-3 [&::-webkit-details-marker]:hidden"
@@ -1787,56 +2070,43 @@ onBeforeUnmount(() => {
               aria-hidden="true"
               >▸</span
             >
-            <span class="text-[15px] font-semibold">{{ copy.storiesTitle }}</span>
-            <span class="ml-auto text-[13px] whitespace-nowrap text-on-night-3">
-              {{ storiesSummary }}
-            </span>
+            <span class="text-[15px] font-semibold">{{ checksTitle }}</span>
           </summary>
-          <div class="grid gap-2 border-t border-night-line px-5 py-4">
-            <div
-              v-for="story in stories"
-              :key="story.id"
-              :class="[
-                '-mx-3 grid gap-1 rounded-field px-3 py-2 transition-colors duration-500 sm:grid-cols-[76px_minmax(0,1fr)] sm:gap-4',
-                itemClass(story.code),
-              ]"
-              :data-requirements-item="story.code"
-              tabindex="-1"
+          <div class="grid gap-3 border-t border-night-line px-5 py-4">
+            <p
+              class="m-0 text-sm leading-normal text-on-night-2"
+              data-testid="requirements-checks-purpose"
             >
-              <span class="font-mono text-xs text-on-night-3 sm:pt-[3px]">{{ story.code }}</span>
-              <div class="min-w-0">
-                <p class="m-0 text-[15px] leading-normal">
-                  <strong class="font-semibold">{{ story.user_twin_reference.name }}</strong>
-                  · {{ story.goal }}
+              <template v-for="part in commandParts(copy.checksPurpose)" :key="part.key">
+                <code
+                  v-if="part.command"
+                  class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                  >{{ part.text }}</code
+                >
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </p>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
+              <div
+                v-for="card in checkCards"
+                :key="card.code"
+                :class="[
+                  'rounded-panel border border-night-line bg-night-raised p-[18px] transition-colors duration-500',
+                  itemClass(card.code),
+                ]"
+                :data-requirements-item="card.code"
+                tabindex="-1"
+                data-testid="requirements-check"
+              >
+                <p class="m-0 font-mono text-[11px] tracking-[0.06em] text-on-night-3 uppercase">
+                  {{ card.label }} · {{ card.code }}
                 </p>
-                <p class="m-0 mt-0.5 text-sm leading-normal text-on-night-2">
-                  {{ copy.benefit }}: {{ story.benefit }}
-                </p>
-              </div>
-            </div>
-            <div
-              v-for="scenario in scenarios"
-              :key="scenario.id"
-              :class="[
-                '-mx-3 grid gap-1 rounded-field px-3 py-2 transition-colors duration-500 sm:grid-cols-[76px_minmax(0,1fr)] sm:gap-4',
-                itemClass(scenario.code),
-              ]"
-              :data-requirements-item="scenario.code"
-              tabindex="-1"
-            >
-              <span class="font-mono text-xs text-on-night-3 sm:pt-[3px]">
-                {{ scenario.code }}
-              </span>
-              <div class="min-w-0">
-                <p class="m-0 text-[15px] leading-normal">
-                  <strong class="font-semibold">{{ scenario.title }}</strong>
-                  · {{ copy.trigger }}: {{ scenario.trigger }}
-                </p>
-                <ol class="m-0 mt-1.5 list-decimal pl-5 text-sm leading-normal text-on-night-2">
-                  <li v-for="step in scenario.steps" :key="step">{{ step }}</li>
-                </ol>
-                <p class="m-0 mt-1.5 text-sm leading-normal text-on-night-2">
-                  {{ copy.outcome }}: {{ scenario.expected_outcome }}
+                <p class="m-0 mt-2 text-sm leading-normal">{{ card.text }}</p>
+                <p
+                  v-if="card.note !== null"
+                  class="m-0 mt-1.5 text-sm leading-normal text-on-night-2"
+                >
+                  {{ card.note }}
                 </p>
               </div>
             </div>

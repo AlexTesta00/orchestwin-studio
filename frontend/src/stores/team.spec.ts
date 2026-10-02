@@ -1,11 +1,14 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api/client";
 import type {
   AgentCatalogResponse,
   AgentTeamApi,
+  PerspectiveView,
+  TeamProposalEditInput,
   TeamProposalVersionResponse,
+  TeamSelectionIssueResponse,
 } from "@/api/team-contracts";
 import type { HumanGateResponse } from "@/api/workflow-contracts";
 
@@ -30,15 +33,55 @@ const CATALOG: AgentCatalogResponse = {
       is_always_present: false,
     },
     {
-      agent_id: "MOBILE_ENGINEER",
+      agent_id: "BACKEND_ENGINEER",
       catalog_version: 1,
       kind: "SPECIALIST",
       selection_policy: "OWNER_SELECTABLE",
-      capabilities: ["MOBILE_ENGINEERING"],
+      capabilities: ["BACKEND_ENGINEERING"],
       supported_project_modes: ["GREENFIELD_GENERATION"],
-      name_key: "agentCatalog.roles.mobile_engineer.name",
-      description_key: "agentCatalog.roles.mobile_engineer.description",
+      name_key: "agentCatalog.roles.backend_engineer.name",
+      description_key: "agentCatalog.roles.backend_engineer.description",
       is_always_present: false,
+    },
+  ],
+};
+
+const NO_WORDS = { fields: [], terms: [] } as const;
+
+const CONTESTED_SERVICES: PerspectiveView = {
+  key: "SOFTWARE_ENGINEERING",
+  standing: "ALWAYS",
+  applied: true,
+  editable: false,
+  agent_id: null,
+  requested: NO_WORDS,
+  excluded: NO_WORDS,
+  aspects: [
+    {
+      key: "SERVICES",
+      agent_id: "BACKEND_ENGINEER",
+      standing: "CONTESTED",
+      applied: false,
+      editable: true,
+      requested: { fields: ["technical_constraints"], terms: ["api"] },
+      excluded: { fields: ["description"], terms: ["senza server"] },
+    },
+  ],
+};
+
+const CONTRADICTION: TeamSelectionIssueResponse = {
+  code: "CONTRADICTORY_ROLE_SIGNALS",
+  agent_id: "BACKEND_ENGINEER",
+  mandatory_reasons: [
+    {
+      code: "BACKEND_DELIVERY_SIGNAL",
+      evidence: { fields: ["technical_constraints"], terms: ["api"] },
+    },
+  ],
+  impossible_reasons: [
+    {
+      code: "EXPLICIT_SCOPE_EXCLUSION",
+      evidence: { fields: ["description"], terms: ["senza server"] },
     },
   ],
 };
@@ -82,13 +125,13 @@ const VERSION: TeamProposalVersionResponse = {
       ],
     },
     {
-      agent_id: "MOBILE_ENGINEER",
-      kind: "OPTIONAL",
+      agent_id: "BACKEND_ENGINEER",
+      kind: "CONFLICT",
       owner_editable: true,
-      reasons: [],
+      reasons: [...CONTRADICTION.mandatory_reasons, ...CONTRADICTION.impossible_reasons],
     },
   ],
-  constraint_issues: [],
+  constraint_issues: [CONTRADICTION],
   members: [
     {
       agent_id: "REQUIREMENTS_ANALYST",
@@ -104,6 +147,7 @@ const VERSION: TeamProposalVersionResponse = {
       ],
     },
   ],
+  perspectives: [CONTESTED_SERVICES],
 
   created_by_user_id: "owner-id",
   created_at: "2026-08-12T12:00:00Z",
@@ -229,7 +273,7 @@ describe("useTeamStore", () => {
     setActivePinia(createPinia());
   });
 
-  it("loads catalog, proposal, gate, events, and readiness", async () => {
+  it("loads catalog, proposal with its perspectives, gate, events, and readiness", async () => {
     const store = useTeamStore();
 
     const loaded = await store.load(PROJECT_ID, buildApi(), authorize);
@@ -237,6 +281,7 @@ describe("useTeamStore", () => {
     expect(loaded).toBe(true);
     expect(store.catalog).toEqual(CATALOG);
     expect(store.currentVersion).toEqual(VERSION);
+    expect(store.currentVersion?.perspectives).toEqual([CONTESTED_SERVICES]);
     expect(store.history).toEqual([VERSION]);
     expect(store.gate).toEqual(GATE);
     expect(store.gateEvents).toHaveLength(1);
@@ -244,27 +289,65 @@ describe("useTeamStore", () => {
     expect(store.errorDetail).toBeNull();
   });
 
-  it("records the complete owner-edited selection", async () => {
+  it("treats a generation that lists the contradictions of the brief as a created version", async () => {
+    const api = buildApi();
+    let generated: TeamProposalVersionResponse | null = null;
+
+    api.generateProjectTeamProposal = async () => {
+      generated = VERSION;
+
+      return {
+        status: "CREATED",
+        version: VERSION,
+        issues: [CONTRADICTION],
+      };
+    };
+    api.getCurrentProjectTeamProposal = async () => {
+      if (generated === null) throw new ApiError(404, "team_proposal_not_found");
+
+      return generated;
+    };
+
+    const store = useTeamStore();
+
+    await store.load(PROJECT_ID, api, authorize);
+    expect(store.currentVersion).toBeNull();
+
+    const result = await store.generateProposal(PROJECT_ID, api, authorize);
+
+    expect(result?.status).toBe("CREATED");
+    expect(result?.issues).toEqual([CONTRADICTION]);
+    expect(store.lastGeneration).toEqual(result);
+    expect(store.currentVersion).toEqual(VERSION);
+    expect(store.currentVersion?.perspectives?.[0]?.aspects[0]?.standing).toBe("CONTESTED");
+    expect(store.errorDetail).toBeNull();
+    expect(store.busy).toBe(false);
+  });
+
+  it("sends the complete selection of the owner and no rationale", async () => {
     const store = useTeamStore();
     const api = buildApi();
+    const edit = vi.spyOn(api, "editCurrentProjectTeamProposal");
 
     await store.load(PROJECT_ID, api, authorize);
 
     const result = await store.editCurrent(
       PROJECT_ID,
-      ["REQUIREMENTS_ANALYST", "MOBILE_ENGINEER"],
-      [
-        {
-          agent_id: "MOBILE_ENGINEER",
-          statement: "The owner wants a mobile companion.",
-        },
-      ],
+      ["REQUIREMENTS_ANALYST", "BACKEND_ENGINEER"],
       api,
       authorize,
     );
 
+    expect(edit).toHaveBeenCalledTimes(1);
+    expect(edit.mock.calls[0]?.slice(0, 2)).toEqual(["access-token", PROJECT_ID]);
+    expect(edit.mock.calls[0]?.[2]).toStrictEqual<TeamProposalEditInput>({
+      selected_agent_ids: ["REQUIREMENTS_ANALYST", "BACKEND_ENGINEER"],
+    });
     expect(result?.status).toBe("UPDATED");
-    expect(store.lastEdit?.version?.selected_agent_ids).toContain("MOBILE_ENGINEER");
+    expect(store.lastEdit?.version?.selected_agent_ids).toEqual([
+      "REQUIREMENTS_ANALYST",
+      "BACKEND_ENGINEER",
+    ]);
   });
 
   it("treats missing current proposal and gate as empty state", async () => {

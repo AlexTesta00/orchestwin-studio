@@ -5,6 +5,7 @@ import { clearFollowedGenerations } from "../api/generationJobs";
 import { UserModelingApiError, userModelingApi } from "../api/userModeling";
 import { useUserModelingStore } from "./userModeling";
 import type {
+  ArchetypePayload,
   HumanGatePayload,
   PersonaVersionPayload,
   UserModelingReadinessPayload,
@@ -89,6 +90,20 @@ const personaVersion: PersonaVersionPayload = {
       },
     ],
   },
+};
+
+const archetype: ArchetypePayload = {
+  persona_id: PERSONA_ID,
+  version_id: PERSONA_VERSION_ID,
+  version_number: 1,
+  name: "Hotel Receptionist",
+  description: "Checks in hotel guests",
+  role: "Receptionist",
+  goals: ["Fast check-in"],
+  context: null,
+  source: "OWNER_PROVIDED",
+  confirmation_status: "CONFIRMED",
+  archived: false,
 };
 
 function fakeResponse(payload: unknown, status = 200): Response {
@@ -464,6 +479,124 @@ describe("User Modeling frontend state", () => {
     expect(store.readiness?.workflow_state).toBe("USER_MODELING_REVIEW_REQUIRED");
 
     expect(store.error).toBeNull();
+  });
+});
+
+describe("manual archetypes", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+  afterEach(() => vi.restoreAllMocks());
+
+  it("loads the active roster even when no snapshot exists", async () => {
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue({
+      ...readinessWithoutSnapshot,
+      archetypes_current: false,
+    });
+    vi.spyOn(userModelingApi, "getSnapshotHistory").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([personaVersion]);
+    const get = vi.spyOn(userModelingApi, "getArchetypes").mockResolvedValue([archetype]);
+    const store = useUserModelingStore();
+    await store.load(PROJECT_ID, ACCESS_TOKEN);
+    expect(get).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(store.archetypes).toEqual([archetype]);
+    expect(store.currentPersonas).toEqual([personaVersion]);
+  });
+
+  it("creates, edits and archives with the displayed version while refreshing readiness", async () => {
+    const data = {
+      name: archetype.name,
+      description: archetype.description!,
+      role: archetype.role!,
+      goals: archetype.goals,
+      context: archetype.context,
+    };
+    const edited = { ...archetype, version_id: "new-version", version_number: 2 };
+    const create = vi.spyOn(userModelingApi, "createArchetype").mockResolvedValue(archetype);
+    const edit = vi.spyOn(userModelingApi, "editArchetype").mockResolvedValue(edited);
+    const archive = vi
+      .spyOn(userModelingApi, "archiveArchetype")
+      .mockResolvedValue({ ...edited, archived: true, version_number: 3 });
+    vi.spyOn(userModelingApi, "getArchetypes")
+      .mockResolvedValueOnce([archetype])
+      .mockResolvedValueOnce([edited])
+      .mockResolvedValueOnce([]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas")
+      .mockResolvedValueOnce([personaVersion])
+      .mockResolvedValueOnce([{ ...personaVersion, version_number: 2 }])
+      .mockResolvedValueOnce([]);
+    const readiness = vi
+      .spyOn(userModelingApi, "getReadiness")
+      .mockResolvedValue({ ...readinessWithoutSnapshot, archetypes_current: false });
+    const generate = vi.spyOn(userModelingApi, "generateSnapshot");
+    const store = useUserModelingStore();
+    await store.saveArchetype(PROJECT_ID, data, ACCESS_TOKEN);
+    expect(create).toHaveBeenCalledWith(PROJECT_ID, data, ACCESS_TOKEN);
+    expect(store.archetypes).toEqual([archetype]);
+    await store.saveArchetype(PROJECT_ID, data, ACCESS_TOKEN, archetype);
+    expect(edit).toHaveBeenCalledWith(
+      PROJECT_ID,
+      PERSONA_ID,
+      { ...data, based_on_version_number: 1 },
+      ACCESS_TOKEN,
+    );
+    expect(store.archetypes).toEqual([edited]);
+    await store.archiveArchetype(PROJECT_ID, edited, ACCESS_TOKEN);
+    expect(archive).toHaveBeenCalledWith(
+      PROJECT_ID,
+      PERSONA_ID,
+      { based_on_version_number: 2 },
+      ACCESS_TOKEN,
+    );
+    expect(store.archetypes).toEqual([]);
+    expect(store.currentPersonas).toEqual([]);
+    expect(store.readiness?.archetypes_current).toBe(false);
+    expect(readiness).toHaveBeenCalledTimes(3);
+    expect(generate).not.toHaveBeenCalled();
+    expect(store.isBusy).toBe(false);
+  });
+
+  it("retains the roster and exposes a version conflict without a silent retry", async () => {
+    const conflict = new UserModelingApiError("ARCHETYPE_VERSION_CONFLICT", {
+      code: "ARCHETYPE_VERSION_CONFLICT",
+      status: 409,
+      payload: null,
+    });
+    const edit = vi.spyOn(userModelingApi, "editArchetype").mockRejectedValue(conflict);
+    const get = vi.spyOn(userModelingApi, "getArchetypes");
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.archetypes = [archetype];
+    await expect(
+      store.saveArchetype(
+        PROJECT_ID,
+        { name: "Reception", description: "Guests", role: "Desk", goals: [], context: null },
+        ACCESS_TOKEN,
+        archetype,
+      ),
+    ).rejects.toBe(conflict);
+    expect(edit).toHaveBeenCalledTimes(1);
+    expect(get).not.toHaveBeenCalled();
+    expect(store.archetypes).toEqual([archetype]);
+    expect(store.error?.code).toBe("ARCHETYPE_VERSION_CONFLICT");
+    expect(store.isBusy).toBe(false);
+  });
+
+  it("ignores a completed mutation from a project that is no longer active", async () => {
+    const deferred = createDeferred();
+    vi.spyOn(userModelingApi, "archiveArchetype").mockImplementation(async () => {
+      await deferred.promise;
+      return { ...archetype, archived: true };
+    });
+    const get = vi.spyOn(userModelingApi, "getArchetypes");
+    const store = useUserModelingStore();
+    const mutation = store.archiveArchetype(PROJECT_ID, archetype, ACCESS_TOKEN);
+    store.activateProject(SECOND_PROJECT_ID);
+    deferred.resolve();
+    await mutation;
+    expect(get).not.toHaveBeenCalled();
+    expect(store.projectId).toBe(SECOND_PROJECT_ID);
+    expect(store.archetypes).toBeNull();
+    expect(store.error).toBeNull();
+    expect(store.isBusy).toBe(false);
   });
 });
 

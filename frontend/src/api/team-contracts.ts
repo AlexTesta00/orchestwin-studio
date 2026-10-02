@@ -123,6 +123,34 @@ export interface TeamSelectionIssueResponse {
   readonly impossible_reasons: readonly TeamSelectionReasonResponse[];
 }
 
+export type PerspectiveKey =
+  "UX" | "ACCESSIBILITY" | "SOFTWARE_ENGINEERING" | "PRODUCT" | "SECURITY";
+
+export type PerspectiveAspectKey = "WEB" | "SERVICES" | "MOBILE" | "INTEGRATIONS";
+
+export type PerspectiveStanding = "ALWAYS" | "REQUIRED" | "OPTIONAL" | "EXCLUDED" | "CONTESTED";
+
+export interface AspectView {
+  readonly key: PerspectiveAspectKey;
+  readonly agent_id: AgentIdentifier;
+  readonly standing: PerspectiveStanding;
+  readonly applied: boolean;
+  readonly editable: boolean;
+  readonly requested: RuleEvidenceResponse;
+  readonly excluded: RuleEvidenceResponse;
+}
+
+export interface PerspectiveView {
+  readonly key: PerspectiveKey;
+  readonly standing: PerspectiveStanding;
+  readonly applied: boolean;
+  readonly editable: boolean;
+  readonly agent_id: AgentIdentifier | null;
+  readonly requested: RuleEvidenceResponse;
+  readonly excluded: RuleEvidenceResponse;
+  readonly aspects: readonly AspectView[];
+}
+
 export type TeamProposalProviderKind = "FAKE_DETERMINISTIC" | "MODEL_ADAPTER";
 
 export type TeamProposalMemberSource =
@@ -173,6 +201,7 @@ export interface TeamProposalVersionResponse {
   readonly role_constraints: readonly TeamRoleConstraintResponse[];
   readonly constraint_issues: readonly TeamSelectionIssueResponse[];
   readonly members: readonly ProposedTeamMemberResponse[];
+  readonly perspectives?: readonly PerspectiveView[];
 
   readonly created_by_user_id: string;
   readonly created_at: string;
@@ -201,7 +230,7 @@ export interface OwnerAgentRationaleInput {
 
 export interface TeamProposalEditInput {
   readonly selected_agent_ids: readonly AgentIdentifier[];
-  readonly owner_rationales: readonly OwnerAgentRationaleInput[];
+  readonly owner_rationales?: readonly OwnerAgentRationaleInput[];
 }
 
 export type TeamEditIssueCode =

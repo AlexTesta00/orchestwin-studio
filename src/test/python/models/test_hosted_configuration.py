@@ -4,12 +4,15 @@ import hashlib
 import json
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
 from orchestwin.api.design_mockups import GENERATED_OUTPUT_TOKENS
 from orchestwin.models.generation_budget import cost_microusd
 from orchestwin.models.hosted_configuration import (
+    HOSTED_PROVIDER_KINDS,
+    HOSTED_RUNTIME_IDS,
     HOSTED_TEMPERATURE,
     PROVIDERS_CONFIGURATION_MAX_BYTES,
     HostedConfigurationError,
@@ -28,11 +31,15 @@ from orchestwin.models.structured_generation import StructuredGenerationProvider
 from orchestwin.projects.requirements_primitives import canonical_json
 from src.test.python.models.test_hosted_support import (
     ANTHROPIC_KEY_ENV,
+    CLAUDE_CODE_EXAMPLE,
+    CLAUDE_CODE_PRICES,
     EXAMPLE_PROVIDERS,
     GATEWAY_KEY,
     GATEWAY_KEY_ENV,
     TEST_KEY,
     changed,
+    claude_code_document,
+    model_entry,
     providers,
     providers_document,
 )
@@ -395,3 +402,145 @@ def test_amounts_convert_to_whole_micro_dollars_and_period_starts_are_dates():
     document = providers_document()
     document["budget"]["period_start"] = "2026-09-01"
     assert providers(document).budget.period_start == date(2026, 9, 1)
+
+
+CLAUDE_KIND = StructuredGenerationProviderKind.CLAUDE_CODE_CLI
+PROGRAM_FILE = (EXAMPLE_PROVIDERS.parent / "claude").as_posix()
+
+
+def with_claude_code(document):
+    document["providers"].append({"id": "claude-code", "kind": "CLAUDE_CODE_CLI"})
+    document["models"].append(
+        model_entry(
+            "subscription", "claude-code", "claude-opus-5-5", prices=dict(CLAUDE_CODE_PRICES)
+        )
+    )
+    return document
+
+
+def test_the_claude_code_example_generates_everything_through_the_subscription():
+    configuration, raw = load_providers_configuration(CLAUDE_CODE_EXAMPLE)
+    assert raw == CLAUDE_CODE_EXAMPLE.read_bytes()
+    [provider] = configuration.providers
+    assert provider.model_dump(mode="json") == {
+        "id": "claude-code",
+        "kind": "CLAUDE_CODE_CLI",
+        "executable": None,
+    }
+    assert [item.id for item in configuration.models] == ["opus-design", "opus"]
+    assert configuration.routes.model_dump() == {
+        "default": "opus",
+        "tasks": {"design": "opus-design"},
+        "purposes": {},
+    }
+    design = configuration.hosted_model("opus-design")
+    assert (design.model, design.effort, design.context_window_tokens) == (
+        "claude-opus-5-5",
+        "high",
+        1_000_000,
+    )
+    assert (design.max_output_tokens, design.reasoning_allowance_tokens) == (64_000, 64_000)
+    assert (design.timeout_seconds, design.characters_per_token) == (1200, 3.0)
+    opus = configuration.hosted_model("opus")
+    assert (opus.model, opus.effort, opus.context_window_tokens) == (
+        "claude-opus-5-5",
+        "medium",
+        1_000_000,
+    )
+    assert (opus.max_output_tokens, opus.reasoning_allowance_tokens) == (64_000, 64_000)
+    assert (opus.timeout_seconds, opus.characters_per_token) == (900, 3.0)
+    assert design.provider_kind is CLAUDE_KIND and opus.provider_kind is CLAUDE_KIND
+    assert design.prices.unpriced and opus.prices.unpriced
+    example, _ = load_providers_configuration(EXAMPLE_PROVIDERS)
+    assert configuration.budget == example.budget
+    assert configuration.billing() == "SUBSCRIPTION"
+    assert configuration.hosted_providers() == ()
+    assert read_provider_keys(configuration, env_file=None) == {}
+
+
+def test_a_claude_code_identity_names_the_command_line_and_its_configuration():
+    design = providers(claude_code_document()).hosted_model("design")
+    assert design.provider.model_dump(mode="json") == {
+        "id": "claude-code",
+        "kind": "CLAUDE_CODE_CLI",
+        "executable": None,
+    }
+    assert design.identity.to_snapshot() == {
+        "provider_id": "claude-code",
+        "runtime_id": "claude-code-print",
+        "base_model_repository": "claude-code/claude-opus-5-5",
+        "base_model_revision": "claude-opus-5-5",
+        "tokenizer_revision": "provider-managed",
+        "configuration_sha256": hashlib.sha256(
+            canonical_json(
+                {
+                    "provider": design.provider.model_dump(mode="json"),
+                    "model": design.entry.model_dump(mode="json"),
+                }
+            ).encode("utf-8")
+        ).hexdigest(),
+        "adapter_id": None,
+        "adapter_sha256": None,
+    }
+    assert hosted_identity(design.provider, design.entry) == design.identity
+    placed = providers(claude_code_document(executable=PROGRAM_FILE)).hosted_model("design")
+    assert placed.provider.executable == Path(PROGRAM_FILE)
+    assert placed.identity.configuration_sha256 != design.identity.configuration_sha256
+    assert "claude-code-print" in HOSTED_RUNTIME_IDS and CLAUDE_KIND in HOSTED_PROVIDER_KINDS
+
+
+@pytest.mark.parametrize("price", sorted(CLAUDE_CODE_PRICES))
+def test_a_subscription_model_with_a_price_is_refused_with_its_own_code(price):
+    document = claude_code_document()
+    document["models"][1]["prices"][price] = "0.0001"
+    with pytest.raises(HostedConfigurationError) as failure:
+        parse_providers_configuration(json.dumps(document).encode("utf-8"))
+    assert failure.value.code == "SUBSCRIPTION_MODEL_PRICED"
+    assert str(failure.value) == "SUBSCRIPTION_MODEL_PRICED"
+    document["models"][1]["prices"][price] = "0.0000"
+    assert providers(document).hosted_model("general").prices.unpriced
+
+
+CLAUDE_CODE_REJECTIONS = {
+    "relative program": _set(("providers", 0, "executable"), "bin/claude"),
+    "program with parent steps": _set(
+        ("providers", 0, "executable"), (EXAMPLE_PROVIDERS.parent / ".." / "claude").as_posix()
+    ),
+    "program as number": _set(("providers", 0, "executable"), 7),
+    "api key variable": _set(("providers", 0, "api_key_env"), "ORCHESTWIN_CLAUDE_API_KEY"),
+    "base url": _set(("providers", 0, "base_url"), "https://api.anthropic.com"),
+    "provider without models": lambda d: d["providers"].append(
+        {"id": "spare", "kind": "CLAUDE_CODE_CLI"}
+    ),
+    "local entry on the subscription": lambda d: d["models"].append(
+        {"id": "bare", "provider": "claude-code"}
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(CLAUDE_CODE_REJECTIONS))
+def test_every_invalid_claude_code_entry_is_rejected(name):
+    document = changed(claude_code_document(), CLAUDE_CODE_REJECTIONS[name])
+    with pytest.raises(HostedConfigurationError) as failure:
+        parse_providers_configuration(json.dumps(document).encode("utf-8"))
+    assert failure.value.code == "HOSTED_PROVIDERS_CONFIGURATION_INVALID"
+
+
+def test_keys_are_read_only_for_the_providers_that_need_one(monkeypatch):
+    configuration = providers(with_claude_code(providers_document()))
+    assert [item.id for item in configuration.hosted_providers()] == ["anthropic", "gateway"]
+    monkeypatch.setenv(ANTHROPIC_KEY_ENV, TEST_KEY)
+    monkeypatch.setenv(GATEWAY_KEY_ENV, GATEWAY_KEY)
+    assert sorted(read_provider_keys(configuration, env_file=None)) == ["anthropic", "gateway"]
+    assert read_provider_keys(providers(claude_code_document()), env_file=None) == {}
+
+
+def test_billing_follows_the_kind_of_every_route():
+    assert providers().billing() == "API"
+    assert providers(claude_code_document()).billing() == "SUBSCRIPTION"
+    document = with_claude_code(providers_document())
+    assert providers(document).billing() == "API"
+    document["routes"]["purposes"]["DESIGN_TWIN_REVIEW"] = "subscription"
+    assert providers(document).billing() == "MIXED"
+    document["routes"] = {"default": "subscription", "tasks": {}, "purposes": {}}
+    assert providers(document).billing() == "SUBSCRIPTION"

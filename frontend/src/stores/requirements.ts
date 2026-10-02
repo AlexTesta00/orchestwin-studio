@@ -333,13 +333,18 @@ export const useRequirementsStore = defineStore("requirements", {
       request: string,
       authorize: AuthorizedRequest,
       api: RequirementsApi = requirementsApi,
+      includeJourneys = false,
     ) {
       this.activateProject(projectId);
       const epoch = this.projectEpoch;
       this.begin("request-change");
 
       try {
-        const result = await authorize((token) => api.requestChange(projectId, request, token));
+        const result = await authorize((token) =>
+          includeJourneys
+            ? api.requestChange(projectId, request, token, true)
+            : api.requestChange(projectId, request, token),
+        );
 
         if (this.isCurrent(projectId, epoch) && result.diff !== null) {
           this.changeRequests[result.diff.id] = request;

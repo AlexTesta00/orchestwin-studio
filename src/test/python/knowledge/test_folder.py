@@ -3,13 +3,21 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import zipfile
 from dataclasses import replace
 from datetime import datetime, timedelta
 
 import pytest
 
+from orchestwin.knowledge.archive import verify_folder
 from orchestwin.knowledge.diagrams import MERMAID_VERSION
+from orchestwin.knowledge.documents import (
+    OVERVIEW_DESCRIPTION_LENGTH,
+    OVERVIEW_REQUIREMENTS,
+    excerpt,
+    overview_lines,
+)
 from orchestwin.knowledge.folder import (
     KNOWLEDGE_FOLDER_KIND,
     KnowledgeFolderError,
@@ -17,6 +25,7 @@ from orchestwin.knowledge.folder import (
     content_files,
     folder_archive,
     folder_content_hash,
+    folder_overview,
     identifiers,
     project_language,
     stage_document_payload,
@@ -24,15 +33,26 @@ from orchestwin.knowledge.folder import (
 from orchestwin.knowledge.layout import (
     KNOWLEDGE_INDEX,
     KNOWLEDGE_MANIFEST,
+    STAGE_LABELS,
     STAGE_PAYLOAD_KEYS,
     STAGES,
+    schema_document,
     stage_document,
+    stage_text,
 )
 from orchestwin.knowledge.schema import SCHEMA_NAMES, schema_files
+from orchestwin.knowledge.state import ProjectStateSources
 from orchestwin.knowledge.tables import TABLE_COLUMNS
 from orchestwin.knowledge.twins import portable_twins
 
-from .knowledge_fixtures import PROJECT_NAME, PUBLISHED_AT, sources
+from .knowledge_fixtures import (
+    PROJECT_NAME,
+    PUBLISHED_AT,
+    development_sources,
+    real_sources,
+    sources,
+)
+from .knowledge_fixtures import test_run as acceptance_run
 
 STAGE_FILES = tuple(
     path for stage in STAGES for path in (f"{stage}/{stage}.json", f"{stage}/{stage}.md")
@@ -44,6 +64,13 @@ FEEDBACK_FILES = (
     "twins/feedback/insights.json",
     "twins/feedback/reviews.json",
 )
+STATE_FILES = (
+    "state/state.json",
+    "state/state.md",
+    "twins/feedback/changes.json",
+    "twins/feedback/tests.json",
+    "twins/feedback/learned.json",
+)
 DIAGRAM_FILES = (
     "requirements/diagrams/use-cases.mmd",
     "requirements/diagrams/requirements.mmd",
@@ -53,6 +80,32 @@ DIAGRAM_FILES = (
     "design/diagrams/screen-map.mmd",
     "design/diagrams/traceability.mmd",
 )
+TEXT_VIEWS = (
+    "brief/brief.md",
+    "team/team.md",
+    "twins/twins.md",
+    "requirements/requirements.md",
+    "design/design.md",
+    "design/critiques.md",
+    "design/mockups.md",
+)
+VERSION_LINES = ("Version ", "User twin version ")
+STEP_NAMES = ("Project brief", "Perspectives", "User twins", "Definition", "Design and evaluation")
+IDENTITY = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+DIGEST = re.compile(r"(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])")
+LINK = re.compile(r"^- \[([^\]]+)\]\(([^)]+)\)$", re.MULTILINE)
+FILES_SENTENCE = (
+    "`orchestwin.json` holds the SHA-256 digest of every file of this folder except itself and "
+    "this index: the Studio and `ut` check the files against those digests before they accept a "
+    "folder.\n"
+)
+LONG_DESCRIPTION = (
+    "Una pagina web per gestire la lista degli ospiti di un workshop di comunita: chi accoglie "
+    "inserisce il nome di ogni ospite, vede subito la lista aggiornata con il numero progressivo "
+    "e riceve un messaggio chiaro quando prova a salvare un nome vuoto, cosi nessun ospite si "
+    "perde e il conteggio resta giusto anche quando all'ingresso arrivano molte persone insieme "
+    "e i volontari si danno il cambio al banco."
+)
 
 
 def folder(package=None, **changes):
@@ -61,6 +114,34 @@ def folder(package=None, **changes):
         version_number=1,
         created_at=PUBLISHED_AT,
     )
+
+
+def overview_of(index: str, heading: str) -> list[str]:
+    return index.split(f"\n{heading}\n\n", 1)[1].split("\n\n", 1)[0].splitlines()
+
+
+def body_of(text: str) -> str:
+    lines = text.splitlines()
+    return "\n".join(
+        lines[3:]
+        if lines[2].startswith((*VERSION_LINES, "Versione ", "User Twin versione "))
+        else lines
+    )
+
+
+def with_requirements(specification: dict[str, object], must: int) -> dict[str, object]:
+    template = specification["requirements"][0]
+    requirements = [
+        {**template, "code": f"REQ-{number:03d}", "title": f"Titolo {number}", "priority": priority}
+        for number, priority in enumerate(["MUST"] * must + ["SHOULD"] * 2, 1)
+    ]
+    return {**specification, "requirements": requirements}
+
+
+def described(package, description: str):
+    version = package.brief
+    brief = replace(version.brief, description=description)
+    return replace(package, brief=replace(version, brief=brief, content_hash=brief.content_hash))
 
 
 def test_folder_holds_every_view_of_every_approved_stage() -> None:
@@ -77,6 +158,7 @@ def test_folder_holds_every_view_of_every_approved_stage() -> None:
                 *STAGE_FILES,
                 *DESIGN_FILES,
                 *FEEDBACK_FILES,
+                *STATE_FILES,
                 *DIAGRAM_FILES,
                 *TABLE_COLUMNS,
                 *schema_files(),
@@ -109,7 +191,7 @@ def test_manifest_indexes_package_project_stages_twins_views_and_feedback() -> N
     manifest = json.loads(built.files[KNOWLEDGE_MANIFEST])
 
     assert manifest == built.manifest
-    assert manifest["schema_version"] == 2
+    assert manifest["schema_version"] == 3
     assert manifest["kind"] == KNOWLEDGE_FOLDER_KIND
     assert manifest["manifest"] == KNOWLEDGE_MANIFEST
     assert manifest["index"] == KNOWLEDGE_INDEX
@@ -143,8 +225,27 @@ def test_manifest_indexes_package_project_stages_twins_views_and_feedback() -> N
         "decisions": 2,
         "discussions": 1,
         "insights": 1,
+        "changes": "twins/feedback/changes.json",
+        "change_reviews": 0,
+        "tests": "twins/feedback/tests.json",
+        "test_runs": 0,
+        "learned": "twins/feedback/learned.json",
+        "learned_observations": 0,
     }
-    assert manifest["schemas"] == {name: f"schema/{name}.schema.json" for name in SCHEMA_NAMES}
+    assert manifest["progress"] == {"approved": list(STAGES), "pending": None, "complete": True}
+    assert manifest["state"] == {
+        "document": "state/state.json",
+        "text": "state/state.md",
+        "changes": 0,
+        "pending_changes": 0,
+        "stale_reviews": 0,
+        "aligned_commit": None,
+        "open_tasks": 0,
+    }
+    assert manifest["schemas"] == {name: schema_document(name) for name in SCHEMA_NAMES}
+    assert len(manifest["schemas"]) == 14
+    assert manifest["schemas"]["tests"] == "schema/tests.schema.json"
+    assert manifest["schemas"]["learning"] == "schema/learned.schema.json"
 
 
 def test_manifest_lists_the_three_views_of_requirements_and_design() -> None:
@@ -152,8 +253,12 @@ def test_manifest_lists_the_three_views_of_requirements_and_design() -> None:
 
     assert sorted(views) == ["design", "requirements"]
     assert views["requirements"]["text"] == [
-        {"path": "requirements/requirements.md", "title": "Requirements"}
+        {"path": "requirements/requirements.md", "title": "Definition"}
     ]
+    assert views["design"]["text"][0] == {
+        "path": "design/design.md",
+        "title": "Design and evaluation",
+    }
     assert [entry["path"] for entry in views["design"]["text"]] == [
         "design/design.md",
         "design/critiques.md",
@@ -272,24 +377,120 @@ def test_prebuilt_content_is_indexed_without_being_rebuilt() -> None:
     assert KNOWLEDGE_MANIFEST not in content
 
 
-def test_text_documents_embed_their_diagrams_and_name_their_tables() -> None:
+@pytest.mark.parametrize("stage", ["requirements", "design"])
+def test_the_views_of_a_text_document_link_its_tables_and_diagrams(stage: str) -> None:
     built = folder()
-    requirements = built.files["requirements/requirements.md"]
-    design = built.files["design/design.md"]
+    text = built.files[f"{stage}/{stage}.md"]
+    views = text.split("\n## Views\n", 1)[1]
+    expected = [
+        (entry["title"], entry["path"])
+        for kind in ("tables", "diagrams")
+        for entry in built.manifest["views"][stage][kind]
+    ]
 
-    assert "## Views" in requirements
-    assert "- `tables/user-stories.csv`" in requirements
-    assert "- `diagrams/use-cases.mmd`: Use cases" in requirements
-    assert requirements.count("```mermaid") == 3
-    assert "```mermaid\nusecase-beta\n" in requirements
-    assert "```mermaid\nrequirementDiagram\n" in requirements
-    assert design.count("```mermaid") == 4
-    assert "```mermaid\nstateDiagram-v2\n" in design
-    assert "- `tables/workflows.csv`" in design
-    for path in DIAGRAM_FILES:
-        source = built.files[path]
-        document = requirements if path.startswith("requirements") else design
-        assert source.rstrip("\n") in document
+    linked = [(title, f"{stage}/{target}") for title, target in LINK.findall(views)]
+
+    assert sorted(linked) == sorted(expected)
+    assert {path for _title, path in linked} <= set(built.files)
+    assert views.split("\nDiagrams:\n", 1)[1] == "".join(
+        f"- [{entry['title']}]({entry['path'].removeprefix(f'{stage}/')})\n"
+        for entry in built.manifest["views"][stage]["diagrams"]
+    )
+    assert "```" not in text
+    assert "accTitle" not in text
+    for diagram in built.manifest["views"][stage]["diagrams"]:
+        assert built.files[diagram["path"]].splitlines()[0] not in text.splitlines()
+
+
+def test_the_views_link_the_tables_by_their_titles() -> None:
+    requirements = folder().files["requirements/requirements.md"]
+
+    assert (
+        "\nTables:\n- [Requirements](tables/requirements.csv)\n"
+        "- [User stories](tables/user-stories.csv)\n"
+        "- [Acceptance criteria](tables/acceptance-criteria.csv)\n"
+        "- [Scenarios](tables/scenarios.csv)\n- [Risks](tables/risks.csv)\n"
+        "- [Definition of done](tables/definition-of-done.csv)\n\nDiagrams:\n"
+        "- [Use cases](diagrams/use-cases.mmd)\n- [Requirements](diagrams/requirements.mmd)\n"
+        "- [Requirements traceability](diagrams/traceability.mmd)\n"
+    ) in requirements
+    assert f"diagrams (Mermaid {MERMAID_VERSION}) below" in requirements
+
+
+def test_the_risks_read_as_lines_with_the_codes_of_their_requirements() -> None:
+    text = folder(real_sources()).files["requirements/requirements.md"]
+
+    risks = text.split("\n## Rischi\n\n", 1)[1].split("\n## Condizioni di completamento", 1)[0]
+    assert "RSK-001: Nomi duplicati" in risks
+    assert "Probabilità: POSSIBLE" in risks
+    assert "Impatto: MEDIUM" in risks
+    assert "Mitigazione: Implementare controllo" in risks
+    assert "[REQ-001 ·" in risks
+
+
+@pytest.mark.parametrize("make", [sources, real_sources], ids=["fixture", "real"])
+def test_the_text_views_show_codes_and_names_instead_of_identifiers(make) -> None:
+    built = folder(make())
+    views = [*TEXT_VIEWS, *(twin["text"] for twin in built.manifest["twins"])]
+
+    for path in views:
+        body = body_of(built.files[path])
+        if path.startswith("twins/"):
+            body = re.sub(
+                r"<details><summary>(?:Why\?|Perché\?).*?</details>", "", body, flags=re.DOTALL
+            )
+        if path == "requirements/requirements.md":
+            body = re.sub(
+                r"<details><summary>(?:Fonti|Sources).*?</details>", "", body, flags=re.DOTALL
+            )
+        assert IDENTITY.search(body) is None, path
+        assert DIGEST.search(body) is None, path
+    assert ("hash del contenuto `" if make is real_sources else "content hash `") in built.files[
+        "requirements/requirements.md"
+    ].splitlines()[2]
+
+
+@pytest.mark.parametrize("make", [sources, real_sources], ids=["fixture", "real"])
+def test_the_steps_have_their_names_in_the_titles_the_index_and_the_manifest(make) -> None:
+    built = folder(make())
+    index = built.files[KNOWLEDGE_INDEX]
+    stages = index.split("\n## Approved stages\n\n", 1)[1].split("\n\n", 1)[0].splitlines()[2:]
+
+    assert tuple(STAGE_LABELS[stage] for stage in STAGES) == STEP_NAMES
+    assert [built.files[stage_text(stage)].splitlines()[0] for stage in STAGES] == [
+        f"# {'Definizione' if make is real_sources and name == 'Definition' else name}"
+        for name in STEP_NAMES
+    ]
+    assert [built.manifest["stages"][stage]["label"] for stage in STAGES] == list(STEP_NAMES)
+    assert [row.split(" | ", 1)[0] for row in stages] == [f"| {name}" for name in STEP_NAMES]
+    assert (
+        "The approved steps of this project (Project brief, Perspectives, User twins, Definition, "
+        "Design and evaluation), each approved by the owner through a human gate in OrchesTwin "
+        "Studio: a step comes into this folder once it is approved. This folder holds 5 of 5 "
+        "approved steps; every step is approved."
+    ) in index
+    assert "| requirements | text | `requirements/requirements.md` | Definition |" in index
+    assert "| design | text | `design/design.md` | Design and evaluation |" in index
+    assert "agent team" not in index.casefold()
+
+
+@pytest.mark.parametrize("make", [sources, real_sources], ids=["fixture", "real"])
+def test_every_view_of_a_step_says_that_the_owner_approved_it(make) -> None:
+    package = make()
+    built = folder(package)
+
+    for stage in STAGES:
+        version = package.version(stage)
+        if make is real_sources and stage == "requirements":
+            assert (
+                built.files[stage_text(stage)].splitlines()[2]
+                == f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal committente il {package.gate(stage).updated_at.isoformat()}."
+            )
+            continue
+        assert built.files[stage_text(stage)].splitlines()[2] == (
+            f"Version {version.version_number}, content hash `{version.content_hash}`, approved "
+            f"by the owner on {package.gate(stage).updated_at.isoformat()}."
+        )
 
 
 def test_index_explains_the_folder_to_people_and_coding_agents() -> None:
@@ -300,17 +501,38 @@ def test_index_explains_the_folder_to_people_and_coding_agents() -> None:
     assert index.startswith(f"# OrchesTwin knowledge folder: {PROJECT_NAME}\n")
     assert f"Knowledge folder version 1 of project {built.project_id}" in index
     assert f"Content hash `{built.content_hash}`" in index
-    for heading in (
+    headings = [line for line in index.splitlines() if line.startswith("## ")]
+    assert headings == [
+        "## In short",
         "## What this folder is",
         "## How to use it",
         "## Approved stages",
         "## User twins",
         "## Views",
         "## Twin feedback",
+        "## Development state",
+        "## Latest critiques on the code",
+        "## Acceptance tests",
+        "## What the twins learned",
         "## Schema",
         "## Files",
-    ):
-        assert heading in index
+    ]
+    assert "This folder holds 5 of 5 approved steps; every step is approved." in index
+    assert (
+        "## Acceptance tests\n\nNo run of the acceptance tests is recorded yet: `ut test` runs "
+        "them on the application and records the result in the Studio.\n"
+    ) in index
+    assert "| tests | `schema/tests.schema.json` |" in index
+    assert "| learning | `schema/learned.schema.json` |" in index
+    assert (
+        "## What the twins learned\n\n- Receptionist Twin, version 1.0: it has learned nothing "
+        "yet.\n\n`twins/feedback/learned.json` holds what the twins learned"
+    ) in index
+    assert "- Build against `requirements/requirements.md` and `design/design.md`" in index
+    assert "- The state of the development is in `state/state.md` and `state/state.json`" in index
+    assert "The Studio has recorded no change (commit) of the code yet." in index
+    assert "## Latest critiques on the code\n\nNone yet.\n" in index
+    assert "`twins/feedback/changes.json` holds 0 review runs of the twins" in index
     assert f"`{twin['document']}`" in index
     assert "| requirements | diagram | `requirements/diagrams/use-cases.mmd` | Use cases |" in index
     assert "| design | mockup | `design/mockup.html` |" in index
@@ -318,7 +540,226 @@ def test_index_explains_the_folder_to_people_and_coding_agents() -> None:
         "2 reviews with 4 findings, 2 owner decisions, 1 approved discussion and 1 applied insight"
     ) in index
     assert "| manifest | `schema/manifest.schema.json` |" in index
-    assert f"| brief/brief.md | {built.manifest['files']['brief/brief.md']} |" in index
+    assert f"diagrams (Mermaid {MERMAID_VERSION}, linked from the Markdown documents)" in index
+    assert index.endswith(f"\n## Files\n\n{FILES_SENTENCE}")
+
+
+def test_the_index_names_the_manifest_instead_of_a_table_of_digests() -> None:
+    built = folder(real_sources())
+    index = built.files[KNOWLEDGE_INDEX]
+
+    assert "SHA-256 |" not in index
+    assert not [digest for digest in built.manifest["files"].values() if digest in index]
+    assert "- Do not edit the files of the approved stages: their digests are in " in index
+    assert "`orchestwin.json`. A change of scope goes through the Studio" in index
+    assert index.split("\n## Files\n\n", 1)[1] == FILES_SENTENCE
+    assert verify_folder(built.files).content_hash == built.content_hash
+
+
+def test_the_index_opens_with_the_overview_of_the_project_in_english() -> None:
+    built = folder()
+    lines = built.files[KNOWLEDGE_INDEX].splitlines()
+
+    assert lines[4] == "## In short"
+    assert overview_of(built.files[KNOWLEDGE_INDEX], "## In short") == [
+        "- Project: Lista ospiti workshop. A browser-based application for managing hotel rooms, "
+        "guests, reservations, and room availability.",
+        "- Who it is for: Receptionist Twin (Hotel receptionist).",
+        "- What it must do:",
+        "  - REQ-001 Create reservations",
+        "- Chosen design: DES-001 Guided reservation flow.",
+        "- How it is verified: 1 acceptance criterion, which `ut test` checks in the browsers.",
+    ]
+    assert built.manifest["project"]["language"] == "en"
+
+
+def test_the_index_of_an_italian_project_opens_with_the_overview_in_italian() -> None:
+    built = folder(real_sources())
+    index = built.files[KNOWLEDGE_INDEX]
+
+    assert index.splitlines()[4] == "## In breve"
+    assert "## In short" not in index
+    assert overview_of(index, "## In breve") == [
+        "- Progetto: Lista ospiti workshop. Una pagina web per gestire la lista degli ospiti di un "
+        "workshop di comunita.",
+        "- Per chi è: Addetti all'accoglienza; Organizzatori volontari.",
+        "- Cosa deve fare:",
+        "  - REQ-001 Aggiunta ospite",
+        "  - REQ-002 Visualizzazione lista",
+        "  - REQ-003 Validazione nome",
+        "  - REQ-006 Architettura statica",
+        "- Design scelto: DES-002 Event Guest Manager.",
+        "- Come si verifica: 1 criterio di accettazione, controllato da `ut test` nei browser.",
+    ]
+    assert index.index("## In breve") < index.index("## What this folder is")
+    assert verify_folder(built.files).complete is True
+
+
+def test_the_overview_names_the_product_of_the_chosen_design_and_the_role_of_each_twin() -> None:
+    package = real_sources()
+    design = package.payload("design")
+    twins = package.payload("twins")
+    chosen = next(
+        item
+        for item in design["alternatives"]
+        if item["id"] == design["owner_selected_alternative_id"]
+    )
+    renamed = {
+        **design,
+        "alternatives": [
+            {**item, "visual_language": {**item["visual_language"], "product_name": "Ospiti"}}
+            if item is chosen
+            else item
+            for item in design["alternatives"]
+        ],
+    }
+    profile = twins["twin_versions"][0]["profile"]
+    observations = [
+        {**item, "value": {**item["value"], "text": "Volontario al banco."}}
+        if item["observation_key"] == "user_twin.role"
+        else item
+        for item in profile["observations"]
+    ]
+    roled = {
+        **twins,
+        "twin_versions": [
+            {**twins["twin_versions"][0], "profile": {**profile, "observations": observations}},
+            *twins["twin_versions"][1:],
+        ],
+    }
+
+    for language, twin_line, design_line in (
+        (
+            "en",
+            "- Who it is for: Addetti all'accoglienza (Volontario al banco); Organizzatori "
+            "volontari.",
+            "- Chosen design: DES-002 Event Guest Manager (product name: Ospiti).",
+        ),
+        (
+            "it",
+            "- Per chi è: Addetti all'accoglienza (Volontario al banco); Organizzatori volontari.",
+            "- Design scelto: DES-002 Event Guest Manager (nome del prodotto: Ospiti).",
+        ),
+    ):
+        lines = overview_lines(
+            language=language,
+            project_name=PROJECT_NAME,
+            brief=package.payload("brief"),
+            twins=roled,
+            package=renamed,
+        )
+        assert lines[3:5] == [twin_line, design_line]
+
+
+@pytest.mark.parametrize(
+    ("must", "language", "rest"),
+    [
+        (OVERVIEW_REQUIREMENTS, "en", []),
+        (OVERVIEW_REQUIREMENTS + 1, "en", ["  - and 1 more."]),
+        (OVERVIEW_REQUIREMENTS + 5, "en", ["  - and 5 more."]),
+        (OVERVIEW_REQUIREMENTS + 1, "it", ["  - e un altro."]),
+        (OVERVIEW_REQUIREMENTS + 5, "it", ["  - e altri 5."]),
+    ],
+)
+def test_the_overview_lists_at_most_twelve_must_requirements(
+    must: int, language: str, rest: list[str]
+) -> None:
+    package = real_sources()
+    specification = with_requirements(package.payload("requirements"), must)
+
+    lines = overview_lines(
+        language=language,
+        project_name=PROJECT_NAME,
+        brief=package.payload("brief"),
+        specification=specification,
+    )
+
+    listed = [line for line in lines if line.startswith("  - ")]
+    assert listed == [
+        *(f"  - REQ-{number:03d} Titolo {number}" for number in range(1, 13)),
+        *rest,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("language", "count", "line"),
+    [
+        (
+            "it",
+            1,
+            "- Come si verifica: 1 criterio di accettazione, controllato da `ut test` nei browser.",
+        ),
+        (
+            "it",
+            3,
+            "- Come si verifica: 3 criteri di accettazione, controllati da `ut test` nei browser.",
+        ),
+        (
+            "en",
+            1,
+            "- How it is verified: 1 acceptance criterion, which `ut test` checks in the browsers.",
+        ),
+        (
+            "en",
+            3,
+            "- How it is verified: 3 acceptance criteria, which `ut test` checks in the browsers.",
+        ),
+    ],
+)
+def test_the_overview_says_how_many_criteria_ut_test_checks(
+    language: str, count: int, line: str
+) -> None:
+    package = real_sources()
+    specification = package.payload("requirements")
+    criteria = specification["acceptance_criteria"][:1] * count
+
+    lines = overview_lines(
+        language=language,
+        project_name=PROJECT_NAME,
+        brief=package.payload("brief"),
+        specification={**specification, "acceptance_criteria": criteria},
+    )
+
+    assert lines[-2:] == [line, ""]
+
+
+def test_the_overview_cuts_a_long_description_at_a_word() -> None:
+    cut = LONG_DESCRIPTION.split(" giusto", 1)[0]
+    package = described(real_sources(), LONG_DESCRIPTION)
+
+    overview = overview_of(folder(package).files[KNOWLEDGE_INDEX], "## In breve")
+
+    assert overview[0] == f"- Progetto: {PROJECT_NAME}. {cut}…"
+    assert len(cut) <= OVERVIEW_DESCRIPTION_LENGTH < len(f"{cut} giusto")
+    assert len(LONG_DESCRIPTION) > OVERVIEW_DESCRIPTION_LENGTH
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("a" * 300, "a" * 300),
+        (f"{'a' * 299} b", f"{'a' * 299}…"),
+        (f"{'a' * 296} bcd efg", f"{'a' * 296} bcd…"),
+        (f"{'a' * 296}, bcdef", f"{'a' * 296}…"),
+        ("a" * 400, f"{'a' * 300}…"),
+        ("  Una   pagina\n web  ", "Una pagina web"),
+    ],
+)
+def test_a_description_is_cut_at_a_word_within_three_hundred_characters(
+    text: str, expected: str
+) -> None:
+    assert excerpt(text) == expected
+
+
+def test_the_overview_of_a_brief_without_description_names_the_project() -> None:
+    package = real_sources()
+    brief = package.payload("brief")
+    unknown = {**brief, "fields": {**brief["fields"], "description": None}}
+
+    lines = overview_lines(language="en", project_name=PROJECT_NAME, brief=unknown)
+
+    assert lines == ["## In short", "", f"- Project: {PROJECT_NAME}.", ""]
+    assert folder_overview(package)[0] == "## In breve"
 
 
 def test_design_without_mockup_still_produces_a_complete_folder() -> None:
@@ -368,3 +809,43 @@ def test_project_language_follows_the_requirement_texts() -> None:
 
     assert project_language(italian) == "it"
     assert project_language(empty) is None
+
+
+def test_every_folder_carries_the_test_runs_and_they_change_the_content_hash() -> None:
+    package = sources()
+    empty = folder(package)
+    tested = folder(replace(package, state=ProjectStateSources(tests=(acceptance_run(),))))
+
+    assert json.loads(empty.files["twins/feedback/tests.json"]) == {
+        "schema_version": 3,
+        "kind": "orchestwin.test-reviews",
+        "project_id": str(package.project_id),
+        "runs": [],
+    }
+    assert json.loads(tested.files["twins/feedback/tests.json"])["runs"] == [acceptance_run()]
+    assert tested.manifest["feedback"]["test_runs"] == 1
+    assert tested.content_hash != empty.content_hash
+    assert "## Critiques on the acceptance tests" in tested.files["twins/feedback/feedback.md"]
+
+
+def test_what_the_twins_learned_changes_the_content_hash_but_never_the_twin_documents() -> None:
+    package = real_sources()
+    plain = folder(package)
+    learned = folder(replace(package, state=development_sources()))
+    twin_files = [
+        path
+        for path in plain.files
+        if path.startswith("twins/") and not path.startswith("twins/feedback/")
+    ]
+
+    assert len(twin_files) == 6
+    assert {path: learned.files[path] for path in twin_files} == {
+        path: plain.files[path] for path in twin_files
+    }
+    assert learned.manifest["twins"] == plain.manifest["twins"]
+    assert learned.manifest["stages"]["twins"] == plain.manifest["stages"]["twins"]
+    assert (
+        learned.files["twins/feedback/learned.json"] != plain.files["twins/feedback/learned.json"]
+    )
+    assert learned.content_hash != plain.content_hash
+    assert "## Learned during development" in learned.files["twins/feedback/feedback.md"]

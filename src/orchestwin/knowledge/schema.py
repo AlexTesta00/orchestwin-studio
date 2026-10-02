@@ -67,20 +67,83 @@ from orchestwin.evaluation.findings import (
 from orchestwin.knowledge.diagrams import DiagramKind
 from orchestwin.knowledge.feedback import DISCUSSIONS_KIND, INSIGHTS_KIND, REVIEWS_KIND
 from orchestwin.knowledge.layout import (
+    FEEDBACK_CHANGES,
     FEEDBACK_DISCUSSIONS,
     FEEDBACK_FOLDER,
     FEEDBACK_INSIGHTS,
+    FEEDBACK_LEARNING,
     FEEDBACK_REVIEWS,
+    FEEDBACK_TESTS,
     KNOWLEDGE_FOLDER_KIND,
     KNOWLEDGE_INDEX,
     KNOWLEDGE_MANIFEST,
     KNOWLEDGE_SCHEMA_VERSION,
     STAGES,
+    STATE_DOCUMENT,
+    SUPPORTED_SCHEMA_VERSIONS,
     TWIN_DOCUMENT_KIND,
     TWIN_FOLDER,
     schema_document,
     stage_document,
     twin_document,
+)
+from orchestwin.knowledge.research_evidence import EVIDENCE_DOCUMENT, EVIDENCE_KIND
+from orchestwin.knowledge.state import (
+    APPLICATION_KINDS,
+    BROWSER_NAMES,
+    CHANGE_REVIEWS_KIND,
+    CRITERION_STATUSES,
+    CRITIQUE_VERDICTS,
+    DECISIONS,
+    FILE_KINDS,
+    LEARNING_SOURCES,
+    MAX_ACTION_LENGTH,
+    MAX_ADDRESS_LENGTH,
+    MAX_AUTHOR_LENGTH,
+    MAX_BASIS_LENGTH,
+    MAX_BROWSER_VERSION_LENGTH,
+    MAX_BROWSERS,
+    MAX_COMMIT_LENGTH,
+    MAX_CRITERIA_PER_PATH,
+    MAX_DESIGN_REQUEST_LENGTH,
+    MAX_EXPECTED_TEXT_LENGTH,
+    MAX_FILES,
+    MAX_FINDING_LENGTH,
+    MAX_FINDINGS,
+    MAX_FOLDER_TEST_RUNS,
+    MAX_LEARNED_OBSERVATIONS,
+    MAX_MESSAGE_LENGTH,
+    MAX_MODEL_TASKS,
+    MAX_NOTE_LENGTH,
+    MAX_OBSERVATION_LENGTH,
+    MAX_PAGE_TEXT_LENGTH,
+    MAX_PATH_HEADING_LENGTH,
+    MAX_PATH_LENGTH,
+    MAX_REASON_LENGTH,
+    MAX_REQUIREMENTS_REQUEST_LENGTH,
+    MAX_RESULTS,
+    MAX_SCREENSHOT_PATH_LENGTH,
+    MAX_STEP_DETAIL_LENGTH,
+    MAX_STEP_VALUE_LENGTH,
+    MAX_STEPS,
+    MAX_SUMMARY_LENGTH,
+    MAX_TARGET_NAME_LENGTH,
+    MAX_TASK_LENGTH,
+    MAX_TASK_NOTE_LENGTH,
+    MIN_COMMIT_LENGTH,
+    OBSERVATION_CODE_PREFIX,
+    PATH_STATUSES,
+    SEVERITIES,
+    STATE_KIND,
+    STEP_STATUSES,
+    TASK_ORIGINS,
+    TASK_STATUSES,
+    TEST_ACTIONS,
+    TEST_EXPECTATIONS,
+    TEST_REVIEWS_KIND,
+    TEST_ROLES,
+    TWIN_LEARNING_KIND,
+    VERDICTS,
 )
 from orchestwin.models.team_proposals import (
     TEAM_PROPOSAL_SCHEMA_VERSION,
@@ -121,6 +184,7 @@ from orchestwin.twins.personas import (
 from orchestwin.twins.user_twins import (
     USER_MODELING_SNAPSHOT_SCHEMA_VERSION,
     USER_TWIN_PROFILE_SCHEMA_VERSION,
+    UserTwinField,
     UserTwinLifecycleStatus,
 )
 from orchestwin.workflow.gates import HumanGateStatus, HumanGateType
@@ -136,6 +200,10 @@ SCHEMA_NAMES: Final = (
     "reviews",
     "discussions",
     "insights",
+    "state",
+    "changes",
+    "tests",
+    "learning",
 )
 SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
 MAX_DOCUMENT_DEPTH: Final = 64
@@ -158,6 +226,33 @@ _SLUG_PATTERN: Final = r"^[a-z0-9]+(-[a-z0-9]+)*$"
 _SCHEMA_PATH_PATTERN: Final = r"^schema/[a-z]+\.schema\.json$"
 _MOCKUP_SCREEN_CODE_PATTERN: Final = r"^SCR-[0-9]{3}$"
 _MARKUP_REQUIREMENT_CODE_PATTERN: Final = r"^[A-Z]{2,5}-[0-9]{3}$"
+_COMMIT_PATTERN: Final = rf"^[0-9a-f]{{{MIN_COMMIT_LENGTH},{MAX_COMMIT_LENGTH}}}$"
+_LOCALE_PATTERN: Final = r"^[a-z]{2,3}(-[A-Z]{2})?$"
+_SCREENSHOT_SEGMENT: Final = r"(?:[^/\\:.][^/\\:]*|\.|\.[^/\\:.][^/\\:]*|\.\.[^/\\:]+)"
+_SCREENSHOT_PATTERN: Final = rf"^{_SCREENSHOT_SEGMENT}(?:/{_SCREENSHOT_SEGMENT})*$"
+_LABEL_PATTERN: Final = r"^[1-9][0-9]*\.(0|[1-9][0-9]*)$"
+_FEEDBACK_PAIRS: Final = {
+    "tests": ["test_runs"],
+    "test_runs": ["tests"],
+    "learned": ["learned_observations"],
+    "learned_observations": ["learned"],
+}
+_STAGE_ORDER: Final = {"twins": ["team"], "requirements": ["twins"], "design": ["requirements"]}
+_MANIFEST_VERSION_RULES: Final = {
+    "allOf": [
+        {
+            "if": {"properties": {"schema_version": {"const": 2}}, "required": ["schema_version"]},
+            "then": {"properties": {"stages": {"required": list(STAGES)}}},
+        },
+        {
+            "if": {"properties": {"schema_version": {"const": 3}}, "required": ["schema_version"]},
+            "then": {
+                "required": ["progress", "state"],
+                "properties": {"feedback": {"required": ["changes", "change_reviews"]}},
+            },
+        },
+    ]
+}
 _DESIGN_ADDITIONS: Final = {
     "DesignCritique": ("verdict", "quote"),
     "DesignPackageSnapshot": ("generated_mockup", "owner_assertions"),
@@ -200,6 +295,16 @@ type Timestamp = Annotated[
         ),
     ),
 ]
+type CommitHash = Annotated[
+    str,
+    Field(
+        pattern=_COMMIT_PATTERN,
+        description=(
+            f"Hash of a git commit written as {MIN_COMMIT_LENGTH} to {MAX_COMMIT_LENGTH} "
+            "lowercase hexadecimal characters."
+        ),
+    ),
+]
 
 _BY_VALUE: Final = Strict(False)
 _OPTIONAL: Final = BeforeValidator(_never_null)
@@ -215,6 +320,20 @@ _OwnerAssertions = Annotated[
     list[_OwnerAssertion], Field(min_length=1, max_length=MAX_OWNER_ASSERTIONS)
 ]
 _MarkupRequirementCode = Annotated[str, Field(pattern=_MARKUP_REQUIREMENT_CODE_PATTERN)]
+_RequirementCode = Annotated[str, Field(pattern=_code("REQ"))]
+_ScreenCode = Annotated[str, Field(pattern=_code("SCR"))]
+_TaskCode = Annotated[str, Field(pattern=_code("TSK"))]
+_AlternativeCode = Annotated[str, Field(pattern=_code("DES"))]
+_Summary = Annotated[str, Field(max_length=MAX_SUMMARY_LENGTH)]
+_TaskText = Annotated[str, Field(min_length=1, max_length=MAX_TASK_LENGTH)]
+_ChangedPath = Annotated[str, Field(min_length=1, max_length=MAX_PATH_LENGTH)]
+_CriterionCode = Annotated[str, Field(pattern=_code("AC"))]
+_PathCode = Annotated[str, Field(pattern=_code("TP"))]
+_ObservationCode = Annotated[str, Field(pattern=_code(OBSERVATION_CODE_PREFIX))]
+_OwnerNote = Annotated[str, Field(max_length=MAX_TASK_NOTE_LENGTH)]
+_TwinName = Annotated[str, Field(min_length=1)]
+_Statement = Annotated[str, Field(min_length=1, max_length=MAX_OBSERVATION_LENGTH)]
+_Basis = Annotated[str, Field(min_length=1, max_length=MAX_BASIS_LENGTH)]
 
 
 class KnowledgeSchemaError(Exception):
@@ -240,8 +359,9 @@ class KnowledgeSchemaError(Exception):
 class _KnowledgeJsonSchema(GenerateJsonSchema):
     def default_schema(self, schema: core_schema.WithDefaultSchema) -> JsonSchemaValue:
         inner = schema["schema"]
-        while inner["type"] in {"function-before", "nullable"}:
-            inner = inner["schema"]
+        if inner["type"] == "function-before":
+            while inner["type"] in {"function-before", "nullable"}:
+                inner = inner["schema"]
         return self.generate_inner(inner)
 
     def field_title_should_be_set(self, schema: object) -> bool:
@@ -326,6 +446,7 @@ class ProfileObservation(_Record):
 
 
 class PersonaProfile(_Record):
+    archived: bool = False
     schema_version: Literal[PERSONA_PROFILE_SCHEMA_VERSION] = Field(
         description="Version of the persona profile format."
     )
@@ -742,7 +863,52 @@ class DefinitionOfDoneItem(_Record):
 
 
 class RequirementsSpecificationSnapshot(_Record):
-    schema_version: Literal[REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION] = Field(
+    model_config = ConfigDict(
+        json_schema_extra={
+            "allOf": [
+                {
+                    "if": {"properties": {"schema_version": {"const": 1}}},
+                    "then": {
+                        "not": {
+                            "anyOf": [
+                                {"required": ["needs"]},
+                                {"required": ["journeys"]},
+                                *(
+                                    {
+                                        "properties": {
+                                            name: {"contains": {"required": ["need_ids"]}}
+                                        },
+                                        "required": [name],
+                                    }
+                                    for name in ("requirements", "user_stories")
+                                ),
+                                {
+                                    "properties": {
+                                        "scenarios": {
+                                            "contains": {
+                                                "anyOf": [
+                                                    {"required": [field]}
+                                                    for field in (
+                                                        "context",
+                                                        "goal",
+                                                        "criticalities",
+                                                        "sources",
+                                                    )
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "required": ["scenarios"],
+                                },
+                            ]
+                        }
+                    },
+                }
+            ]
+        }
+    )
+
+    schema_version: Literal[1] = Field(
         description="Version of the requirements specification format."
     )
     project_id: Uuid = Field(description="Project the specification belongs to.")
@@ -762,6 +928,81 @@ class RequirementsSpecificationSnapshot(_Record):
     definition_of_done: list[DefinitionOfDoneItem] = Field(
         description="Definition of done items in code order."
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_has_no_chain(cls, value: object) -> object:
+        if (
+            isinstance(value, Mapping)
+            and value.get("schema_version") == 1
+            and (
+                "needs" in value
+                or "journeys" in value
+                or any(
+                    "need_ids" in item
+                    for name in ("requirements", "user_stories")
+                    for item in value.get(name, ())
+                    if isinstance(item, Mapping)
+                )
+                or any(
+                    set(item) & {"context", "goal", "criticalities", "sources"}
+                    for item in value.get("scenarios", ())
+                    if isinstance(item, Mapping)
+                )
+            )
+        ):
+            raise ValueError("schema 1 cannot contain needs or enriched scenarios")
+        return value
+
+
+class UserNeed(_Record):
+    id: Uuid
+    code: str = Field(pattern=_code("NED"))
+    title: str = Field(min_length=1, max_length=200)
+    statement: str = Field(min_length=1, max_length=2000)
+    scenario_ids: list[Uuid] = Field(min_length=1)
+    sources: list[RequirementSource] = Field(min_length=1)
+
+
+class Requirement2(Requirement):
+    need_ids: list[Uuid] = Field(min_length=1)
+
+
+class UserStory2(UserStory):
+    need_ids: list[Uuid] = Field(min_length=1)
+
+
+class UsageScenario2(UsageScenario):
+    context: str = Field(min_length=1, max_length=2000)
+    goal: str = Field(min_length=1, max_length=2000)
+    criticalities: list[Annotated[str, Field(min_length=1, max_length=2000)]]
+    sources: list[RequirementSource] = Field(min_length=1)
+
+
+class JourneyPhase(_Record):
+    title: str = Field(min_length=1, max_length=200)
+    action: str = Field(min_length=1, max_length=2000)
+    touchpoint: Annotated[str, Field(min_length=1, max_length=2000)] | None
+    criticalities: list[Annotated[str, Field(min_length=1, max_length=2000)]]
+    need_ids: list[Uuid] = Field(min_length=1)
+
+
+class UserJourney(_Record):
+    id: Uuid
+    code: str = Field(pattern=_code("JRN"))
+    title: str = Field(min_length=1, max_length=200)
+    scenario_id: Uuid
+    phases: list[JourneyPhase] = Field(min_length=1, max_length=32)
+    sources: list[RequirementSource] = Field(min_length=1)
+
+
+class RequirementsSpecificationSnapshot2(RequirementsSpecificationSnapshot):
+    schema_version: Literal[REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION]
+    needs: list[UserNeed] = Field(min_length=1)
+    requirements: list[Requirement2]
+    user_stories: list[UserStory2]
+    scenarios: list[UsageScenario2]
+    journeys: Annotated[list[UserJourney], _OPTIONAL] = Field(default_factory=list, min_length=1)
 
 
 class DesignContextReference(_Record):
@@ -1139,9 +1380,10 @@ class TwinsDocument(_RevisedStageDocument):
 
 
 class RequirementsDocument(_RevisedStageDocument):
-    specification: RequirementsSpecificationSnapshot = Field(
-        description="Content of the approved requirements specification."
-    )
+    specification: Annotated[
+        RequirementsSpecificationSnapshot | RequirementsSpecificationSnapshot2,
+        Field(discriminator="schema_version"),
+    ] = Field(description="Content of the approved requirements specification.")
 
 
 class DesignDocument(_RevisedStageDocument):
@@ -1158,7 +1400,7 @@ class TwinOrigin(_Record):
 
 
 class TwinDocument(_Record):
-    schema_version: Literal[KNOWLEDGE_SCHEMA_VERSION] = Field(
+    schema_version: Literal[SUPPORTED_SCHEMA_VERSIONS] = Field(
         description="Version of the knowledge folder format."
     )
     kind: Literal[TWIN_DOCUMENT_KIND] = Field(description="Kind of document, a portable user twin.")
@@ -1297,7 +1539,7 @@ class OwnerFindingDecision(_Record):
 
 
 class ReviewsDocument(_Record):
-    schema_version: Literal[KNOWLEDGE_SCHEMA_VERSION] = Field(
+    schema_version: Literal[SUPPORTED_SCHEMA_VERSIONS] = Field(
         description="Version of the knowledge folder format."
     )
     kind: Literal[REVIEWS_KIND] = Field(description="Kind of document, the twin reviews.")
@@ -1406,7 +1648,7 @@ class DesignDiscussion(_Record):
 
 
 class DiscussionsDocument(_Record):
-    schema_version: Literal[KNOWLEDGE_SCHEMA_VERSION] = Field(
+    schema_version: Literal[SUPPORTED_SCHEMA_VERSIONS] = Field(
         description="Version of the knowledge folder format."
     )
     kind: Literal[DISCUSSIONS_KIND] = Field(description="Kind of document, the twin discussions.")
@@ -1447,13 +1689,622 @@ class InsightApplication(_Record):
 
 
 class InsightsDocument(_Record):
-    schema_version: Literal[KNOWLEDGE_SCHEMA_VERSION] = Field(
+    schema_version: Literal[SUPPORTED_SCHEMA_VERSIONS] = Field(
         description="Version of the knowledge folder format."
     )
     kind: Literal[INSIGHTS_KIND] = Field(description="Kind of document, the applied insights.")
     project_id: Uuid = Field(description="Project the applications belong to.")
     applications: list[InsightApplication] = Field(
         description="Applied insights in the order they were applied."
+    )
+
+
+class DesignVersionReference(ApprovedVersionReference):
+    alternative_code: _AlternativeCode | None = Field(
+        description="Code of the alternative the owner selected, like DES-002, or null."
+    )
+
+
+class DevelopmentReference(_Record):
+    requirements: ApprovedVersionReference | None = Field(
+        description=(
+            "Approved requirements version the code is expected to implement, or null while "
+            "the requirements are not approved."
+        )
+    )
+    design: DesignVersionReference | None = Field(
+        description=(
+            "Approved design version the code is expected to implement, or null while the design "
+            "is not approved."
+        )
+    )
+
+
+class AlignedPoint(_Record):
+    commit: CommitHash = Field(description="Commit that the owner decided is the aligned point.")
+    decided_at: Timestamp = Field(description="When the owner decided it.")
+    requirements_version_number: _Version | None = Field(
+        description="Requirements version approved at that moment, or null when none was."
+    )
+    design_version_number: _Version | None = Field(
+        description="Design version approved at that moment, or null when none was."
+    )
+
+
+class ChangedFile(_Record):
+    path: _ChangedPath = Field(description="Path of the file in the repository after the commit.")
+    kind: Literal[FILE_KINDS] = Field(
+        description="Whether the commit added, modified, deleted or renamed the file."
+    )
+    added: _Count = Field(description="Number of lines the commit added to the file.")
+    removed: _Count = Field(description="Number of lines the commit removed from the file.")
+
+
+class RunReference(_Record):
+    requirements_version_number: _Version = Field(
+        description="Approved requirements version the change was reviewed against."
+    )
+    design_version_number: _Version = Field(
+        description="Approved design version the change was reviewed against."
+    )
+    alternative_code: _AlternativeCode | None = Field(
+        description="Code of the selected design alternative, like DES-002, or null."
+    )
+
+
+class ChangeReviewSummary(_Record):
+    run_id: Uuid = Field(description="Latest review run of the change.")
+    reviewed_at: Timestamp = Field(description="When that run completed.")
+    verdict: Literal[VERDICTS] = Field(description="Alignment status decided by the model.")
+    summary: _Summary = Field(description="Summary of the verdict.")
+    reference: RunReference | None = Field(
+        default=None,
+        description=(
+            "Approved versions that run was made against, or null when the Studio did not "
+            "record them; left out by folders published before the reviews could become stale."
+        ),
+    )
+    stale: Annotated[bool | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "True when the reference differs from the requirements version, the design version "
+            "or the selected alternative approved in this folder, so that the twins should "
+            "review the change again; false without a reference or without an approved design; "
+            "left out by folders published before the reviews could become stale."
+        ),
+    )
+
+
+class ChangeDecision(_Record):
+    kind: Literal[DECISIONS] = Field(description="What the owner decided about the change.")
+    decided_at: Timestamp = Field(description="When the owner decided.")
+    note: Annotated[str, Field(max_length=MAX_NOTE_LENGTH)] | None = Field(
+        description="Owner's note on the decision, or null."
+    )
+
+
+class RecordedChange(_Record):
+    commit: CommitHash = Field(description="Full hash of the commit.")
+    parent: CommitHash | None = Field(
+        description="Hash of the parent commit, or null for the first commit."
+    )
+    committed_at: Timestamp = Field(description="When the commit was made.")
+    author: Annotated[str, Field(min_length=1, max_length=MAX_AUTHOR_LENGTH)] | None = Field(
+        description="Author of the commit, or null when it is not known."
+    )
+    message: str = Field(
+        min_length=1,
+        max_length=MAX_MESSAGE_LENGTH,
+        description=f"First {MAX_MESSAGE_LENGTH} characters of the commit message.",
+    )
+    files: list[ChangedFile] = Field(
+        max_length=MAX_FILES, description="Files the commit changed; the diff is never exported."
+    )
+    recorded_at: Timestamp = Field(description="When the Studio recorded the change.")
+    review: ChangeReviewSummary | None = Field(
+        description="Verdict of the latest review run of the change, or null before any review."
+    )
+    decision: ChangeDecision | None = Field(
+        description="Current decision of the owner on the change, or null before any decision."
+    )
+
+
+class CodeSubjects(_Record):
+    requirements: list[_RequirementCode] = Field(
+        description="Codes of the requirements concerned, like REQ-003."
+    )
+    screens: list[_ScreenCode] = Field(description="Codes of the screens concerned, like SCR-002.")
+
+
+class TaskSubjects(CodeSubjects):
+    criteria: Annotated[list[_CriterionCode] | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Codes of the acceptance criteria concerned, like AC-007; left out by folders "
+            "published before the tasks had an origin."
+        ),
+    )
+
+
+class TaskOrigin(_Record):
+    kind: Literal[TASK_ORIGINS] = Field(
+        description=(
+            "CODE_CHANGE for a task that comes from the review of a commit, TEST_RUN for one "
+            "that comes from a run of the acceptance tests, OWNER for one the owner wrote."
+        )
+    )
+    commit: CommitHash | None = Field(
+        description="Commit whose review the task comes from, or null."
+    )
+    test_run_id: Uuid | None = Field(
+        description="Run of the acceptance tests whose review the task comes from, or null."
+    )
+    twin_id: Uuid | None = Field(
+        description=(
+            "User twin whose finding became the task, or null for a task that comes from the "
+            "alignment verdict or from the owner."
+        )
+    )
+    twin_name: _TwinName | None = Field(
+        description="Display name of that user twin when the task was created, or null."
+    )
+    finding: Annotated[str, Field(max_length=MAX_FINDING_LENGTH)] | None = Field(
+        description="Text of that finding, copied when the task was created, or null."
+    )
+
+
+class CodeTask(_Record):
+    code: _TaskCode = Field(description="Code of the task, like TSK-001.")
+    text: _TaskText = Field(description="What the code should do.")
+    about: TaskSubjects = Field(
+        description="Requirements, screens and acceptance criteria the task is about."
+    )
+    origin: Annotated[TaskOrigin | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Where the task comes from; left out by folders published before the tasks had an "
+            "origin, whose tasks all come from the decision on from_commit."
+        ),
+    )
+    from_commit: CommitHash | None = Field(
+        description=(
+            "Commit whose review the task comes from, the same as origin.commit, or null for a "
+            "task that does not come from a commit."
+        )
+    )
+    created_at: Timestamp = Field(description="When the task was created.")
+    status: Literal[TASK_STATUSES] = Field(
+        description=(
+            "OPEN while the task waits; DONE once a later change is decided aligned or the owner "
+            "closes it; DROPPED once the owner decides that it is no longer wanted."
+        )
+    )
+    closed_at: Timestamp | None = Field(
+        default=None,
+        description=(
+            "When the task became DONE or DROPPED, or null; left out by folders published before "
+            "the tasks had an origin."
+        ),
+    )
+    note: _OwnerNote | None = Field(
+        default=None,
+        description=(
+            "Owner's note at the last change of status, or null; left out by folders published "
+            "before the tasks had an origin."
+        ),
+    )
+
+
+class StateDocument(_Record):
+    schema_version: Literal[KNOWLEDGE_SCHEMA_VERSION] = Field(
+        description="Version of the knowledge folder format."
+    )
+    kind: Literal[STATE_KIND] = Field(description="Kind of document, the development state.")
+    project_id: Uuid = Field(description="Project the development belongs to.")
+    reference: DevelopmentReference = Field(
+        description="Approved requirements and design versions the code is expected to implement."
+    )
+    aligned: AlignedPoint | None = Field(
+        description="Newest change the owner decided is aligned, or null before any."
+    )
+    changes: list[RecordedChange] = Field(description="Recorded changes, newest first.")
+    tasks: list[CodeTask] = Field(description="Tasks for the code: open, done and dropped.")
+
+
+class FindingSubject(_Record):
+    requirement: _RequirementCode | None = Field(
+        description="Code of the requirement the finding is about, or null."
+    )
+    screen: _ScreenCode | None = Field(
+        description="Code of the screen the finding is about, or null."
+    )
+    file: _ChangedPath | None = Field(description="Path of the file the finding is about, or null.")
+
+
+class CritiqueFinding(_Record):
+    severity: Literal[SEVERITIES] = Field(description="How much the finding matters to the twin.")
+    text: str = Field(max_length=MAX_FINDING_LENGTH, description="What the twin found.")
+    about: FindingSubject = Field(description="Requirement, screen and file the finding is about.")
+    action: Annotated[str, Field(max_length=MAX_ACTION_LENGTH)] | None = Field(
+        description="What the twin suggests doing, or null."
+    )
+
+
+class ChangeCritique(_Record):
+    twin_id: Uuid = Field(description="User twin that criticized the change.")
+    twin_name: str = Field(min_length=1, description="Display name of that user twin.")
+    verdict: Literal[CRITIQUE_VERDICTS] = Field(
+        description="Whether the change is fine for the twin, worries it or departs from the design."
+    )
+    summary: _Summary = Field(description="Critique of the twin, in the language of the project.")
+    findings: list[CritiqueFinding] = Field(
+        max_length=MAX_FINDINGS, description="Findings of the twin, most important first."
+    )
+
+
+class AlignmentVerdict(_Record):
+    status: Literal[VERDICTS] = Field(description="Alignment status decided by the model.")
+    summary: _Summary = Field(description="Why the model decided that status.")
+    affected: CodeSubjects = Field(description="Requirements and screens the change affects.")
+    design_request: Annotated[str, Field(max_length=MAX_DESIGN_REQUEST_LENGTH)] | None = Field(
+        description="Design change request an owner could send, or null."
+    )
+    requirements_request: (
+        Annotated[str, Field(max_length=MAX_REQUIREMENTS_REQUEST_LENGTH)] | None
+    ) = Field(description="Requirements change request an owner could send, or null.")
+    code_tasks: list[Annotated[str, Field(max_length=MAX_TASK_LENGTH)]] = Field(
+        max_length=MAX_MODEL_TASKS,
+        description="Tasks the model proposes for the code; tasks only once the owner decides.",
+    )
+
+
+class ChangeReviewRun(_Record):
+    id: Uuid = Field(description="Identifier of the review run.")
+    commit: CommitHash = Field(description="Commit that was reviewed.")
+    reviewed_at: Timestamp = Field(description="When the run completed.")
+    locale: str = Field(pattern=_LOCALE_PATTERN, description="Locale of the run, like it-IT.")
+    reference: RunReference = Field(
+        description="Approved versions the change was reviewed against."
+    )
+    critiques: list[ChangeCritique] = Field(description="One critique for every approved twin.")
+    alignment: AlignmentVerdict = Field(description="Alignment verdict of the model.")
+    cost_microusd: _Count = Field(
+        description="Cost of the generations of the run, in microdollars."
+    )
+
+
+class ChangeReviewsDocument(_Record):
+    schema_version: Literal[KNOWLEDGE_SCHEMA_VERSION] = Field(
+        description="Version of the knowledge folder format."
+    )
+    kind: Literal[CHANGE_REVIEWS_KIND] = Field(
+        description="Kind of document, the twin critiques on the code changes."
+    )
+    project_id: Uuid = Field(description="Project the review runs belong to.")
+    runs: list[ChangeReviewRun] = Field(description="Review runs, newest first.")
+
+
+class ApplicationUnderTest(_Record):
+    kind: Literal[APPLICATION_KINDS] = Field(
+        description=(
+            "URL for an address, STATIC for a folder served on the computer that ran the tests."
+        )
+    )
+    address: Annotated[str, Field(min_length=1, max_length=MAX_ADDRESS_LENGTH)] = Field(
+        description=(
+            "The address, or the folder relative to the project root with / separators, or only "
+            "its name when it is outside the project."
+        )
+    )
+
+
+class RunBrowser(_Record):
+    name: Literal[BROWSER_NAMES] = Field(
+        description="chrome for Chrome, Chromium or Edge; firefox for Firefox."
+    )
+    version: Annotated[str, Field(min_length=1, max_length=MAX_BROWSER_VERSION_LENGTH)] = Field(
+        description="Version of the browser that ran the paths."
+    )
+
+
+class VerifiedVersions(_Record):
+    requirements_version_number: _Version = Field(
+        description="Approved requirements version whose acceptance criteria were verified."
+    )
+    design_version_number: _Version = Field(
+        description="Approved design version the application was verified against."
+    )
+    alternative_code: _AlternativeCode | None = Field(
+        description="Code of the selected design alternative, like DES-002, or null."
+    )
+
+
+class CriteriaSummary(_Record):
+    passed: _Count = Field(description="Number of criteria whose every result passed.")
+    failed: _Count = Field(description="Number of criteria with at least one failed result.")
+    blocked: _Count = Field(
+        description="Number of criteria with a blocked result and no failed one."
+    )
+    not_covered: _Count = Field(description="Number of criteria that no path verifies.")
+    not_run: _Count = Field(description="Number of criteria that the run did not verify.")
+
+
+class CriterionOutcome(_Record):
+    code: _CriterionCode = Field(description="Code of the acceptance criterion, like AC-001.")
+    status: Literal[CRITERION_STATUSES] = Field(
+        description="Outcome of the criterion computed from every result that names it."
+    )
+    paths: list[_PathCode] = Field(description="Codes of the paths that name the criterion.")
+
+
+class UncoveredCriterion(_Record):
+    criterion: _CriterionCode = Field(description="Code of the criterion that no path verifies.")
+    reason: Annotated[str, Field(max_length=MAX_REASON_LENGTH)] = Field(
+        description="Why no path verifies it, for example because a person has to judge it."
+    )
+
+
+class StepTarget(_Record):
+    role: Literal[TEST_ROLES] | None = Field(
+        description="Role of the element as a person perceives it, like button, or null for any."
+    )
+    name: Annotated[str, Field(min_length=1, max_length=MAX_TARGET_NAME_LENGTH)] = Field(
+        description="Name or visible text of the element."
+    )
+
+
+class StepExpectation(_Record):
+    kind: Literal[TEST_EXPECTATIONS] = Field(
+        description="What is checked on the page after the action."
+    )
+    target: StepTarget | None = Field(
+        description="Element the expectation is about, or null when it is about a text."
+    )
+    text: Annotated[str, Field(max_length=MAX_EXPECTED_TEXT_LENGTH)] | None = Field(
+        description="Expected text, value, part of the address or part of the title, or null."
+    )
+
+
+class PathStep(_Record):
+    action: Literal[TEST_ACTIONS] = Field(
+        description="What a person does: open a page, click, type, select, press a key or check."
+    )
+    target: StepTarget | None = Field(
+        description="Element the action is done on, or null for an action without one."
+    )
+    value: Annotated[str, Field(max_length=MAX_STEP_VALUE_LENGTH)] | None = Field(
+        description="Page to open, text to type, option to select or key to press, or null."
+    )
+    expect: StepExpectation | None = Field(
+        description="What must be true after the action, or null."
+    )
+
+
+class AcceptancePath(_Record):
+    code: _PathCode = Field(description="Code of the path inside its plan, like TP-001.")
+    heading: Annotated[str, Field(max_length=MAX_PATH_HEADING_LENGTH)] = Field(
+        description="What the path verifies, in words."
+    )
+    criteria: list[_CriterionCode] = Field(
+        min_length=1,
+        max_length=MAX_CRITERIA_PER_PATH,
+        description="Codes of the acceptance criteria the path verifies.",
+    )
+    steps: list[PathStep] = Field(
+        min_length=1,
+        max_length=MAX_STEPS,
+        description="Steps of the path, described by what a person sees; the first one opens.",
+    )
+
+
+class StepOutcome(_Record):
+    index: Annotated[int, Field(ge=1, le=MAX_STEPS)] = Field(
+        description="Position of the step in its path, starting at 1."
+    )
+    status: Literal[STEP_STATUSES] = Field(
+        description="DONE, FAILED, BLOCKED, or SKIPPED after a failed or blocked step."
+    )
+    detail: Annotated[str, Field(max_length=MAX_STEP_DETAIL_LENGTH)] | None = Field(
+        description="Why the step failed or was blocked, or null."
+    )
+    url: str | None = Field(description="Address of the page after the step, or null.")
+    title: str | None = Field(description="Title of the page after the step, or null.")
+    screenshot: (
+        Annotated[str, Field(max_length=MAX_SCREENSHOT_PATH_LENGTH, pattern=_SCREENSHOT_PATTERN)]
+        | None
+    ) = Field(
+        description=(
+            "Path of the screenshot taken after the step, relative to the folder of the run on "
+            "the computer that ran it, or null; screenshots are never copied into this folder."
+        )
+    )
+
+
+class PathResult(_Record):
+    path: AcceptancePath = Field(description="The path that was run.")
+    browser: Literal[BROWSER_NAMES] = Field(description="Browser the path ran in.")
+    status: Literal[PATH_STATUSES] = Field(description="Outcome of the path in that browser.")
+    seconds: Annotated[float, Field(ge=0)] = Field(description="How long the path took.")
+    steps: list[StepOutcome] = Field(
+        max_length=MAX_STEPS, description="Outcome of every step, in the order of the path."
+    )
+    page_text: Annotated[str, Field(max_length=MAX_PAGE_TEXT_LENGTH)] | None = Field(
+        description="Visible text of the page at the end of the path, or null."
+    )
+
+
+class CriterionSubject(_Record):
+    criterion: _CriterionCode | None = Field(
+        description="Code of the acceptance criterion the finding is about, or null."
+    )
+    requirement: _RequirementCode | None = Field(
+        description="Code of the requirement the finding is about, or null."
+    )
+    screen: _ScreenCode | None = Field(
+        description="Code of the screen the finding is about, or null."
+    )
+
+
+class AcceptanceFinding(_Record):
+    severity: Literal[SEVERITIES] = Field(description="How much the finding matters to the twin.")
+    text: str = Field(max_length=MAX_FINDING_LENGTH, description="What the twin found.")
+    about: CriterionSubject = Field(
+        description="Criterion, requirement and screen the finding is about."
+    )
+    action: Annotated[str, Field(max_length=MAX_ACTION_LENGTH)] | None = Field(
+        description="What the twin suggests doing, or null."
+    )
+
+
+class AcceptanceCritique(_Record):
+    twin_id: Uuid = Field(description="User twin that criticized the run.")
+    twin_name: str = Field(min_length=1, description="Display name of that user twin.")
+    verdict: Literal[CRITIQUE_VERDICTS] = Field(
+        description="Whether the results are fine for the twin, worry it or depart from the design."
+    )
+    summary: _Summary = Field(description="Critique of the twin, in the language of the project.")
+    findings: list[AcceptanceFinding] = Field(
+        max_length=MAX_FINDINGS, description="Findings of the twin, most important first."
+    )
+
+
+class AcceptanceRun(_Record):
+    id: Uuid = Field(description="Identifier of the run.")
+    started_at: Timestamp = Field(description="When the run started.")
+    finished_at: Timestamp = Field(description="When the run finished.")
+    recorded_at: Timestamp = Field(description="When the Studio recorded the run.")
+    application: ApplicationUnderTest = Field(description="Application the paths ran on.")
+    browsers: list[RunBrowser] = Field(
+        min_length=1, max_length=MAX_BROWSERS, description="Browsers the paths ran in."
+    )
+    reference: VerifiedVersions = Field(
+        description="Approved versions whose acceptance criteria were verified."
+    )
+    summary: CriteriaSummary = Field(description="Number of criteria for every outcome.")
+    criteria: list[CriterionOutcome] = Field(
+        description="Outcome of every criterion of the approved requirements."
+    )
+    not_covered: list[UncoveredCriterion] = Field(
+        description="Criteria that the plan could not turn into a path, with the reason."
+    )
+    results: list[PathResult] = Field(
+        max_length=MAX_RESULTS, description="Outcome of every path in every browser."
+    )
+    critiques: list[AcceptanceCritique] = Field(
+        description="Latest review of the run, one critique for every approved twin, or empty."
+    )
+    reviewed_at: Timestamp | None = Field(
+        description="When the latest review completed, or null before any review."
+    )
+    cost_microusd: _Count = Field(
+        description="Cost of the plans of the run and of its latest review, in microdollars."
+    )
+
+
+class TestReviewsDocument(_Record):
+    schema_version: Literal[KNOWLEDGE_SCHEMA_VERSION] = Field(
+        description="Version of the knowledge folder format."
+    )
+    kind: Literal[TEST_REVIEWS_KIND] = Field(
+        description="Kind of document, the acceptance tests and the twin critiques on them."
+    )
+    project_id: Uuid = Field(description="Project the runs belong to.")
+    runs: list[AcceptanceRun] = Field(
+        max_length=MAX_FOLDER_TEST_RUNS, description="Runs of the acceptance tests, newest first."
+    )
+
+
+class ObservationSubject(_Record):
+    requirement: _RequirementCode | None = Field(
+        description="Code of the requirement the observation is about, or null."
+    )
+    screen: _ScreenCode | None = Field(
+        description="Code of the screen the observation is about, or null."
+    )
+
+
+class LearnedObservation(_Record):
+    code: _ObservationCode = Field(
+        description="Code of the observation, like OBS-001, unique in the project."
+    )
+    statement: _Statement = Field(
+        description="What the development brought out about the user group of the twin."
+    )
+    basis: _Basis | None = Field(
+        description=(
+            "Critiques, changes or test runs the observation rests on, or null for an observation "
+            "written by the owner."
+        )
+    )
+    source: Literal[LEARNING_SOURCES] = Field(
+        description=(
+            "TWIN_CRITIQUE when the twin proposed it from its own critiques and the owner approved "
+            "it, OWNER when the owner wrote it."
+        )
+    )
+    about: ObservationSubject = Field(
+        description="Requirement and screen the observation is about."
+    )
+    contradicts_profile: _Basis | None = Field(
+        description=(
+            "What the observation contradicts in the approved profile of the twin, or null; the "
+            "profile itself changes only through the Studio."
+        )
+    )
+    added_in_version: _Version = Field(
+        description="Development version of the twin that added the observation."
+    )
+    approved_at: Timestamp = Field(description="When the owner approved or wrote it.")
+    update_id: Uuid | None = Field(
+        description="Update proposal the observation comes from, or null."
+    )
+
+
+class RetiredObservation(_Record):
+    code: _ObservationCode = Field(description="Code of the retired observation.")
+    statement: _Statement = Field(description="What the observation said.")
+    retired_in_version: _Version = Field(
+        description="Development version of the twin that retired the observation."
+    )
+    retired_at: Timestamp = Field(description="When the owner retired it.")
+    reason: _OwnerNote | None = Field(description="Why the owner retired it, or null.")
+
+
+class TwinLearning(_Record):
+    twin_id: Uuid = Field(description="User twin of the approved user modeling.")
+    twin_name: _TwinName = Field(description="Display name of the user twin.")
+    profile_version_number: _Version = Field(
+        description="Approved profile version of the twin, which learning never changes."
+    )
+    development_version_number: _Count = Field(
+        description=(
+            "Development version of the twin: 0 before it learns anything, one more for every "
+            "approved update, every observation written by the owner and every retirement."
+        )
+    )
+    label: str = Field(
+        pattern=_LABEL_PATTERN,
+        description="Profile version and development version joined by a dot, like 1.2.",
+    )
+    observations: list[LearnedObservation] = Field(
+        max_length=MAX_LEARNED_OBSERVATIONS,
+        description="Active learned observations, oldest first.",
+    )
+    retired: list[RetiredObservation] = Field(
+        description="Learned observations that the owner retired."
+    )
+
+
+class TwinLearningDocument(_Record):
+    schema_version: Literal[KNOWLEDGE_SCHEMA_VERSION] = Field(
+        description="Version of the knowledge folder format."
+    )
+    kind: Literal[TWIN_LEARNING_KIND] = Field(
+        description="Kind of document, what the user twins learned during the development."
+    )
+    project_id: Uuid = Field(description="Project the twins belong to.")
+    twins: list[TwinLearning] = Field(
+        description="One entry for every twin of the approved user modeling, in its order."
     )
 
 
@@ -1476,7 +2327,10 @@ class ProjectIdentity(_Record):
     id: Uuid = Field(description="Identifier of the project.")
     name: str = Field(description="Name of the project.")
     language: str | None = Field(
-        description="ISO 639-1 code of the dominant language of the requirements, or null."
+        description=(
+            "ISO 639-1 code of the dominant language of the requirements, or of the brief while "
+            "the requirements do not show one, or null."
+        )
     )
 
 
@@ -1508,11 +2362,29 @@ class StageEntry(_Record):
 
 
 class StageEntries(_Record):
+    model_config = ConfigDict(json_schema_extra={"dependentRequired": _STAGE_ORDER})
+
     brief: StageEntry = Field(description="Approved project brief.")
-    team: StageEntry = Field(description="Approved agent team.")
-    twins: StageEntry = Field(description="Approved user modeling.")
-    requirements: StageEntry = Field(description="Approved requirements specification.")
-    design: StageEntry = Field(description="Approved design package.")
+    team: Annotated[StageEntry | None, _OPTIONAL] = Field(
+        default=None, description="Approved agent team, left out while it is not approved."
+    )
+    twins: Annotated[StageEntry | None, _OPTIONAL] = Field(
+        default=None, description="Approved user modeling, left out while it is not approved."
+    )
+    requirements: Annotated[StageEntry | None, _OPTIONAL] = Field(
+        default=None,
+        description="Approved requirements specification, left out while it is not approved.",
+    )
+    design: Annotated[StageEntry | None, _OPTIONAL] = Field(
+        default=None, description="Approved design package, left out while it is not approved."
+    )
+
+    @model_validator(mode="after")
+    def _approved_in_order(self) -> StageEntries:
+        given = [getattr(self, stage) is not None for stage in STAGES]
+        if given != sorted(given, reverse=True):
+            raise ValueError("a stage is present only when every stage before it is present")
+        return self
 
 
 class TwinSummary(_Record):
@@ -1554,21 +2426,111 @@ class StageViews(_Record):
 
 
 class FolderViews(_Record):
-    requirements: StageViews = Field(description="Views of the requirements.")
-    design: StageViews = Field(description="Views of the design.")
+    requirements: Annotated[StageViews | None, _OPTIONAL] = Field(
+        default=None,
+        description="Views of the requirements, left out while the requirements are not approved.",
+    )
+    design: Annotated[StageViews | None, _OPTIONAL] = Field(
+        default=None, description="Views of the design, left out while the design is not approved."
+    )
 
 
 class FeedbackSummary(_Record):
+    model_config = ConfigDict(json_schema_extra={"dependentRequired": _FEEDBACK_PAIRS})
+
     folder: str = Field(description="Folder that holds the twin feedback.")
-    text: str = Field(description="Path of the Markdown summary of the feedback.")
-    reviews_document: str = Field(description="Path of the reviews document.")
-    discussions_document: str = Field(description="Path of the discussions document.")
-    insights_document: str = Field(description="Path of the applied insights document.")
+    text: str | None = Field(
+        description="Path of the Markdown summary of the feedback, or null without the design."
+    )
+    reviews_document: str | None = Field(
+        description="Path of the reviews document, or null without the design."
+    )
+    discussions_document: str | None = Field(
+        description="Path of the discussions document, or null without the design."
+    )
+    insights_document: str | None = Field(
+        description="Path of the applied insights document, or null without the design."
+    )
     reviews: _Count = Field(description="Number of review runs.")
     findings: _Count = Field(description="Number of findings across the review runs.")
     decisions: _Count = Field(description="Number of findings with a current owner decision.")
     discussions: _Count = Field(description="Number of approved discussions.")
     insights: _Count = Field(description="Number of applied insights.")
+    changes: Annotated[str | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Path of the document of the twin critiques on the code changes; left out by "
+            "folders of schema 2."
+        ),
+    )
+    change_reviews: Annotated[_Count | None, _OPTIONAL] = Field(
+        default=None,
+        description="Number of review runs on the code changes; left out by folders of schema 2.",
+    )
+    tests: Annotated[Literal[FEEDBACK_TESTS] | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Path of the document of the acceptance test runs and of the twin critiques on them; "
+            "left out, together with test_runs, by folders published before the acceptance tests."
+        ),
+    )
+    test_runs: Annotated[_Count | None, _OPTIONAL] = Field(
+        default=None,
+        description="Number of acceptance test runs in that document, written together with tests.",
+    )
+    learned: Annotated[Literal[FEEDBACK_LEARNING] | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Path of the document of what the user twins learned during the development; left "
+            "out, together with learned_observations, by folders without the user twins and by "
+            "folders published before the twins could learn."
+        ),
+    )
+    learned_observations: Annotated[_Count | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Number of active learned observations of every twin in that document, written "
+            "together with learned."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _documents_with_their_count(self) -> FeedbackSummary:
+        if (self.tests is None) != (self.test_runs is None):
+            raise ValueError("tests and test_runs are written together or both left out")
+        if (self.learned is None) != (self.learned_observations is None):
+            raise ValueError(
+                "learned and learned_observations are written together or both left out"
+            )
+        return self
+
+
+class ProgressEntry(_Record):
+    approved: list[Literal[STAGES]] = Field(
+        description="Approved stages the folder holds, in stage order."
+    )
+    pending: Literal[STAGES] | None = Field(
+        description="First stage that is not approved yet, or null when every stage is approved."
+    )
+    complete: bool = Field(description="True when the five stages are approved.")
+
+
+class StateEntry(_Record):
+    document: str = Field(description="Path of the JSON document of the development state.")
+    text: str = Field(description="Path of the Markdown text of the development state.")
+    changes: _Count = Field(description="Number of recorded changes.")
+    pending_changes: _Count = Field(description="Number of changes after the aligned point.")
+    stale_reviews: Annotated[_Count | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Number of changes after the aligned point whose latest review is stale; left out by "
+            "folders published before the reviews could become stale."
+        ),
+    )
+    aligned_commit: CommitHash | None = Field(
+        description="Commit of the aligned point, or null before any."
+    )
+    open_tasks: _Count = Field(description="Number of open tasks for the code.")
 
 
 class StableIdentifier(_Record):
@@ -1585,8 +2547,13 @@ class StableIdentifier(_Record):
 
 
 class KnowledgeManifest(_Record):
-    schema_version: Literal[KNOWLEDGE_SCHEMA_VERSION] = Field(
-        description="Version of the knowledge folder format."
+    model_config = ConfigDict(json_schema_extra=_MANIFEST_VERSION_RULES)
+
+    schema_version: Literal[SUPPORTED_SCHEMA_VERSIONS] = Field(
+        description=(
+            "Version of the knowledge folder format: 3 holds the approved stages so far and the "
+            "development state, 2 holds the five stages."
+        )
     )
     kind: Literal[KNOWLEDGE_FOLDER_KIND] = Field(
         description="Kind of document, a knowledge folder."
@@ -1598,12 +2565,29 @@ class KnowledgeManifest(_Record):
     generator: FolderGenerator = Field(description="Application that wrote the folder.")
     package: PackageVersion = Field(description="Version and digest of the folder.")
     project: ProjectIdentity = Field(description="Project the folder describes.")
-    stages: StageEntries = Field(description="Approved version of every stage.")
+    stages: StageEntries = Field(
+        description=(
+            "Approved version of every approved stage; a stage appears only after the stages "
+            "before it."
+        )
+    )
+    progress: Annotated[ProgressEntry | None, _OPTIONAL] = Field(
+        default=None,
+        description="Approved stages and the next one; left out by folders of schema 2.",
+    )
+    state: Annotated[StateEntry | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Where the development state is and a summary of it; left out by folders of schema 2."
+        ),
+    )
     twins: list[TwinSummary] = Field(description="Portable user twins of the folder.")
-    views: FolderViews = Field(description="Texts, tables, diagrams and mockups by stage.")
+    views: FolderViews = Field(
+        description="Texts, tables, diagrams and mockups of the approved requirements and design."
+    )
     feedback: FeedbackSummary = Field(description="Where the twin feedback is and how much.")
     identifiers: list[StableIdentifier] = Field(
-        description="Code and identifier of every requirement and design item."
+        description="Code and identifier of every approved requirement and design item."
     )
     schemas: dict[str, Annotated[str, Field(pattern=_SCHEMA_PATH_PATTERN)]] = Field(
         description="Path of the JSON Schema of every document kind, keyed by schema name."
@@ -1611,6 +2595,111 @@ class KnowledgeManifest(_Record):
     files: dict[str, Sha256] = Field(
         description="SHA-256 digest of every file, except orchestwin.json and the index."
     )
+
+    @model_validator(mode="after")
+    def _fits_its_version(self) -> KnowledgeManifest:
+        if self.schema_version == 2:
+            if any(getattr(self.stages, stage) is None for stage in STAGES):
+                raise ValueError("a folder of schema 2 holds the five stages")
+            return self
+        if self.progress is None or self.state is None:
+            raise ValueError("a folder of schema 3 states its progress and its development state")
+        if self.feedback.changes is None or self.feedback.change_reviews is None:
+            raise ValueError("a folder of schema 3 states where its change critiques are")
+        return self
+
+
+class ResearchEvidenceCitation(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    source_id: Uuid
+    source_version: _Version
+    content_hash: Sha256
+    quote: Annotated[str, Field(min_length=1, max_length=1000)]
+    start: _Count
+    end: _Count
+    start_line: _Version
+    end_line: _Version
+
+    @model_validator(mode="after")
+    def _interval(self):
+        if self.end != self.start + len(self.quote) or self.end_line < self.start_line:
+            raise ValueError("citation interval does not match the exact quote")
+        if "\r" in self.quote or self.end_line - self.start_line != self.quote[:-1].count("\n"):
+            raise ValueError("citation lines do not match its preserved LF text")
+        return self
+
+
+class ResearchEvidenceLink(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    twin_id: Uuid
+    twin_version: _Version
+    field: Annotated[UserTwinField, _BY_VALUE]
+    effect: Literal["SUPPORTS", "CONTRADICTS", "ADDS"]
+    citation: ResearchEvidenceCitation
+    status: Literal["ACTIVE", "RETIRED"]
+    imported_from: dict[str, object] | None = None
+
+
+class ResearchEvidenceVersion(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    id: Uuid
+    code: Annotated[str, Field(pattern=_code("EVD"))]
+    version: _Version
+    title: str
+    source_kind: Annotated[EvidenceSourceKind, _BY_VALUE]
+    source_ref: str
+    context: str
+    method: str
+    collected_at: str | None
+    limitations: str
+    empirical: bool
+    content_hash: Sha256
+    character_count: Annotated[int, Field(ge=1, le=24000)]
+    byte_count: Annotated[int, Field(ge=1, le=32768)]
+    created_at: Timestamp
+    status: Literal["ACTIVE", "RETIRED"]
+    retired_at: Timestamp | None
+    retired_reason: str | None
+    text_available: bool
+    imported_from: dict[str, object] | None = None
+
+    @model_validator(mode="after")
+    def _nature(self):
+        if (self.source_kind is EvidenceSourceKind.EMPIRICAL_RESEARCH) != self.empirical:
+            raise ValueError("declared empirical nature must match its source kind")
+        if self.empirical and (not self.method.strip() or not self.limitations.strip()):
+            raise ValueError("empirical sources require their method and limitations")
+        if self.status == "RETIRED" and self.retired_at is None:
+            raise ValueError("retired source requires its retirement time")
+        return self
+
+
+class ResearchEvidenceDocument(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    kind: Literal[EVIDENCE_KIND]
+    schema_version: Literal[1]
+    project_id: Uuid
+    evidence: Annotated[list[ResearchEvidenceVersion], Field(max_length=50)]
+    citations: list[ResearchEvidenceLink]
+    omitted_sections: list[dict[str, object]] | None = None
+
+    @model_validator(mode="after")
+    def _references(self):
+        sources = {(item.id, item.version): item for item in self.evidence}
+        if len(sources) != len(self.evidence):
+            raise ValueError("evidence source versions must be unique")
+        for item in self.citations:
+            quote = item.citation
+            source = sources.get((quote.source_id, quote.source_version))
+            if (
+                source is None
+                or quote.content_hash != source.content_hash
+                or quote.end > source.character_count
+            ):
+                raise ValueError("citation does not match its source version")
+            if source.status == "RETIRED" and item.status == "ACTIVE":
+                raise ValueError("a retired source cannot support an active citation")
+        return self
 
 
 _MODELS: Final = {
@@ -1624,14 +2713,24 @@ _MODELS: Final = {
     "reviews": ReviewsDocument,
     "discussions": DiscussionsDocument,
     "insights": InsightsDocument,
+    "state": StateDocument,
+    "changes": ChangeReviewsDocument,
+    "tests": TestReviewsDocument,
+    "learning": TwinLearningDocument,
+    "evidence": ResearchEvidenceDocument,
 }
 _WRITTEN_BY: Final = "OrchesTwin Studio writes it when it exports the knowledge folder."
 _SCHEMA_TEXTS: Final = {
+    "evidence": (
+        "Research evidence excerpts",
+        "Exact approved quotations, source provenance and limits. Original documents are excluded; owner approval does not establish empirical research or human validation.",
+    ),
     "manifest": (
         "Knowledge folder manifest",
         f"Machine-readable index of a knowledge folder, stored in {KNOWLEDGE_MANIFEST} at the "
-        "folder root: approved stages, user twins, views, twin feedback, stable identifiers, "
-        f"schemas and the SHA-256 digest of every file. {_WRITTEN_BY}",
+        "folder root: approved stages, progress, development state, user twins, views, twin "
+        "feedback, stable identifiers, schemas and the SHA-256 digest of every file. "
+        f"{_WRITTEN_BY}",
     ),
     "brief": (
         "Approved project brief",
@@ -1683,6 +2782,39 @@ _SCHEMA_TEXTS: Final = {
         "The twin feedback that the owner applied to the brief, the requirements or the design, "
         f"stored in {FEEDBACK_INSIGHTS}. {_WRITTEN_BY}",
     ),
+    "state": (
+        "Development state",
+        "The development of the project outside the Studio, stored in "
+        f"{STATE_DOCUMENT}: the approved requirements and design versions the code is expected "
+        "to implement, the commits recorded in the Studio with their latest verdict, the "
+        "versions that verdict was made against and the owner's decision, the aligned point and "
+        "the tasks for the code with where each comes from. The diff of a commit is never "
+        f"exported. {_WRITTEN_BY}",
+    ),
+    "changes": (
+        "Twin critiques on the code changes",
+        "The review runs in which every approved user twin criticized a recorded commit and the "
+        f"model gave one alignment verdict, stored in {FEEDBACK_CHANGES}; every critique is a "
+        f"model inference, not empirical evidence. {_WRITTEN_BY}",
+    ),
+    "tests": (
+        "Acceptance tests and twin critiques on them",
+        "The runs in which the command line ut test verified the approved acceptance criteria on "
+        "the application developed outside the Studio, in the browsers of the computer that ran "
+        "them: the paths with their steps, the outcome of every step, path and criterion, and the "
+        f"latest critiques of the approved user twins on every run, stored in {FEEDBACK_TESTS}, "
+        "newest first. Screenshots are never exported; every critique is a model inference, not "
+        f"empirical evidence. {_WRITTEN_BY}",
+    ),
+    "learning": (
+        "What the user twins learned",
+        "What every approved user twin learned during the development of the application, "
+        f"stored in {FEEDBACK_LEARNING}: the observations about its user group that the owner "
+        "approved from the critiques of the twin or wrote directly, with the development version "
+        "of the twin that added them, and the observations the owner retired. The approved "
+        "profile of a twin never changes here; every observation is an assumption about a "
+        f"modelled user, not empirical evidence. {_WRITTEN_BY}",
+    ),
 }
 _DOCUMENT_PATHS: Final = {
     KNOWLEDGE_MANIFEST: "manifest",
@@ -1690,6 +2822,11 @@ _DOCUMENT_PATHS: Final = {
     FEEDBACK_REVIEWS: "reviews",
     FEEDBACK_DISCUSSIONS: "discussions",
     FEEDBACK_INSIGHTS: "insights",
+    STATE_DOCUMENT: "state",
+    FEEDBACK_CHANGES: "changes",
+    FEEDBACK_TESTS: "tests",
+    FEEDBACK_LEARNING: "learning",
+    EVIDENCE_DOCUMENT: "evidence",
 }
 
 
@@ -1756,17 +2893,28 @@ def _published_schema(name: str, *, design_additions: bool) -> dict[str, object]
     }
 
 
-def knowledge_schemas(*, design_additions: bool = False) -> dict[str, dict[str, object]]:
-    return {
-        name: _published_schema(name, design_additions=design_additions) for name in SCHEMA_NAMES
-    }
+def knowledge_schemas(
+    *, design_additions: bool = False, research_evidence: bool = False, only_evidence: bool = False
+) -> dict[str, dict[str, object]]:
+    names = (
+        ("evidence",)
+        if only_evidence
+        else (*SCHEMA_NAMES, *(("evidence",) if research_evidence else ()))
+    )
+    return {name: _published_schema(name, design_additions=design_additions) for name in names}
 
 
-def schema_files(*, design_additions: bool = False) -> dict[str, str]:
+def schema_files(
+    *, design_additions: bool = False, research_evidence: bool = False, only_evidence: bool = False
+) -> dict[str, str]:
     return {
         schema_document(name): json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False)
         + "\n"
-        for name, schema in knowledge_schemas(design_additions=design_additions).items()
+        for name, schema in knowledge_schemas(
+            design_additions=design_additions,
+            research_evidence=research_evidence,
+            only_evidence=only_evidence,
+        ).items()
     }
 
 
@@ -1832,10 +2980,18 @@ def _validate(name: str, payload: object, path: str | None) -> None:
         model.model_validate(payload)
     except ValidationError as error:
         first = error.errors(include_url=False)[0]
+        location = first["loc"]
+        if (
+            name == "requirements"
+            and len(location) > 1
+            and location[0] == "specification"
+            and location[1] in (1, 2)
+        ):
+            location = (location[0], *location[2:])
         raise KnowledgeSchemaError(
             code="DOCUMENT_INVALID",
             document=name,
-            location=_location(first["loc"]),
+            location=_location(location),
             message=first["msg"],
             path=path,
         ) from error

@@ -31,18 +31,17 @@ NO_MODEL = (
 )
 REFUSALS = {
     ("UX_DESIGNER_REQUIRED", "en"): (
-        "The design alternatives were not prepared: the approved team of this project has no "
-        "UX/UI designer, the specialist who prepares them (UX_DESIGNER_REQUIRED). A team "
-        "approved before 29 September 2026 may lack the designer; new teams always have one. "
-        "Change the team and approve it again in the web Studio, then launch `ut design` "
-        "again.\n"
+        "The design alternatives were not prepared: in the approved perspectives of this "
+        "project User experience (UX) is not fully applied (UX_DESIGNER_REQUIRED). It can "
+        "happen with perspectives approved before 29 September 2026. Prepare the perspectives "
+        "again and approve them in the web Studio, then launch `ut design` again.\n"
     ),
     ("UX_DESIGNER_REQUIRED", "it"): (
-        "Le alternative di design non sono state preparate: la squadra approvata di questo "
-        "progetto non ha il designer UX/UI, lo specialista che le prepara (UX_DESIGNER_REQUIRED). "
-        "Una squadra approvata prima del 29 settembre 2026 può non averlo; le squadre nuove lo "
-        "hanno sempre. Cambia la squadra e approvala di nuovo nello Studio web, poi rilancia "
-        "`ut design`.\n"
+        "Le alternative di design non sono state preparate: nelle prospettive approvate di "
+        "questo progetto l'Esperienza d'uso (UX) non è applicata per intero "
+        "(UX_DESIGNER_REQUIRED). Può succedere con le prospettive approvate prima del 29 "
+        "settembre 2026. Prepara di nuovo le prospettive e approvale nello Studio web, poi "
+        "rilancia `ut design`.\n"
     ),
     ("GROUNDED_INPUT_REQUIRED", "en"): (
         "The design alternatives were not prepared: the approved steps do not give the model "
@@ -237,6 +236,77 @@ def test_a_rejected_mockup_can_be_drawn_again_with_a_new_gesture(tmp_path: Path)
     assert run.output.count("Go ahead with this spending?") == 2
     assert drawn == ["DES-001", "DES-002", "DES-001"]
     assert len(run.opened) == 2
+
+
+@pytest.mark.parametrize(
+    ("language", "line"),
+    [
+        (
+            "en",
+            "This generation runs on the Claude subscription: it spends no credit. Estimated "
+            "time: about 13 min.",
+        ),
+        (
+            "it",
+            "Questa generazione usa l'abbonamento di Claude: non spende credito. Tempo stimato: "
+            "circa 13 min.",
+        ),
+    ],
+)
+def test_on_the_subscription_the_first_design_starts_without_a_question(
+    tmp_path: Path, language: str, line: str
+) -> None:
+    with design_session(tmp_path, language=language, billing="SUBSCRIPTION") as session:
+        run = session.ut("design", answers=["leave"], language=language)
+        mockups = session.count("POST", MOCKUP_JOBS)
+
+    assert run.status == 0, run.errors
+    assert line in run.output.splitlines()
+    assert "USD" not in run.output
+    assert "[Y/n]" not in run.output and "[S/n]" not in run.output
+    assert mockups == 2
+
+
+@pytest.mark.parametrize(
+    ("language", "sentence"),
+    [
+        (
+            "en",
+            "The other alternatives remain usable. Drawing DES-001 again runs on the Claude "
+            "subscription and spends no credit (about 10 min): `ut design` offers it in its menu.",
+        ),
+        (
+            "it",
+            "Le altre alternative restano utilizzabili. Disegnare di nuovo DES-001 usa "
+            "l'abbonamento di Claude e non spende credito (circa 10 min): `ut design` te lo "
+            "propone nel menu.",
+        ),
+    ],
+)
+def test_on_the_subscription_a_rejected_mockup_is_offered_again_without_an_amount(
+    tmp_path: Path, language: str, sentence: str
+) -> None:
+    with design_session(tmp_path, language=language, billing="SUBSCRIPTION") as session:
+        session.studio.fail_job("MOCKUP", code="MOCKUP_REJECTED", rejected=True)
+        run = session.ut("design", answers=["leave"], language=language)
+
+    assert run.status == 0, run.errors
+    assert sentence in run.output
+    assert "USD" not in run.output
+
+
+@pytest.mark.parametrize("billing", ["MIXED", "API"])
+def test_with_paid_routes_a_rejected_mockup_names_its_amount(tmp_path: Path, billing: str) -> None:
+    with design_session(tmp_path, billing=billing) as session:
+        session.studio.fail_job("MOCKUP", code="MOCKUP_REJECTED", rejected=True)
+        run = session.ut("design", answers=["y", "leave"])
+
+    assert run.status == 0, run.errors
+    assert run.output.count("Go ahead with this spending? [Y/n]") == 1
+    assert (
+        "The other alternatives remain usable. Drawing DES-001 again is a new spending "
+        "(1.30-1.60 USD, about 10 min): `ut design` offers it in its menu." in run.output
+    )
 
 
 def test_a_lost_mockup_is_said_and_offered_again(tmp_path: Path) -> None:

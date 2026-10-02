@@ -1,18 +1,142 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Final
+from typing import Any, Final
 
+from orchestwin.agents.perspectives import (
+    AspectView,
+    GuidanceStage,
+    Perspective,
+    PerspectiveAspect,
+    PerspectiveStanding,
+    PerspectiveView,
+    perspective_guidance,
+    perspective_views,
+)
 from orchestwin.agents.proposals import TeamProposalVersion
+from orchestwin.agents.selection_rules import RuleEvidence
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.visual_catalog import ARCHETYPES, LayoutArchetype
-from orchestwin.knowledge.layout import STAGE_LABELS, STAGES, VIEW_STAGES
-from orchestwin.projects.briefs import ProjectBriefVersion
+from orchestwin.knowledge.layout import (
+    STAGE_LABELS,
+    STAGES,
+    VIEW_STAGES,
+    present_stages,
+    twin_slug,
+    twin_text,
+)
+from orchestwin.projects.briefs import BriefField, ProjectBriefVersion
 from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
+from orchestwin.twins.persistence.snapshots import (
+    persona_version_from_snapshot,
+    user_twin_version_from_snapshot,
+)
+from orchestwin.twins.representation import twin_view
 from orchestwin.twins.user_twins import UserModelingSnapshotVersion
 from orchestwin.workflow.gates import HumanGate
 
 UNSET: Final = "not provided"
+OVERVIEW_DESCRIPTION_LENGTH: Final = 300
+OVERVIEW_REQUIREMENTS: Final = 12
+_ROLE_KEY: Final = "user_twin.role"
+_MUST: Final = "MUST"
+_VERIFIED: Final = "- How it is verified: {criteria}, which `ut test` checks in the browsers."
+_OVERVIEW_TEXTS: Final[dict[str, dict[str, Any]]] = {
+    "en": {
+        "heading": "## In short",
+        "project": "- Project: {name}.",
+        "described": "- Project: {name}. {description}",
+        "twins": "- Who it is for: {twins}.",
+        "must": "- What it must do:",
+        "more": ("and 1 more.", "and {count} more."),
+        "design": "- Chosen design: {alternative}.",
+        "product": "{alternative} (product name: {product})",
+        "criteria": (_VERIFIED, _VERIFIED),
+        "criterion_words": ("acceptance criterion", "acceptance criteria"),
+    },
+    "it": {
+        "heading": "## In breve",
+        "project": "- Progetto: {name}.",
+        "described": "- Progetto: {name}. {description}",
+        "twins": "- Per chi è: {twins}.",
+        "must": "- Cosa deve fare:",
+        "more": ("e un altro.", "e altri {count}."),
+        "design": "- Design scelto: {alternative}.",
+        "product": "{alternative} (nome del prodotto: {product})",
+        "criteria": (
+            "- Come si verifica: {criteria}, controllato da `ut test` nei browser.",
+            "- Come si verifica: {criteria}, controllati da `ut test` nei browser.",
+        ),
+        "criterion_words": ("criterio di accettazione", "criteri di accettazione"),
+    },
+}
+_STEP_NAMES: Final = ", ".join(STAGE_LABELS[stage] for stage in STAGES)
+_PERSPECTIVES_INTRODUCTION: Final = (
+    "The perspectives are the competences through which this project is looked at. Each applied "
+    "perspective adds its considerations when the requirements and the design alternatives are "
+    "written."
+)
+_PERSPECTIVE_TEXTS: Final[dict[Perspective, tuple[str, str]]] = {
+    Perspective.UX: (
+        "User experience (UX)",
+        "Looks at the project through the eyes of the people who will use it: goals, context, "
+        "places where they may get stuck.",
+    ),
+    Perspective.ACCESSIBILITY: (
+        "Accessibility",
+        "Checks that everyone can use it: keyboard, contrast, readable text, clear messages.",
+    ),
+    Perspective.SOFTWARE_ENGINEERING: (
+        "Software engineering",
+        "Keeps the project feasible within its technical constraints, time and budget, and "
+        "verifiable.",
+    ),
+    Perspective.PRODUCT: (
+        "Product",
+        "Keeps the priorities: what the first version needs and what can wait.",
+    ),
+    Perspective.SECURITY: ("Security", "Protects data and access: who may see and do what."),
+}
+_ASPECT_NAMES: Final[dict[PerspectiveAspect, str]] = {
+    PerspectiveAspect.WEB: "Web interface",
+    PerspectiveAspect.SERVICES: "Services and data",
+    PerspectiveAspect.MOBILE: "Mobile",
+    PerspectiveAspect.INTEGRATIONS: "Connections to other systems",
+}
+_ASPECT_OF: Final = "aspect of software engineering"
+_BRIEF_FIELD_NAMES: Final[dict[BriefField, str]] = {
+    BriefField.NAME: "Name",
+    BriefField.DESCRIPTION: "The idea",
+    BriefField.PROBLEM: "The problem",
+    BriefField.GOALS: "Goals",
+    BriefField.TARGET_USERS: "For whom",
+    BriefField.DOMAIN: "Context",
+    BriefField.TECHNICAL_CONSTRAINTS: "Technical constraints",
+    BriefField.TEMPORAL_CONSTRAINTS: "Timing",
+    BriefField.BUDGET: "Budget",
+    BriefField.FUNCTIONAL_REQUIREMENTS: "What it must do",
+    BriefField.NON_FUNCTIONAL_REQUIREMENTS: "Expected qualities",
+    BriefField.RISKS: "Risks",
+    BriefField.STAKEHOLDERS: "People involved",
+    BriefField.AVAILABLE_ARTIFACTS: "Available materials",
+    BriefField.DEFINITION_OF_DONE: "When it is done",
+}
+_ALWAYS_APPLIED: Final = "Always applied"
+_PREPARED_EARLIER: Final = "This version was prepared before this perspective became always applied"
+_OPTIONAL_APPLIED: Final = "Applied, optional"
+_OPTIONAL: Final = "Optional"
+_STANDING_TEXTS: Final[dict[PerspectiveStanding, str]] = {
+    PerspectiveStanding.REQUIRED: "The brief asks for it{requested}",
+    PerspectiveStanding.EXCLUDED: "The brief rules it out{excluded}",
+    PerspectiveStanding.CONTESTED: (
+        "The brief says two different things: the owner decides. It rules it out{excluded} and "
+        "also calls for it{requested}"
+    ),
+}
+_GUIDANCE_HEADINGS: Final = (
+    (GuidanceStage.DEFINITION, "In the definition:"),
+    (GuidanceStage.DESIGN, "In the design:"),
+)
 
 
 def plain_text(value: object) -> str:
@@ -33,6 +157,32 @@ def plain_text(value: object) -> str:
 
 def title_text(value: str) -> str:
     return value.replace("_", " ").capitalize()
+
+
+def _inline(value: object) -> str:
+    return " ".join(str(value).split())
+
+
+def _bare(value: object) -> str:
+    return _inline(value).rstrip(".")
+
+
+def _sentence(value: object) -> str:
+    text = _inline(value)
+    return text if not text or text.endswith((".", "!", "?", "…")) else f"{text}."
+
+
+def _lowered(value: object) -> str:
+    return str(value).replace("_", " ").lower()
+
+
+def excerpt(text: str, limit: int = OVERVIEW_DESCRIPTION_LENGTH) -> str:
+    flat = _inline(text)
+    if len(flat) <= limit:
+        return flat
+    head = flat[: limit + 1]
+    cut = head.rsplit(" ", 1)[0] if " " in head else flat[:limit]
+    return f"{cut.rstrip(' ,;:.')}…"
 
 
 def markdown_bullets(items: Iterable[object]) -> list[str]:
@@ -96,7 +246,7 @@ def _version_lines(label: str, version: object, gate: HumanGate) -> list[str]:
         f"# {label}",
         "",
         f"Version {version.version_number}, content hash `{version.content_hash}`, "
-        f"approved by gate {gate.gate_type.value} on {gate.updated_at.isoformat()}.",
+        f"approved by the owner on {gate.updated_at.isoformat()}.",
         "",
     ]
 
@@ -117,53 +267,97 @@ def brief_markdown(version: ProjectBriefVersion, gate: HumanGate) -> str:
     return "\n".join(lines)
 
 
+def _evidence_text(evidence: RuleEvidence) -> str:
+    if not evidence.terms:
+        return ""
+    terms = ", ".join(f"“{term}”" for term in evidence.terms)
+    fields = ", ".join(_BRIEF_FIELD_NAMES[field] for field in evidence.fields)
+    return f" ({terms} in {fields})"
+
+
+def _standing_text(unit: PerspectiveView | AspectView) -> str:
+    if unit.standing is PerspectiveStanding.ALWAYS:
+        return _ALWAYS_APPLIED if unit.applied else _PREPARED_EARLIER
+    if unit.standing is PerspectiveStanding.OPTIONAL:
+        return _OPTIONAL_APPLIED if unit.applied else _OPTIONAL
+    return _STANDING_TEXTS[unit.standing].format(
+        requested=_evidence_text(unit.requested), excluded=_evidence_text(unit.excluded)
+    )
+
+
+def _considerations(version: TeamProposalVersion) -> dict[GuidanceStage, dict[str, list[str]]]:
+    selected = version.proposal.selected_agent_ids
+    return {
+        stage: {
+            str(item["perspective"]): [str(sentence) for sentence in item["considerations"]]
+            for item in perspective_guidance(selected, stage)
+        }
+        for stage, _heading in _GUIDANCE_HEADINGS
+    }
+
+
+def _applied_perspective_lines(
+    view: PerspectiveView, considerations: Mapping[GuidanceStage, Mapping[str, list[str]]]
+) -> list[str]:
+    name, line = _PERSPECTIVE_TEXTS[view.key]
+    lines = [f"### {name}", "", line, "", f"{_standing_text(view)}.", ""]
+    aspects = [aspect for aspect in view.aspects if aspect.applied]
+    if aspects:
+        lines.extend(
+            [
+                "Applied aspects:",
+                *(f"- {_ASPECT_NAMES[item.key]}: {_standing_text(item)}." for item in aspects),
+                "",
+            ]
+        )
+    for stage, heading in _GUIDANCE_HEADINGS:
+        sentences = considerations[stage].get(view.key.value, [])
+        lines.extend([heading, *markdown_bullets(sentences), ""])
+    return lines
+
+
+def _not_applied_lines(views: Sequence[PerspectiveView]) -> list[str]:
+    lines: list[str] = []
+    for view in views:
+        if not view.applied:
+            lines.append(f"- {_PERSPECTIVE_TEXTS[view.key][0]}: {_standing_text(view)}.")
+        lines.extend(
+            f"- {_ASPECT_NAMES[aspect.key]} ({_ASPECT_OF}): {_standing_text(aspect)}."
+            for aspect in view.aspects
+            if not aspect.applied
+        )
+    return ["## Not applied", "", *lines, ""] if lines else []
+
+
 def team_markdown(version: TeamProposalVersion, gate: HumanGate) -> str:
-    snapshot = version.proposal.to_snapshot()
+    proposal = version.proposal
+    views = perspective_views(proposal.constraints, proposal.selected_agent_ids)
+    considerations = _considerations(version)
     lines = _version_lines(STAGE_LABELS["team"], version, gate)
-    lines.extend(
-        [
-            f"Project mode: {snapshot['project_mode']}. Provider: "
-            f"{snapshot['provider']['provider_id']} v{snapshot['provider']['provider_version']}.",
-            "",
-            "## Members",
-            "",
-        ]
-    )
-    rows = []
-    for member in snapshot["members"]:
-        justifications = "; ".join(
-            item["statement"] or f"{item['kind']} {item['code']}"
-            for item in member["justifications"]
-        )
-        rows.append((title_text(member["agent_id"]), title_text(member["source"]), justifications))
-    lines.extend(markdown_table(("Agent", "Source", "Justification"), rows))
-    lines.extend(["", "## Role constraints", ""])
-    rows = [
-        (
-            title_text(constraint["agent_id"]),
-            constraint["kind"],
-            "; ".join(reason["code"] for reason in constraint["reasons"]),
-        )
-        for constraint in snapshot["constraints"]["role_constraints"]
-    ]
-    lines.extend(
-        markdown_table(
-            (
-                "Agent",
-                "Constraint",
-                "Reasons",
-            ),
-            rows,
-        )
-    )
-    lines.append("")
+    lines.extend([_PERSPECTIVES_INTRODUCTION, "", "## Applied", ""])
+    applied = [view for view in views if view.applied]
+    for view in applied:
+        lines.extend(_applied_perspective_lines(view, considerations))
+    if not applied:
+        lines.extend([f"{UNSET}.", ""])
+    lines.extend(_not_applied_lines(views))
     return "\n".join(lines)
 
 
-def twins_markdown(version: UserModelingSnapshotVersion, gate: HumanGate) -> str:
+def _persona_names(snapshot: Mapping[str, object]) -> dict[tuple[str, object], str]:
+    return {
+        (str(persona["persona_id"]), persona["version_number"]): str(persona["profile"]["name"])
+        for persona in snapshot["persona_versions"]
+    }
+
+
+def twins_markdown(
+    version: UserModelingSnapshotVersion, gate: HumanGate, *, language: str | None = None
+) -> str:
     snapshot = version.snapshot.to_snapshot()
+    personas = _persona_names(snapshot)
     lines = _version_lines(STAGE_LABELS["twins"], version, gate)
-    lines.extend(["## Personas", ""])
+    lines.extend(["## Archetipi" if language == "it" else "## Archetypes", ""])
     for persona in snapshot["persona_versions"]:
         profile = persona["profile"]
         lines.extend(
@@ -174,23 +368,43 @@ def twins_markdown(version: UserModelingSnapshotVersion, gate: HumanGate) -> str
                 f"{title_text(profile['confirmation_status'])}, "
                 f"version {persona['version_number']}.",
                 "",
-                *observation_table(profile["observations"]),
+                *markdown_bullets(
+                    _observation_value(item["value"])
+                    for item in profile["observations"]
+                    if item["observation_key"] == "persona.summary"
+                ),
                 "",
             ]
         )
     lines.extend(["## User twins", ""])
     for twin in snapshot["twin_versions"]:
         profile = twin["profile"]
+        reference = profile["persona_reference"]
+        persona = personas.get((str(reference["persona_id"]), reference["version_number"]), UNSET)
+        exact = next(
+            item
+            for item in snapshot["persona_versions"]
+            if item["persona_id"] == reference["persona_id"]
+            and item["content_hash"] == reference["content_hash"]
+        )
+        view = twin_view(
+            user_twin_version_from_snapshot(twin), persona_version_from_snapshot(exact)
+        )
+        texts = _twin_texts(language)
+        path = twin_text(twin_slug(profile["name"], twin["twin_id"])).removeprefix("twins/")
         lines.extend(
             [
                 f"### {profile['name']}",
                 "",
-                f"Twin {twin['twin_id']} version {twin['version_number']}, "
+                f"Version {twin['version_number']}, "
                 f"validation status {profile['validation_status']}, human validation "
                 f"{'required' if profile['requires_human_validation'] else 'not required'}, "
-                f"persona {reference_text(profile['persona_reference'])}.",
+                f"{texts['archetype']} {persona} (v{reference['version_number']}).",
                 "",
-                *observation_table(profile["observations"]),
+                f"{texts['basis']}: {texts[view['basis']]}. "
+                + _observation_value(view["persona"]["description"]["value"]),
+                texts["provisional"] if view["basis"] == "PROVISIONAL" else "",
+                f"[{texts['persona']} · {texts['why']}]({path})",
                 "",
             ]
         )
@@ -200,13 +414,14 @@ def twins_markdown(version: UserModelingSnapshotVersion, gate: HumanGate) -> str
 def code_index(specification: Mapping[str, object]) -> dict[str, str]:
     codes: dict[str, str] = {}
     for key in (
+        "needs",
         "requirements",
         "user_stories",
         "acceptance_criteria",
         "scenarios",
         "definition_of_done",
     ):
-        for item in specification[key]:
+        for item in specification.get(key, ()):
             codes[item["id"]] = item["code"]
     return codes
 
@@ -225,7 +440,17 @@ def twin_names(references: Iterable[Mapping[str, object]]) -> str:
     return ", ".join(names)
 
 
-def requirements_markdown(version: RequirementsSpecificationVersion, gate: HumanGate) -> str:
+def _risk_line(risk: Mapping[str, object], codes: Mapping[str, str]) -> str:
+    return (
+        f"- {risk['code']}: {_sentence(risk['summary'])} Likelihood "
+        f"{_lowered(risk['likelihood'])}, impact {_lowered(risk['impact'])}. Mitigation: "
+        f"{_sentence(risk['mitigation'])} Requirements {code_list(risk['requirement_ids'], codes)}."
+    )
+
+
+def _legacy_requirements_markdown(
+    version: RequirementsSpecificationVersion, gate: HumanGate
+) -> str:
     specification = version.specification.to_snapshot()
     codes = code_index(specification)
     lines = _version_lines(STAGE_LABELS["requirements"], version, gate)
@@ -294,7 +519,9 @@ def requirements_markdown(version: RequirementsSpecificationVersion, gate: Human
             ]
         )
     lines.extend(["## Risks", ""])
-    lines.extend(markdown_bullets(specification["risks"]))
+    lines.extend(_risk_line(risk, codes) for risk in specification["risks"])
+    if not specification["risks"]:
+        lines.append(f"- {UNSET}")
     lines.extend(["", "## Definition of done", ""])
     lines.extend(
         markdown_table(
@@ -313,6 +540,348 @@ def requirements_markdown(version: RequirementsSpecificationVersion, gate: Human
         )
     )
     lines.append("")
+    return "\n".join(lines)
+
+
+_DEFINITION_TEXTS: Final = {
+    "en": {
+        "definition": "Definition",
+        "twins": "User twins",
+        "scenarios": "Scenarios",
+        "needs": "Needs",
+        "journeys": "Journey",
+        "phases": "Phases",
+        "action": "Action",
+        "touchpoint": "Touchpoint",
+        "stories": "User stories",
+        "actor": "Actor",
+        "context": "Context",
+        "goal": "Goal",
+        "trigger": "Trigger",
+        "steps": "Steps",
+        "criticalities": "Potential difficulties",
+        "sources": "Sources",
+        "preconditions": "Preconditions",
+        "outcome": "Expected outcome",
+        "benefit": "Benefit",
+        "requirements": "Requirements",
+        "criteria": "Acceptance criteria",
+        "risks": "Risks",
+        "done": "Definition of done",
+        "verification": "Verification",
+        "mitigation": "Mitigation",
+        "priority": "Priority",
+        "condition": "Condition",
+        "likelihood": "Likelihood",
+        "impact": "Impact",
+        "review_status": "Review status",
+        "applicability": "Applicability",
+        "warning": "This definition comes from the brief and the twins: it still needs to be checked with real users.",
+        "legacy": "This definition has no needs: they were not recorded in this version.",
+        "FUNCTIONAL": "Functional requirements",
+        "NON_FUNCTIONAL": "Non-functional requirements",
+        "CONSTRAINT": "Constraints",
+    },
+    "it": {
+        "definition": "Definizione",
+        "twins": "Twin degli utenti",
+        "scenarios": "Scenari",
+        "needs": "Bisogni",
+        "journeys": "Journey",
+        "phases": "Fasi",
+        "action": "Azione",
+        "touchpoint": "Punto di contatto",
+        "stories": "Storie",
+        "actor": "Attore",
+        "context": "Contesto",
+        "goal": "Obiettivo",
+        "trigger": "Evento iniziale",
+        "steps": "Passi",
+        "criticalities": "Criticità",
+        "sources": "Fonti",
+        "preconditions": "Precondizioni",
+        "outcome": "Risultato atteso",
+        "benefit": "Beneficio",
+        "requirements": "Requisiti",
+        "criteria": "Criteri di accettazione",
+        "risks": "Rischi",
+        "done": "Condizioni di completamento",
+        "verification": "Verifica",
+        "mitigation": "Mitigazione",
+        "priority": "Priorità",
+        "condition": "Condizione",
+        "likelihood": "Probabilità",
+        "impact": "Impatto",
+        "review_status": "Stato di revisione",
+        "applicability": "Applicabilità",
+        "warning": "Questa definizione deriva dal brief e dai twin: resta da verificare con utenti reali.",
+        "legacy": "Questa definizione non contiene bisogni: non erano registrati in questa versione.",
+        "FUNCTIONAL": "Requisiti funzionali",
+        "NON_FUNCTIONAL": "Requisiti non funzionali",
+        "CONSTRAINT": "Vincoli",
+    },
+}
+
+
+def requirements_markdown(
+    version: RequirementsSpecificationVersion, gate: HumanGate, *, locale: str = "en"
+) -> str:
+    specification = version.specification.to_snapshot()
+    language = locale if locale in _DEFINITION_TEXTS else "en"
+    if language == "en" and specification["schema_version"] == 1:
+        return _legacy_requirements_markdown(version, gate)
+    text = _DEFINITION_TEXTS[language]
+    collections = (
+        "scenarios",
+        "journeys",
+        "needs",
+        "user_stories",
+        "requirements",
+        "acceptance_criteria",
+        "risks",
+        "definition_of_done",
+    )
+    items = {str(item["id"]): item for key in collections for item in specification.get(key, ())}
+    twin_anchors = {
+        str(item["twin_id"]): f"twin-{index}"
+        for index, item in enumerate(
+            sorted(
+                specification["user_twin_references"], key=lambda item: str(item["name"]).casefold()
+            ),
+            1,
+        )
+    }
+
+    def links(identifiers: Iterable[object]) -> str:
+        return (
+            ", ".join(
+                f"[{items[str(identifier)]['code']} · {items[str(identifier)].get('title', items[str(identifier)].get('goal', items[str(identifier)].get('statement', items[str(identifier)].get('summary', ''))))}](#{str(items[str(identifier)]['code']).lower()})"
+                for identifier in identifiers
+                if str(identifier) in items
+            )
+            or "—"
+        )
+
+    def heading(item: Mapping[str, object], title: object) -> list[str]:
+        return [f"### {item['code']}: {title}", "", f'<a id="{str(item["code"]).lower()}"></a>', ""]
+
+    def sources(item: Mapping[str, object]) -> list[str]:
+        references = item.get("sources", ())
+        if not references:
+            return []
+        known = {
+            str(reference["twin_id"]): str(reference["name"])
+            for reference in specification["user_twin_references"]
+        }
+        known[str(specification["context"]["project_brief"]["artifact_id"])] = (
+            "Brief di progetto" if language == "it" else "Project brief"
+        )
+        labels = {
+            "PROJECT_BRIEF": "Brief di progetto" if language == "it" else "Project brief",
+            "USER_TWIN": "Twin utente" if language == "it" else "User twin",
+            "OWNER_INPUT": "Indicazione del committente" if language == "it" else "Owner input",
+            "MODEL_PROPOSAL": "Proposta del modello" if language == "it" else "Model proposal",
+            "SYSTEM_ARTIFACT": "Artefatto di sistema" if language == "it" else "System artifact",
+        }
+        return [
+            f"<details><summary>{text['sources']}</summary>",
+            "",
+            *markdown_bullets(
+                " · ".join(
+                    str(value)
+                    for value in (
+                        known.get(str(source["source_id"]), labels[str(source["kind"])]),
+                        source.get("source_version"),
+                        source.get("locator"),
+                        source["source_id"]
+                        if str(source["source_id"]) not in known
+                        and source["kind"] not in ("PROJECT_BRIEF", "USER_TWIN")
+                        else None,
+                    )
+                    if value is not None
+                )
+                for source in references
+            ),
+            "",
+            "</details>",
+            "",
+        ]
+
+    version_word = "Versione" if language == "it" else "Version"
+    lines = [
+        f"# {text['definition']}",
+        "",
+        (
+            f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal committente il {gate.updated_at.isoformat()}."
+            if language == "it"
+            else f"{version_word} {version.version_number}, content hash `{version.content_hash}`, approved by the owner on {gate.updated_at.isoformat()}."
+        ),
+        "",
+        text["warning"],
+        "",
+        f"## {text['twins']}",
+        "",
+    ]
+    for reference in specification["user_twin_references"]:
+        lines.extend(
+            [
+                f'<a id="{twin_anchors[str(reference["twin_id"])]}"></a>',
+                f"- {reference_text(reference)} · {text['scenarios']}: {links(item['id'] for item in specification['scenarios'] if item['actor']['twin_id'] == reference['twin_id'])}",
+                "",
+            ]
+        )
+    lines.extend(["", f"## {text['scenarios']}", ""])
+    for scenario in specification["scenarios"]:
+        lines.extend(heading(scenario, scenario["title"]))
+        lines.append(
+            f"{text['actor']}: [{scenario['actor']['name']}](#{twin_anchors[str(scenario['actor']['twin_id'])]})"
+        )
+        for field in ("context", "goal", "trigger"):
+            if scenario.get(field):
+                lines.extend(["", f"{text[field]}: {scenario[field]}"])
+        for field in ("preconditions", "steps", "criticalities"):
+            if scenario.get(field):
+                values = (
+                    [f"{index}. {step}" for index, step in enumerate(scenario[field], 1)]
+                    if field == "steps"
+                    else markdown_bullets(scenario[field])
+                )
+                lines.extend(["", f"{text[field]}:", *values])
+        revealed = [
+            need["id"]
+            for need in specification.get("needs", ())
+            if scenario["id"] in need["scenario_ids"]
+        ]
+        lines.extend(
+            [
+                "",
+                f"{text['outcome']}: {scenario['expected_outcome']}",
+                f"{text['needs']}: {links(revealed)}",
+                f"{text['requirements']}: {links(scenario['requirement_ids'])}",
+                f"{text['criteria']}: {links(scenario['acceptance_criterion_ids'])}",
+                *(
+                    [
+                        f"{text['journeys']}: {links(item['id'] for item in specification['journeys'] if item['scenario_id'] == scenario['id'])}"
+                    ]
+                    if specification.get("journeys")
+                    else []
+                ),
+                "",
+                *sources(scenario),
+            ]
+        )
+    if specification.get("journeys"):
+        lines.extend([f"## {text['journeys']}", ""])
+        for journey in specification["journeys"]:
+            scenario = items[str(journey["scenario_id"])]
+            lines.extend(
+                [
+                    *heading(journey, journey["title"]),
+                    f"{text['scenarios']}: {links([journey['scenario_id']])}",
+                    f"{text['actor']}: [{scenario['actor']['name']}](#{twin_anchors[str(scenario['actor']['twin_id'])]})",
+                    "",
+                    f"{text['phases']}:",
+                    "",
+                ]
+            )
+            for index, phase in enumerate(journey["phases"], 1):
+                lines.extend(
+                    [
+                        f"#### {index}. {phase['title']}",
+                        "",
+                        f"{text['action']}: {phase['action']}",
+                        f"{text['needs']}: {links(phase['need_ids'])}",
+                        "",
+                    ]
+                )
+                if phase.get("touchpoint"):
+                    lines.extend([f"{text['touchpoint']}: {phase['touchpoint']}", ""])
+                if phase.get("criticalities"):
+                    lines.extend(
+                        [f"{text['criticalities']}:", *markdown_bullets(phase["criticalities"]), ""]
+                    )
+            lines.extend(sources(journey))
+    lines.extend([f"## {text['needs']}", ""])
+    if not specification.get("needs"):
+        lines.extend([text["legacy"], ""])
+    for need in specification.get("needs", ()):
+        lines.extend(
+            [
+                *heading(need, need["title"]),
+                str(need["statement"]),
+                "",
+                f"{text['scenarios']}: {links(need['scenario_ids'])}",
+                f"{text['stories']}: {links(item['id'] for item in specification['user_stories'] if need['id'] in item.get('need_ids', ()))}",
+                f"{text['requirements']}: {links(item['id'] for item in specification['requirements'] if need['id'] in item.get('need_ids', ()))}",
+                *(
+                    [
+                        f"{text['journeys']}: {links(item['id'] for item in specification['journeys'] if any(need['id'] in phase['need_ids'] for phase in item['phases']))}"
+                    ]
+                    if specification.get("journeys")
+                    else []
+                ),
+                "",
+                *sources(need),
+            ]
+        )
+    lines.extend([f"## {text['stories']}", ""])
+    for story in specification["user_stories"]:
+        lines.extend(
+            [
+                *heading(story, story["goal"]),
+                f"{text['actor']}: {story['user_twin_reference']['name']}",
+                f"{text['goal']}: {story['goal']}",
+                f"{text['benefit']}: {story['benefit']}",
+                f"{text['needs']}: {links(story.get('need_ids', ()))}",
+                f"{text['requirements']}: {links(story['requirement_ids'])}",
+                "",
+            ]
+        )
+    for kind in ("FUNCTIONAL", "NON_FUNCTIONAL", "CONSTRAINT"):
+        lines.extend([f"## {text[kind]}", ""])
+        for item in specification["requirements"]:
+            if item["kind"] == kind:
+                lines.extend(
+                    [
+                        *heading(item, item["title"]),
+                        str(item["statement"]),
+                        "",
+                        f"{text['priority']}: {item['priority']}",
+                        f"{text['twins']}: {twin_names(item['user_twin_references'])}",
+                        f"{text['needs']}: {links(item.get('need_ids', ()))}",
+                        "",
+                        *sources(item),
+                    ]
+                )
+    for key, label, field in (
+        ("acceptance_criteria", "criteria", "statement"),
+        ("risks", "risks", "summary"),
+        ("definition_of_done", "done", "statement"),
+    ):
+        lines.extend([f"## {text[label]}", ""])
+        for item in specification[key]:
+            lines.extend(
+                [
+                    *heading(item, item[field]),
+                    f"{text['requirements']}: {links(item['requirement_ids'])}",
+                ]
+            )
+            if "user_story_ids" in item:
+                lines.append(f"{text['stories']}: {links(item['user_story_ids'])}")
+            for name in (
+                "verification_method",
+                "mitigation",
+                "condition",
+                "likelihood",
+                "impact",
+                "review_status",
+                "applicability",
+            ):
+                if item.get(name):
+                    lines.append(
+                        f"{text['verification' if name == 'verification_method' else name]}: {item[name]}"
+                    )
+            lines.extend(["", *sources(item)])
     return "\n".join(lines)
 
 
@@ -440,8 +1009,8 @@ def _visual_language_lines(visual: Mapping[str, object] | None) -> list[str]:
         "",
         "#### Visual language",
         "",
-        f"Product name: {visual['product_name']}. Catalog version {visual['catalog_version']} "
-        f"({visual['catalog_content_hash']}). {described}.",
+        f"Product name: {visual['product_name']}. Catalog version {visual['catalog_version']}. "
+        f"{described}.",
         "",
         f"Rationale: {visual['rationale']}",
         "",
@@ -562,9 +1131,14 @@ def mockups_markdown(version: DesignPackageVersion) -> str:
     return "\n".join(lines)
 
 
+def _links(entries: Sequence[Mapping[str, object]]) -> list[str]:
+    links = [f"- [{_inline(entry['title'])}]({entry['path']})" for entry in entries]
+    return links or [f"- {UNSET}"]
+
+
 def views_markdown(
     *,
-    tables: Sequence[str],
+    tables: Sequence[Mapping[str, object]],
     diagrams: Sequence[Mapping[str, object]],
     mermaid_version: str,
 ) -> str:
@@ -572,67 +1146,167 @@ def views_markdown(
         "",
         "## Views",
         "",
-        "This document is the text view. The same content is available as tables and as "
-        f"diagrams written for Mermaid {mermaid_version}; paths are relative to this folder.",
+        "This document is the text view. The same content is in the tables (CSV) and in the "
+        f"diagrams (Mermaid {mermaid_version}) below; the links are relative to this document.",
         "",
         "Tables:",
-        *markdown_bullets(f"`{path}`" for path in tables),
+        *_links(tables),
         "",
         "Diagrams:",
-        *markdown_bullets(f"`{diagram['path']}`: {diagram['title']}" for diagram in diagrams),
+        *_links(diagrams),
         "",
     ]
-    for diagram in diagrams:
-        lines.extend(
-            [
-                f"### {diagram['title']}",
-                "",
-                str(diagram["description"]),
-                "",
-                "```mermaid",
-                str(diagram["source"]).rstrip("\n"),
-                "```",
-                "",
-            ]
-        )
     return "\n".join(lines)
 
 
-def twin_markdown(document: Mapping[str, object]) -> str:
+def _twin_texts(language: str | None) -> dict[str, str]:
+    labels = {
+        "archetype": ("Archetipo", "Archetype"),
+        "persona": ("Persona", "Persona"),
+        "basis": ("Fondamento", "Basis"),
+        "PROVISIONAL": ("Provvisorio", "Provisional"),
+        "EVIDENCE_BASED": ("Fondato su evidenze", "Evidence based"),
+        "represents": ("Rappresenta", "Represents"),
+        "does_not_represent": ("Non rappresenta", "Does not represent"),
+        "contexts": ("Contesti coperti", "Covered contexts"),
+        "persona_contexts": ("Contesti", "Contexts"),
+        "evidence_gaps": ("Limiti delle evidenze", "Evidence gaps"),
+        "description": ("Descrizione", "Description"),
+        "goals": ("Obiettivi", "Goals"),
+        "needs": ("Bisogni", "Needs"),
+        "behaviours": ("Comportamenti", "Behaviours"),
+        "pain_points": ("Difficoltà", "Pain points"),
+        "constraints": ("Vincoli", "Constraints"),
+        "EVIDENCED": ("Evidenziato", "Evidenced"),
+        "INFERRED": ("Dedotto", "Inferred"),
+        "HYPOTHESIZED": ("Ipotizzato", "Hypothesized"),
+        "CONTESTED": ("Contestato", "Contested"),
+        "UNKNOWN": ("Sconosciuto", "Unknown"),
+        "why": ("Perché?", "Why?"),
+        "missing_rationale": ("Motivazione non fornita.", "Rationale not provided."),
+        "missing_sources": ("Fonti non fornite.", "Sources not provided."),
+        "provisional": (
+            "Il brief e le scelte del proprietario non sono evidenze su utenti reali.",
+            "The brief and the owner's choices are not evidence about real users.",
+        ),
+    }
+    return {key: value[0 if language == "it" else 1] for key, value in labels.items()}
+
+
+def _claim_lines(label: str, claim: Mapping[str, object], texts: Mapping[str, str]) -> list[str]:
+    value = claim["value"]
+    shown = (
+        texts["UNKNOWN"] if value["kind"] in {"UNKNOWN", "ABSTAINED"} else _observation_value(value)
+    )
+    sources = claim["provenance"]
+    return [
+        f"- **{label}**: {shown} [{texts[claim['display_status']]}]",
+        "",
+        f"<details><summary>{texts['why']} · {label}</summary>",
+        "",
+        str(claim["rationale"] or texts["missing_rationale"]),
+        "",
+        *(
+            markdown_bullets(
+                " · ".join(
+                    str(source[key])
+                    for key in (
+                        "source_kind",
+                        "source_id",
+                        "source_version",
+                        "content_hash",
+                        "locator",
+                        "summary",
+                    )
+                    if source.get(key) is not None
+                )
+                for source in sources
+            )
+            if sources
+            else [texts["missing_sources"]]
+        ),
+        "",
+        "</details>",
+        "",
+    ]
+
+
+def twin_markdown(document: Mapping[str, object], *, language: str | None = None) -> str:
     origin = document["origin"]
     persona = document["persona"]
     twin = document["twin"]
     profile = twin["profile"]
     persona_profile = persona["profile"]
     modeling = origin["user_modeling"]
+    view = twin_view(user_twin_version_from_snapshot(twin), persona_version_from_snapshot(persona))
+    texts = _twin_texts(language)
     lines = [
         f"# {profile['name']}",
         "",
-        f"User twin {twin['twin_id']} version {twin['version_number']}, content hash "
-        f"`{twin['content_hash']}`, of the project {origin['project_name']} "
-        f"({origin['project_id']}). Validation status {profile['validation_status']}, human "
-        f"validation {'required' if profile['requires_human_validation'] else 'not required'}. "
-        f"Approved with user modeling version {modeling['version_number']} on "
-        f"{origin['approved_at']}.",
+        (
+            f"User twin version {twin['version_number']}, content hash "
+            f"`{twin['content_hash']}`, of the project {origin['project_name']}. "
+            f"Validation status {profile['validation_status']}, human "
+            f"validation {'required' if profile['requires_human_validation'] else 'not required'}. "
+            f"Approved with user modeling version {modeling['version_number']} on "
+            f"{origin['approved_at']}."
+            if language != "it"
+            else f"User Twin versione {twin['version_number']}, hash del contenuto "
+            f"`{twin['content_hash']}`, del progetto {origin['project_name']}. "
+            f"Stato di validazione {profile['validation_status']}, validazione umana "
+            f"{'richiesta' if profile['requires_human_validation'] else 'non richiesta'}. "
+            f"Approvato con il modello utenti versione {modeling['version_number']} il "
+            f"{origin['approved_at']}."
+        ),
         "",
-        "A user twin is a model of a kind of user, not a person: its observations are "
-        "assumptions with a declared epistemic status and confidence. `twin.json` next to this "
-        "document is a self-contained copy that another OrchesTwin project can import.",
+        (
+            "A user twin is a model of a kind of user, not a person: its observations are "
+            "assumptions with a declared epistemic status and confidence. `twin.json` next to this "
+            "document is a self-contained copy that another OrchesTwin project can import."
+            if language != "it"
+            else "Uno User Twin è un modello di un tipo di utente: le sue osservazioni sono "
+            "ipotesi con stato epistemico e confidenza dichiarati. `twin.json` accanto a "
+            "questo documento è una copia autonoma che un altro progetto OrchesTwin può importare."
+        ),
         "",
-        "## Persona",
+        f"## {texts['archetype']}",
         "",
-        f"{persona_profile['name']}: source {title_text(persona_profile['source'])}, "
+        f"{persona_profile['name']}: {'fonte' if language == 'it' else 'source'} "
+        f"{title_text(persona_profile['source'])}, "
         f"{title_text(persona_profile['kind'])}, "
-        f"{title_text(persona_profile['confirmation_status'])}, version "
+        f"{title_text(persona_profile['confirmation_status'])}, "
+        f"{'versione' if language == 'it' else 'version'} "
         f"{persona['version_number']}.",
         "",
-        *observation_table(persona_profile["observations"]),
-        "",
-        "## Profile",
-        "",
-        *observation_table(profile["observations"]),
+        f"{texts['basis']}: **{texts[view['basis']]}**.",
+        texts["provisional"] if view["basis"] == "PROVISIONAL" else "",
         "",
     ]
+    for field in ("represents", "does_not_represent", "contexts", "evidence_gaps"):
+        lines.extend(_claim_lines(texts[field], view[field], texts))
+    lines.extend(
+        [f"## {texts['persona']}", "", f"<details><summary>{texts['persona']}</summary>", ""]
+    )
+    for field, claim in view["persona"].items():
+        lines.extend(
+            _claim_lines(texts["persona_contexts" if field == "contexts" else field], claim, texts)
+        )
+    lines.extend(
+        [
+            "</details>",
+            "",
+            f"<details><summary>{'Profilo' if language == 'it' else 'Profile'} · JSON</summary>",
+            "",
+            "## Profilo" if language == "it" else "## Profile",
+            "",
+            *observation_table(profile["observations"]),
+            "",
+            "[JSON](twin.json)",
+            "",
+            "</details>",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -647,14 +1321,15 @@ def _stage_rows(manifest: Mapping[str, object]) -> list[tuple[object, ...]]:
             entry["gate"]["gate_type"],
             entry["gate"]["updated_at"],
         )
-        for entry in (manifest["stages"][stage] for stage in STAGES)
+        for entry in (manifest["stages"][stage] for stage in present_stages(manifest))
     ]
 
 
 def _view_rows(manifest: Mapping[str, object]) -> list[tuple[object, ...]]:
+    views = manifest["views"]
     return [
         (stage, form, f"`{entry['path']}`", entry["title"])
-        for stage, view in ((name, manifest["views"][name]) for name in VIEW_STAGES)
+        for stage, view in ((name, views[name]) for name in VIEW_STAGES if name in views)
         for form, key in (
             ("text", "text"),
             ("table", "tables"),
@@ -679,46 +1354,68 @@ def feedback_counts(counts: Mapping[str, object]) -> str:
     )
 
 
-def index_markdown(manifest: Mapping[str, object]) -> str:
-    project = manifest["project"]
-    package = manifest["package"]
-    feedback = manifest["feedback"]
-    lines = [
-        f"# OrchesTwin knowledge folder: {project['name']}",
-        "",
-        f"Knowledge folder version {package['version_number']} of project {project['id']}, "
-        f"written on {package['created_at']} with folder schema version "
-        f"{manifest['schema_version']}. Content hash `{package['content_hash']}`.",
-        "",
-        "## What this folder is",
-        "",
-        "The brief, the agent team, the user twins, the requirements and the design of this "
-        "project, each approved by the owner through a human gate in OrchesTwin Studio. The "
-        "project is implemented outside the Studio: this folder travels with the source code "
-        "and tells people and coding agents what has to be built and for whom.",
-        "",
-        "## How to use it",
-        "",
-        "- Build against `requirements/requirements.md` and `design/design.md`: they are the "
-        "approved scope. Requirements, user stories, acceptance criteria, screens and elements "
-        "have stable codes (REQ-001, USR-001, AC-001, SCR-001, ELM-001): quote them in code "
-        "reviews, commits and tests.",
-        "- Judge every change from the point of view of the user twins in `twins/`: each twin "
-        "has a profile with goals, constraints and accessibility needs.",
-        "- Treat the twins as models: an observation or a finding is an assumption until a "
-        "person validates it.",
-        "- Do not edit the files of the approved stages: their hashes are listed below and in "
-        f"`{manifest['manifest']}`. A change of scope goes through the Studio and produces a "
-        "new version of this folder.",
-        f"- The feedback of the twins lives in `{feedback['folder']}/`.",
-        "",
-        "## Approved stages",
-        "",
-        *markdown_table(
-            ("Stage", "Text", "Exact snapshot", "Version", "Content hash", "Gate", "Approved at"),
-            _stage_rows(manifest),
-        ),
-        "",
+def progress_sentence(manifest: Mapping[str, object]) -> str:
+    present = present_stages(manifest)
+    held = f"This folder holds {len(present)} of {len(STAGES)} approved steps"
+    if len(present) == len(STAGES):
+        return f"{held}; every step is approved."
+    return f"{held}; next: {STAGE_LABELS[STAGES[len(present)]]}."
+
+
+def _scope_line(present: tuple[str, ...]) -> str:
+    if "design" in present:
+        return (
+            "- Build against `requirements/requirements.md` and `design/design.md`: they are the "
+            "approved scope. Requirements, user stories, acceptance criteria, screens and "
+            "elements have stable codes (REQ-001, USR-001, AC-001, SCR-001, ELM-001): quote them "
+            "in code reviews, commits and tests."
+        )
+    if "requirements" in present:
+        return (
+            "- The requirements are approved in `requirements/requirements.md`, with stable codes "
+            "(REQ-001, USR-001, AC-001); the design comes into this folder once the owner "
+            "approves it, and only then is the scope complete."
+        )
+    return (
+        "- The scope is not approved yet: the requirements and the design come into this folder "
+        "once the owner approves them, and only then is there an approved scope to build against."
+    )
+
+
+def _usage_lines(manifest: Mapping[str, object]) -> list[str]:
+    present = present_stages(manifest)
+    state = manifest.get("state")
+    lines = [_scope_line(present)]
+    if "twins" in present:
+        lines.extend(
+            [
+                "- Judge every change from the point of view of the user twins in `twins/`: each "
+                "twin has a profile with goals, constraints and accessibility needs.",
+                "- Treat the twins as models: an observation or a finding is an assumption until "
+                "a person validates it.",
+            ]
+        )
+    lines.extend(
+        [
+            "- Do not edit the files of the approved stages: their digests are in "
+            f"`{manifest['manifest']}`. A change of scope goes through the Studio and produces a "
+            "new version of this folder.",
+            f"- The feedback of the twins lives in `{manifest['feedback']['folder']}/`.",
+        ]
+    )
+    if isinstance(state, Mapping):
+        lines.append(
+            f"- The state of the development is in `{state['text']}` and `{state['document']}`: "
+            "the commits recorded in the Studio, the critiques of the twins on them, the "
+            "decisions of the owner and the tasks for the code."
+        )
+    return lines
+
+
+def _twin_lines(manifest: Mapping[str, object]) -> list[str]:
+    if "twins" not in present_stages(manifest):
+        return []
+    return [
         "## User twins",
         "",
         *markdown_table(
@@ -735,19 +1432,172 @@ def index_markdown(manifest: Mapping[str, object]) -> str:
             ),
         ),
         "",
+    ]
+
+
+def _views_lines(manifest: Mapping[str, object]) -> list[str]:
+    if not any(stage in manifest["views"] for stage in VIEW_STAGES):
+        return []
+    return [
         "## Views",
         "",
-        "Requirements and design are available in three forms: text (Markdown), tables (CSV) "
-        f"and diagrams (Mermaid {manifest['generator']['mermaid_version']}, also embedded in the "
-        "Markdown documents).",
+        "The approved requirements and design are available in three forms: text (Markdown), "
+        f"tables (CSV) and diagrams (Mermaid {manifest['generator']['mermaid_version']}, linked "
+        "from the Markdown documents).",
         "",
         *markdown_table(("Stage", "Form", "File", "Content"), _view_rows(manifest)),
         "",
-        "## Twin feedback",
+    ]
+
+
+def _feedback_lines(manifest: Mapping[str, object]) -> list[str]:
+    feedback = manifest["feedback"]
+    lines = ["## Twin feedback", ""]
+    if feedback.get("text"):
+        lines.append(
+            f"`{feedback['text']}` summarises {feedback_counts(feedback)} recorded in the Studio. "
+            "The exact records are in the JSON files of the same folder."
+        )
+    else:
+        lines.append(
+            "The feedback of the twins on the design comes into this folder once the design is "
+            "approved."
+        )
+    if feedback.get("changes"):
+        runs = counted(feedback.get("change_reviews") or 0, "review run", "review runs")
+        lines.extend(
+            ["", f"`{feedback['changes']}` holds {runs} of the twins on the code changes."]
+        )
+    return [*lines, ""]
+
+
+def _overview_project(name: str, brief: Mapping[str, object], texts: Mapping[str, Any]) -> str:
+    description = brief["fields"].get("description")
+    if not isinstance(description, str) or not description.strip():
+        return texts["project"].format(name=_bare(name))
+    return texts["described"].format(name=_bare(name), description=excerpt(description))
+
+
+def _role(profile: Mapping[str, object]) -> str | None:
+    for observation in profile["observations"]:
+        if observation["observation_key"] == _ROLE_KEY:
+            text = observation["value"].get("text")
+            return _bare(text) if isinstance(text, str) and text.strip() else None
+    return None
+
+
+def _twin_label(profile: Mapping[str, object]) -> str:
+    name = _bare(profile["name"])
+    role = _role(profile)
+    if role is None or role.casefold() == name.casefold():
+        return name
+    return f"{name} ({role})"
+
+
+def _overview_twins(twins: Mapping[str, object], texts: Mapping[str, Any]) -> list[str]:
+    labels = [_twin_label(twin["profile"]) for twin in twins["twin_versions"]]
+    return [texts["twins"].format(twins="; ".join(labels))] if labels else []
+
+
+def _overview_must(specification: Mapping[str, object], texts: Mapping[str, Any]) -> list[str]:
+    must = [item for item in specification["requirements"] if item["priority"] == _MUST]
+    if not must:
+        return []
+    lines = [
+        texts["must"],
+        *(f"  - {item['code']} {_bare(item['title'])}" for item in must[:OVERVIEW_REQUIREMENTS]),
+    ]
+    hidden = len(must) - OVERVIEW_REQUIREMENTS
+    if hidden > 0:
+        one, many = texts["more"]
+        lines.append(f"  - {(one if hidden == 1 else many).format(count=hidden)}")
+    return lines
+
+
+def _overview_design(package: Mapping[str, object], texts: Mapping[str, Any]) -> list[str]:
+    selected = package.get("owner_selected_alternative_id")
+    chosen = next((item for item in package["alternatives"] if item["id"] == selected), None)
+    if chosen is None:
+        return []
+    title = _bare(chosen["title"])
+    alternative = f"{chosen['code']} {title}"
+    visual = chosen.get("visual_language")
+    product = _bare(visual["product_name"]) if isinstance(visual, Mapping) else ""
+    if product and product.casefold() != title.casefold():
+        alternative = texts["product"].format(alternative=alternative, product=product)
+    return [texts["design"].format(alternative=alternative)]
+
+
+def _overview_criteria(specification: Mapping[str, object], texts: Mapping[str, Any]) -> list[str]:
+    count = len(specification["acceptance_criteria"])
+    if not count:
+        return []
+    one, many = texts["criteria"]
+    line = one if count == 1 else many
+    return [line.format(criteria=counted(count, *texts["criterion_words"]))]
+
+
+def overview_lines(
+    *,
+    language: str,
+    project_name: str,
+    brief: Mapping[str, object],
+    twins: Mapping[str, object] | None = None,
+    specification: Mapping[str, object] | None = None,
+    package: Mapping[str, object] | None = None,
+) -> list[str]:
+    texts = _OVERVIEW_TEXTS[language]
+    lines = [texts["heading"], "", _overview_project(project_name, brief, texts)]
+    if twins is not None:
+        lines.extend(_overview_twins(twins, texts))
+    if specification is not None:
+        lines.extend(_overview_must(specification, texts))
+    if package is not None:
+        lines.extend(_overview_design(package, texts))
+    if specification is not None:
+        lines.extend(_overview_criteria(specification, texts))
+    return [*lines, ""]
+
+
+def index_markdown(
+    manifest: Mapping[str, object],
+    *,
+    overview: Sequence[str] = (),
+    development: Sequence[str] = (),
+) -> str:
+    project = manifest["project"]
+    package = manifest["package"]
+    lines = [
+        f"# OrchesTwin knowledge folder: {project['name']}",
         "",
-        f"`{feedback['text']}` summarises {feedback_counts(feedback)} recorded in the Studio. "
-        "The exact records are in the JSON files of the same folder.",
+        f"Knowledge folder version {package['version_number']} of project {project['id']}, "
+        f"written on {package['created_at']} with folder schema version "
+        f"{manifest['schema_version']}. Content hash `{package['content_hash']}`.",
         "",
+        *overview,
+        "## What this folder is",
+        "",
+        f"The approved steps of this project ({_STEP_NAMES}), each approved by the owner through "
+        "a human gate in OrchesTwin Studio: a step comes into this folder once it is approved. "
+        f"{progress_sentence(manifest)} The project is implemented outside the Studio: this "
+        "folder travels with the source code and tells people and coding agents what has to be "
+        "built and for whom.",
+        "",
+        "## How to use it",
+        "",
+        *_usage_lines(manifest),
+        "",
+        "## Approved stages",
+        "",
+        *markdown_table(
+            ("Stage", "Text", "Exact snapshot", "Version", "Content hash", "Gate", "Approved at"),
+            _stage_rows(manifest),
+        ),
+        "",
+        *_twin_lines(manifest),
+        *_views_lines(manifest),
+        *_feedback_lines(manifest),
+        *development,
         "## Schema",
         "",
         f"`{manifest['manifest']}` is the machine-readable index of this folder. Every JSON "
@@ -760,13 +1610,17 @@ def index_markdown(manifest: Mapping[str, object]) -> str:
         "",
         "## Files",
         "",
-        *markdown_table(("File", "SHA-256"), manifest["files"].items()),
+        f"`{manifest['manifest']}` holds the SHA-256 digest of every file of this folder except "
+        "itself and this index: the Studio and `ut` check the files against those digests before "
+        "they accept a folder.",
         "",
     ]
     return "\n".join(lines)
 
 
 __all__ = [
+    "OVERVIEW_DESCRIPTION_LENGTH",
+    "OVERVIEW_REQUIREMENTS",
     "UNSET",
     "brief_markdown",
     "code_index",
@@ -774,13 +1628,16 @@ __all__ = [
     "counted",
     "critiques_markdown",
     "design_markdown",
+    "excerpt",
     "feedback_counts",
     "index_markdown",
     "markdown_bullets",
     "markdown_table",
     "mockups_markdown",
     "observation_table",
+    "overview_lines",
     "plain_text",
+    "progress_sentence",
     "reference_text",
     "requirements_markdown",
     "team_markdown",

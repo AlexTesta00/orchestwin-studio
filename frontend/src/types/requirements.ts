@@ -18,6 +18,8 @@ export type RiskReviewStatus = "PROPOSED" | "OWNER_ACKNOWLEDGED" | "OWNER_REJECT
 export type DefinitionOfDoneApplicability = "REQUIRED" | "CONDITIONAL";
 
 export type RequirementsArtifactKind =
+  | "JOURNEY"
+  | "NEED"
   | "REQUIREMENT"
   | "USER_STORY"
   | "ACCEPTANCE_CRITERION"
@@ -30,6 +32,8 @@ export type RequirementsDiffStatus = "PROPOSED" | "APPROVED" | "REJECTED";
 export type RequirementsRevisionDecision = "APPROVE" | "REJECT";
 
 export type TraceabilityNodeKind =
+  | "JOURNEY"
+  | "NEED"
   | "USER_TWIN"
   | "USER_STORY"
   | "REQUIREMENT"
@@ -39,7 +43,15 @@ export type TraceabilityNodeKind =
   | "DEFINITION_OF_DONE";
 
 export type TraceabilityLinkKind =
-  "ACTS_AS" | "MOTIVATES" | "VERIFIED_BY" | "EXERCISES" | "AFFECTS" | "GOVERNS";
+  | "EXPANDS"
+  | "ACTS_AS"
+  | "PARTICIPATES_IN"
+  | "REVEALS"
+  | "MOTIVATES"
+  | "VERIFIED_BY"
+  | "EXERCISES"
+  | "AFFECTS"
+  | "GOVERNS";
 
 export type HumanGateStatus =
   | "DRAFT"
@@ -91,6 +103,7 @@ export interface RequirementPayload {
   priority: RequirementPriority;
   sources: RequirementSourcePayload[];
   user_twin_references: UserTwinVersionReferencePayload[];
+  need_ids?: UUID[];
 }
 
 export interface UserStoryPayload {
@@ -100,6 +113,7 @@ export interface UserStoryPayload {
   goal: string;
   benefit: string;
   requirement_ids: UUID[];
+  need_ids?: UUID[];
 }
 
 export interface AcceptanceCriterionPayload {
@@ -122,6 +136,36 @@ export interface UsageScenarioPayload {
   expected_outcome: string;
   requirement_ids: UUID[];
   acceptance_criterion_ids: UUID[];
+  context?: string | null;
+  goal?: string | null;
+  criticalities?: string[];
+  sources?: RequirementSourcePayload[];
+}
+
+export interface UserNeedPayload {
+  id: UUID;
+  code: string;
+  title: string;
+  statement: string;
+  scenario_ids: UUID[];
+  sources: RequirementSourcePayload[];
+}
+
+export interface JourneyPhasePayload {
+  title: string;
+  action: string;
+  touchpoint: string | null;
+  criticalities: string[];
+  need_ids: UUID[];
+}
+
+export interface UserJourneyPayload {
+  id: UUID;
+  code: string;
+  title: string;
+  scenario_id: UUID;
+  phases: JourneyPhasePayload[];
+  sources: RequirementSourcePayload[];
 }
 
 export interface ProjectRiskPayload {
@@ -147,6 +191,9 @@ export interface DefinitionOfDoneItemPayload {
 }
 
 export interface RequirementsSpecificationPayload {
+  schema_version?: 1 | 2;
+  needs?: UserNeedPayload[];
+  journeys?: UserJourneyPayload[];
   project_id: UUID;
   project_brief_reference: RequirementsContextReferencePayload;
   agent_team_reference: RequirementsContextReferencePayload;
@@ -175,6 +222,8 @@ export interface RequirementsSpecificationVersionPayload {
 
 export interface RequirementsArtifactEnvelope {
   kind: RequirementsArtifactKind;
+  need?: UserNeedPayload | null;
+  journey?: UserJourneyPayload | null;
   requirement: RequirementPayload | null;
   user_story: UserStoryPayload | null;
   acceptance_criterion: AcceptanceCriterionPayload | null;

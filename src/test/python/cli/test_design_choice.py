@@ -19,6 +19,7 @@ from .test_api_design import (
     prototype_package,
     without_drawing,
 )
+from .test_status_command import AFTER_DESIGN
 
 REVISIONS = "/design/revisions"
 DECISION = "/decision"
@@ -40,6 +41,16 @@ NO_MODEL_APPROVAL = (
     "Studio the choice needs a model that is not connected. Whoever runs the Studio can "
     "connect one.\n"
 )
+LIMIT_REACHED = {
+    "en": (
+        "The Studio does not accept another version of the design: the last three were not "
+        "approved (ITERATION_LIMIT_REACHED).\n"
+    ),
+    "it": (
+        "Lo Studio non accetta un'altra versione del design: le ultime tre non sono state "
+        "approvate (ITERATION_LIMIT_REACHED).\n"
+    ),
+}
 
 
 def ready(session: Session) -> None:
@@ -355,6 +366,11 @@ def test_the_approval_brings_the_knowledge_folder(tmp_path: Path) -> None:
     )
     assert f"The knowledge folder is in {folder}: version 1, " in run.output
     assert "Inside you find ORCHESTWIN.md, to be read first" in run.output
+    assert "the brief, the perspectives, the twins, the requirements and the design" in run.output
+    lines = run.output.splitlines()
+    position = lines.index("The development goes on with these commands:")
+    assert lines[position - 1].startswith("Inside you find ORCHESTWIN.md")
+    assert lines[position + 1 :] == AFTER_DESIGN["en"]
     assert (folder / "ORCHESTWIN.md").is_file()
     assert approved
     assert submissions == 1
@@ -373,6 +389,34 @@ def test_the_approval_in_italian(tmp_path: Path) -> None:
     assert run.status == 0, run.errors
     assert "Design approvato: DES-001 “Calcolo guidato”, versione 2." in run.output
     assert "Dentro trovi ORCHESTWIN.md, da leggere per primo" in run.output
+    assert "brief, prospettive, twin, requisiti e design" in run.output
+    lines = run.output.splitlines()
+    position = lines.index("Lo sviluppo continua con questi comandi:")
+    assert lines[position + 1 :] == AFTER_DESIGN["it"]
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_a_version_refused_after_three_not_approved_is_said_in_plain_words(
+    tmp_path: Path, language: str
+) -> None:
+    with design_session(tmp_path, language=language) as session:
+        ready(session)
+        choose(session, "DES-002")
+        session.studio.fail_next(
+            "POST",
+            "/projects/{project_id}/design/gate/submit",
+            status=409,
+            body={"detail": {"code": "ITERATION_LIMIT_REACHED"}},
+        )
+        run = session.ut("design", "approve", language=language)
+        approved = session.project.approved("design")
+        decisions = session.count("POST", "/design/gate/decision")
+
+    assert run.status == 1
+    assert run.errors == LIMIT_REACHED[language]
+    assert "maximum" not in run.errors
+    assert not approved
+    assert decisions == 0
 
 
 def test_an_approval_needs_a_choice(tmp_path: Path) -> None:

@@ -354,6 +354,10 @@ class FakeQueries:
         """Create empty read state."""
         self.snapshot: UserModelingSnapshotVersion | None = None
 
+    async def current_personas(self, *, owner_user_id: UUID, project_id: UUID):
+        del owner_user_id, project_id
+        return () if self.snapshot is None else self.snapshot.snapshot.persona_versions
+
     async def current_snapshot(
         self,
         *,

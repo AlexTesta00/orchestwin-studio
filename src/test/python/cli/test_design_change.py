@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from orchestwin.cli import messages
 from orchestwin.cli.api import design as design_api
 from orchestwin.cli.errors import CliError
 from orchestwin.cli.flows import design_change
@@ -494,3 +495,53 @@ def test_the_design_changed_before_the_change_was_applied(tmp_path: Path) -> Non
     assert run.errors.startswith("In the meantime the design changed")
     assert run.output.endswith("Chosen: DES-002 “Single card”, version 2, not approved yet.\n")
     assert (number, started) == (2, 0)
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_a_design_behind_the_new_requirements_names_the_gesture(
+    tmp_path: Path, language: str
+) -> None:
+    with design_session(tmp_path, through="design", language=language) as session:
+        session.project.seed_requirements_change()
+        run = session.ut("--yes", "design", "change", "Bigger button", language=language)
+        guided = session.ut(
+            "--yes",
+            "design",
+            answers=["leave"],
+            language=language,
+        )
+        number = version_number(session)
+        started = reviews(session)
+
+    assert run.status == 1
+    assert run.errors == messages.text("design.behind", language) + "\n"
+    assert "`ut sections update`" in run.errors
+    assert guided.status == 0, guided.errors
+    assert guided.errors == ""
+    assert messages.text("design.behind", language) in guided.output
+    assert messages.text("design.menu_update_sections", language) in guided.output
+    assert messages.text("design.menu_change", language) not in guided.output
+    assert (number, started) == (2, 0)
+
+
+def test_a_design_that_cites_a_removed_requirement_says_why_it_cannot_follow(
+    tmp_path: Path,
+) -> None:
+    with design_session(tmp_path, through="design") as session:
+        session.project.seed_requirement_removed()
+        run = session.ut("--yes", "design", "change", "Bigger button")
+        sections = session.project.sections()
+
+    design = next(item for item in sections["sections"] if item["key"] == "DESIGN")
+    assert run.status == 1
+    assert (
+        run.errors
+        == messages.text(
+            "design.recovery_requirement_removed", "en", codes=", ".join(design["codes"])
+        )
+        + "\n"
+    )
+    assert "`ut design regenerate`" in run.errors
+    assert "ut sections update" not in run.errors
+    assert "ut design change" not in run.errors
+    assert "ask for a change" not in run.errors

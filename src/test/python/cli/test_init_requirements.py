@@ -52,7 +52,7 @@ def test_a_change_is_applied_and_the_new_version_is_approved(tmp_path: Path) -> 
     assert "  + adds the requirement REQ-005: Owner request: " + REQUEST in lines
     assert "Change applied: the requirements are at version 2." in lines
     assert (
-        'Step "Requirements" approved (version 2). Saved in .orchestwin/steps/requirements.json.'
+        'Step "Definition" approved (version 2). Saved in .orchestwin/steps/requirements.json.'
         in lines
     )
 
@@ -91,10 +91,7 @@ def test_everything_is_read_in_full(tmp_path: Path) -> None:
 
     lines = run.output.splitlines()
     assert run.status == 0, run.errors
-    assert (
-        "The requirements (version 1). Requirements: 4; user stories: 2; acceptance criteria: 4."
-        in lines
-    )
+    assert "Scenarios: 2; needs: 2; user stories: 2; requirements: 4; criteria: 4." in lines
     assert "REQ-001 Amount entry (must have, function)" in lines
     assert "  The system lets people enter the bill in euros." in lines
     assert "REQ-004 Immediate answer (must have, quality)" in lines

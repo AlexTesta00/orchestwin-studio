@@ -122,6 +122,12 @@ _TEXT: Final = {
         "gaps_many": "{count} requirements are not covered.",
         "twins": "User twins",
         "stories": "User stories",
+        "needs": "Needs",
+        "journeys": "Journey",
+        "expands": "expands",
+        "participates_in": "participates in",
+        "reveals": "reveals",
+        "motivates": "motivates",
         "criteria": "Acceptance criteria",
         "scenarios": "Usage scenarios",
         "risks": "Risks",
@@ -177,6 +183,12 @@ _TEXT: Final = {
         "gaps_many": "{count} requisiti non sono coperti.",
         "twins": "User twin",
         "stories": "Storie utente",
+        "needs": "Bisogni",
+        "journeys": "Journey",
+        "expands": "espande",
+        "participates_in": "partecipa a",
+        "reveals": "rivela",
+        "motivates": "motiva",
         "criteria": "Criteri di accettazione",
         "scenarios": "Scenari d'uso",
         "risks": "Rischi",
@@ -495,6 +507,8 @@ def requirements_traceability_diagram(
     criteria = specification["acceptance_criteria"]
     scenarios = specification["scenarios"]
     risks = specification["risks"]
+    needs = specification.get("needs", ())
+    journeys = specification.get("journeys", ())
     done = specification["definition_of_done"]
     codes = {
         **_codes(requirements),
@@ -523,6 +537,8 @@ def requirements_traceability_diagram(
         )
     )
     for identifier, label, items, field in (
+        ("NEEDS", text["needs"], needs, "title"),
+        ("JOURNEYS", text["journeys"], journeys, "title"),
         ("STORIES", text["stories"], stories, "goal"),
         ("REQUIREMENTS", text["requirements"], requirements, "title"),
         ("CRITERIA", text["criteria"], criteria, "statement"),
@@ -554,6 +570,63 @@ def requirements_traceability_diagram(
         ]
     )
     lines.extend(f"{_INDENT}{source} --> {destination}" for source, destination in solid)
+    if specification.get("schema_version", 1) == 2:
+        scenario_codes = _codes(scenarios)
+        need_codes = _codes(needs)
+        for label, pairs in (
+            (
+                text["participates_in"],
+                _edges(
+                    (twins[str(item["actor"]["twin_id"])], _identifier(item["code"]))
+                    for item in scenarios
+                ),
+            ),
+            (
+                text["reveals"],
+                _edges(
+                    (_identifier(scenario_codes[str(identifier)]), _identifier(need["code"]))
+                    for need in needs
+                    for identifier in need["scenario_ids"]
+                ),
+            ),
+            (
+                text["motivates"],
+                _edges(
+                    (_identifier(need_codes[str(identifier)]), _identifier(item["code"]))
+                    for item in (*requirements, *stories)
+                    for identifier in item["need_ids"]
+                ),
+            ),
+        ):
+            lines.extend(
+                f'{_INDENT}{source} -->|"{_line(label)}"| {destination}'
+                for source, destination in pairs
+            )
+    for label, pairs in (
+        (
+            text["expands"],
+            _edges(
+                (_identifier(str(scenario["code"])), _identifier(str(journey["code"])))
+                for journey in journeys
+                for scenario in scenarios
+                if scenario["id"] == journey["scenario_id"]
+            ),
+        ),
+        (
+            text["reveals"],
+            _edges(
+                (_identifier(str(journey["code"])), _identifier(str(need["code"])))
+                for journey in journeys
+                for phase in journey["phases"]
+                for need in needs
+                if need["id"] in phase["need_ids"]
+            ),
+        ),
+    ):
+        lines.extend(
+            f'{_INDENT}{source} -->|"{_line(label)}"| {destination}'
+            for source, destination in pairs
+        )
     for label, pairs in (
         (
             text["exercised_by"],

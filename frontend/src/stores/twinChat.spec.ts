@@ -7,12 +7,12 @@ import { useTwinChatStore } from "./twinChat";
 
 const authorize = <T>(operation: (token: string) => Promise<T>) => operation("token");
 
-function conversation(turnCount: number): TwinConversationPayload {
+function conversation(turnCount: number, versionNumber = 1): TwinConversationPayload {
   return {
-    id: "conversation-1",
+    id: `conversation-${versionNumber}`,
     project_id: "project-1",
     twin_id: "twin-1",
-    twin_version_number: 1,
+    twin_version_number: versionNumber,
     twin_content_hash: "a".repeat(64),
     twin_name: "Marta",
     created_at: "2026-09-22T10:00:00Z",
@@ -47,13 +47,31 @@ describe("twin chat store", () => {
     expect(store.conversationOf("twin-1")?.turns).toHaveLength(1);
     expect(store.conversationOf("twin-2")).toBeNull();
 
-    await store.ask("project-1", "twin-1", "E poi?", authorize, api);
+    await store.ask("project-1", "twin-1", 1, "E poi?", authorize, api);
     expect(vi.mocked(api.ask).mock.calls[0]?.[2]).toEqual({
       question: "E poi?",
       expected_turn_count: 1,
     });
     expect(store.conversationOf("twin-1")?.turns).toHaveLength(2);
     expect(store.isBusy("twin-1")).toBe(false);
+    expect(store.error).toBeNull();
+  });
+
+  it("starts from zero when the conversation held belongs to another version of the twin", async () => {
+    const api: TwinChatApi = {
+      conversation: vi.fn().mockResolvedValue(conversation(2, 1)),
+      ask: vi.fn().mockResolvedValue(conversation(1, 2)),
+    };
+    const store = useTwinChatStore();
+
+    await store.load("project-1", "twin-1", authorize, api);
+    await store.ask("project-1", "twin-1", 2, "E adesso?", authorize, api);
+
+    expect(vi.mocked(api.ask).mock.calls[0]?.[2]).toEqual({
+      question: "E adesso?",
+      expected_turn_count: 0,
+    });
+    expect(store.conversationOf("twin-1")).toEqual(conversation(1, 2));
     expect(store.error).toBeNull();
   });
 
@@ -65,7 +83,7 @@ describe("twin chat store", () => {
     const store = useTwinChatStore();
 
     await store.load("project-1", "twin-1", authorize, api);
-    await expect(store.ask("project-1", "twin-1", "Ciao?", authorize, api)).rejects.toThrow(
+    await expect(store.ask("project-1", "twin-1", 1, "Ciao?", authorize, api)).rejects.toThrow(
       "TWIN_CHAT_MODEL_NOT_CONFIGURED",
     );
     expect(store.error).toBe("TWIN_CHAT_MODEL_NOT_CONFIGURED");

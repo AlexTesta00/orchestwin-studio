@@ -11,15 +11,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from orchestwin import __version__
+from orchestwin.api.acceptance_tests import create_acceptance_test_router
+from orchestwin.api.archetypes import create_archetypes_router
 from orchestwin.api.artifacts import create_artifact_graph_router
 from orchestwin.api.auth import AuthApiSettings, AuthAttemptLimits, create_auth_router
 from orchestwin.api.brief_dialogue import create_brief_dialogue_router
 from orchestwin.api.clarification import create_clarification_router
+from orchestwin.api.code_changes import create_code_change_router
 from orchestwin.api.design import create_design_router
 from orchestwin.api.design_discussion import create_design_discussion_router
 from orchestwin.api.design_iterations import create_design_iteration_router
 from orchestwin.api.design_loop import create_design_loop_router
 from orchestwin.api.design_mockups import create_design_mockup_router
+from orchestwin.api.design_realignment import create_design_realignment_router
 from orchestwin.api.design_review_pins import create_design_review_pins_router
 from orchestwin.api.diagrams import create_diagram_router
 from orchestwin.api.generation_jobs import GenerationJobRegistry
@@ -39,11 +43,16 @@ from orchestwin.api.requirements import create_requirements_router
 from orchestwin.api.requirements_realignment import (
     create_requirements_realignment_router,
 )
+from orchestwin.api.research_evidence import create_research_evidence_router
+from orchestwin.api.sections import create_sections_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
+from orchestwin.api.team_realignment import create_team_realignment_router
 from orchestwin.api.teams import create_team_router
 from orchestwin.api.training import create_training_router
 from orchestwin.api.twin_chat import create_twin_chat_router
 from orchestwin.api.twin_imports import create_twin_import_router
+from orchestwin.api.twin_learning import create_twin_learning_router
+from orchestwin.api.user_modeling_realignment import create_user_modeling_realignment_router
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
 from orchestwin.api.validation import request_validation_error
 from orchestwin.config import ApplicationSettings, load_settings
@@ -145,6 +154,7 @@ def create_app(
     application.state.team_proposal_service = resolved_runtime.team_proposal_service
     application.state.agent_team_service = resolved_runtime.agent_team_service
     application.state.user_modeling_services = resolved_runtime.user_modeling_services
+    application.state.archetype_service = resolved_runtime.archetype_service
     application.state.requirements_generation_service = (
         resolved_runtime.requirements_generation_service
     )
@@ -160,9 +170,15 @@ def create_app(
     application.state.project_diagram_service = resolved_runtime.project_diagram_service
     application.state.knowledge_package_service = resolved_runtime.knowledge_package_service
     application.state.twin_import_service = resolved_runtime.twin_import_service
+    application.state.user_modeling_realignment_service = (
+        resolved_runtime.user_modeling_realignment_service
+    )
     application.state.requirements_realignment_service = (
         resolved_runtime.requirements_realignment_service
     )
+    application.state.design_realignment_service = resolved_runtime.design_realignment_service
+    application.state.sections_service = resolved_runtime.sections_service
+    application.state.team_realignment_service = resolved_runtime.team_realignment_service
     application.state.project_import_service = resolved_runtime.project_import_service
     application.state.training_api_service = resolved_runtime.training_api_service
     application.state.generation_jobs = jobs
@@ -198,6 +214,7 @@ def create_app(
         create_brief_dialogue_router(),
         create_team_router(),
         create_runtime_user_modeling_router(resolved_runtime.user_modeling_services),
+        create_archetypes_router(),
         create_twin_chat_router(),
         create_requirements_router(),
         create_design_router(),
@@ -211,8 +228,16 @@ def create_app(
         create_artifact_graph_router(),
         create_diagram_router(),
         create_knowledge_package_router(),
+        create_code_change_router(),
+        create_acceptance_test_router(),
+        create_twin_learning_router(),
+        create_research_evidence_router(),
         create_twin_import_router(),
+        create_user_modeling_realignment_router(),
         create_requirements_realignment_router(),
+        create_design_realignment_router(),
+        create_sections_router(),
+        create_team_realignment_router(),
         create_project_import_router(),
         create_training_router(),
         create_proposal_evidence_router(),

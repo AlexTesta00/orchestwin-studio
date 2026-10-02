@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from uuid import UUID
 
 from orchestwin.artifacts.design_discussion import DiscussionStatus
 from orchestwin.artifacts.design_finding_validations import create_finding_validation
+from orchestwin.knowledge import state_documents
 from orchestwin.knowledge.feedback import (
     DISCUSSIONS_KIND,
     INSIGHTS_KIND,
@@ -24,13 +26,51 @@ from src.test.python.artifacts.design_fixtures import design_version
 from src.test.python.artifacts.test_design_evaluation import TWIN_A, TWIN_B
 
 from .knowledge_fixtures import (
+    ALIGNED_COMMIT,
     RUN_ONE,
     RUN_TWO,
+    VOLUNTEER_TWIN,
     applications,
+    change_run,
+    development_sources,
     discussions,
     evaluation_runs,
+    learned_entry,
+    partial_sources,
+    real_sources,
     sources,
+    state_sources,
     validations,
+)
+from .knowledge_fixtures import test_run as acceptance_run
+
+CODE_CRITIQUES = "## Critiques on the code changes\n\n"
+TEST_CRITIQUES = "\n## Critiques on the acceptance tests\n\n"
+LEARNED_HEADING = "\n## Learned during development\n\n"
+LEARNED_SECTION = (
+    "## Learned during development",
+    "",
+    "Addetti all'accoglienza, version 1.3, has 2 active learned observations. OBS-001 (from its "
+    "own critiques, approved by the owner on 2026-09-29 11:00+00:00): Gli addetti lavorano in "
+    "piedi e tengono il tablet con una mano sola. Basis: I rilievi sul pulsante di conferma "
+    "piccolo, tornati su due commit. Warning, it contradicts the profile: Il profilo dice che gli "
+    "addetti lavorano seduti al banco. OBS-003 (written by the owner on 2026-09-30 "
+    "09:00+00:00): Gli addetti leggono la lista da due metri, mentre accolgono gli ospiti. "
+    "Retired observation: OBS-002.",
+    "",
+    "Organizzatori volontari, version 1.0, has learned nothing yet.",
+    "",
+)
+NEWEST_TEST_RUN = (
+    "The run of 2026-09-29 10:05+00:00 checked the static folder `dist` in Chrome 151.0.7922.76 "
+    "and Firefox 156.0.1, against requirements version 2 and design version 4, alternative "
+    "DES-002. Criteria: 1 passed, 1 failed, 0 blocked, 1 not covered, 0 not run. The twins "
+    "reviewed it on 2026-09-29 10:20+00:00. Addetti all'accoglienza: the results raise a concern "
+    "(CONCERN). Un nome vuoto viene accettato senza nessun messaggio. Findings: importance high "
+    "(HIGH) about AC-002, REQ-003, SCR-002: Un ospite senza nome entra nella lista; importance "
+    "low (LOW) about AC-003: Nessuno ha provato la lista sul tablet. Organizzatori volontari: the "
+    "results are fine (FINE). L'aggiunta di un ospite funziona in tutti e due i browser. No "
+    "finding."
 )
 
 
@@ -81,7 +121,8 @@ def test_feedback_documents_hold_the_exact_records() -> None:
 
     assert list(documents) == [FEEDBACK_REVIEWS, FEEDBACK_DISCUSSIONS, FEEDBACK_INSIGHTS]
     reviews = documents[FEEDBACK_REVIEWS]
-    assert reviews["schema_version"] == 2
+    assert reviews["schema_version"] == 3
+    assert {document["schema_version"] for document in documents.values()} == {3}
     assert reviews["kind"] == REVIEWS_KIND
     assert reviews["project_id"] == str(package.project_id)
     assert reviews["design"] == {
@@ -159,6 +200,23 @@ def test_feedback_text_shows_findings_with_the_owner_decisions() -> None:
     assert "Evidence gaps:" in text
 
 
+def test_feedback_text_dates_runs_and_discussions_without_their_identifiers() -> None:
+    text = feedback_markdown(sources())
+    runs = [run.to_snapshot() for run in evaluation_runs()]
+    approved = discussions()[0].to_snapshot()
+
+    for run in runs:
+        assert (
+            f"\nCompleted on {run['completed_at']}, evaluator fake-design-evaluator 1, "
+            "prompt prompt-1.\n"
+        ) in text
+        assert run["id"] not in text
+    assert f"\nApproved on {approved['decided_at']}.\n" in text
+    assert approved["id"] not in text
+    assert "\nRun " not in text
+    assert "\nDiscussion " not in text
+
+
 def test_feedback_text_reports_rounds_reactions_and_synthesis_of_discussions() -> None:
     text = feedback_markdown(sources())
 
@@ -194,3 +252,177 @@ def test_feedback_text_without_records_says_so() -> None:
     assert "## Reviews\n\nnot provided.\n" in text
     assert "## Approved discussions\n\nnot provided.\n" in text
     assert "## Applied insights\n\nnot provided.\n" in text
+    assert text.endswith(
+        "## Critiques on the code changes\n\nNo code change has been reviewed yet.\n\n"
+        "## Critiques on the acceptance tests\n\nNo run of the acceptance tests is recorded yet: "
+        "`ut test` runs them on the application and records the result in the Studio.\n\n"
+        "## Learned during development\n\nReceptionist Twin, version 1.0, has learned nothing "
+        "yet.\n"
+    )
+
+
+def test_feedback_text_has_one_paragraph_for_every_critique_run_on_the_code() -> None:
+    first = change_run()
+    second = {
+        **change_run(),
+        "id": "00000000-0000-4000-8000-00000000d002",
+        "commit": ALIGNED_COMMIT,
+        "reviewed_at": "2026-09-28T09:40:00+00:00",
+        "alignment": {
+            **change_run()["alignment"],
+            "status": "DESIGN_OUTDATED",
+            "design_request": "Aggiungere un filtro per sede nella lista",
+            "code_tasks": [],
+        },
+    }
+    package = sources(state=replace(state_sources(), runs=(first, second)))
+
+    text = feedback_markdown(package)
+    section = text.split(CODE_CRITIQUES, 1)[1].split(TEST_CRITIQUES, 1)[0]
+    paragraphs = [item for item in section.split("\n\n") if item.strip()]
+
+    assert len(paragraphs) == 2
+    assert paragraphs[0].startswith(
+        "Commit `4f2a9c1`, reviewed on 2026-09-28 11:30+00:00 against requirements version 2 "
+        "and design version 4, alternative DES-002: the code departs from the approved "
+        "requirements or design (CODE_DRIFT). Il controllo del nome vuoto non segue il "
+        "requisito REQ-003."
+    )
+    assert (
+        "Addetti all'accoglienza: the change raises a concern (CONCERN), 2 findings. "
+        "Il messaggio per il nome vuoto compare solo dopo il salvataggio."
+    ) in paragraphs[0]
+    assert "Organizzatori volontari: the change is fine (FINE), 1 finding." in paragraphs[0]
+    assert paragraphs[0].endswith(
+        "Tasks proposed for the code: Mostrare il messaggio di errore accanto al campo del nome."
+    )
+    assert paragraphs[1].startswith("Commit `9d8e7f6`, reviewed on 2026-09-28 09:40+00:00")
+    assert "the design should get a new version (DESIGN_OUTDATED)" in paragraphs[1]
+    assert "Design change request: Aggiungere un filtro per sede nella lista." in paragraphs[1]
+    assert "Tasks proposed" not in paragraphs[1]
+    assert "\n" not in paragraphs[0].strip()
+
+
+def test_feedback_text_ends_with_one_paragraph_for_every_test_run_newest_first() -> None:
+    drifting = {
+        **acceptance_run(),
+        "id": "00000000-0000-4000-8000-00000000e0ff",
+        "finished_at": "2026-09-29T08:00:00+00:00",
+        "reviewed_at": "2026-09-29T08:30:00+00:00",
+        "critiques": [
+            {
+                "twin_id": VOLUNTEER_TWIN,
+                "twin_name": "Organizzatori volontari",
+                "verdict": "DRIFT",
+                "summary": "La lista non mostra più il numero progressivo",
+                "findings": [
+                    {
+                        "severity": "MEDIUM",
+                        "text": "Dov'è finito il numero?",
+                        "about": {"criterion": None, "requirement": None, "screen": "SCR-001"},
+                        "action": None,
+                    }
+                ],
+            }
+        ],
+    }
+    unreviewed = {
+        **acceptance_run(),
+        "id": "00000000-0000-4000-8000-00000000e0fe",
+        "finished_at": "2026-09-28T16:00:00+00:00",
+        "application": {"kind": "URL", "address": "http://localhost:5173/"},
+        "browsers": [{"name": "chrome", "version": "151.0.7922.76"}],
+        "reference": {**acceptance_run()["reference"], "alternative_code": None},
+        "critiques": [],
+        "reviewed_at": None,
+    }
+    runs = (acceptance_run(), drifting, unreviewed)
+    package = sources(state=replace(state_sources(), tests=runs))
+
+    text = feedback_markdown(package)
+    section = text.split(TEST_CRITIQUES, 1)[1].split(LEARNED_HEADING, 1)[0]
+    paragraphs = [item.strip() for item in section.split("\n\n") if item.strip()]
+
+    assert section.endswith(f"{paragraphs[-1]}\n")
+    assert len(paragraphs) == 3
+    assert paragraphs[0] == NEWEST_TEST_RUN
+    assert paragraphs[1].startswith("The run of 2026-09-29 08:00+00:00 checked")
+    assert (
+        "The twins reviewed it on 2026-09-29 08:30+00:00. Organizzatori volontari: the application "
+        "departs from what was approved (DRIFT). La lista non mostra più il numero progressivo. "
+        "Findings: importance medium (MEDIUM) about SCR-001: Dov'è finito il numero?"
+    ) in paragraphs[1]
+    assert paragraphs[2] == (
+        "The run of 2026-09-28 16:00+00:00 checked the address `http://localhost:5173/` in Chrome "
+        "151.0.7922.76, against requirements version 2 and design version 4, alternative not "
+        "selected. Criteria: 1 passed, 1 failed, 0 blocked, 1 not covered, 0 not run. The twins "
+        "have not reviewed this run yet."
+    )
+    assert all("\n" not in paragraph for paragraph in paragraphs)
+
+
+def test_feedback_text_speaks_english_about_the_test_runs_of_an_italian_project() -> None:
+    text = feedback_markdown(real_sources(state=state_sources()))
+
+    assert "## Critiques on the code changes" in text
+    assert f"{TEST_CRITIQUES}{NEWEST_TEST_RUN}\n{LEARNED_HEADING}" in text
+    assert "Critiche sui test" not in text
+
+
+def test_feedback_text_ends_with_what_every_twin_learned() -> None:
+    text = feedback_markdown(real_sources(state=development_sources()))
+
+    assert text.endswith("\n".join(LEARNED_SECTION))
+    assert text.index("## Critiques on the acceptance tests") < text.index(
+        "## Learned during development"
+    )
+
+
+def test_feedback_text_names_the_retired_observations_and_the_singular() -> None:
+    entry = learned_entry()
+    retired = {**entry["retired"][0], "code": "OBS-004", "reason": None}
+    one = {**entry, "observations": entry["observations"][1:]}
+    none_active = {**entry, "observations": [], "retired": [*entry["retired"], retired]}
+
+    single = feedback_markdown(real_sources(state=replace(development_sources(), learning=(one,))))
+    empty = feedback_markdown(
+        real_sources(state=replace(development_sources(), learning=(none_active,)))
+    )
+
+    assert (
+        "Addetti all'accoglienza, version 1.3, has 1 active learned observation. OBS-003 (written "
+        "by the owner on 2026-09-30 09:00+00:00): Gli addetti leggono la lista da due metri, "
+        "mentre accolgono gli ospiti. Retired observation: OBS-002.\n"
+    ) in single
+    assert "Basis:" not in single and "Warning" not in single
+    assert (
+        "Addetti all'accoglienza, version 1.3, has no active learned observation. Retired "
+        "observations: OBS-002, OBS-004.\n"
+    ) in empty
+
+
+def test_feedback_text_leaves_out_what_a_twin_outside_the_folder_learned() -> None:
+    package = replace(sources(), state=development_sources())
+    text = feedback_markdown(package)
+
+    assert text.endswith(
+        "## Learned during development\n\nReceptionist Twin, version 1.0, has learned nothing "
+        "yet.\n"
+    )
+    assert "OBS-001" not in text
+
+
+def test_the_section_on_learning_without_twins_says_that_no_twin_learned() -> None:
+    assert state_documents.learning_feedback_lines(partial_sources("team")) == [
+        "## Learned during development",
+        "",
+        "No twin has learned anything yet during the development.",
+        "",
+    ]
+
+
+def test_feedback_counts_are_zero_while_the_design_is_not_approved() -> None:
+    package = replace(sources(), design=None, design_gate=None)
+
+    assert package.present_stages == ("brief", "team", "twins", "requirements")
+    assert set(feedback_summary(package).values()) == {0}

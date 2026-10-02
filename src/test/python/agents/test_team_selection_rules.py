@@ -23,6 +23,7 @@ from orchestwin.agents.selection_rules import (
 )
 from orchestwin.projects.briefs import (
     BriefField,
+    ProjectBrief,
     create_project_brief,
 )
 from orchestwin.projects.domain import (
@@ -483,3 +484,378 @@ def test_mode_that_a_specialist_does_not_support_keeps_the_rule_of_before(
     assert supported.reasons == (
         TeamSelectionReason(code=TeamSelectionReasonCode.CORE_USER_CENTERED_DESIGN),
     )
+
+
+def test_negated_server_in_the_budget_does_not_contradict_the_excluded_backend() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice",
+            description="È una pagina web statica senza server, registrazione né pubblicità.",
+            budget=(
+                "Si presume un progetto di piccole dimensioni "
+                "senza costi di server o di servizi esterni."
+            ),
+        ),
+    )
+
+    backend = constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert backend.kind is TeamRoleConstraintKind.IMPOSSIBLE
+    assert backend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.EXPLICIT_SCOPE_EXCLUSION,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("senza server",)),
+        ),
+    )
+    assert constraints.has_conflicts is False
+
+
+def test_negated_backend_words_alone_leave_the_backend_engineer_optional() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice",
+            description="Non richiede un database e non ha bisogno di un server.",
+        ),
+    )
+
+    assert constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER).kind is (
+        TeamRoleConstraintKind.OPTIONAL
+    )
+
+
+def test_backend_word_before_a_negation_still_counts() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice",
+            description="Il server non deve mai fermarsi.",
+        ),
+    )
+
+    backend = constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert backend.kind is TeamRoleConstraintKind.MANDATORY
+    assert backend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.BACKEND_DELIVERY_SIGNAL,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("server",)),
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "description",
+    (
+        "senza dubbio la cosa più importante è il database",
+        "Non importa come, ci serve un database.",
+    ),
+    ids=("eight words away", "six words away"),
+)
+def test_negation_farther_than_five_words_does_not_neutralize_the_backend_word(
+    description: str,
+) -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(name="Calcolatrice", description=description),
+    )
+
+    backend = constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert backend.kind is TeamRoleConstraintKind.MANDATORY
+    assert backend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.BACKEND_DELIVERY_SIGNAL,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("database",)),
+        ),
+    )
+
+
+def test_word_negated_in_one_field_counts_only_in_the_field_where_it_is_plain() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice",
+            budget="senza costi di server",
+            technical_constraints=["un server con API REST"],
+        ),
+    )
+
+    backend = constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert backend.kind is TeamRoleConstraintKind.MANDATORY
+    assert backend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.BACKEND_DELIVERY_SIGNAL,
+            evidence=RuleEvidence(
+                fields=(BriefField.TECHNICAL_CONSTRAINTS,),
+                terms=("api", "server"),
+            ),
+        ),
+    )
+
+
+def test_match_terms_without_a_negation_window_still_counts_negated_words() -> None:
+    evidence_values = ((BriefField.BUDGET, "senza costi di server"),)
+    counted = RuleEvidence(fields=(BriefField.BUDGET,), terms=("server",))
+
+    assert selection_rules._match_terms(evidence_values, ("server",)) == counted
+    assert selection_rules._match_terms(evidence_values, ("server",), negated_within=0) == counted
+    assert (
+        selection_rules._match_terms(
+            evidence_values,
+            ("server",),
+            negated_within=selection_rules._NEGATION_WINDOW,
+        )
+        == RuleEvidence()
+    )
+
+
+def test_words_listed_after_an_excluded_server_are_negated_too() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(name="Calcolatrice", description="Senza server o database."),
+    )
+
+    backend = constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert backend.kind is TeamRoleConstraintKind.IMPOSSIBLE
+    assert backend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.EXPLICIT_SCOPE_EXCLUSION,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("senza server",)),
+        ),
+    )
+    assert constraints.has_conflicts is False
+
+
+def test_every_item_of_a_negated_list_stays_negated() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice",
+            description="Nessun server, database o account: i dati restano nel browser.",
+        ),
+    )
+
+    backend = constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert backend.kind is TeamRoleConstraintKind.IMPOSSIBLE
+    assert backend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.EXPLICIT_SCOPE_EXCLUSION,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("nessun server",)),
+        ),
+    )
+    assert constraints.has_conflicts is False
+
+
+def test_a_contrast_word_stops_the_negation() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice",
+            description="Senza login, ma con un database locale.",
+        ),
+    )
+
+    backend = constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert backend.kind is TeamRoleConstraintKind.MANDATORY
+    assert backend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.BACKEND_DELIVERY_SIGNAL,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("database",)),
+        ),
+    )
+
+
+def test_a_negation_does_not_reach_the_next_sentence() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice",
+            description="Non serve un server. Il database è necessario.",
+        ),
+    )
+
+    backend = constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert backend.kind is TeamRoleConstraintKind.MANDATORY
+    assert backend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.BACKEND_DELIVERY_SIGNAL,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("database",)),
+        ),
+    )
+
+
+def test_a_request_before_a_contrast_still_conflicts_with_the_exclusion_after_it() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice",
+            description="Una app con database ma senza backend.",
+        ),
+    )
+
+    backend = constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert backend.kind is TeamRoleConstraintKind.CONFLICT
+    assert backend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.BACKEND_DELIVERY_SIGNAL,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("database",)),
+        ),
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.EXPLICIT_SCOPE_EXCLUSION,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("senza backend",)),
+        ),
+    )
+    assert constraints.conflicting_agent_ids == (AgentIdentifier.BACKEND_ENGINEER,)
+    assert constraints.issues[0].code is TeamSelectionIssueCode.CONTRADICTORY_ROLE_SIGNALS
+
+
+def test_the_owner_may_switch_only_optional_and_contested_roles() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice",
+            description="Una app con database ma senza backend.",
+            technical_constraints=["Vue", "No mobile"],
+        ),
+    )
+
+    kinds = {
+        constraint.agent_id: (constraint.kind, constraint.owner_editable)
+        for constraint in constraints.role_constraints
+    }
+
+    assert kinds[AgentIdentifier.FRONTEND_ENGINEER] == (TeamRoleConstraintKind.MANDATORY, False)
+    assert kinds[AgentIdentifier.BACKEND_ENGINEER] == (TeamRoleConstraintKind.CONFLICT, True)
+    assert kinds[AgentIdentifier.MOBILE_ENGINEER] == (TeamRoleConstraintKind.IMPOSSIBLE, False)
+    assert kinds[AgentIdentifier.SECURITY_REVIEWER] == (TeamRoleConstraintKind.OPTIONAL, True)
+    assert constraints.issues[0].code is TeamSelectionIssueCode.CONTRADICTORY_ROLE_SIGNALS
+    assert all(
+        constraint.owner_editable
+        is (
+            constraint.kind
+            in {
+                TeamRoleConstraintKind.OPTIONAL,
+                TeamRoleConstraintKind.CONFLICT,
+            }
+        )
+        for constraint in constraints.role_constraints
+    )
+
+
+def test_a_contested_constraint_gives_back_the_issue_of_the_rules() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Contradictory project",
+            description="Use HTML screens, but the final product must be headless.",
+            technical_constraints=["Vue", "Nessun backend"],
+            functional_requirements=["Store the data in a database."],
+        ),
+    )
+
+    assert constraints.conflicting_agent_ids == (
+        AgentIdentifier.FRONTEND_ENGINEER,
+        AgentIdentifier.BACKEND_ENGINEER,
+    )
+    assert (
+        tuple(
+            selection_rules.contradiction_issue(constraints.constraint_for(agent_id))
+            for agent_id in constraints.conflicting_agent_ids
+        )
+        == constraints.issues
+    )
+
+    with pytest.raises(ValueError, match="only a conflicting role constraint"):
+        selection_rules.contradiction_issue(
+            constraints.constraint_for(AgentIdentifier.MOBILE_ENGINEER)
+        )
+
+
+def test_merged_evidence_keeps_the_order_of_the_brief_and_of_the_terms() -> None:
+    merged = selection_rules.merge_rule_evidence(
+        (
+            RuleEvidence(fields=(BriefField.TECHNICAL_CONSTRAINTS,), terms=("vue", "website")),
+            RuleEvidence(),
+            RuleEvidence(
+                fields=(BriefField.DESCRIPTION, BriefField.TECHNICAL_CONSTRAINTS),
+                terms=("browser", "vue"),
+            ),
+        )
+    )
+
+    assert merged == RuleEvidence(
+        fields=(BriefField.DESCRIPTION, BriefField.TECHNICAL_CONSTRAINTS),
+        terms=("browser", "vue", "website"),
+    )
+    assert selection_rules.merge_rule_evidence(()) == RuleEvidence()
+    assert selection_rules.merge_rule_evidence(iter((merged,))) == merged
+
+
+def test_a_mark_inside_a_word_does_not_split_the_sentence() -> None:
+    brief = create_project_brief(
+        name="Calcolatrice", description="Il sito usa Vue.js senza server."
+    )
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=brief,
+    )
+
+    frontend = constraints.constraint_for(AgentIdentifier.FRONTEND_ENGINEER)
+    backend = constraints.constraint_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert selection_rules._provided_evidence(brief) == (
+        (BriefField.NAME, "calcolatrice"),
+        (BriefField.DESCRIPTION, "il sito usa vue js senza server"),
+    )
+    assert frontend.kind is TeamRoleConstraintKind.MANDATORY
+    assert frontend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.WEB_DELIVERY_SIGNAL,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("vue",)),
+        ),
+    )
+    assert backend.kind is TeamRoleConstraintKind.IMPOSSIBLE
+    assert backend.reasons == (
+        TeamSelectionReason(
+            code=TeamSelectionReasonCode.EXPLICIT_SCOPE_EXCLUSION,
+            evidence=RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("senza server",)),
+        ),
+    )
+    assert constraints.has_conflicts is False
+
+
+def test_match_terms_without_a_window_reads_each_sentence_as_before() -> None:
+    values = selection_rules._provided_evidence(
+        ProjectBrief(
+            name="Calcolatrice",
+            description="Senza server né costi di database, solo REST\nAPI esterne.",
+        )
+    )
+    terms = ("api", "database", "rest api", "server")
+    ignored = ("senza server",)
+    read_as_before = RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("api", "database"))
+
+    assert values == (
+        (BriefField.NAME, "calcolatrice"),
+        (BriefField.DESCRIPTION, "senza server né costi di database solo rest"),
+        (BriefField.DESCRIPTION, "api esterne"),
+    )
+    assert selection_rules._match_terms(values, terms, ignored_phrases=ignored) == read_as_before
+    assert (
+        selection_rules._match_terms(values, terms, ignored_phrases=ignored, negated_within=0)
+        == read_as_before
+    )
+    assert selection_rules._match_terms(
+        values,
+        terms,
+        ignored_phrases=ignored,
+        negated_within=selection_rules._NEGATION_WINDOW,
+    ) == RuleEvidence(fields=(BriefField.DESCRIPTION,), terms=("api",))

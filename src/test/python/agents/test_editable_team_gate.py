@@ -7,8 +7,14 @@ from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from uuid import UUID
 
+import pytest
+
 from orchestwin.agents.catalog import (
     AgentIdentifier,
+)
+from orchestwin.agents.perspectives import (
+    PerspectiveStanding,
+    perspective_views,
 )
 from orchestwin.agents.proposals import (
     TeamProposalRevisionKind,
@@ -19,12 +25,14 @@ from orchestwin.agents.selection_rules import (
     determine_team_constraints,
 )
 from orchestwin.agents.team_gate import (
+    OWNER_CHOICE_STATEMENT,
     AgentTeamGateDecisionStatus,
     AgentTeamGateSubmissionStatus,
     LocalAgentTeamApprovalService,
     OwnerEditedProposalPersistenceResult,
     OwnerEditedProposalPersistenceStatus,
     ProjectWorkflowReadiness,
+    TeamEditIssue,
     TeamEditIssueCode,
     TeamEditStatus,
     agent_team_gate_is_currently_approved,
@@ -34,6 +42,8 @@ from orchestwin.models.fake_team_proposals import (
     FakeDeterministicTeamProposalAdapter,
 )
 from orchestwin.models.team_proposals import (
+    TeamProposalJustification,
+    TeamProposalJustificationKind,
     TeamProposalMemberSource,
     TeamProposalRequest,
 )
@@ -62,6 +72,7 @@ from orchestwin.workflow.gates import (
 OWNER_ID = UUID("00000000-0000-4000-8000-000000000001")
 OTHER_OWNER_ID = UUID("00000000-0000-4000-8000-000000000002")
 PROJECT_ID = UUID("00000000-0000-4000-8000-000000000010")
+CONTRADICTION = "Una app con database ma senza backend."
 NOW = datetime(
     2026,
     8,
@@ -576,13 +587,12 @@ def test_owner_cannot_remove_mandatory_agent() -> None:
     assert result.issues[0].agent_id is (AgentIdentifier.REQUIREMENTS_ANALYST)
 
 
-def test_new_optional_agent_requires_owner_rationale() -> None:
-    """Require inspectable owner reasoning for additions."""
+def test_new_optional_agent_without_rationale_is_chosen_by_the_owner() -> None:
     (
         _,
         initial,
         _,
-        _,
+        proposals,
         _,
         service,
     ) = build_fixture()
@@ -593,14 +603,34 @@ def test_new_optional_agent_requires_owner_rationale() -> None:
             owner_user_id=OWNER_ID,
             selected_agent_ids=(
                 *initial.proposal.selected_agent_ids,
-                AgentIdentifier.MOBILE_ENGINEER,
+                AgentIdentifier.SECURITY_REVIEWER,
             ),
         )
     )
 
-    assert result.status is (TeamEditStatus.REJECTED)
-    assert result.issues[0].code is (TeamEditIssueCode.RATIONALE_REQUIRED)
-    assert result.issues[0].agent_id is (AgentIdentifier.MOBILE_ENGINEER)
+    assert result.status is (TeamEditStatus.UPDATED)
+    assert result.issues == ()
+    assert result.version is not None
+    assert len(proposals.versions[PROJECT_ID]) == 2
+
+    security = result.version.proposal.member_for(AgentIdentifier.SECURITY_REVIEWER)
+
+    assert OWNER_CHOICE_STATEMENT == "Chosen by the owner."
+    assert security.source is (TeamProposalMemberSource.OWNER_ADDED)
+    assert security.justifications == (
+        TeamProposalJustification(
+            kind=TeamProposalJustificationKind.OWNER_RATIONALE,
+            code="OWNER_SELECTED_ROLE",
+            statement=OWNER_CHOICE_STATEMENT,
+        ),
+    )
+    assert (
+        perspective_views(
+            result.version.proposal.constraints,
+            result.version.proposal.selected_agent_ids,
+        )[4].applied
+        is True
+    )
 
 
 def test_owner_cannot_add_impossible_agent() -> None:
@@ -633,6 +663,125 @@ def test_owner_cannot_add_impossible_agent() -> None:
 
     assert result.status is (TeamEditStatus.REJECTED)
     assert result.issues[0].code is (TeamEditIssueCode.AGENT_NOT_SELECTABLE)
+
+
+def test_owner_cannot_add_impossible_agent_without_a_rationale_either() -> None:
+    (
+        _,
+        initial,
+        _,
+        proposals,
+        _,
+        service,
+    ) = build_fixture(description=("A Vue web application with no mobile application."))
+
+    result = asyncio.run(
+        service.edit_current(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            selected_agent_ids=(
+                *initial.proposal.selected_agent_ids,
+                AgentIdentifier.MOBILE_ENGINEER,
+            ),
+        )
+    )
+
+    assert result.status is (TeamEditStatus.REJECTED)
+    assert result.issues == (
+        TeamEditIssue(
+            code=TeamEditIssueCode.AGENT_NOT_SELECTABLE,
+            agent_id=AgentIdentifier.MOBILE_ENGINEER,
+        ),
+    )
+    assert len(proposals.versions[PROJECT_ID]) == 1
+
+
+def test_owner_adds_and_removes_a_contested_agent() -> None:
+    (
+        _,
+        initial,
+        _,
+        proposals,
+        _,
+        service,
+    ) = build_fixture(description=CONTRADICTION)
+    constraints = initial.proposal.constraints
+
+    assert constraints.conflicting_agent_ids == (AgentIdentifier.BACKEND_ENGINEER,)
+    assert AgentIdentifier.BACKEND_ENGINEER not in initial.proposal.selected_agent_ids
+
+    added = asyncio.run(
+        service.edit_current(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            selected_agent_ids=(
+                *initial.proposal.selected_agent_ids,
+                AgentIdentifier.BACKEND_ENGINEER,
+            ),
+        )
+    )
+
+    assert added.status is (TeamEditStatus.UPDATED)
+    assert added.version is not None
+
+    backend = added.version.proposal.member_for(AgentIdentifier.BACKEND_ENGINEER)
+    services = perspective_views(constraints, added.version.proposal.selected_agent_ids)[2].aspects[
+        1
+    ]
+
+    assert backend.source is (TeamProposalMemberSource.OWNER_ADDED)
+    assert backend.justifications[0].statement == OWNER_CHOICE_STATEMENT
+    assert added.version.proposal.constraints == constraints
+    assert (services.standing, services.applied) == (PerspectiveStanding.CONTESTED, True)
+
+    removed = asyncio.run(
+        service.edit_current(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            selected_agent_ids=(initial.proposal.selected_agent_ids),
+        )
+    )
+
+    assert removed.status is (TeamEditStatus.UPDATED)
+    assert removed.version is not None
+    assert removed.version.version_number == 3
+    assert AgentIdentifier.BACKEND_ENGINEER not in removed.version.proposal.selected_agent_ids
+    assert removed.version.content_hash == initial.content_hash
+    assert len(proposals.versions[PROJECT_ID]) == 3
+
+
+def test_owner_keeps_the_rationale_given_for_a_contested_agent() -> None:
+    (
+        _,
+        initial,
+        _,
+        _,
+        _,
+        service,
+    ) = build_fixture(description=CONTRADICTION)
+
+    result = asyncio.run(
+        service.edit_current(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            selected_agent_ids=(
+                *initial.proposal.selected_agent_ids,
+                AgentIdentifier.BACKEND_ENGINEER,
+            ),
+            owner_rationales=(
+                create_owner_agent_rationale(
+                    agent_id=(AgentIdentifier.BACKEND_ENGINEER),
+                    statement=("The data live on a server after all."),
+                ),
+            ),
+        )
+    )
+
+    assert result.status is (TeamEditStatus.UPDATED)
+    assert result.version is not None
+    assert result.version.proposal.member_for(AgentIdentifier.BACKEND_ENGINEER).justifications[
+        0
+    ].statement == ("The data live on a server after all.")
 
 
 def test_gate_two_approval_produces_readiness() -> None:
@@ -794,3 +943,145 @@ def test_other_owner_cannot_edit_team() -> None:
 
     assert result.status is (TeamEditStatus.PROJECT_NOT_FOUND)
     assert len(proposals.versions[PROJECT_ID]) == 1
+
+
+def team_attempt(
+    service: LocalAgentTeamApprovalService,
+    initial: TeamProposalVersion,
+    number: int,
+    action: HumanGateAction,
+):
+    if number > 1:
+        selected = initial.proposal.selected_agent_ids
+
+        if number % 2 == 0:
+            selected = (
+                *selected,
+                AgentIdentifier.MOBILE_ENGINEER,
+            )
+
+        edited = asyncio.run(
+            service.edit_current(
+                project_id=PROJECT_ID,
+                owner_user_id=OWNER_ID,
+                selected_agent_ids=selected,
+            )
+        )
+
+        assert edited.status is (TeamEditStatus.UPDATED)
+        assert edited.version is not None
+        assert edited.version.version_number == number
+
+    submitted = asyncio.run(
+        service.submit_gate(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+    )
+
+    if submitted.status is not AgentTeamGateSubmissionStatus.SUBMITTED:
+        return submitted, None
+
+    decided = asyncio.run(
+        service.decide_gate(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            action=action,
+            reason=(None if action is HumanGateAction.APPROVE else "Not these perspectives."),
+        )
+    )
+
+    assert decided.status is (AgentTeamGateDecisionStatus.APPLIED)
+    assert decided.gate is not None
+    assert 1 <= decided.gate.iteration <= decided.gate.max_iterations
+
+    return submitted, decided.gate
+
+
+def test_every_approved_team_version_renews_the_budget_of_attempts() -> None:
+    (
+        _,
+        initial,
+        _,
+        _,
+        gates,
+        service,
+    ) = build_fixture()
+
+    approved = [
+        team_attempt(
+            service,
+            initial,
+            number,
+            HumanGateAction.APPROVE,
+        )[1]
+        for number in range(1, 6)
+    ]
+
+    assert [(gate.iteration, gate.max_iterations) for gate in approved if gate is not None] == [
+        (1, 3),
+        (2, 4),
+        (3, 5),
+        (4, 6),
+        (5, 7),
+    ]
+    assert [gate.status for gate in gates.gates] == [
+        *(HumanGateStatus.STALE,) * 4,
+        HumanGateStatus.APPROVED,
+    ]
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        HumanGateAction.REJECT,
+        HumanGateAction.REQUEST_REVISION,
+    ],
+)
+@pytest.mark.parametrize("approvals", [0, 1, 4])
+def test_three_team_versions_not_approved_in_a_row_still_reach_the_limit(
+    approvals: int,
+    action: HumanGateAction,
+) -> None:
+    (
+        _,
+        initial,
+        _,
+        _,
+        _,
+        service,
+    ) = build_fixture()
+
+    for number in range(1, approvals + 1):
+        team_attempt(service, initial, number, HumanGateAction.APPROVE)
+
+    attempts = [
+        team_attempt(service, initial, number, action)[1]
+        for number in range(approvals + 1, approvals + 4)
+    ]
+    refused, _ = team_attempt(
+        service,
+        initial,
+        approvals + 4,
+        HumanGateAction.APPROVE,
+    )
+    final = attempts[-1]
+    final_status = (
+        HumanGateStatus.REJECTED
+        if action is HumanGateAction.REJECT
+        else HumanGateStatus.PAUSED_NEEDS_HUMAN
+    )
+
+    assert final is not None
+    assert final.status is final_status
+    assert (final.iteration, final.max_iterations) == (
+        approvals + 3,
+        approvals + 3,
+    )
+    assert refused.status is (AgentTeamGateSubmissionStatus.ITERATION_LIMIT_REACHED)
+    assert refused.gate is not None
+    assert refused.gate.status is (HumanGateStatus.STALE)
+    assert (refused.gate.iteration, refused.gate.max_iterations) == (
+        approvals + 3,
+        approvals + 3,
+    )

@@ -26,6 +26,8 @@ DIALOGUE = (
 )
 CREATED_AT = "2026-09-29T09:00:00+00:00"
 STAGES = ("brief", "team", "twins", "requirements")
+PUBLICATION = "/knowledge-packages"
+BASE = f"{API}/projects/{PROJECT_ID}"
 
 
 def sign_in(studio: FakeStudio, tmp_path: Path) -> None:
@@ -98,8 +100,24 @@ def changes(studio: FakeStudio) -> list[tuple[str, str, bytes]]:
     return [
         (request.method, request.path, request.body)
         for request in studio.requests
-        if request.method != "GET" and not request.path.endswith("/auth/login")
+        if request.method != "GET" and not request.path.endswith(("/auth/login", PUBLICATION))
     ]
+
+
+def publications(studio: FakeStudio) -> int:
+    return len(
+        [
+            request
+            for request in studio.requests
+            if request.method == "POST" and request.path.endswith(PUBLICATION)
+        ]
+    )
+
+
+def local_progress(tmp_path: Path) -> tuple[list[str], str | None]:
+    manifest = tmp_path / "project" / "orchestwin" / "orchestwin.json"
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    return document["progress"]["approved"], document["progress"]["pending"]
 
 
 def posted(studio: FakeStudio, suffix: str) -> list[object]:
@@ -160,8 +178,17 @@ def test_the_whole_path_with_typed_answers(tmp_path: Path, language: str, yes: s
             "it": "Il prossimo comando è `ut design`",
             "en": "The next command is `ut design`",
         }
+        folder_line = {
+            "it": "Cartella di conoscenza aggiornata in orchestwin/ (versione 4): contiene i "
+            "passi approvati finora.",
+            "en": "Knowledge folder updated in orchestwin/ (version 4): it holds the steps "
+            "approved so far.",
+        }
         assert next_line[language] in run.output
+        assert folder_line[language] in run.output.splitlines()
         assert len(changes(studio)) == len(set(changes(studio)))
+        assert publications(studio) == 4
+        assert local_progress(tmp_path) == (list(STAGES), "design")
         assert run.errors == ""
         assert studio.errors == []
 
@@ -180,11 +207,25 @@ def test_the_whole_path_in_italian_says_what_happens_at_each_step(tmp_path: Path
     assert "Domanda 1: Quale problema risolve il progetto?" in lines
     assert "Punti essenziali ancora aperti: 1." in lines
     assert 'Passo "Brief" approvato (versione 3). Salvato in .orchestwin/steps/brief.json.' in lines
-    assert "Passo 2 di 4: Squadra" in lines
-    assert "Profilo 2 di 2: Titolare della pizzeria" in lines
+    assert "Il percorso ha quattro passi: Brief, Prospettive, User Twin e Definizione." in (
+        run.output
+    )
+    assert "Passo 2 di 4: Prospettive" in lines
+    assert "Passo 3 di 4: User Twin" in lines
+    assert "Passo 4 di 4: Definizione" in lines
+    assert "Archetipo 2 di 2: Titolare della pizzeria" in lines
     assert "  Difficoltà: Conti a mente sbagliati; Attesa alla cassa" in lines
-    assert "REQ-003  Divisione del conto       importante" in lines
-    assert "- Requisiti: versione 1" in lines
+    assert "- Divisione del conto" in lines
+    assert (
+        'Fatto: il progetto "Calcolo mancia" ha approvati tutti i passi fino alla Definizione.'
+        in (lines)
+    )
+    assert lines[lines.index("- Brief: versione 3") : lines.index("- Brief: versione 3") + 4] == [
+        "- Brief: versione 3",
+        "- Prospettive: versione 1",
+        "- User Twin: versione 1",
+        "- Definizione: versione 1",
+    ]
 
 
 def test_the_whole_path_with_an_answers_file_asks_nothing(tmp_path: Path) -> None:
@@ -296,10 +337,17 @@ def test_until_stops_after_the_step_and_the_next_launch_goes_on(tmp_path: Path) 
         assert (first.status, second.status) == (0, 0), second.errors
         assert after_first == ["brief"]
         assert_saved(studio, tmp_path, STAGES)
-    assert 'Stopping after the step "Brief", as asked with --until.' in first.output
+    assert (
+        'Stopping after the step "Brief", as asked with --until. Launch `ut init` again to go on '
+        'with the step "Perspectives".' in first.output
+    )
     assert "Step 2 of 4" not in first.output
-    assert 'Resuming the project "Calcolo mancia" from step 2 of 4: Team.' in second.output
+    assert 'Resuming the project "Calcolo mancia" from step 2 of 4: Perspectives.' in second.output
     assert 'Step "Brief" already approved (version 3).' in second.output
+    assert "Step 2 of 4: Perspectives" in second.output.splitlines()
+    assert 'Done: the project "Calcolo mancia" has every step approved up to the Definition.' in (
+        second.output.splitlines()
+    )
 
 
 STOPS = {
@@ -326,7 +374,7 @@ STOPS = {
 }
 LEFT = {
     "brief": "The brief stays waiting for your approval.",
-    "team": "The team stays waiting for your approval.",
+    "team": "The perspectives stay waiting for your approval.",
     "twins": "The User Twins stay waiting for your approval.",
     "requirements": "The requirements stay waiting for your approval.",
 }
@@ -366,8 +414,8 @@ def test_the_project_option_links_the_folder_to_a_project_of_the_studio(tmp_path
         assert_saved(studio, tmp_path, STAGES)
         assert seeded.stage == "DESIGN"
     assert 'Linking this folder to the project "Calcolo mancia" of the Studio.' in run.output
-    assert 'Resuming the project "Calcolo mancia" from step 3 of 4: User Twins.' in run.output
-    assert 'Step "Team" already approved (version 1).' in run.output
+    assert 'Resuming the project "Calcolo mancia" from step 3 of 4: User Twin.' in run.output
+    assert 'Step "Perspectives" already approved (version 1).' in run.output
 
 
 def test_a_project_already_at_the_design_step_only_saves_its_steps(tmp_path: Path) -> None:
@@ -380,8 +428,18 @@ def test_a_project_already_at_the_design_step_only_saves_its_steps(tmp_path: Pat
         assert run.status == 0, run.errors
         assert_saved(studio, tmp_path, STAGES)
         assert changes(studio) == []
-    assert "already has an approved brief, team, User Twins and requirements" in run.output
+        assert publications(studio) >= 1
+        assert len(seeded.knowledge_versions()) == 1
+        assert local_progress(tmp_path) == (list(STAGES), "design")
+    assert (
+        'The project "Calcolo mancia" already has the steps Brief, Perspectives, User Twin and '
+        "Definition approved." in run.output.splitlines()
+    )
     assert "The next command is `ut design`" in run.output
+    assert (
+        "Knowledge folder updated in orchestwin/ (version 1): it holds the steps approved "
+        "so far." in run.output.splitlines()
+    )
 
 
 def test_the_project_option_refuses_a_folder_linked_to_another_project(tmp_path: Path) -> None:
@@ -453,15 +511,198 @@ def test_a_studio_that_cannot_be_reached_in_the_middle_loses_nothing(tmp_path: P
     transport.assert_done()
 
 
+def test_each_approved_step_brings_the_partial_folder_into_the_project(tmp_path: Path) -> None:
+    with FakeStudio(language="en") as studio:
+        sign_in(studio, tmp_path)
+
+        first = ut(tmp_path, "--until", "brief", answers=[*start()[:-1], *brief_answers()])
+        after_brief = local_progress(tmp_path)
+        second = ut(tmp_path, "--until", "team", answers=["y", "1"])
+        after_team = local_progress(tmp_path)
+        versions = fake_project(studio, tmp_path).knowledge_versions()
+
+        assert (first.status, second.status) == (0, 0), second.errors
+        assert [version["version_number"] for version in versions] == [1, 2]
+        assert studio.errors == []
+    assert after_brief == (["brief"], "team")
+    assert after_team == (["brief", "team"], "twins")
+    assert (
+        "Knowledge folder updated in orchestwin/ (version 1): it holds the steps approved "
+        "so far." in first.output.splitlines()
+    )
+    assert "Knowledge folder updated in orchestwin/ (version 2)" in second.output
+
+
+def write_local_manifest(project: Path, stages: Sequence[str]) -> None:
+    folder = project / "orchestwin"
+    folder.mkdir(parents=True)
+    manifest = {
+        "schema_version": 3,
+        "package": {"version_number": 7, "content_hash": "c"},
+        "project": {"id": PROJECT_ID, "name": NAME},
+        "stages": {
+            stage: {"version_number": 1, "gate": {"status": "APPROVED"}} for stage in stages
+        },
+        "progress": {"approved": list(stages), "pending": "design", "complete": False},
+        "files": {},
+    }
+    (folder / "orchestwin.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def test_a_folder_that_already_holds_the_approved_steps_is_not_published_again(
+    tmp_path: Path,
+) -> None:
+    store_session(tmp_path)
+    link_folder(tmp_path / "project")
+    write_local_manifest(tmp_path / "project", STAGES)
+    transport = ScriptedTransport()
+    expect_approved_steps(transport)
+
+    run = run_ut(["init"], tmp_path, transport=transport)
+
+    assert run.status == 0, run.errors
+    assert transport.requests("POST") == []
+    transport.assert_done()
+
+
+def expect_approved_steps(transport: ScriptedTransport) -> None:
+    brief = {"id": "brief-1", "version_number": 1, "content_hash": "hb", "brief": {}}
+    team = {
+        "id": "team-1",
+        "version_number": 1,
+        "content_hash": "ht",
+        "brief_version_number": 1,
+        "brief_content_hash": "hb",
+        "selected_agent_ids": ["UX_UI_DESIGNER"],
+        "role_constraints": [],
+        "constraint_issues": [],
+        "members": [{"agent_id": "UX_UI_DESIGNER", "justifications": []}],
+    }
+    snapshot = {"id": "snapshot-1", "version_number": 1, "content_hash": "hs"}
+    requirements = {"id": "spec-1", "version_number": 1, "content_hash": "hr"}
+
+    def gate(version: dict[str, object]) -> dict[str, object]:
+        return {
+            "id": f"gate-{version['id']}",
+            "status": "APPROVED",
+            "artifact": {"artifact_id": version["id"], "content_hash": version["content_hash"]},
+        }
+
+    transport.expect(
+        "GET", BASE, body={"id": PROJECT_ID, "display_name": NAME, "current_stage": "DESIGN"}
+    )
+    transport.expect("GET", f"{BASE}/brief-versions/current", body=brief)
+    transport.expect("GET", f"{BASE}/gates/project-brief/current", body=gate(brief))
+    transport.expect("GET", f"{BASE}/team-proposals/current", body=team)
+    transport.expect("GET", f"{BASE}/readiness", body={"status": "READY_FOR_MAIN_WORKFLOW"})
+    transport.expect("GET", f"{BASE}/gates/agent-team/current", body=gate(team))
+    transport.expect(
+        "GET",
+        f"{BASE}/user-modeling/readiness",
+        body={
+            "workflow_state": "READY_FOR_REQUIREMENTS_DEFINITION",
+            "approved_current_snapshot": True,
+            "snapshot_version_number": 1,
+        },
+    )
+    transport.expect("GET", f"{BASE}/user-modeling/snapshots/current", body=snapshot)
+    transport.expect("GET", f"{BASE}/user-modeling/gate", body=gate(snapshot))
+    transport.expect(
+        "GET",
+        f"{BASE}/requirements/readiness",
+        body={
+            "status": "READY_FOR_DESIGN_EXPLORATION",
+            "version": requirements,
+            "gate": gate(requirements),
+        },
+    )
+
+
+def test_a_studio_that_publishes_only_complete_folders_is_asked_once_and_says_nothing(
+    tmp_path: Path,
+) -> None:
+    store_session(tmp_path)
+    link_folder(tmp_path / "project")
+    transport = ScriptedTransport()
+    expect_approved_steps(transport)
+    transport.expect(
+        "POST",
+        f"{BASE}{PUBLICATION}",
+        status=409,
+        body={"detail": {"code": "DESIGN_APPROVAL_REQUIRED"}},
+    )
+
+    run = run_ut(["init"], tmp_path, transport=transport)
+
+    assert run.status == 0, run.errors
+    assert run.errors == ""
+    assert "knowledge folder" not in run.output.lower()
+    transport.assert_done()
+
+
+def test_a_publication_that_fails_is_said_in_one_line_and_the_path_goes_on(
+    tmp_path: Path,
+) -> None:
+    store_session(tmp_path)
+    link_folder(tmp_path / "project")
+    transport = ScriptedTransport()
+    expect_approved_steps(transport)
+    transport.expect(
+        "POST",
+        f"{BASE}{PUBLICATION}",
+        status=503,
+        body={"detail": {"code": "KNOWLEDGE_PACKAGE_SERVICE_UNAVAILABLE"}},
+    )
+
+    run = run_ut(["--lang", "it", "init"], tmp_path, transport=transport)
+
+    assert run.status == 0, run.errors
+    lines = run.output.splitlines()
+    assert (
+        lines.count(
+            "La cartella di conoscenza non è stata aggiornata "
+            "(KNOWLEDGE_PACKAGE_SERVICE_UNAVAILABLE): il percorso continua, e puoi scaricarla più "
+            "tardi con `ut package publish`."
+        )
+        == 1
+    )
+    assert "Il prossimo comando è `ut design`" in run.output
+    transport.assert_done()
+
+
 @pytest.mark.parametrize(
     ("language", "words"),
     [
-        ("it", "si ferma dopo il passo indicato: brief, team, twins oppure requirements"),
-        ("en", "stop after the named step: brief, team, twins or requirements"),
+        (
+            "it",
+            "si ferma dopo il passo indicato: brief (Brief), team (Prospettive), twins (User "
+            "Twin) oppure requirements (Definizione)",
+        ),
+        (
+            "en",
+            "stop after the named step: brief (Brief), team (Perspectives), twins (User Twin) or "
+            "requirements (Definition)",
+        ),
     ],
 )
 def test_the_help_of_the_command_is_translated(tmp_path: Path, language: str, words: str) -> None:
     run = run_ut(["--lang", language, "init", "--help"], tmp_path, transport=ScriptedTransport())
+
+    assert run.status == 0
+    assert words in " ".join(run.output.split())
+
+
+@pytest.mark.parametrize(
+    ("language", "words"),
+    [
+        ("it", "Crea un progetto e lo porta dall'idea alla Definizione approvata"),
+        ("en", "Create a project and take it from the idea to an approved Definition"),
+    ],
+)
+def test_the_list_of_commands_says_where_init_takes_the_project(
+    tmp_path: Path, language: str, words: str
+) -> None:
+    run = run_ut(["--lang", language, "--help"], tmp_path, transport=ScriptedTransport())
 
     assert run.status == 0
     assert words in " ".join(run.output.split())

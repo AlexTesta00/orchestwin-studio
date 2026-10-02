@@ -256,6 +256,7 @@ import { rosterAvatar, type TwinRoster } from "./twinIdentity";
 import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 import { workflowStatusLabel } from "./workflowLabels";
 import { designApi, type DesignApi } from "../api/design";
+import type { DesignAlignmentApi } from "../api/designAlignment";
 import { designIterationsApi, type DesignIterationsApi } from "../api/designIterations";
 import { designLoopApi, DesignLoopApiError, type DesignLoopApi } from "../api/designLoop";
 import { designMockupsApi, type DesignMockupsApi } from "../api/designMockups";
@@ -283,6 +284,7 @@ import type {
   HumanGateStatus,
   PrototypeElementPayload,
   SyntheticDesignCritiquePayload,
+  VersionedArtifactReferencePayload,
 } from "../types/design";
 import type {
   DesignEvaluationRunPayload,
@@ -363,12 +365,14 @@ const props = withDefaults(
     api?: DesignApi;
     loopApi?: DesignLoopApi;
     requirementsApi?: Pick<RequirementsApi, "readiness" | "submitGate" | "decideGate">;
+    alignmentApi?: Pick<DesignAlignmentApi, "status">;
     mockupsApi?: DesignMockupsApi;
     iterationsApi?: DesignIterationsApi;
     pinsApi?: DesignReviewPinsApi;
     usageApi?: ModelUsageApi;
     upstream?: UpstreamValue;
     active?: boolean;
+    sectionsMode?: boolean;
   }>(),
   {
     locale: "en",
@@ -376,8 +380,11 @@ const props = withDefaults(
     prerequisiteReady: true,
     upstream: null,
     active: true,
+    sectionsMode: false,
   },
 );
+
+const emit = defineEmits<{ "sections-changed": [] }>();
 
 provide(
   surfaceKey,
@@ -402,7 +409,7 @@ const messages = {
       "You chose {alternative}. If something should change, ask for changes: I draw a new version and you compare it with the current one.",
     numbers: ["no", "one", "two", "three", "four", "five", "six", "seven", "eight"],
     viewLabel: "Views of the design",
-    loadError: "The Design step could not be loaded.",
+    loadError: "Design & Evaluation could not be loaded.",
     mockupRequired: "The mockup of this alternative is not ready yet: wait for it before choosing.",
     mockupRequiredDeclarative: "Try the mockup of this alternative first: then you can choose it.",
     pendingOther:
@@ -426,7 +433,7 @@ const messages = {
     previewDraft: "Model-generated draft · not applied",
     previewCurrent: "The mockup of the chosen design",
     previewHelp:
-      "Explore the screens and controls. Example results illustrate the design; the application is built from the package with your own tools.",
+      "Explore the screens and controls. Example results illustrate the design; the application is built from the knowledge folder with your own tools.",
     previewMissing: "This alternative has no preview yet. Creating it takes a moment.",
     previewError: "The preview could not be loaded.",
     createMockup: "Create the preview",
@@ -455,7 +462,12 @@ const messages = {
     barChoose:
       "Choose one of the alternatives with “Choose this one”: then you approve the design here.",
     barApprove:
-      "You approve {alternative}. The package will contain this design and the opinion of the twins.",
+      "You approve {alternative}. The knowledge folder will contain this design and the opinion of the twins.",
+    barApproved:
+      "You approved this design. You can still ask for changes in words: the new version comes back here for your approval.",
+    barApprovedDrawing:
+      "The designer is drawing the new version you asked for: the approved design stays as it is until you apply it.",
+    barApprovedWaiting: "The new version is waiting above: apply it, then approve it here.",
     barPending:
       "A proposed change is waiting above: if you approve now, it stays out of this version.",
     barIteration:
@@ -466,7 +478,7 @@ const messages = {
       "You asked for changes: ask the designer for a new version, choose the other alternative or regenerate the alternatives.",
     barRequestIteration: "Until you apply the new version, the current design stays as it is.",
     barRequestRevision:
-      "The current design does not change: your note stays in the history of this step.",
+      "The current design does not change: your note stays in the history of the design.",
     iterationPlaceholder:
       "Write what to change: the designer draws a new version and you decide whether to apply it.",
     revisionPlaceholder:
@@ -493,8 +505,12 @@ const messages = {
     closedText:
       "To change it, choose the other alternative, ask for changes or regenerate the alternatives: the new version comes back here for your approval.",
     yourNote: "Your note",
-    ready: "Design approved by you. Next: the package.",
+    ready: "Design approved by you. Next: the Dossier.",
+    reanchoredReview:
+      "The design was re-anchored to the new Definition: you can ask the twins for a new evaluation.",
     matrixEmpty: "The twins have not given an opinion on these alternatives yet.",
+    readObservations: "Read every observation of {twin} on {alternative} ({count})",
+    closeObservations: "Close the observations",
     version: "Version",
     statusChoose: "waiting for your choice",
     statusPending: "waiting for your decision",
@@ -507,7 +523,7 @@ const messages = {
     basedOn: "Based on version",
     created: "Created",
     approval: "Approval",
-    decisionCounter: "decision {n} of {max}",
+    decisionCounter: "Decision no. {n}",
     requirements: "Requirements",
     catalog: "Style catalogue",
     model: "Model that draws the mockups",
@@ -529,6 +545,7 @@ const messages = {
     confidence: "self-assessed confidence {value}",
     usage: "Generations with the hosted model",
     usageItem: "{date} · {purpose} · {model} · {status}",
+    subscription: "subscription",
     mockupNotes: "Notes of the Studio on the mockups",
     mockupNotesIntro: "The Studio accepted these mockups and noted these points.",
     mockupNotesOf: "{code} · {title}",
@@ -553,7 +570,7 @@ const messages = {
       "Hai scelto {alternative}. Se qualcosa va cambiato, chiedi modifiche: disegno una nuova versione e la confronti con quella attuale.",
     numbers: ["nessuna", "una", "due", "tre", "quattro", "cinque", "sei", "sette", "otto"],
     viewLabel: "Viste del design",
-    loadError: "Non è stato possibile caricare il passo del design.",
+    loadError: "Non è stato possibile caricare Design e valutazione.",
     mockupRequired:
       "Il mockup di questa alternativa non è ancora pronto: aspettalo prima di sceglierla.",
     mockupRequiredDeclarative:
@@ -580,7 +597,7 @@ const messages = {
     previewDraft: "Bozza generata dal modello · non applicata",
     previewCurrent: "Il mockup del design scelto",
     previewHelp:
-      "Esplora schermate e controlli. I risultati di esempio illustrano il design; l'applicazione si realizza dal pacchetto con i tuoi strumenti.",
+      "Esplora schermate e controlli. I risultati di esempio illustrano il design; l'applicazione si realizza dalla cartella di conoscenza con i tuoi strumenti.",
     previewMissing:
       "Questa alternativa non ha ancora un'anteprima. Crearla richiede qualche istante.",
     previewError: "Non è stato possibile caricare l'anteprima.",
@@ -611,7 +628,13 @@ const messages = {
     approveGate: "Approva il design scelto",
     askChanges: "Chiedi modifiche",
     barChoose: "Scegli una delle alternative con «Scegli questa»: poi approvi il design qui.",
-    barApprove: "Approvi {alternative}. Il pacchetto conterrà questo design e il parere dei twin.",
+    barApprove:
+      "Approvi {alternative}. La cartella di conoscenza conterrà questo design e il parere dei twin.",
+    barApproved:
+      "Hai approvato questo design. Puoi ancora chiedere modifiche a parole: la nuova versione torna qui per la tua approvazione.",
+    barApprovedDrawing:
+      "Il designer sta disegnando la nuova versione che hai chiesto: il design approvato resta com'è finché non la applichi.",
+    barApprovedWaiting: "La nuova versione aspetta qui sopra: applicala, poi approvala qui.",
     barPending:
       "Una modifica proposta aspetta qui sopra: se approvi ora, resta fuori da questa versione.",
     barIteration: "Una nuova versione aspetta qui sopra: se approvi ora, approvi quella attuale.",
@@ -620,8 +643,7 @@ const messages = {
     barRevision:
       "Hai chiesto modifiche: chiedi al designer una nuova versione, scegli l'altra alternativa o rigenera le alternative.",
     barRequestIteration: "Finché non applichi la nuova versione, il design attuale resta com'è.",
-    barRequestRevision:
-      "Il design attuale non cambia: la tua nota resta nella storia di questo passo.",
+    barRequestRevision: "Il design attuale non cambia: la tua nota resta nella storia del design.",
     iterationPlaceholder:
       "Scrivi che cosa cambiare: il designer disegna una nuova versione e decidi tu se applicarla.",
     revisionPlaceholder:
@@ -648,8 +670,12 @@ const messages = {
     closedText:
       "Per cambiarlo scegli l'altra alternativa, chiedi modifiche o rigenera le alternative: la nuova versione torna qui per la tua approvazione.",
     yourNote: "La tua nota",
-    ready: "Design approvato da te. Ora il pacchetto.",
+    ready: "Design approvato da te. Ora il Dossier.",
+    reanchoredReview:
+      "Il design è stato riagganciato alla Definizione nuova: puoi chiedere ai twin una nuova valutazione.",
     matrixEmpty: "I twin non hanno ancora espresso un parere su queste alternative.",
+    readObservations: "Leggi tutte le osservazioni di {twin} su {alternative} ({count})",
+    closeObservations: "Chiudi le osservazioni",
     version: "Versione",
     statusChoose: "in attesa della tua scelta",
     statusPending: "in attesa della tua decisione",
@@ -662,7 +688,7 @@ const messages = {
     basedOn: "Basata sulla versione",
     created: "Creata il",
     approval: "Approvazione",
-    decisionCounter: "decisione {n} di {max}",
+    decisionCounter: "Decisione n. {n}",
     requirements: "Requisiti",
     catalog: "Catalogo degli stili",
     model: "Modello che disegna i mockup",
@@ -684,6 +710,7 @@ const messages = {
     confidence: "confidenza auto-valutata {value}",
     usage: "Generazioni con il modello ospitato",
     usageItem: "{date} · {purpose} · {model} · {status}",
+    subscription: "abbonamento",
     mockupNotes: "Note dello Studio sui mockup",
     mockupNotesIntro: "Lo Studio ha accettato questi mockup e ha annotato questi punti.",
     mockupNotesOf: "{code} · {title}",
@@ -726,6 +753,7 @@ const diffReasons = reactive<Record<string, string>>({});
 const reviewRequestedFor = ref<string | null>(null);
 const nextStepRefresh = ref(0);
 const selectedCell = ref<TwinMatrixSelection | null>(null);
+const observationsOpen = ref(false);
 const dialog = ref<DialogState | null>(null);
 const dialogBusy = ref(false);
 const previewAlternativeId = ref<string | null>(null);
@@ -818,6 +846,9 @@ const iterationScreens = computed<ScreenName[]>(() => [
 const staticCheckAvailable = computed(
   () => !(mockups.projectId === props.projectId && mockups.capabilities?.static_check === false),
 );
+const mockupsPaid = computed(
+  () => !(mockups.projectId === props.projectId && mockups.capabilities?.paid === false),
+);
 
 const gateTargetsCurrent = computed(() => {
   const gate = store.gate;
@@ -871,11 +902,15 @@ const decisionState = computed<DecisionState>(() => {
   }
   return status === "REJECTED" || status === "CANCELLED" ? "closed" : "none";
 });
+const approvedChanges = computed(
+  () => props.sectionsMode && decisionState.value === "approved" && iterationMode.value,
+);
 const barVisible = computed(
   () =>
     decisionState.value === "choose" ||
     decisionState.value === "approve" ||
-    (decisionState.value === "revision" && iterationMode.value),
+    (decisionState.value === "revision" && iterationMode.value) ||
+    approvedChanges.value,
 );
 const iterationWaiting = computed(
   () => iterations.state === "drawing" || iterations.state === "ready",
@@ -904,7 +939,6 @@ const closedNote = computed(() => {
 const decisionCounter = computed(() =>
   fill(copy.value.decisionCounter, {
     n: store.gate?.iteration ?? 1,
-    max: store.gate?.max_iterations ?? 1,
   }),
 );
 
@@ -920,6 +954,26 @@ const reviewRun = computed<DesignEvaluationRunPayload | null>(() => {
         run.design_version_id === version.id &&
         run.design_content_hash === version.content_hash,
     ) ?? null
+  );
+});
+const reanchoredWithoutReview = computed(() => {
+  const version = current.value;
+  if (version === null || reviewRun.value !== null || loopStore.projectId !== props.projectId) {
+    return false;
+  }
+  const base = store.history.find(
+    (item) => item.version_number === version.based_on_version_number,
+  );
+  return (
+    base !== undefined &&
+    sameAlternatives(base.package, version.package) &&
+    !sameReference(
+      base.package.grounding.requirements_reference,
+      version.package.grounding.requirements_reference,
+    ) &&
+    loopStore.runs.some(
+      (run) => runMode(run) === "TWIN_REVIEW" && run.design_version_id !== version.id,
+    )
   );
 });
 const reviewPins = computed(() =>
@@ -1050,10 +1104,25 @@ const observation = computed(() => {
             number: pinNumbers.value.get(`${finding.twin_id}:${finding.finding_id}`) ?? null,
           })),
     critique: critique === null ? null : critiqueView(critique),
+    count: findings === null ? critiqueItemCount(critique) : findings.length,
     screens: screensOf(alternative.id),
     elements: alternative.id === chosenAlternativeId.value ? reviewElements.value : {},
     workflows: workflowNamesOf(alternative),
   };
+});
+const observationsLabel = computed(() => {
+  const value = observation.value;
+  if (value === null) {
+    return "";
+  }
+  if (observationsOpen.value) {
+    return copy.value.closeObservations;
+  }
+  return fill(copy.value.readObservations, {
+    twin: value.twin.name,
+    alternative: `${value.alternative.code} · ${value.alternative.title}`,
+    count: value.count,
+  });
 });
 const observationValidations = computed(() => {
   const decisions: Record<string, { decision: "OWNER_CONFIRMED" | "OWNER_DISMISSED" }> = {};
@@ -1331,6 +1400,12 @@ const barDescription = computed(() => {
   }
   if (requestOpen.value && secondaryLabel.value !== null) {
     return iterationMode.value ? text.barRequestIteration : text.barRequestRevision;
+  }
+  if (decisionState.value === "approved") {
+    if (pendingDiff.value !== null || iterations.state === "ready") {
+      return text.barApprovedWaiting;
+    }
+    return iterations.state === "drawing" ? text.barApprovedDrawing : text.barApproved;
   }
   if (decisionState.value === "revision") {
     return text.barRevision;
@@ -1711,8 +1786,31 @@ function samePackage(left: DesignPackagePayload, right: DesignPackagePayload): b
   );
 }
 
+function sameAlternatives(left: DesignPackagePayload, right: DesignPackagePayload): boolean {
+  return (
+    left.owner_selected_alternative_id === right.owner_selected_alternative_id &&
+    left.alternatives.map((item) => item.id).join("|") ===
+      right.alternatives.map((item) => item.id).join("|")
+  );
+}
+
+function sameReference(
+  left: VersionedArtifactReferencePayload,
+  right: VersionedArtifactReferencePayload,
+): boolean {
+  return (
+    left.artifact_id === right.artifact_id &&
+    left.version_number === right.version_number &&
+    left.content_hash === right.content_hash
+  );
+}
+
 function reviewAffected(diff: DesignPackageDiffPayload): boolean {
   return diff.changes.some((change) => REVIEWED_KINDS.has(change.artifact_kind));
+}
+
+function changed(): void {
+  emit("sections-changed");
 }
 
 function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
@@ -1752,7 +1850,9 @@ async function generate(): Promise<void> {
   const generated = await preparing(() =>
     run(() => store.generate(props.projectId, authorizedRequest, api.value)),
   );
-  if (!generated && isGenerationInterrupted(store.error?.code)) {
+  if (generated) {
+    changed();
+  } else if (isGenerationInterrupted(store.error?.code)) {
     localError.value = null;
   }
 }
@@ -1799,6 +1899,7 @@ async function regenerateDesign(): Promise<void> {
   }
   const loaded = await run(() => store.load(props.projectId, authorizedRequest, api.value));
   nextStepRefresh.value++;
+  changed();
   if (loaded) {
     declarativeEpoch++;
     previewAlternativeId.value = null;
@@ -1811,6 +1912,7 @@ async function reloadAfterGeneration(): Promise<void> {
     run(() => store.load(props.projectId, authorizedRequest, api.value)),
   );
   nextStepRefresh.value++;
+  changed();
   if (loaded) {
     declarativeEpoch++;
     previewAlternativeId.value = null;
@@ -1829,12 +1931,18 @@ const {
   onSettled: reloadAfterGeneration,
 });
 
+function onReapproved(): void {
+  localError.value = null;
+  changed();
+}
+
 async function onInsightApplied(application: InsightApplicationPayload): Promise<void> {
   if (application.id === handledApplicationId) {
     return;
   }
   handledApplicationId = application.id;
   nextStepRefresh.value++;
+  changed();
   if (application.target === "DESIGN" && application.project_id === props.projectId) {
     await load();
   }
@@ -1894,6 +2002,7 @@ async function applyPackage(
   if (requestReview && version.package.prototype !== null && reviewAffected(diff)) {
     reviewRequestedFor.value = version.id;
   }
+  changed();
   return true;
 }
 
@@ -1936,8 +2045,11 @@ async function decideDiff(diff: DesignPackageDiffPayload, approve: boolean): Pro
     deciding.value = true;
     try {
       const version = await decideRevision(diff.id);
-      if (version !== null && version.package.prototype !== null && reviewAffected(diff)) {
-        reviewRequestedFor.value = version.id;
+      if (version !== null) {
+        if (version.package.prototype !== null && reviewAffected(diff)) {
+          reviewRequestedFor.value = version.id;
+        }
+        changed();
       }
     } finally {
       deciding.value = false;
@@ -1949,9 +2061,12 @@ async function decideDiff(diff: DesignPackageDiffPayload, approve: boolean): Pro
     localError.value = copy.value.reasonRequired;
     return;
   }
-  await run(() =>
+  const discarded = await run(() =>
     store.decideRevision(props.projectId, diff.id, "REJECT", authorizedRequest, reason, api.value),
   );
+  if (discarded) {
+    changed();
+  }
 }
 
 async function submitGate(): Promise<boolean> {
@@ -1982,6 +2097,7 @@ async function decideGate(action: DesignGateDecisionAction): Promise<boolean> {
   );
   if (applied) {
     gateReason.value = "";
+    changed();
   }
   return applied;
 }
@@ -2028,6 +2144,7 @@ async function requestRevision(note: string): Promise<void> {
   );
   if (requested) {
     await completeRequest();
+    changed();
   } else {
     localError.value = copy.value.requestFailed;
   }
@@ -2471,6 +2588,11 @@ async function prepareMockups(): Promise<void> {
   void loadUsage();
 }
 
+function selectCell(selection: TwinMatrixSelection): void {
+  selectedCell.value = selection;
+  observationsOpen.value = true;
+}
+
 async function validate(finding: ObservationFinding, confirmed: boolean): Promise<void> {
   const runId = observation.value?.runId ?? null;
   if (runId === null || loopStore.validating !== null) {
@@ -2496,6 +2618,7 @@ async function validate(finding: ObservationFinding, confirmed: boolean): Promis
       key,
       code: loopStore.validationError ?? "DESIGN_LOOP_REQUEST_FAILED",
     };
+    observationsOpen.value = true;
   }
 }
 
@@ -2544,6 +2667,7 @@ async function applyInsight(request: ObservationInsightRequest): Promise<void> {
     await onInsightApplied(application);
   } catch {
     applyFailure.value = { id: source.id, code: loopStore.error ?? "DESIGN_LOOP_REQUEST_FAILED" };
+    observationsOpen.value = true;
   } finally {
     applyingSource.value = null;
   }
@@ -2581,6 +2705,7 @@ watch(
   () => props.projectId,
   async () => {
     reviewRequestedFor.value = null;
+    observationsOpen.value = false;
     if (props.autoLoad) {
       await load();
     }
@@ -2927,6 +3052,7 @@ onBeforeUnmount(() => {
           :notes="cardNotes"
           :choosing="choosing"
           :disabled="store.isBusy || deciding"
+          :paid="mockupsPaid"
           :locale="locale"
           @select="choose"
           @open="openMockup"
@@ -3019,46 +3145,79 @@ onBeforeUnmount(() => {
           :cells="matrixCells"
           :selected="activeCell"
           :locale="locale"
-          @select="selectedCell = $event"
+          @select="selectCell"
         >
           <div class="grid gap-7">
-            <DesignObservationList
-              v-if="observation !== null"
-              :twin="observation.twin"
-              :alternative="observation.alternative"
-              :run-id="observation.runId"
-              :findings="observation.findings"
-              :critique="observation.critique"
-              :validations="observationValidations"
-              :validating="loopStore.validating"
-              :failure="validationFailure"
-              :applied="appliedInsights"
-              :applying="applyingSource"
-              :apply-failure="applyFailure"
-              :screens="observation.screens"
-              :elements="observation.elements"
-              :workflows="observation.workflows"
-              :locale="locale"
-              @confirm="validate($event, true)"
-              @dismiss="validate($event, false)"
-              @apply-insight="applyInsight"
-            />
-            <ProjectDesignEvaluationPanel
-              v-if="current.package.prototype"
-              :project-id="projectId"
-              :design-version-id="current.id"
-              :design-content-hash="current.content_hash"
-              :twin-names="twinNames"
-              :locale="locale"
-              :authorize="authorizedRequest"
-              :api="props.loopApi"
-              :auto-evaluate-version-id="reviewRequestedFor"
-              :static-check-available="staticCheckAvailable"
-              :screens="appliedScreens"
-              :elements="reviewElements"
-              :workflows="workflowsByAlternative"
-              @applied="onInsightApplied"
-            />
+            <div v-if="observation !== null" data-testid="design-observations">
+              <button
+                type="button"
+                class="flex min-h-12 w-full items-start gap-3 rounded-field border border-night-line-strong bg-on-night/3 px-4 py-3 text-left text-[15px] leading-6 font-semibold text-on-night transition-colors duration-150 hover:bg-night-hover"
+                :aria-expanded="observationsOpen ? 'true' : 'false'"
+                :aria-controls="`${uid}-observations`"
+                data-testid="design-observations-toggle"
+                @click="observationsOpen = !observationsOpen"
+              >
+                <span
+                  :class="[
+                    'inline-block w-3 shrink-0 text-xs leading-6 text-on-night-3 transition-transform duration-150',
+                    observationsOpen ? 'rotate-90' : '',
+                  ]"
+                  aria-hidden="true"
+                  >▸</span
+                >
+                <span class="min-w-0 flex-1 break-words" data-testid="design-observations-label">{{
+                  observationsLabel
+                }}</span>
+              </button>
+              <div :id="`${uid}-observations`" data-testid="design-observations-region">
+                <DesignObservationList
+                  v-if="observationsOpen"
+                  class="mt-4"
+                  :twin="observation.twin"
+                  :alternative="observation.alternative"
+                  :run-id="observation.runId"
+                  :findings="observation.findings"
+                  :critique="observation.critique"
+                  :validations="observationValidations"
+                  :validating="loopStore.validating"
+                  :failure="validationFailure"
+                  :applied="appliedInsights"
+                  :applying="applyingSource"
+                  :apply-failure="applyFailure"
+                  :screens="observation.screens"
+                  :elements="observation.elements"
+                  :workflows="observation.workflows"
+                  :locale="locale"
+                  @confirm="validate($event, true)"
+                  @dismiss="validate($event, false)"
+                  @apply-insight="applyInsight"
+                />
+              </div>
+            </div>
+            <div v-if="current.package.prototype" class="grid gap-3">
+              <p
+                v-if="reanchoredWithoutReview"
+                class="m-0 rounded-field border border-petrol-on-night/35 bg-petrol-on-night/8 px-4 py-3 text-sm leading-normal text-on-night-2"
+                data-testid="design-reanchored-review"
+              >
+                {{ copy.reanchoredReview }}
+              </p>
+              <ProjectDesignEvaluationPanel
+                :project-id="projectId"
+                :design-version-id="current.id"
+                :design-content-hash="current.content_hash"
+                :twin-names="twinNames"
+                :locale="locale"
+                :authorize="authorizedRequest"
+                :api="props.loopApi"
+                :auto-evaluate-version-id="reviewRequestedFor"
+                :static-check-available="staticCheckAvailable"
+                :screens="appliedScreens"
+                :elements="reviewElements"
+                :workflows="workflowsByAlternative"
+                @applied="onInsightApplied"
+              />
+            </div>
           </div>
         </DesignTwinMatrix>
         <p
@@ -3141,13 +3300,16 @@ onBeforeUnmount(() => {
             :design-requirements-version-id="
               current.package.grounding.requirements_reference.artifact_id
             "
+            :design-version-id="current.id"
+            :design-approved="decisionState === 'approved'"
             :refresh-key="nextStepRefresh"
             :busy="store.isBusy || deciding || loopStore.isBusy || designJob !== null"
             :locale="locale"
             :authorize="authorizedRequest"
             :api="props.requirementsApi"
+            :alignment-api="props.alignmentApi"
             @regenerate="regenerate"
-            @reapproved="localError = null"
+            @reapproved="onReapproved"
           >
             <div class="flex flex-wrap items-center gap-4 text-sm text-on-night-3">
               <span class="min-w-[min(100%,16rem)] flex-1 leading-normal">
@@ -3422,7 +3584,13 @@ onBeforeUnmount(() => {
                     status: item.status,
                   })
                 }}
-                · {{ money(item.cost_microusd) }} · {{ item.generation_id }}
+                ·
+                {{
+                  item.provider_kind === "CLAUDE_CODE_CLI"
+                    ? copy.subscription
+                    : money(item.cost_microusd)
+                }}
+                · {{ item.generation_id }}
               </li>
             </ul>
           </section>

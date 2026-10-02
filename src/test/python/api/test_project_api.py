@@ -352,6 +352,9 @@ def test_the_stages_and_actions_are_published_in_the_contract() -> None:
         "APPROVE_REQUIREMENTS",
         "APPROVE_DESIGN",
         "DOWNLOAD_FOLDER",
+        "UPDATE_SECTIONS",
+        "PREPARE_TWINS",
+        "PREPARE_DESIGN",
     ]
     assert {"current_stage", "next_action"} <= set(schema["ProjectResponse"]["required"])
 

@@ -18,6 +18,7 @@ from orchestwin.knowledge.project_import import (
     IMPORTED_VERSION_NUMBER,
     ProjectImportPlan,
     plan_project_import,
+    require_complete,
 )
 from orchestwin.knowledge.project_import_persistence import (
     SOURCE_NAME_LIMIT,
@@ -73,6 +74,14 @@ def verified_archive(content: bytes) -> VerifiedFolder:
         return read_verified_folder(content)
     except KnowledgeArchiveError as error:
         raise archive_failure(error) from error
+
+
+def complete_folder(folder: VerifiedFolder) -> VerifiedFolder:
+    try:
+        require_complete(folder)
+    except KnowledgeArchiveError as error:
+        raise archive_failure(error) from error
+    return folder
 
 
 def import_source_name(folder: VerifiedFolder) -> str:
@@ -259,6 +268,15 @@ async def _write_import(
 
     imports = SqlAlchemyProjectImportRepository(session, owner_user_id=owner)
     await _attempt("import", imports.add(record))
+    if plan.research_evidence is not None:
+        from orchestwin.projects.persistence.research_evidence import (
+            SqlAlchemyResearchEvidenceRepository,
+        )
+
+        evidence = SqlAlchemyResearchEvidenceRepository(session, owner_user_id=owner)
+        await _attempt(
+            "evidence", evidence.import_dossier(project.id, plan.research_evidence, plan.modeling)
+        )
 
     stored = await projects.get_owned(project_id=project.id, owner_user_id=owner)
     _require(
@@ -291,7 +309,7 @@ class ProjectImportService:
         content: bytes,
         display_name: str | None = None,
     ) -> ProjectImportResult:
-        folder = verified_archive(content)
+        folder = complete_folder(verified_archive(content))
         source_name = import_source_name(folder)
         mode = imported_project_mode(folder)
         imported_at = _aware(self._clock())
@@ -340,6 +358,7 @@ __all__ = [
     "ProjectImportResult",
     "ProjectImportService",
     "archive_failure",
+    "complete_folder",
     "import_display_name",
     "import_record",
     "import_source_name",

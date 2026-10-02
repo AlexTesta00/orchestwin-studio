@@ -60,6 +60,7 @@ export interface GenerationResume {
   checked: Ref<boolean>;
   failure: Ref<GenerationResumeFailure | null>;
   dismiss: () => void;
+  recheck: () => Promise<void>;
 }
 
 interface TrackedJob {
@@ -394,6 +395,7 @@ export function useGenerationResume(options: GenerationResumeOptions): Generatio
   const store = useGenerationJobsStore();
   const checked = ref(false);
   const failure = ref<GenerationResumeFailure | null>(null);
+  const waiting = new Set<string>();
   let mounted = true;
   let round = 0;
 
@@ -446,9 +448,19 @@ export function useGenerationResume(options: GenerationResumeOptions): Generatio
     checked.value = true;
 
     for (const running of found) {
+      const key = `${project}|${running.job_id}`;
+
+      if (waiting.has(key)) {
+        continue;
+      }
+
+      waiting.add(key);
       void store
         .wait(project, running.job_id, options.authorize, options.api)
-        .then((settlement) => settle(project, running.operation, settlement));
+        .then((settlement) => {
+          waiting.delete(key);
+          settle(project, running.operation, settlement);
+        });
     }
   }
 
@@ -491,5 +503,6 @@ export function useGenerationResume(options: GenerationResumeOptions): Generatio
     dismiss: () => {
       failure.value = null;
     },
+    recheck: check,
   };
 }

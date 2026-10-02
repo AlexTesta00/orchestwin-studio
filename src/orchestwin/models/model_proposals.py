@@ -141,6 +141,11 @@ HOSTED_SCHEMA_INSTRUCTION = (
     "The Studio checks the answer against the complete output schema, so follow these rules "
     "exactly."
 )
+HOSTED_PERSPECTIVES_INSTRUCTION = (
+    "context.perspectives lists the perspectives chosen for this project, each with its "
+    "considerations: take them into account in every alternative and in the critiques, without "
+    "adding screens or functions that no requirement asks for."
+)
 PERSONAS_INSTRUCTION = (
     "Propose one persona content draft per candidate, in input order. "
     "Use the approved project_brief.brief business content, including its goals and "
@@ -171,8 +176,18 @@ USER_TWINS_INSTRUCTION = (
     "user_twin.context_of_use, user_twin.information_needs, user_twin.decision_criteria, "
     "user_twin.preferred_vocabulary, user_twin.frustrations, user_twin.pain_points, "
     "user_twin.trust_concerns, user_twin.accessibility_needs, user_twin.operational_constraints, "
-    "user_twin.technical_literacy, user_twin.risk_sensitivity, user_twin.assumptions. "
-    "role must be TEXT; context_of_use, technical_literacy and risk_sensitivity use "
+    "user_twin.technical_literacy, user_twin.risk_sensitivity, user_twin.assumptions, "
+    "user_twin.description, user_twin.represents, user_twin.does_not_represent, "
+    "user_twin.evidence_gaps. Include all four declaration fields in new drafts. "
+    "description briefly summarizes the cited archetype; represents states only the "
+    "people and role described by that archetype. does_not_represent lists only exclusions "
+    "explicitly supported by the brief or archetype, otherwise use UNKNOWN. "
+    "evidence_gaps explicitly states that the brief and owner inputs are not empirical "
+    "research about real users, and preserves missing evidence. Never invent demographics, "
+    "stereotypes, empirical support or contested claims. Declaration TEXT is at most 600 "
+    "characters; ITEMS contains at most 6 items of at most 200 characters; any abstention "
+    "reason is at most 240 characters. "
+    "role must be TEXT; description, context_of_use, technical_literacy and risk_sensitivity use "
     "TEXT or UNKNOWN; other fields use ITEMS or UNKNOWN. Every inferred observation "
     "requires a concise rationale and confidence between 0 and 1. UNKNOWN uses "
     "reason=null, text=null and items=[]; explain uncertainty in rationale. Keep values and rationales very short."
@@ -260,6 +275,7 @@ def hosted_design_instruction(context):
         (
             _design_instruction("/".join(keys), language, CRITIQUE_LIST_INSTRUCTIONS[None]),
             HOSTED_VERDICT_INSTRUCTION.format(language=written),
+            HOSTED_PERSPECTIVES_INSTRUCTION,
             *rules,
         )
     )
@@ -348,11 +364,6 @@ class ModelTeamProposalAdapter:
     @_model_boundary
     async def propose(self, request):
         constraints = request.constraints
-        if constraints.has_conflicts:
-            return TeamProposalGenerationResult(
-                status=TeamProposalGenerationStatus.BLOCKED_BY_CONSTRAINTS,
-                issues=constraints.issues,
-            )
         route = self.generator.route("team")
         output = await self.generator.generate(
             task="team",
@@ -431,7 +442,9 @@ class ModelTeamProposalAdapter:
         except (ValueError, TypeError) as error:
             raise ProposalGenerationError("INVALID_PROVIDER_OUTPUT") from error
         return TeamProposalGenerationResult(
-            status=TeamProposalGenerationStatus.PROPOSED, proposal=proposal
+            status=TeamProposalGenerationStatus.PROPOSED,
+            proposal=proposal,
+            issues=constraints.issues,
         )
 
 
@@ -443,7 +456,9 @@ class ModelRequirementsAdapter:
     async def propose(self, request):
         _require(AgentIdentifier.REQUIREMENTS_ANALYST in request.team.selected_agent_ids)
         from orchestwin.models.requirements_drafts import (
+            REQUIREMENTS_CHAIN_INSTRUCTION,
             REQUIREMENTS_CHANGE_INSTRUCTION,
+            REQUIREMENTS_JOURNEYS_INSTRUCTION,
             RequirementsDraft,
             bind_requirements,
             requirements_context,
@@ -453,16 +468,28 @@ class ModelRequirementsAdapter:
         route = self.generator.route("requirements", context.get("purpose"))
         instruction = (
             "Write a concise complete requirements baseline in the brief's language. "
-            "Use codes REQ-001, USR-001, AC-001, SCN-001, RSK-001, DOD-001. "
+            "Use codes REQ-001, USR-001, AC-001, SCN-001, NED-001, RSK-001, DOD-001. "
             "References use these codes, never UUIDs. Sources must be exact keys from "
             "context.evidence; twins must be exact keys from context.twins. "
             "Cover every brief requirement and each twin with a story and scenario. "
+            f"{REQUIREMENTS_CHAIN_INSTRUCTION} "
+            "Be proportionate to the project: context.limits holds the largest number of items "
+            "that each list may have. A limit is a ceiling and not a target: write fewer items "
+            "when the project needs fewer. When the brief names more needs than a limit allows, "
+            "merge related needs into one requirement and name every merged need among its "
+            "sources. Every statement is one sentence, two at most. "
+            "context.perspectives lists the perspectives chosen for this project, each with its "
+            "considerations. Apply a consideration where this project needs it, inside the "
+            "requirements, the acceptance criteria and the risks that you write anyway: a "
+            "consideration never justifies an item that the project does not need and never an "
+            "item beyond context.limits. "
             "Keep criteria concrete and testable. Include relevant risks and completion "
             "conditions. A definition_of_done item with applicability REQUIRED must leave condition null; "
             "only a CONDITIONAL item states the condition under which it applies. "
             "All items are proposals, never executed tests or owner decisions. "
             "Do not invent source evidence, identifiers, hashes or approval state."
         )
+        instruction = f"{instruction} {REQUIREMENTS_JOURNEYS_INSTRUCTION}"
         if request.owner_request is not None:
             instruction = f"{instruction} {REQUIREMENTS_CHANGE_INSTRUCTION}"
         draft = await self.generator.generate(
@@ -499,7 +526,7 @@ class ModelDesignAdapter:
         context, twins = design_context(request)
         route = self.generator.route("design")
         if hosted_route(route):
-            context = hosted_design_context(context)
+            context = hosted_design_context(context, request.team.selected_agent_ids)
             route = self.generator.route("design", context["purpose"])
             output_type, budget = HostedDesignDraft, HOSTED_DESIGN_OUTPUT_TOKENS
             instruction = hosted_design_instruction(context)

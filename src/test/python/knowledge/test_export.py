@@ -3,17 +3,20 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
 
 from orchestwin.knowledge.export import KnowledgeExportError, KnowledgeSourceLoader
+from orchestwin.knowledge.layout import STAGES
 from orchestwin.knowledge.sources import (
     KnowledgeFeedback,
     KnowledgeSources,
     consistency_issue,
 )
 from orchestwin.knowledge.stage_documents import stage_versions
+from orchestwin.knowledge.state import ProjectStateSources
 from orchestwin.workflow.gates import HumanGateStatus
 from src.test.python.artifacts.design_fixtures import OWNER_ID
 
@@ -23,6 +26,7 @@ from .knowledge_fixtures import (
     real_documents,
     real_sources,
     sources_of,
+    state_sources,
 )
 
 PROJECT_ID = REAL_PROJECT_ID
@@ -44,12 +48,13 @@ class FakeQuery:
 
 
 def loader(package: KnowledgeSources, *, with_feedback: bool = True, **overrides):
-    values = {
+    values: dict[str, object] = {
         "project_service": FakeQuery(package.brief, "current_brief"),
         "brief_gate_service": FakeQuery(package.brief_gate, "current_gate"),
         "team_proposal_service": FakeQuery(package.team, "current"),
         "agent_team_service": FakeQuery(package.team_gate, "current_gate"),
         "user_modeling_services": SimpleNamespace(
+            commands=SimpleNamespace(snapshot_context_is_current=AsyncMock(return_value=True)),
             queries=FakeQuery(package.modeling, "current_snapshot"),
             gates=FakeQuery(package.modeling_gate, "current_gate"),
         ),
@@ -103,6 +108,31 @@ def test_loader_without_feedback_service_exports_an_empty_history() -> None:
     assert loaded.feedback == KnowledgeFeedback()
 
 
+def test_changed_archetypes_end_the_current_export_after_the_team():
+    package = sources()
+    service = loader(package)
+    check = service.user_modeling_services.commands.snapshot_context_is_current
+    check.return_value = False
+    loaded = load(service)
+    assert loaded.present_stages == ("brief", "team")
+    assert loaded.modeling is None and loaded.requirements is None and loaded.design is None
+    check.assert_awaited_once_with(
+        owner_user_id=OWNER_ID, project_id=PROJECT_ID, snapshot=package.modeling
+    )
+    assert service.requirements_query_service.calls == []
+    assert service.design_query_service.calls == []
+    assert service.feedback_query_service.calls == []
+
+
+def stage_services(service: KnowledgeSourceLoader) -> dict[str, tuple[FakeQuery, FakeQuery]]:
+    return {
+        "team": (service.team_proposal_service, service.agent_team_service),
+        "twins": (service.user_modeling_services.queries, service.user_modeling_services.gates),
+        "requirements": (service.requirements_query_service, service.requirements_gate_service),
+        "design": (service.design_query_service, service.design_gate_service),
+    }
+
+
 def test_missing_project_is_reported_before_anything_else() -> None:
     service = loader(sources(), project_service=FakeQuery(None, "current_brief"))
 
@@ -113,41 +143,64 @@ def test_missing_project_is_reported_before_anything_else() -> None:
     assert service.brief_gate_service.calls == []
 
 
-@pytest.mark.parametrize(
-    ("service_name", "method", "code"),
-    [
-        ("brief_gate_service", "current_gate", "BRIEF_APPROVAL_REQUIRED"),
-        ("team_proposal_service", "current", "TEAM_APPROVAL_REQUIRED"),
-        ("agent_team_service", "current_gate", "TEAM_APPROVAL_REQUIRED"),
-        ("requirements_query_service", "current", "REQUIREMENTS_APPROVAL_REQUIRED"),
-        ("requirements_gate_service", "current_gate", "REQUIREMENTS_APPROVAL_REQUIRED"),
-        ("design_query_service", "current", "DESIGN_APPROVAL_REQUIRED"),
-        ("design_gate_service", "current_gate", "DESIGN_APPROVAL_REQUIRED"),
-    ],
-)
-def test_first_missing_approval_is_reported(service_name: str, method: str, code: str) -> None:
-    service = loader(sources(), **{service_name: FakeQuery(None, method)})
+def test_a_brief_that_is_not_approved_is_the_only_missing_approval_reported() -> None:
+    service = loader(sources(), brief_gate_service=FakeQuery(None, "current_gate"))
 
     with pytest.raises(KnowledgeExportError) as error:
         load(service)
 
-    assert error.value.code == code
+    assert error.value.code == "BRIEF_APPROVAL_REQUIRED"
+    assert all(query.calls == [] for pair in stage_services(service).values() for query in pair)
     assert service.feedback_query_service.calls == []
 
 
+@pytest.mark.parametrize(
+    ("service_name", "method", "present"),
+    [
+        ("team_proposal_service", "current", ("brief",)),
+        ("agent_team_service", "current_gate", ("brief",)),
+        ("requirements_query_service", "current", ("brief", "team", "twins")),
+        ("requirements_gate_service", "current_gate", ("brief", "team", "twins")),
+        ("design_query_service", "current", ("brief", "team", "twins", "requirements")),
+        ("design_gate_service", "current_gate", ("brief", "team", "twins", "requirements")),
+    ],
+)
+def test_loader_includes_the_stages_up_to_the_first_one_not_approved_and_stops_there(
+    service_name: str, method: str, present: tuple[str, ...]
+) -> None:
+    service = loader(sources(), **{service_name: FakeQuery(None, method)})
+
+    loaded = load(service)
+
+    missing = STAGES[len(present)]
+    services = stage_services(service)
+    assert loaded.present_stages == present
+    assert loaded.pending_stage == missing
+    assert loaded.complete is False
+    assert all(len(query.calls) == 1 for query in services[missing])
+    later = STAGES[len(present) + 1 :]
+    assert all(query.calls == [] for stage in later for query in services[stage])
+    assert service.feedback_query_service.calls == []
+    with pytest.raises(KeyError):
+        loaded.version(missing)
+
+
 @pytest.mark.parametrize("part", ["queries", "gates"])
-def test_missing_twin_approval_is_reported(part: str) -> None:
+def test_twins_that_are_not_approved_end_the_folder_after_the_team(part: str) -> None:
     package = sources()
     modeling = {
         "queries": FakeQuery(package.modeling, "current_snapshot"),
         "gates": FakeQuery(package.modeling_gate, "current_gate"),
     }
     modeling[part] = FakeQuery(None, "current_snapshot" if part == "queries" else "current_gate")
+    service = loader(package, user_modeling_services=SimpleNamespace(**modeling))
 
-    with pytest.raises(KnowledgeExportError) as error:
-        load(loader(package, user_modeling_services=SimpleNamespace(**modeling)))
+    loaded = load(service)
 
-    assert error.value.code == "USER_MODELING_APPROVAL_REQUIRED"
+    assert loaded.present_stages == ("brief", "team")
+    assert loaded.modeling is None and loaded.modeling_gate is None
+    assert service.requirements_query_service.calls == []
+    assert service.design_gate_service.calls == []
 
 
 def test_gate_that_approves_another_version_does_not_count() -> None:
@@ -158,13 +211,76 @@ def test_gate_that_approves_another_version_does_not_count() -> None:
     )
     pending = replace(package.requirements_gate, status=HumanGateStatus.PENDING_APPROVAL)
 
-    with pytest.raises(KnowledgeExportError) as design_error:
-        load(loader(package, design_gate_service=FakeQuery(stale, "current_gate")))
-    with pytest.raises(KnowledgeExportError) as requirements_error:
-        load(loader(package, requirements_gate_service=FakeQuery(pending, "current_gate")))
+    without_design = load(loader(package, design_gate_service=FakeQuery(stale, "current_gate")))
+    without_requirements = load(
+        loader(package, requirements_gate_service=FakeQuery(pending, "current_gate"))
+    )
 
-    assert design_error.value.code == "DESIGN_APPROVAL_REQUIRED"
-    assert requirements_error.value.code == "REQUIREMENTS_APPROVAL_REQUIRED"
+    assert without_design.present_stages == ("brief", "team", "twins", "requirements")
+    assert without_design.design is None
+    assert without_requirements.present_stages == ("brief", "team", "twins")
+    assert without_requirements.requirements is None
+
+
+def test_a_stage_approved_after_a_missing_one_is_never_included() -> None:
+    package = sources()
+    service = loader(package, agent_team_service=FakeQuery(None, "current_gate"))
+
+    loaded = load(service)
+
+    assert loaded.present_stages == ("brief",)
+    assert loaded.requirements is None and loaded.design is None
+    assert service.design_query_service.calls == []
+
+
+def test_loader_reads_the_development_state_of_the_owner() -> None:
+    state = state_sources()
+    service = loader(sources(), state_query_service=FakeQuery(state, "current"))
+
+    loaded = load(service)
+
+    assert loaded.state is state
+    assert service.state_query_service.calls == [
+        {"project_id": PROJECT_ID, "owner_user_id": OWNER_ID}
+    ]
+
+
+def test_loader_reads_the_development_state_even_before_the_team_is_approved() -> None:
+    state = state_sources()
+    service = loader(
+        sources(),
+        team_proposal_service=FakeQuery(None, "current"),
+        state_query_service=FakeQuery(state, "current"),
+    )
+
+    loaded = load(service)
+
+    assert loaded.present_stages == ("brief",)
+    assert loaded.state is state
+    assert len(service.state_query_service.calls) == 1
+
+
+def test_loader_without_state_service_exports_no_change() -> None:
+    loaded = load(loader(sources()))
+
+    assert loaded.state == ProjectStateSources()
+    assert loaded.state.is_empty
+
+
+def test_a_later_stage_of_an_older_version_is_not_checked_while_it_is_not_approved() -> None:
+    versions = stage_versions(real_documents())
+    versions["requirements"] = replace(versions["requirements"], id=UUID(int=77))
+    package = sources_of(versions, project_id=REAL_PROJECT_ID)
+    stale = replace(
+        package.design_gate,
+        artifact=replace(package.design_gate.artifact, content_hash="f" * 64),
+    )
+
+    loaded = load(loader(package, design_gate_service=FakeQuery(stale, "current_gate")))
+
+    assert consistency_issue(package) == "DESIGN_OUTDATED"
+    assert loaded.present_stages == ("brief", "team", "twins", "requirements")
+    assert consistency_issue(loaded) is None
 
 
 def test_feedback_fixture_is_not_empty() -> None:

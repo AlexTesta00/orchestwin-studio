@@ -14,6 +14,8 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
+from orchestwin.agents.catalog import AgentIdentifier
+from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.design import DesignPackagePayload
@@ -26,6 +28,9 @@ from orchestwin.identity.domain import NormalizedEmail, UserAccount
 from orchestwin.models.generation_budget import GenerationBudget
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.structured_generation import StructuredGenerationProviderKind
+from orchestwin.projects.progress import ProjectStage
+from orchestwin.projects.sections import SectionState
+from src.test.python.api.test_design_context import sections_port
 from src.test.python.models.test_generated_mockup_support import (
     DASHBOARD,
     DASHBOARD_ID,
@@ -37,13 +42,16 @@ from src.test.python.models.test_generated_mockup_support import (
     MemoryMockupStore,
     ScriptedMockupGenerator,
     answer,
+    applied_package,
     draft_payload,
     failure,
+    iteration_payload,
     package,
     requirements_version,
     runtime,
     with_markup,
 )
+from src.test.python.models.test_hosted_support import claude_code_document, providers
 
 NOW = datetime(2026, 9, 29, 9, 0, tzinfo=UTC)
 BASE = f"/api/v1/projects/{PROJECT_ID}/design"
@@ -113,6 +121,156 @@ def generated(client, registry, versions, alternative_id=GUIDED_ID):
     return settle(client, registry, started.json())
 
 
+def wired_runtime(generator, versions, *, selected_agent_ids=(), states=None):
+    legacy = runtime(generator, versions=versions)
+    reference = versions.versions[-1].package.grounding.agent_team_reference
+    team = SimpleNamespace(
+        project_id=PROJECT_ID,
+        id=reference.artifact_id,
+        version_number=reference.version_number,
+        content_hash=reference.content_hash,
+        proposal=SimpleNamespace(selected_agent_ids=selected_agent_ids),
+    )
+    team_port = SimpleNamespace(value=team, calls=[])
+
+    async def current(**scope):
+        assert scope == {"owner_user_id": OWNER_ID, "project_id": PROJECT_ID}
+        team_port.calls.append(scope)
+        return team_port.value
+
+    team_port.current = current
+    value = ApplicationRuntime(
+        real_model_runtime=legacy.real_model_runtime,
+        proposal_evidence_store=legacy.proposal_evidence_store,
+        design_query_service=legacy.design_query_service,
+        requirements_query_service=legacy.requirements_query_service,
+        team_proposal_service=team_port,
+        sections_service=sections_port(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID, states=states
+        ),
+    )
+    return value, team_port
+
+
+@pytest.mark.parametrize("security", (False, True))
+def test_generated_mockup_uses_only_exact_selected_team_guidance_and_keeps_it_on_retry(security):
+    selected = (AgentIdentifier.UX_UI_DESIGNER,) + (
+        (AgentIdentifier.SECURITY_REVIEWER,) if security else ()
+    )
+    versions = DesignVersions(package())
+    generator = ScriptedMockupGenerator(answer(BROKEN), answer(draft_payload()))
+    value, team = wired_runtime(
+        generator,
+        versions,
+        selected_agent_ids=selected,
+        states={ProjectStage.DESIGN: SectionState.IN_PROGRESS} if security else None,
+    )
+    client, registry = client_for(value)
+    with client:
+        done = generated(client, registry, versions)
+    assert done["status"] == "SUCCEEDED"
+    assert len(generator.calls) == 2 and len(team.calls) >= 2
+    expected = perspective_guidance(selected, GuidanceStage.DESIGN)
+    assert all(call["context"]["perspectives"] == expected for call in generator.calls)
+    assert any(item["perspective"] == "SECURITY" for item in expected) is security
+    assert all(
+        "not empirical evidence about real users" in call["instruction"] for call in generator.calls
+    )
+
+
+@pytest.mark.parametrize(
+    "field,new_value",
+    [
+        ("id", uuid4()),
+        ("version_number", 99),
+        ("content_hash", "a" * 64),
+        ("project_id", uuid4()),
+        ("missing", None),
+        ("service_missing", None),
+    ],
+)
+def test_real_runtime_team_mismatch_is_refused_before_provider(field, new_value):
+    versions = DesignVersions(package())
+    generator = ScriptedMockupGenerator()
+    value, team = wired_runtime(generator, versions)
+    if field == "missing":
+        team.value = None
+    elif field == "service_missing":
+        value.team_proposal_service = None
+    else:
+        setattr(team.value, field, new_value)
+    client, registry = client_for(value)
+    with client:
+        response = client.post(f"{MOCKUPS}/jobs", json=body(versions))
+    assert response.status_code == 409
+    assert response.json()["detail"] == {"code": "DESIGN_CONTEXT_CHANGED"}
+    assert generator.calls == [] and len(registry) == 0
+
+
+@pytest.mark.parametrize(
+    "key,state",
+    [
+        (ProjectStage.USER_TWINS, SectionState.TO_UPDATE),
+        (ProjectStage.DESIGN, SectionState.TO_UPDATE),
+        (ProjectStage.TEAM, SectionState.IN_PROGRESS),
+    ],
+)
+def test_stale_sections_after_archetype_edit_prevent_mockup_generation(key, state):
+    versions = DesignVersions(package())
+    generator = ScriptedMockupGenerator()
+    value, _team = wired_runtime(generator, versions, states={key: state})
+    client, registry = client_for(value)
+    with client:
+        response = client.post(f"{MOCKUPS}/jobs", json=body(versions))
+    assert response.status_code == 409
+    assert response.json()["detail"] == {"code": "DESIGN_CONTEXT_CHANGED"}
+    assert generator.calls == [] and len(registry) == 0
+
+
+def test_archetype_edit_during_provider_refuses_adapter_acceptance():
+    states = {}
+
+    class Changed(ScriptedMockupGenerator):
+        async def generate(self, **options):
+            draft = await super().generate(**options)
+            states[ProjectStage.USER_TWINS] = SectionState.TO_UPDATE
+            return draft
+
+    versions = DesignVersions(package())
+    generator = Changed(answer(draft_payload()))
+    value, _team = wired_runtime(generator, versions, states=states)
+    client, registry = client_for(value)
+    with client:
+        done = generated(client, registry, versions)
+    assert done["status"] == "FAILED"
+    assert done["failure"]["code"] == "DESIGN_CONTEXT_CHANGED"
+    assert len(generator.calls) == 1
+    assert "ADAPTER_ACCEPTED" not in value.proposal_evidence_store.kinds(
+        value.proposal_evidence_store.order[-1]
+    )
+
+
+def test_team_changed_during_provider_refuses_adapter_acceptance():
+    class Changed(ScriptedMockupGenerator):
+        async def generate(self, **options):
+            draft = await super().generate(**options)
+            team.value.version_number += 1
+            return draft
+
+    versions = DesignVersions(package())
+    generator = Changed(answer(draft_payload()))
+    value, team = wired_runtime(generator, versions)
+    client, registry = client_for(value)
+    with client:
+        done = generated(client, registry, versions)
+    assert done["status"] == "FAILED"
+    assert done["failure"]["code"] == "DESIGN_CONTEXT_CHANGED"
+    assert len(generator.calls) == 1
+    assert "ADAPTER_ACCEPTED" not in value.proposal_evidence_store.kinds(
+        value.proposal_evidence_store.order[-1]
+    )
+
+
 class Gated(ScriptedMockupGenerator):
     def __init__(self, *outcomes):
         super().__init__(*outcomes)
@@ -136,6 +294,12 @@ class Routed:
         return self.routes.get(purpose, self.routes["default"])
 
 
+def subscription_generator(*outcomes, budget=None):
+    generator = ScriptedMockupGenerator(*outcomes, budget=budget)
+    generator.configuration = providers(claude_code_document()).hosted_model("design")
+    return generator
+
+
 def test_capabilities_follow_the_route_of_each_purpose():
     hosted = ScriptedMockupGenerator()
     local = SimpleNamespace(
@@ -154,6 +318,7 @@ def test_capabilities_follow_the_route_of_each_purpose():
                 "iterations": True,
                 "model": "claude-opus-5-5",
                 "static_check": False,
+                "paid": True,
             },
         ),
         (
@@ -164,6 +329,7 @@ def test_capabilities_follow_the_route_of_each_purpose():
                 "iterations": False,
                 "model": None,
                 "static_check": False,
+                "paid": True,
             },
         ),
         (
@@ -174,6 +340,7 @@ def test_capabilities_follow_the_route_of_each_purpose():
                 "iterations": False,
                 "model": None,
                 "static_check": False,
+                "paid": True,
             },
         ),
         (
@@ -184,6 +351,7 @@ def test_capabilities_follow_the_route_of_each_purpose():
                 "iterations": False,
                 "model": "claude-opus-5-5",
                 "static_check": False,
+                "paid": True,
             },
         ),
         (
@@ -194,6 +362,7 @@ def test_capabilities_follow_the_route_of_each_purpose():
                 "iterations": True,
                 "model": "claude-sonnet-5",
                 "static_check": False,
+                "paid": True,
             },
         ),
     ]
@@ -205,13 +374,95 @@ def test_capabilities_follow_the_route_of_each_purpose():
         assert response.json() == expected
 
 
+def test_capabilities_are_not_paid_when_the_route_that_draws_uses_the_subscription():
+    hosted = ScriptedMockupGenerator()
+    subscription = subscription_generator()
+    local = SimpleNamespace(
+        configuration=SimpleNamespace(
+            provider_kind=StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL,
+            max_output_tokens=16_384,
+        )
+    )
+    cases = [
+        (subscription, (True, True, False)),
+        (Routed({"default": local, "DESIGN_ITERATION": subscription}), (False, True, False)),
+        (
+            Routed(
+                {"default": local, "DESIGN_MOCKUP_HTML": hosted, "DESIGN_ITERATION": subscription}
+            ),
+            (True, True, True),
+        ),
+        (
+            Routed(
+                {"default": local, "DESIGN_MOCKUP_HTML": subscription, "DESIGN_ITERATION": hosted}
+            ),
+            (True, True, False),
+        ),
+    ]
+    for generator, (mockups, iterations, paid) in cases:
+        client, _registry = client_for(runtime(generator))
+        with client:
+            response = client.get(f"{MOCKUPS}/capabilities")
+        assert response.status_code == 200
+        assert response.json() == {
+            "generated_mockups": mockups,
+            "iterations": iterations,
+            "model": "claude-opus-5-5",
+            "static_check": False,
+            "paid": paid,
+        }
+
+
+def test_a_route_without_prices_starts_the_jobs_whatever_was_spent():
+    budget = GenerationBudget(1_500_000, 10_000_000, 60_000_000)
+    versions = DesignVersions(package())
+    store = MemoryMockupStore(project=10**12, total=10**12)
+    generator = subscription_generator(answer(draft_payload(), cost=None), budget=budget)
+    client, registry = client_for(runtime(generator, store, versions))
+    with client:
+        done = generated(client, registry, versions)
+    assert done["status"] == "SUCCEEDED"
+    assert done["result"]["cost_microusd"] == 0
+    applied = DesignVersions(package(), applied_package())
+    current = applied.versions[-1]
+    iterating = subscription_generator(answer(iteration_payload(), cost=None), budget=budget)
+    client, registry = client_for(runtime(iterating, store, applied))
+    with client:
+        started = client.post(
+            f"{BASE}/iterations/jobs",
+            json={
+                "design_version_id": str(current.id),
+                "design_content_hash": current.content_hash,
+                "request": "Mostra la sede di ritiro della tessera.",
+            },
+        )
+        assert started.status_code == 202, started.json()
+        job_id = started.json()["job_id"]
+        client.portal.call(registry.wait, UUID(job_id))
+        iteration = client.get(f"{BASE}/iterations/jobs/{job_id}").json()
+    assert iteration["status"] == "SUCCEEDED", iteration["failure"]
+    assert store.reads == []
+    priced = ScriptedMockupGenerator(budget=budget)
+    client, registry = client_for(runtime(priced, MemoryMockupStore(project=10**12), versions))
+    with client:
+        refused = client.post(f"{MOCKUPS}/jobs", json=body(versions))
+    assert refused.status_code == 402
+    assert refused.json()["detail"] == {"code": "GENERATION_BUDGET_EXCEEDED"}
+
+
 def test_capabilities_say_whether_the_runtime_has_the_final_evaluator():
     cases = [
-        (ScriptedMockupGenerator(), True, None, (True, True, "claude-opus-5-5", False)),
-        (ScriptedMockupGenerator(), True, SimpleNamespace(), (True, True, "claude-opus-5-5", True)),
-        (None, False, SimpleNamespace(), (False, False, None, True)),
-        (None, False, None, (False, False, None, False)),
+        (ScriptedMockupGenerator(), True, None, (True, True, "claude-opus-5-5", False, True)),
+        (
+            ScriptedMockupGenerator(),
+            True,
+            SimpleNamespace(),
+            (True, True, "claude-opus-5-5", True, True),
+        ),
+        (None, False, SimpleNamespace(), (False, False, None, True, True)),
+        (None, False, None, (False, False, None, False, True)),
     ]
+    keys = ("generated_mockups", "iterations", "model", "static_check", "paid")
     for generator, real, evaluator, expected in cases:
         value = runtime(generator, real=real)
         value.final_evaluator_runtime = evaluator
@@ -220,16 +471,16 @@ def test_capabilities_say_whether_the_runtime_has_the_final_evaluator():
             response = client.get(f"{MOCKUPS}/capabilities")
             schema = client.app.openapi()["components"]["schemas"]["MockupCapabilities"]
         assert response.status_code == 200
-        assert response.json() == dict(
-            zip(("generated_mockups", "iterations", "model", "static_check"), expected, strict=True)
-        )
+        assert response.json() == dict(zip(keys, expected, strict=True))
     assert sorted(schema["required"]) == [
         "generated_mockups",
         "iterations",
         "model",
+        "paid",
         "static_check",
     ]
     assert schema["properties"]["static_check"]["type"] == "boolean"
+    assert schema["properties"]["paid"]["type"] == "boolean"
     assert schema["additionalProperties"] is False
 
 
@@ -600,6 +851,7 @@ def test_the_application_registers_the_routes_and_closes_the_jobs_on_shutdown():
             "iterations": False,
             "model": None,
             "static_check": False,
+            "paid": True,
         }
         unavailable = [
             client.post(f"{MOCKUPS}/jobs", json=body(versions)),

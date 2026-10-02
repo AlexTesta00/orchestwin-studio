@@ -10,10 +10,13 @@ export type ArtifactKind =
 export type ArtifactGraphStage = "CONTEXT" | "REQUIREMENTS" | "DESIGN";
 
 export type ArtifactGraphNodeKind =
+  | "NEED"
+  | "JOURNEY"
   | "PROJECT_BRIEF"
   | "AGENT_TEAM"
   | "USER_MODELING"
   | "USER_TWIN"
+  | "RESEARCH_EVIDENCE"
   | "REQUIREMENTS_SPECIFICATION"
   | "REQUIREMENT"
   | "USER_STORY"
@@ -30,6 +33,9 @@ export type ArtifactGraphNodeKind =
   | "PROTOTYPE_SCREEN";
 
 export type ArtifactGraphLinkKind =
+  | "PARTICIPATES_IN"
+  | "REVEALS"
+  | "EXPANDS"
   | "CONTAINS"
   | "GROUNDED_IN"
   | "ACTS_AS"
@@ -40,7 +46,10 @@ export type ArtifactGraphLinkKind =
   | "GOVERNS"
   | "TRACES_TO"
   | "REPRESENTS"
-  | "CRITIQUES";
+  | "CRITIQUES"
+  | "SUPPORTS"
+  | "CONTRADICTS"
+  | "ADDS";
 
 export interface VersionedArtifactReferencePayload {
   kind: ArtifactKind;

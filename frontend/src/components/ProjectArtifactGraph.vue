@@ -9,6 +9,8 @@ import type {
   ArtifactGraphNodePayload,
   ArtifactGraphReferencePayload,
   ArtifactGraphStage,
+  ArtifactGraphNodeKind,
+  ArtifactGraphLinkKind,
   VersionedArtifactReferencePayload,
 } from "../types/artifacts";
 
@@ -36,6 +38,7 @@ const auth = useAuthStore();
 const store = useArtifactGraphStore();
 const localError = ref<string | null>(null);
 const stageFilter = ref<StageFilter>("ALL");
+const kindFilter = ref<"ALL" | ArtifactGraphNodeKind>("ALL");
 
 const stages: ArtifactGraphStage[] = ["CONTEXT", "REQUIREMENTS", "DESIGN"];
 
@@ -62,9 +65,9 @@ const messages = {
     notAvailable: "Not available",
     filter: "Relationship stage filter",
     allStages: "All stages",
-    context: "Context",
-    requirementsStage: "Requirements",
-    designStage: "Design",
+    context: "Brief, Perspectives and User Twin",
+    requirementsStage: "Definition",
+    designStage: "Design & Evaluation",
     nodeKind: "Artifact kind",
     version: "Exact version",
     outgoing: "Outgoing",
@@ -75,6 +78,19 @@ const messages = {
     target: "Target",
     noRelationships: "No relationships match the selected stage.",
     downloadError: "The graph export could not be downloaded.",
+    kindFilter: "Item filter",
+    allKinds: "All items",
+    need: "Need",
+    journey: "Journey",
+    expands: "expands",
+    scenario: "Scenario",
+    participates: "participates in",
+    reveals: "reveals",
+    motivates: "motivates",
+    evidence: "Evidence source",
+    supports: "supports",
+    contradicts: "contradicts",
+    adds: "adds information to",
   },
   it: {
     eyebrow: "Gestione artefatti e provenienza",
@@ -99,9 +115,9 @@ const messages = {
     notAvailable: "Non disponibile",
     filter: "Filtro della fase per le relazioni",
     allStages: "Tutte le fasi",
-    context: "Contesto",
-    requirementsStage: "Requisiti",
-    designStage: "Design",
+    context: "Brief, Prospettive e User Twin",
+    requirementsStage: "Definizione",
+    designStage: "Design e valutazione",
     nodeKind: "Tipo di artefatto",
     version: "Versione esatta",
     outgoing: "In uscita",
@@ -112,6 +128,19 @@ const messages = {
     target: "Destinazione",
     noRelationships: "Nessuna relazione corrisponde alla fase selezionata.",
     downloadError: "Non è stato possibile scaricare l'esportazione del grafo.",
+    kindFilter: "Filtro degli elementi",
+    allKinds: "Tutti gli elementi",
+    need: "Bisogno",
+    journey: "Journey",
+    expands: "espande",
+    scenario: "Scenario",
+    participates: "partecipa a",
+    reveals: "rivela",
+    motivates: "motiva",
+    evidence: "Fonte di evidenza",
+    supports: "sostiene",
+    contradicts: "contraddice",
+    adds: "aggiunge informazioni a",
   },
 } as const;
 
@@ -132,12 +161,21 @@ const nodesByStage = computed(
     Object.fromEntries(
       stages.map((stage) => [
         stage,
-        (graph.value?.nodes ?? []).filter((node) => node.stage === stage),
+        (graph.value?.nodes ?? []).filter(
+          (node) =>
+            node.stage === stage &&
+            (kindFilter.value === "ALL" || node.reference.kind === kindFilter.value),
+        ),
       ]),
     ) as Record<ArtifactGraphStage, ArtifactGraphNodePayload[]>,
 );
 const visibleLinks = computed(() => {
-  const links = graph.value?.links ?? [];
+  const links = (graph.value?.links ?? []).filter(
+    (link) =>
+      kindFilter.value === "ALL" ||
+      link.source.kind === kindFilter.value ||
+      link.target.kind === kindFilter.value,
+  );
 
   if (stageFilter.value === "ALL") {
     return links;
@@ -150,6 +188,37 @@ const visibleLinks = computed(() => {
     return source?.stage === stageFilter.value || target?.stage === stageFilter.value;
   });
 });
+const nodeKinds = computed(() => [
+  ...new Set((graph.value?.nodes ?? []).map((node) => node.reference.kind)),
+]);
+
+function nodeKindLabel(kind: ArtifactGraphNodeKind): string {
+  if (kind === "RESEARCH_EVIDENCE") return copy.value.evidence;
+  return kind === "JOURNEY"
+    ? copy.value.journey
+    : kind === "NEED"
+      ? copy.value.need
+      : kind === "SCENARIO"
+        ? copy.value.scenario
+        : kind;
+}
+function linkKindLabel(kind: ArtifactGraphLinkKind): string {
+  const evidenceLabels = {
+    SUPPORTS: copy.value.supports,
+    CONTRADICTS: copy.value.contradicts,
+    ADDS: copy.value.adds,
+  };
+  if (kind === "SUPPORTS" || kind === "CONTRADICTS" || kind === "ADDS") return evidenceLabels[kind];
+  return kind === "EXPANDS"
+    ? copy.value.expands
+    : kind === "PARTICIPATES_IN"
+      ? copy.value.participates
+      : kind === "REVEALS"
+        ? copy.value.reveals
+        : kind === "MOTIVATES"
+          ? copy.value.motivates
+          : kind;
+}
 
 function referenceKey(reference: ArtifactGraphReferencePayload): string {
   return [
@@ -173,9 +242,14 @@ function stageLabel(stage: ArtifactGraphStage): string {
 function nodeLabel(reference: ArtifactGraphReferencePayload): string {
   const node = nodeLookup.value.get(referenceKey(reference));
 
-  return node === undefined
-    ? `${reference.kind} · ${reference.artifact_id}`
-    : `${node.display_code} · ${node.title}`;
+  const label =
+    node === undefined
+      ? `${reference.kind} · ${reference.artifact_id}`
+      : `${node.display_code} · ${node.title}`;
+  return (reference.kind === "RESEARCH_EVIDENCE" || reference.kind === "USER_TWIN") &&
+    reference.version_number !== null
+    ? `${label} · v${reference.version_number}`
+    : label;
 }
 
 function exactReferenceLabel(reference: VersionedArtifactReferencePayload | null): string {
@@ -386,11 +460,20 @@ watch(
               <dl class="grid gap-1 text-xs text-on-night-2">
                 <div>
                   <dt class="inline font-semibold text-on-night">{{ copy.nodeKind }}:</dt>
-                  <dd class="inline break-all">{{ node.reference.kind }}</dd>
+                  <dd class="inline break-all">{{ nodeKindLabel(node.reference.kind) }}</dd>
                 </div>
                 <div v-if="node.reference.version_number !== null">
                   <dt class="inline font-semibold text-on-night">{{ copy.version }}:</dt>
                   <dd class="inline">{{ node.reference.version_number }}</dd>
+                </div>
+                <div
+                  v-if="
+                    node.reference.kind === 'RESEARCH_EVIDENCE' &&
+                    node.reference.content_hash !== null
+                  "
+                >
+                  <dt class="font-semibold text-on-night">{{ copy.hash }}:</dt>
+                  <dd class="m-0 font-mono break-all">{{ node.reference.content_hash }}</dd>
                 </div>
                 <div>
                   <dt class="inline font-semibold text-on-night">{{ copy.outgoing }}:</dt>
@@ -423,6 +506,19 @@ watch(
               </option>
             </select>
           </label>
+          <label class="grid gap-2 text-sm font-semibold">
+            {{ copy.kindFilter }}
+            <select
+              v-model="kindFilter"
+              class="min-h-11 rounded-control border border-night-line-strong bg-night-panel px-3 py-2 font-normal text-on-night"
+              data-testid="artifact-kind-filter"
+            >
+              <option value="ALL">{{ copy.allKinds }}</option>
+              <option v-for="kind in nodeKinds" :key="kind" :value="kind">
+                {{ nodeKindLabel(kind) }}
+              </option>
+            </select>
+          </label>
         </div>
 
         <div
@@ -444,7 +540,7 @@ watch(
                 class="border-t border-night-line"
               >
                 <th class="px-4 py-3 font-mono text-xs font-medium text-on-night" scope="row">
-                  {{ link.kind }}
+                  {{ linkKindLabel(link.kind) }}
                 </th>
                 <td class="px-4 py-3 text-on-night-2">{{ nodeLabel(link.source) }}</td>
                 <td class="px-4 py-3 text-on-night-2">{{ nodeLabel(link.target) }}</td>

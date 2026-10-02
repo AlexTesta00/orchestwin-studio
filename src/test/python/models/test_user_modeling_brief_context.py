@@ -55,7 +55,8 @@ def test_real_provider_receives_actual_approved_goals_and_description(tmp_path, 
     assert "created_by_user_id" not in json.dumps(received)
     assert "created_at" not in json.dumps(received)
     task = "personas" if stage == "personas" else "user-twins"
-    assert call["metadata"]["orchestwin_prompt_version_ref"] == f"proposal-{task}-v4"
+    version = 4 if stage == "personas" else 5
+    assert call["metadata"]["orchestwin_prompt_version_ref"] == f"proposal-{task}-v{version}"
     observations = result.proposals[0].profile.observations
     for observation in observations[1:] if stage == "personas" else observations:
         reference = next(

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import io
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from orchestwin.cli.console import Console
 from orchestwin.cli.context import CommandContext
-from orchestwin.cli.environment import Environment
+from orchestwin.cli.environment import Environment, ProcessResult, RunningProcess
 from orchestwin.cli.http import Transport
 from orchestwin.cli.main import main
 from orchestwin.cli.project import ProjectFolder, ProjectLink
@@ -20,7 +20,14 @@ from orchestwin.cli.session import (
     StudioSession,
 )
 
+from .agents import no_agents
+from .browsers import no_browsers
+from .processes import no_processes
 from .transports import NoNetwork
+
+Runner = Callable[[Sequence[str], Path, float], ProcessResult]
+Starter = Callable[[Sequence[str], Path, Mapping[str, str]], RunningProcess]
+Interactive = Callable[[Sequence[str], Path, Mapping[str, str]], int]
 
 START = datetime(2026, 9, 29, 9, 0, tzinfo=UTC)
 MONOTONIC_ORIGIN = 1000.0
@@ -112,6 +119,9 @@ def terminal(
     language: str | None = "en",
     start: datetime | None = None,
     working_directory: Path | None = None,
+    processes: Runner | None = None,
+    start_process: Starter | None = None,
+    run_interactive: Interactive | None = None,
 ) -> Terminal:
     home = tmp_path / "home"
     home.mkdir(parents=True, exist_ok=True)
@@ -136,6 +146,9 @@ def terminal(
         open_browser=browser.open,
         transport=transport,
         system_language=language,
+        run_process=no_processes if processes is None else processes,
+        start_process=no_browsers if start_process is None else start_process,
+        run_interactive=no_agents if run_interactive is None else run_interactive,
     )
     return Terminal(environment=environment, clock=clock, browser=browser, secrets=keeper)
 
@@ -151,6 +164,9 @@ def environment(
     interactive: bool = False,
     language: str | None = "en",
     start: datetime | None = None,
+    processes: Runner | None = None,
+    start_process: Starter | None = None,
+    run_interactive: Interactive | None = None,
 ) -> Environment:
     return terminal(
         tmp_path,
@@ -162,6 +178,9 @@ def environment(
         interactive=interactive,
         language=language,
         start=start,
+        processes=processes,
+        start_process=start_process,
+        run_interactive=run_interactive,
     ).environment
 
 
@@ -178,6 +197,9 @@ def run_ut(
     language: str | None = "en",
     interactive: bool = False,
     start: datetime | None = None,
+    processes: Runner | None = None,
+    start_process: Starter | None = None,
+    run_interactive: Interactive | None = None,
 ) -> Run:
     bundle = terminal(
         tmp_path,
@@ -190,6 +212,9 @@ def run_ut(
         language=language,
         start=start,
         working_directory=working_directory,
+        processes=processes,
+        start_process=start_process,
+        run_interactive=run_interactive,
     )
     status = main(list(arguments), environment=bundle.environment)
     return Run(

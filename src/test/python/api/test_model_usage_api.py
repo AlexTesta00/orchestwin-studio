@@ -111,7 +111,7 @@ def test_usage_and_budget_require_authentication_and_an_evidence_store():
 def test_the_budget_reports_ceilings_spending_and_remainder():
     store = Store()
     budget = GenerationBudget(1_500_000, 10_000_000, 60_000_000, date(2026, 9, 1))
-    response = client(store, SimpleNamespace(budget=budget)).get(BUDGET_PATH)
+    response = client(store, SimpleNamespace(budget=budget, billing="API")).get(BUDGET_PATH)
     assert response.status_code == 200
     assert response.json() == {
         "currency": "USD",
@@ -121,8 +121,21 @@ def test_the_budget_reports_ceilings_spending_and_remainder():
         "spent_total_microusd": 1_250_000,
         "remaining_total_microusd": 58_750_000,
         "period_start": "2026-09-01",
+        "billing": "API",
     }
     assert store.spent_calls == [(None, date(2026, 9, 1))]
+
+
+def test_the_budget_says_how_the_routes_are_paid():
+    budget = GenerationBudget(1_500_000, 10_000_000, 60_000_000)
+    for billing in ("SUBSCRIPTION", "API", "MIXED"):
+        real = SimpleNamespace(budget=budget, billing=billing)
+        response = client(Store(), real).get(BUDGET_PATH)
+        assert response.status_code == 200
+        assert response.json()["billing"] == billing
+        assert response.json()["total_microusd"] == 60_000_000
+    unknown = client(Store(), SimpleNamespace(budget=budget)).get(BUDGET_PATH)
+    assert unknown.json()["billing"] is None
 
 
 def test_the_budget_needs_a_real_runtime_with_a_budget():

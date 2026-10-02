@@ -6,7 +6,12 @@ from uuid import UUID
 import pytest
 from sqlalchemy.dialects import postgresql
 
-from orchestwin.projects.persistence.progress import overview_statement, progress_facts
+from orchestwin.projects.persistence.progress import (
+    _roster_matches,
+    overview_section_facts,
+    overview_statement,
+    progress_facts,
+)
 from orchestwin.projects.progress import (
     CURRENT_CATALOG,
     ArtifactVersion,
@@ -259,7 +264,7 @@ def test_one_statement_reads_every_project_of_the_owner_or_one_of_them() -> None
         )
     )
 
-    assert listing.count("LATERAL") == 9
+    assert listing.count("LATERAL") == 10
     assert "projects.archived_at IS NULL" in listing
     assert "projects.owner_user_id" in listing
     assert "projects.id = " not in listing
@@ -273,3 +278,130 @@ def test_one_statement_reads_every_project_of_the_owner_or_one_of_them() -> None
         "project_brief_versions",
     ):
         assert table in listing
+
+
+@pytest.mark.parametrize("changed", ["id", "version_number", "content_hash", "archived"])
+def test_roster_identity_is_compared_with_the_exact_snapshot_persona_version(changed) -> None:
+    persona_id = str(UUID(int=21))
+    version_id = str(UUID(int=22))
+    roster = [
+        {
+            "id": version_id,
+            "persona_id": persona_id,
+            "version_number": 1,
+            "content_hash": "a" * 64,
+            "profile": {"confirmation_status": "CONFIRMED"},
+        }
+    ]
+    snapshot = {
+        "persona_versions": [
+            {
+                "id": version_id,
+                "persona_id": persona_id,
+                "version_number": 1,
+                "content_hash": "a" * 64,
+            }
+        ]
+    }
+    assert _roster_matches(snapshot, roster)
+    if changed == "archived":
+        roster[0]["profile"]["archived"] = True
+    else:
+        roster[0][changed] = {
+            "id": str(UUID(int=23)),
+            "version_number": 2,
+            "content_hash": "b" * 64,
+        }[changed]
+    assert not _roster_matches(snapshot, roster)
+
+
+def test_a_raw_row_with_the_wrong_persona_version_id_has_obsolete_twins() -> None:
+    persona_id = str(UUID(int=21))
+    values = row(
+        **columns("twins", TWINS),
+        **columns("twins_brief", BRIEF),
+        **columns("twins_team", TEAM),
+        **columns("twins_gate", TWINS),
+        twins_gate_status="APPROVED",
+        twins_catalog_version=CURRENT_CATALOG.version,
+        twins_catalog_hash=CURRENT_CATALOG.content_hash,
+        twins_snapshot={
+            "persona_versions": [
+                {
+                    "id": str(UUID(int=22)),
+                    "persona_id": persona_id,
+                    "version_number": 1,
+                    "content_hash": "a" * 64,
+                }
+            ],
+            "twin_versions": [],
+        },
+        twins_revision_pending=False,
+        archetype_versions=[
+            {
+                "id": str(UUID(int=23)),
+                "persona_id": persona_id,
+                "version_number": 1,
+                "content_hash": "a" * 64,
+                "profile": {"confirmation_status": "CONFIRMED"},
+            }
+        ],
+    )
+    facts = overview_section_facts(values)
+    assert facts.user_twins.archetypes_current is False
+
+
+def test_section_updates_determine_progress_without_changing_the_first_pass() -> None:
+    from orchestwin.projects.sections import project_sections
+    from src.test.python.projects.test_sections import aligned, brief, user_twins
+
+    changed_brief = aligned(brief=brief(2), team=replace(aligned().team, alignable=True))
+    progress = project_progress(complete(), sections=project_sections(changed_brief))
+    assert progress == ProjectProgress(ProjectStage.TEAM, ProjectNextAction.UPDATE_SECTIONS)
+    changed_archetypes = aligned(user_twins=user_twins(archetypes_current=False))
+    progress = project_progress(complete(), sections=project_sections(changed_archetypes))
+    assert progress == ProjectProgress(ProjectStage.USER_TWINS, ProjectNextAction.PREPARE_TWINS)
+    assert project_progress(complete(), sections=project_sections(aligned())) == project_progress(
+        complete()
+    )
+
+
+@pytest.mark.parametrize("blocked", ["REQUIREMENT_NO_LONGER_AVAILABLE", "PREPARE_AGAIN"])
+def test_an_obsolete_blocked_design_asks_to_prepare_a_new_version(blocked):
+    from orchestwin.projects.sections import (
+        ProjectSections,
+        Section,
+        SectionAlignment,
+        SectionBlock,
+        SectionState,
+    )
+
+    sections = ProjectSections(
+        first_pass_complete=True,
+        sections=(
+            Section(
+                key=ProjectStage.DESIGN,
+                state=SectionState.TO_UPDATE,
+                version_number=1,
+                blocked=SectionBlock(blocked),
+            ),
+        ),
+        alignment=SectionAlignment(available=False, sections=(ProjectStage.DESIGN,)),
+    )
+    assert project_progress(complete(), sections=sections) == ProjectProgress(
+        ProjectStage.DESIGN, ProjectNextAction.PREPARE_DESIGN
+    )
+
+
+def test_first_pass_pending_twins_and_design_keep_their_confirmation_actions():
+    from orchestwin.projects.sections import project_sections
+    from src.test.python.projects.test_sections import aligned, design
+
+    missing_twins = replace(complete(), user_twins=None)
+    assert project_progress(
+        missing_twins, sections=project_sections(aligned(user_twins=None))
+    ) == ProjectProgress(ProjectStage.USER_TWINS, ProjectNextAction.CONFIRM_TWINS)
+    pending_design = replace(complete(), design_gate=pending(DESIGN))
+    assert project_progress(
+        pending_design, sections=project_sections(aligned(design=design(approved=False)))
+    ) == ProjectProgress(ProjectStage.DESIGN, ProjectNextAction.APPROVE_DESIGN)

@@ -52,6 +52,7 @@ export interface RequirementsApi {
     projectId: string,
     request: string,
     accessToken: string,
+    includeJourneys?: boolean,
   ): Promise<RequirementsRevisionPayload>;
   revisionHistory(
     projectId: string,
@@ -227,11 +228,11 @@ export function createRequirementsApi(options: RequirementsApiOptions = {}): Req
       });
     },
 
-    requestChange(projectId, requestValue, accessToken) {
+    requestChange(projectId, requestValue, accessToken, includeJourneys = false) {
       return request(`${projectPath(projectId)}/change-requests`, {
         method: "POST",
         accessToken,
-        body: { request: requestValue },
+        body: { request: requestValue, ...(includeJourneys ? { include_journeys: true } : {}) },
         generationProjectId: projectId,
       });
     },

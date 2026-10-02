@@ -11,6 +11,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 
+from orchestwin.knowledge.layout import KNOWLEDGE_SCHEMA_VERSION
 from orchestwin.knowledge.package_persistence import (
     PACKAGE_VERSIONS,
     KnowledgePackageWriteStatus,
@@ -32,7 +33,7 @@ MIGRATION = importlib.import_module(
 )
 NOW = datetime(2026, 9, 27, 21, 0, tzinfo=UTC)
 MANIFEST = {
-    "schema_version": 2,
+    "schema_version": KNOWLEDGE_SCHEMA_VERSION,
     "manifest": "orchestwin.json",
     "index": "ORCHESTWIN.md",
     "files": {"brief/brief.md": "0" * 64},
@@ -53,7 +54,7 @@ def package(owner: UUID, project: UUID, archive: bytes, number: int = 1) -> Know
         project_id=project,
         owner_user_id=owner,
         version_number=number,
-        schema_version=2,
+        schema_version=KNOWLEDGE_SCHEMA_VERSION,
         content_hash=hashlib.sha256(b"content" + archive).hexdigest(),
         archive_hash=hashlib.sha256(archive).hexdigest(),
         file_name=f"orchestwin-knowledge-v{number}.zip",

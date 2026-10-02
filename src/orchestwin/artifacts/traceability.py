@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
@@ -32,11 +33,14 @@ class ArtifactGraphNodeKind(StrEnum):
     AGENT_TEAM = "AGENT_TEAM"
     USER_MODELING = "USER_MODELING"
     USER_TWIN = "USER_TWIN"
+    RESEARCH_EVIDENCE = "RESEARCH_EVIDENCE"
     REQUIREMENTS_SPECIFICATION = "REQUIREMENTS_SPECIFICATION"
     REQUIREMENT = "REQUIREMENT"
     USER_STORY = "USER_STORY"
     ACCEPTANCE_CRITERION = "ACCEPTANCE_CRITERION"
     SCENARIO = "SCENARIO"
+    NEED = "NEED"
+    JOURNEY = "JOURNEY"
     PROJECT_RISK = "PROJECT_RISK"
     DEFINITION_OF_DONE = "DEFINITION_OF_DONE"
     DESIGN_PACKAGE = "DESIGN_PACKAGE"
@@ -54,6 +58,9 @@ class ArtifactGraphLinkKind(StrEnum):
     CONTAINS = "CONTAINS"
     GROUNDED_IN = "GROUNDED_IN"
     ACTS_AS = "ACTS_AS"
+    PARTICIPATES_IN = "PARTICIPATES_IN"
+    REVEALS = "REVEALS"
+    EXPANDS = "EXPANDS"
     MOTIVATES = "MOTIVATES"
     VERIFIED_BY = "VERIFIED_BY"
     EXERCISES = "EXERCISES"
@@ -62,6 +69,9 @@ class ArtifactGraphLinkKind(StrEnum):
     TRACES_TO = "TRACES_TO"
     REPRESENTS = "REPRESENTS"
     CRITIQUES = "CRITIQUES"
+    SUPPORTS = "SUPPORTS"
+    CONTRADICTS = "CONTRADICTS"
+    ADDS = "ADDS"
 
 
 _STAGE_ORDER = {
@@ -380,7 +390,7 @@ def _add_requirement_stage(
                 reference=team_root,
                 stage=ArtifactGraphStage.CONTEXT,
                 display_code=f"TEAM-v{team.version_number}",
-                title="Approved Agent Team",
+                title="Approved perspectives",
             ),
             _node(
                 reference=user_modeling_root,
@@ -400,6 +410,33 @@ def _add_requirement_stage(
         _link(ArtifactGraphLinkKind.GROUNDED_IN, requirements_root, target)
         for target in (brief_root, team_root, user_modeling_root)
     )
+
+    for journey in specification.journeys:
+        reference = _plain_reference(ArtifactGraphNodeKind.JOURNEY, journey.id)
+        nodes.append(
+            _node(
+                reference=reference,
+                stage=ArtifactGraphStage.REQUIREMENTS,
+                display_code=journey.code,
+                title=journey.title,
+            )
+        )
+        links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
+        links.append(
+            _link(
+                ArtifactGraphLinkKind.EXPANDS,
+                _plain_reference(ArtifactGraphNodeKind.SCENARIO, journey.scenario_id),
+                reference,
+            )
+        )
+        links.extend(
+            _link(
+                ArtifactGraphLinkKind.REVEALS,
+                reference,
+                _plain_reference(ArtifactGraphNodeKind.NEED, need_id),
+            )
+            for need_id in {value for phase in journey.phases for value in phase.need_ids}
+        )
 
     for twin in specification.user_twin_references:
         twin_reference = ArtifactGraphReference(
@@ -429,6 +466,53 @@ def _add_requirement_stage(
             )
         )
         links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
+
+    if specification.schema_version == 2:
+        for need in specification.needs:
+            reference = _plain_reference(ArtifactGraphNodeKind.NEED, need.id)
+            nodes.append(
+                _node(
+                    reference=reference,
+                    stage=ArtifactGraphStage.REQUIREMENTS,
+                    display_code=need.code,
+                    title=need.title,
+                )
+            )
+            links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
+            links.extend(
+                _link(
+                    ArtifactGraphLinkKind.REVEALS,
+                    _plain_reference(ArtifactGraphNodeKind.SCENARIO, scenario_id),
+                    reference,
+                )
+                for scenario_id in need.scenario_ids
+            )
+        for kind, artifacts in (
+            (ArtifactGraphNodeKind.REQUIREMENT, specification.requirements),
+            (ArtifactGraphNodeKind.USER_STORY, specification.user_stories),
+        ):
+            for artifact in artifacts:
+                links.extend(
+                    _link(
+                        ArtifactGraphLinkKind.MOTIVATES,
+                        _plain_reference(ArtifactGraphNodeKind.NEED, need_id),
+                        _plain_reference(kind, artifact.id),
+                    )
+                    for need_id in artifact.need_ids
+                )
+        links.extend(
+            _link(
+                ArtifactGraphLinkKind.PARTICIPATES_IN,
+                ArtifactGraphReference(
+                    kind=ArtifactGraphNodeKind.USER_TWIN,
+                    artifact_id=scenario.actor.twin_id,
+                    version_number=scenario.actor.version_number,
+                    content_hash=scenario.actor.content_hash,
+                ),
+                _plain_reference(ArtifactGraphNodeKind.SCENARIO, scenario.id),
+            )
+            for scenario in specification.scenarios
+        )
 
     for story in specification.user_stories:
         reference = _plain_reference(ArtifactGraphNodeKind.USER_STORY, story.id)
@@ -786,9 +870,26 @@ def _add_design_stage(
     return root
 
 
+def grounded_design(
+    requirements: RequirementsSpecificationVersion,
+    design: DesignPackageVersion | None,
+) -> DesignPackageVersion | None:
+    if (
+        design is None
+        or design.project_id != requirements.project_id
+        or design.package.grounding.requirements_reference
+        != _exact_requirements_reference(requirements)
+    ):
+        return None
+    return design
+
+
 def build_cross_stage_artifact_graph(
     requirements: RequirementsSpecificationVersion,
     design: DesignPackageVersion | None = None,
+    *,
+    research_evidence: Mapping[str, object] | None = None,
+    evidence_twins: Sequence = (),
 ) -> CrossStageArtifactGraph:
     """Derive a deterministic graph without persisting duplicate relationship state."""
     requirements_exact = _exact_requirements_reference(requirements)
@@ -816,6 +917,8 @@ def build_cross_stage_artifact_graph(
             nodes=nodes,
             links=links,
         )
+    if research_evidence and research_evidence.get("evidence"):
+        _add_evidence_stage(research_evidence, evidence_twins, nodes, links)
 
     return CrossStageArtifactGraph(
         project_id=requirements.project_id,
@@ -824,6 +927,68 @@ def build_cross_stage_artifact_graph(
         nodes=tuple(sorted(nodes, key=lambda node: node.sort_key)),
         links=tuple(sorted(set(links), key=lambda link: link.sort_key)),
     )
+
+
+def _add_evidence_stage(document, twins, nodes, links) -> None:
+    sources = {}
+    for source in document.get("evidence", ()):
+        reference = ArtifactGraphReference(
+            kind=ArtifactGraphNodeKind.RESEARCH_EVIDENCE,
+            artifact_id=UUID(source["id"]),
+            version_number=source["version"],
+            content_hash=source["content_hash"],
+        )
+        sources[(source["id"], source["version"], source["content_hash"])] = reference
+        nodes.append(
+            _node(
+                reference=reference,
+                stage=ArtifactGraphStage.CONTEXT,
+                display_code=f"{source['code']}-v{source['version']}",
+                title=f"{source['title']} ({source['status']})",
+            )
+        )
+    profiles = {str(twin.twin_id): twin for twin in twins}
+    for item in document.get("citations", ()):
+        if item.get("status") != "ACTIVE":
+            continue
+        citation = item["citation"]
+        source = sources.get(
+            (citation["source_id"], citation["source_version"], citation["content_hash"])
+        )
+        twin = profiles.get(item["twin_id"])
+        if source is None or twin is None:
+            continue
+        observation = next(
+            (
+                entry
+                for entry in twin.profile.observations
+                if entry.observation_key == f"user_twin.{item['field']}"
+            ),
+            None,
+        )
+        if observation is None or not any(
+            entry.source_id == citation["source_id"]
+            and entry.source_version == citation["source_version"]
+            and entry.content_hash == citation["content_hash"]
+            for entry in observation.provenance.references
+        ):
+            continue
+        target = ArtifactGraphReference(
+            kind=ArtifactGraphNodeKind.USER_TWIN,
+            artifact_id=twin.twin_id,
+            version_number=twin.version_number,
+            content_hash=twin.content_hash,
+        )
+        if not any(node.reference == target for node in nodes):
+            nodes.append(
+                _node(
+                    reference=target,
+                    stage=ArtifactGraphStage.CONTEXT,
+                    display_code=f"UT-{twin.twin_id.hex[:8].upper()}-v{twin.version_number}",
+                    title=twin.profile.name,
+                )
+            )
+        links.append(_link(ArtifactGraphLinkKind(item["effect"]), source, target))
 
 
 __all__ = [
@@ -835,4 +1000,5 @@ __all__ = [
     "ArtifactGraphStage",
     "CrossStageArtifactGraph",
     "build_cross_stage_artifact_graph",
+    "grounded_design",
 ]

@@ -125,6 +125,11 @@ class LocalUserTwinProfileRevisionService:
     ) -> ProfileRevisionApplicationResult:
         """Persist one explicit diff against the current User Modeling snapshot."""
         async with self._uow_factory(owner_user_id=owner_user_id) as uow:
+            if not await uow.lock_project(project_id=project_id):
+                return ProfileRevisionApplicationResult(
+                    status=ProfileRevisionApplicationStatus.REJECTED,
+                    issue=ProfileRevisionApplicationIssueCode.SNAPSHOT_NOT_FOUND,
+                )
             current_snapshot = await uow.snapshots.current(project_id=project_id)
 
             if current_snapshot is None:
@@ -140,6 +145,13 @@ class LocalUserTwinProfileRevisionService:
                 return ProfileRevisionApplicationResult(
                     status=(ProfileRevisionApplicationStatus.REJECTED),
                     issue=(ProfileRevisionApplicationIssueCode.TWIN_NOT_FOUND),
+                )
+
+            pending_evidence = getattr(uow, "has_pending_evidence_update", None)
+            if pending_evidence is not None and await pending_evidence(project_id=project_id):
+                return ProfileRevisionApplicationResult(
+                    status=ProfileRevisionApplicationStatus.REJECTED,
+                    issue=ProfileRevisionApplicationIssueCode.DIFF_ALREADY_PENDING,
                 )
 
             existing = await uow.diffs.current_proposed(
@@ -199,6 +211,11 @@ class LocalUserTwinProfileRevisionService:
     ) -> ProfileRevisionApplicationResult:
         """Approve/reject one diff and atomically version approved content."""
         async with self._uow_factory(owner_user_id=owner_user_id) as uow:
+            if not await uow.lock_project(project_id=project_id):
+                return ProfileRevisionApplicationResult(
+                    status=ProfileRevisionApplicationStatus.REJECTED,
+                    issue=ProfileRevisionApplicationIssueCode.DIFF_NOT_FOUND,
+                )
             current_diff = await uow.diffs.get(
                 project_id=project_id,
                 diff_id=diff_id,

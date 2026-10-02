@@ -14,20 +14,27 @@ from orchestwin.agents.catalog import (
     AGENT_CATALOG_VERSION,
     all_agent_catalog_entries,
 )
+from orchestwin.agents.perspectives import (
+    perspective_views,
+)
 from orchestwin.agents.proposals import (
+    LocalTeamProposalApplicationService,
     TeamProposalApplicationResult,
     TeamProposalApplicationStatus,
     TeamProposalRevisionKind,
     TeamProposalVersion,
+    TeamSelectionContext,
 )
 from orchestwin.agents.selection_rules import (
     determine_team_constraints,
 )
 from orchestwin.agents.team_gate import (
+    OWNER_CHOICE_STATEMENT,
     AgentTeamGateDecisionResult,
     AgentTeamGateDecisionStatus,
     AgentTeamGateSubmissionResult,
     AgentTeamGateSubmissionStatus,
+    LocalAgentTeamApprovalService,
     OwnerAgentRationale,
     ProjectWorkflowReadiness,
     TeamEditResult,
@@ -41,6 +48,9 @@ from orchestwin.api.auth import (
 )
 from orchestwin.api.services import (
     ApplicationRuntime,
+)
+from orchestwin.api.teams import (
+    TeamProposalVersionResponse,
 )
 from orchestwin.config import (
     ApplicationSettings,
@@ -58,6 +68,7 @@ from orchestwin.models.team_proposals import (
     TeamProposalJustification,
     TeamProposalJustificationKind,
     TeamProposalMemberSource,
+    TeamProposalPort,
     TeamProposalRequest,
 )
 from orchestwin.projects.briefs import (
@@ -78,6 +89,20 @@ from orchestwin.workflow.gates import (
     create_human_gate,
     transition_human_gate,
 )
+from src.test.python.agents.test_editable_team_gate import (
+    IncrementingUuidFactory,
+    InMemoryAgentTeamUnitOfWork,
+    InMemoryContextRepository,
+    InMemoryEditableProposalRepository,
+    InMemoryGateRepository,
+    approved_brief_gate,
+)
+from src.test.python.agents.test_team_proposal_application import (
+    BlockingProposalAdapter,
+    InMemoryTeamProposalUnitOfWork,
+    InMemoryTeamProposalVersionRepository,
+    InMemoryTeamSelectionContextRepository,
+)
 
 USER_ID = UUID("00000000-0000-4000-8000-000000000001")
 PROJECT_ID = UUID("00000000-0000-4000-8000-000000000010")
@@ -95,6 +120,8 @@ NOW = datetime(
     0,
     tzinfo=UTC,
 )
+DEFAULT_DESCRIPTION = "A Vue web application with a FastAPI backend."
+CONTRADICTION = "Una app con database ma senza backend."
 
 _AGENT_ORDER = tuple(entry.agent_id for entry in all_agent_catalog_entries())
 
@@ -111,33 +138,12 @@ def build_user() -> UserAccount:
     )
 
 
-async def build_initial_team_version() -> TeamProposalVersion:
+async def build_initial_team_version(
+    description: str = DEFAULT_DESCRIPTION,
+) -> TeamProposalVersion:
     """Create one deterministic generated team-proposal version."""
-    provided_fields = {
-        BriefField.NAME,
-        BriefField.DESCRIPTION,
-        BriefField.TECHNICAL_CONSTRAINTS,
-    }
-    brief = create_project_brief(
-        name="Agent Team API project",
-        description=("A Vue web application with a FastAPI backend."),
-        technical_constraints=[
-            "Vue frontend",
-            "FastAPI backend",
-            "PostgreSQL database",
-        ],
-        unknown_fields=[field for field in BriefField if field not in provided_fields],
-    )
-    brief_version = ProjectBriefVersion(
-        id=BRIEF_VERSION_ID,
-        project_id=PROJECT_ID,
-        version_number=1,
-        schema_version=(brief.SCHEMA_VERSION),
-        brief=brief,
-        content_hash=brief.content_hash,
-        created_by_user_id=USER_ID,
-        created_at=NOW,
-    )
+    brief_version = brief_version_for(description)
+    brief = brief_version.brief
     constraints = determine_team_constraints(
         project_mode=(ProjectMode.GREENFIELD_GENERATION),
         brief=brief,
@@ -158,6 +164,37 @@ async def build_initial_team_version() -> TeamProposalVersion:
         version_number=1,
         proposal=generation.proposal,
         revision_kind=(TeamProposalRevisionKind.PROPOSER_GENERATED),
+        created_by_user_id=USER_ID,
+        created_at=NOW,
+    )
+
+
+def brief_version_for(
+    description: str = DEFAULT_DESCRIPTION,
+) -> ProjectBriefVersion:
+    provided_fields = {
+        BriefField.NAME,
+        BriefField.DESCRIPTION,
+        BriefField.TECHNICAL_CONSTRAINTS,
+    }
+    brief = create_project_brief(
+        name="Agent Team API project",
+        description=description,
+        technical_constraints=[
+            "Vue frontend",
+            "FastAPI backend",
+            "PostgreSQL database",
+        ],
+        unknown_fields=[field for field in BriefField if field not in provided_fields],
+    )
+
+    return ProjectBriefVersion(
+        id=BRIEF_VERSION_ID,
+        project_id=PROJECT_ID,
+        version_number=1,
+        schema_version=(brief.SCHEMA_VERSION),
+        brief=brief,
+        content_hash=brief.content_hash,
         created_by_user_id=USER_ID,
         created_at=NOW,
     )
@@ -683,3 +720,263 @@ def test_team_routes_return_service_unavailable_without_runtime() -> None:
 
     assert response.status_code == 503
     assert response.json() == {"detail": ("team_proposal_service_unavailable")}
+
+
+def build_runtime_client(
+    description: str = DEFAULT_DESCRIPTION,
+    proposal_port: TeamProposalPort | None = None,
+) -> tuple[
+    TestClient,
+    TeamProposalVersion,
+]:
+    initial = asyncio.run(build_initial_team_version(description))
+    brief_version = brief_version_for(description)
+    context = TeamSelectionContext(
+        project_id=PROJECT_ID,
+        owner_user_id=USER_ID,
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief_version=brief_version,
+        brief_gate=approved_brief_gate(brief_version),
+    )
+    generation_contexts = InMemoryTeamSelectionContextRepository()
+    generation_contexts.set_context(context)
+    generated = InMemoryTeamProposalVersionRepository()
+    edit_contexts = InMemoryContextRepository()
+    edit_contexts.set_context(context)
+    editable = InMemoryEditableProposalRepository()
+    editable.seed(initial)
+    gates = InMemoryGateRepository()
+    runtime = ApplicationRuntime(
+        identity_service=FakeIdentityService(),
+        team_proposal_service=LocalTeamProposalApplicationService(
+            unit_of_work_factory=lambda: InMemoryTeamProposalUnitOfWork(
+                generation_contexts,
+                generated,
+            ),
+            proposal_port=proposal_port or FakeDeterministicTeamProposalAdapter(),
+        ),
+        agent_team_service=LocalAgentTeamApprovalService(
+            unit_of_work_factory=lambda: InMemoryAgentTeamUnitOfWork(
+                edit_contexts,
+                editable,
+                gates,
+            ),
+            clock=lambda: NOW,
+            gate_id_factory=IncrementingUuidFactory(start=1000),
+            event_id_factory=IncrementingUuidFactory(start=2000),
+        ),
+    )
+    settings = ApplicationSettings(
+        environment=RuntimeEnvironment.TEST,
+        api_prefix="/api/v1",
+        cors_allowed_origins=("http://127.0.0.1:5173",),
+        _env_file=None,
+    )
+
+    return (
+        TestClient(
+            create_app(
+                settings,
+                runtime=runtime,
+                auth_settings=AuthApiSettings(_env_file=None),
+            )
+        ),
+        initial,
+    )
+
+
+def expected_perspectives(version: TeamProposalVersion) -> list[dict[str, object]]:
+    return [
+        view.to_snapshot()
+        for view in perspective_views(
+            version.proposal.constraints,
+            version.proposal.selected_agent_ids,
+        )
+    ]
+
+
+def test_every_version_payload_holds_the_five_perspectives() -> None:
+    client, state = build_client()
+
+    with client:
+        current = client.get(
+            (f"/api/v1/projects/{PROJECT_ID}/team-proposals/current"),
+            headers=authorization_header(),
+        )
+        history = client.get(
+            (f"/api/v1/projects/{PROJECT_ID}/team-proposals"),
+            headers=authorization_header(),
+        )
+        generated = client.post(
+            (f"/api/v1/projects/{PROJECT_ID}/team-proposals"),
+            headers=authorization_header(),
+        )
+
+    perspectives = current.json()["perspectives"]
+    software = perspectives[2]
+
+    assert current.status_code == 200
+    assert perspectives == expected_perspectives(state.current_version)
+    assert [item["key"] for item in perspectives] == [
+        "UX",
+        "ACCESSIBILITY",
+        "SOFTWARE_ENGINEERING",
+        "PRODUCT",
+        "SECURITY",
+    ]
+    assert [(item["key"], item["standing"], item["applied"]) for item in software["aspects"]] == [
+        ("WEB", "REQUIRED", True),
+        ("SERVICES", "REQUIRED", True),
+        ("MOBILE", "OPTIONAL", False),
+        ("INTEGRATIONS", "OPTIONAL", False),
+    ]
+    assert perspectives[4] == {
+        "key": "SECURITY",
+        "standing": "OPTIONAL",
+        "applied": False,
+        "editable": True,
+        "agent_id": "SECURITY_REVIEWER",
+        "requested": {"fields": [], "terms": []},
+        "excluded": {"fields": [], "terms": []},
+        "aspects": [],
+    }
+    assert history.json()[0]["perspectives"] == perspectives
+    assert generated.json()["version"]["perspectives"] == perspectives
+    assert set(current.json()) == set(TeamProposalVersionResponse.model_fields)
+
+
+def test_owner_switches_security_on_without_a_rationale() -> None:
+    client, initial = build_runtime_client()
+    selected = [agent_id.value for agent_id in initial.proposal.selected_agent_ids]
+
+    with client:
+        edited = client.patch(
+            (f"/api/v1/projects/{PROJECT_ID}/team-proposals/current"),
+            headers=authorization_header(),
+            json={"selected_agent_ids": [*selected, "SECURITY_REVIEWER"]},
+        )
+        switched_off = client.patch(
+            (f"/api/v1/projects/{PROJECT_ID}/team-proposals/current"),
+            headers=authorization_header(),
+            json={"selected_agent_ids": selected},
+        )
+
+    payload = edited.json()
+    security = next(
+        member
+        for member in payload["version"]["members"]
+        if member["agent_id"] == "SECURITY_REVIEWER"
+    )
+
+    assert expected_perspectives(initial)[4]["applied"] is False
+    assert edited.status_code == 201
+    assert payload["status"] == "UPDATED"
+    assert payload["issues"] == []
+    assert payload["version"]["version_number"] == 2
+    assert payload["version"]["perspectives"][4] == {
+        **expected_perspectives(initial)[4],
+        "applied": True,
+    }
+    assert security["source"] == "OWNER_ADDED"
+    assert security["justifications"][0]["statement"] == OWNER_CHOICE_STATEMENT
+    assert switched_off.status_code == 201
+    assert switched_off.json()["version"]["version_number"] == 3
+    assert switched_off.json()["version"]["perspectives"] == expected_perspectives(initial)
+
+
+def test_owner_still_cannot_switch_on_an_excluded_aspect() -> None:
+    client, initial = build_runtime_client("A Vue web application with no mobile application.")
+    selected = [agent_id.value for agent_id in initial.proposal.selected_agent_ids]
+
+    with client:
+        refused = client.patch(
+            (f"/api/v1/projects/{PROJECT_ID}/team-proposals/current"),
+            headers=authorization_header(),
+            json={"selected_agent_ids": [*selected, "MOBILE_ENGINEER"]},
+        )
+
+    mobile = expected_perspectives(initial)[2]["aspects"][2]
+
+    assert (mobile["key"], mobile["standing"], mobile["editable"]) == (
+        "MOBILE",
+        "EXCLUDED",
+        False,
+    )
+    assert refused.status_code == 422
+    assert refused.json()["issues"] == [
+        {"code": "AGENT_NOT_SELECTABLE", "agent_id": "MOBILE_ENGINEER"}
+    ]
+
+
+def test_a_brief_with_a_contradiction_creates_the_proposal() -> None:
+    client, _ = build_runtime_client(CONTRADICTION)
+
+    with client:
+        generated = client.post(
+            (f"/api/v1/projects/{PROJECT_ID}/team-proposals"),
+            headers=authorization_header(),
+        )
+        repeated = client.post(
+            (f"/api/v1/projects/{PROJECT_ID}/team-proposals"),
+            headers=authorization_header(),
+        )
+        current = client.get(
+            (f"/api/v1/projects/{PROJECT_ID}/team-proposals/current"),
+            headers=authorization_header(),
+        )
+
+    payload = generated.json()
+    services = payload["version"]["perspectives"][2]["aspects"][1]
+
+    assert generated.status_code == 201
+    assert payload["status"] == "CREATED"
+    assert [(issue["code"], issue["agent_id"]) for issue in payload["issues"]] == [
+        ("CONTRADICTORY_ROLE_SIGNALS", "BACKEND_ENGINEER")
+    ]
+    assert payload["issues"] == payload["version"]["constraint_issues"]
+    assert payload["issues"][0]["impossible_reasons"] == [
+        {
+            "code": "EXPLICIT_SCOPE_EXCLUSION",
+            "evidence": {"fields": ["description"], "terms": ["senza backend"]},
+        }
+    ]
+    assert "BACKEND_ENGINEER" not in payload["version"]["selected_agent_ids"]
+    assert services == {
+        "key": "SERVICES",
+        "agent_id": "BACKEND_ENGINEER",
+        "standing": "CONTESTED",
+        "applied": False,
+        "editable": True,
+        "requested": {
+            "fields": ["name", "description", "technical_constraints"],
+            "terms": ["api", "backend", "database", "postgresql"],
+        },
+        "excluded": {"fields": ["description"], "terms": ["senza backend"]},
+    }
+    assert (
+        next(
+            constraint
+            for constraint in payload["version"]["role_constraints"]
+            if constraint["agent_id"] == "BACKEND_ENGINEER"
+        )["owner_editable"]
+        is True
+    )
+    assert repeated.status_code == 200
+    assert repeated.json()["status"] == "UNCHANGED"
+    assert repeated.json()["issues"] == payload["issues"]
+    assert current.json() == payload["version"]
+
+
+def test_an_adapter_that_still_blocks_answers_conflict() -> None:
+    client, _ = build_runtime_client(CONTRADICTION, proposal_port=BlockingProposalAdapter())
+
+    with client:
+        blocked = client.post(
+            (f"/api/v1/projects/{PROJECT_ID}/team-proposals"),
+            headers=authorization_header(),
+        )
+
+    assert blocked.status_code == 409
+    assert blocked.json()["status"] == "BLOCKED_BY_CONSTRAINTS"
+    assert blocked.json()["version"] is None
+    assert blocked.json()["issues"][0]["agent_id"] == "BACKEND_ENGINEER"

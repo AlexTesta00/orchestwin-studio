@@ -7,12 +7,20 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import costs, jobs
+from orchestwin.cli import folder as knowledge
 from orchestwin.cli.api import brief, usage
 from orchestwin.cli.api import projects as project_api
 from orchestwin.cli.console import Choice, ProgressOutcome, selected_choice
-from orchestwin.cli.errors import BUDGET_CODES, USAGE_STATUS, ApiFailure, CliError
+from orchestwin.cli.errors import (
+    BUDGET_CODES,
+    INTERRUPTED_STATUS,
+    USAGE_STATUS,
+    ApiFailure,
+    CliError,
+)
 from orchestwin.cli.flows import answers as answers_file
 from orchestwin.cli.flows import init_brief, init_requirements, init_team, init_twins
+from orchestwin.cli.flows.publish import publish_approved
 from orchestwin.cli.project import LINK_FILE, STEPS_FOLDER, ProjectFolder, ProjectLink
 
 if TYPE_CHECKING:
@@ -333,6 +341,7 @@ class Journey:
         self.explained = False
         self.retried = False
         self.designer_note = False
+        self.partial_folders = True
         self.versions: dict[str, int | None] = {}
         self.announced: set[str] = set()
 
@@ -361,6 +370,7 @@ class Journey:
             state = flow.read(self)
             if state.approved:
                 self._announce(stage, state.number)
+                self.refresh_folder(stage, state.number, approved_now=False)
             else:
                 self.console.write()
                 self.console.heading(
@@ -373,6 +383,7 @@ class Journey:
                 )
                 if not flow.run(self, state):
                     return 0
+                self.refresh_folder(stage, self.versions.get(stage), approved_now=True)
             if stage == self.until and number < len(STAGES):
                 self.say(
                     "init.until_stop",
@@ -382,6 +393,30 @@ class Journey:
                 return 0
         self._finish()
         return 0
+
+    def refresh_folder(self, stage: str, number: int | None, *, approved_now: bool) -> None:
+        if not self.partial_folders or (not approved_now and self._folder_holds(stage, number)):
+            return
+        try:
+            found = publish_approved(self.context, self.client, self.project)
+        except CliError as error:
+            if error.status == INTERRUPTED_STATUS:
+                raise
+            self.partial_folders = False
+            self.say("init.folder_not_updated", code=str(error.values.get("code", error.code)))
+            return
+        if found is None:
+            self.partial_folders = False
+            return
+        self.say("init.folder_updated", version=found.version_number)
+
+    def _folder_holds(self, stage: str, number: int | None) -> bool:
+        try:
+            local = knowledge.summary(self.project.knowledge)
+        except CliError:
+            return False
+        entry = None if local is None or stage not in local.progress else local.stage(stage)
+        return entry is not None and entry.version_number == number
 
     def _announce(self, stage: str, number: int | None) -> None:
         if stage in self.announced:
@@ -520,10 +555,15 @@ class Journey:
         if self.retried:
             return False
         self.say("init.generation_failed", label=label, code=code)
+        if self.script is not None and not self.context.assume_yes:
+            return False
+        if costs.uses_subscription(self.client):
+            if self.script is not None:
+                self.say("init.retry_assumed_subscription")
+                return True
+            return self.console.confirm("init.retry_confirm_subscription", default=True)
         amount = costs.amount_text(costs.estimate([operation]), self.context.language)
         if self.script is not None:
-            if not self.context.assume_yes:
-                return False
             self.say("init.retry_assumed", amount=amount)
             return True
         return self.console.confirm("init.retry_confirm", default=True, amount=amount)

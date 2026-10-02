@@ -91,9 +91,9 @@ TRANSIENT_FAILURE_CODES: Final = frozenset(
 DESIGN_CONTRACT_VERSIONS: Final = MappingProxyType(
     {
         "DESIGN_MOCKUP": 7,
-        "DESIGN_ALTERNATIVES_HOSTED": 101,
-        "DESIGN_MOCKUP_HTML": 102,
-        "DESIGN_ITERATION": 103,
+        "DESIGN_ALTERNATIVES_HOSTED": 104,
+        "DESIGN_MOCKUP_HTML": 105,
+        "DESIGN_ITERATION": 106,
     }
 )
 
@@ -268,13 +268,15 @@ class ProposalGenerator:
         _forbid_extra_schema(schema_payload)
         contract_version = {
             "personas": 4,
-            "user-twins": 4,
-            "requirements": 3,
+            "user-twins": 5,
+            "requirements": 7,
             "design": 11,
             "architecture": 7,
             "twin-discussion": 5,
         }.get(task, 1)
         purpose = serialized_context.get("purpose")
+        if task == "requirements" and purpose == "TEST_PLAN":
+            contract_version = 5
         if task == "design" and isinstance(purpose, str):
             contract_version = DESIGN_CONTRACT_VERSIONS.get(purpose, contract_version)
         if task == "brief-dialogue" and serialized_context.get("purpose") == "BRIEF_SYNTHESIS":
@@ -284,8 +286,13 @@ class ProposalGenerator:
             and serialized_context.get("purpose") == "DISCUSSION_SYNTHESIS"
         ):
             contract_version = 6
+        schema_ref = (
+            f"proposal-{task}-evidence-v1"
+            if purpose == "TWIN_EVIDENCE_UPDATE"
+            else f"proposal-{task}-v{contract_version}"
+        )
         schema = create_structured_json_schema(
-            schema_id=f"proposal-{task}-v{contract_version}",
+            schema_id=schema_ref,
             version_number=contract_version,
             schema_payload=schema_payload,
         )
@@ -303,7 +310,7 @@ class ProposalGenerator:
                 ),
                 input_payload={"context": serialized_context, "output_schema": schema_payload},
                 allowed_evidence_refs=(),
-                prompt_version_ref=f"proposal-{task}-v{contract_version}",
+                prompt_version_ref=schema_ref,
                 temperature=self.configuration.temperature if temperature is None else temperature,
                 max_output_tokens=budget,
                 timeout_seconds=self.configuration.timeout_seconds,

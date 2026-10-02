@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api import modeling
+from orchestwin.cli.commands import archetypes
 from orchestwin.cli.console import Choice
 from orchestwin.cli.errors import CliError
 from orchestwin.cli.flows.answers import APPROVE
+from orchestwin.cli.views import personas
 
 if TYPE_CHECKING:
     from orchestwin.cli.commands.init import Journey
@@ -68,7 +70,7 @@ def run(journey: Journey, state: TwinsState) -> bool:
             personas = propose(journey)
         decide(journey, personas)
         snapshot = generate(journey)
-    while True:
+    for _ in range(ATTEMPTS):
         show(journey, snapshot)
         if journey.script is not None:
             action = "approve" if journey.script.twins == APPROVE else "stop"
@@ -78,8 +80,16 @@ def run(journey: Journey, state: TwinsState) -> bool:
                 [
                     Choice("approve", journey.text("init.twins_approve")),
                     Choice("stop", journey.text("init.twins_stop")),
+                    Choice("manage", journey.text("init.twins_manage")),
                 ],
             ).key
+        if action == "manage":
+            archetypes.manage(journey.context, journey.client, journey.project_id)
+            readiness = modeling.readiness(journey.client, journey.project_id)
+            if readiness.get("archetypes_current") is False:
+                decide(journey, modeling.personas(journey.client, journey.project_id))
+                snapshot = generate(journey)
+            continue
         if action == "stop":
             journey.say("init.twins_left")
             return False
@@ -90,6 +100,7 @@ def run(journey: Journey, state: TwinsState) -> bool:
         )
         journey.conclude(STAGE, snapshot, gate)
         return True
+    raise CliError("ANSWER_NOT_VALID")
 
 
 def propose(journey: Journey) -> list[Mapping[str, object]]:
@@ -157,8 +168,14 @@ def show(journey: Journey, snapshot: Mapping[str, object]) -> None:
     number = snapshot.get("version_number")
     journey.console.write()
     journey.say("init.twins_heading", count=len(twins), version=number or "-")
+    views = personas.views_of(snapshot)
     for index, twin in enumerate(twins, start=1):
         journey.say("init.twin_heading", number=index, total=len(twins), name=modeling.name(twin))
+        view = views[str(twin.get("twin_id"))]
+        personas.show_claim(
+            journey.context, "description", (view.get("persona") or {}).get("description") or {}
+        )
+        personas.show_declaration(journey.context, view)
         details(journey, twin, TWIN_DETAILS)
 
 

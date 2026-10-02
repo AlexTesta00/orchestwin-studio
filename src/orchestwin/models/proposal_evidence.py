@@ -15,6 +15,11 @@ from functools import wraps
 from typing import Protocol
 from uuid import UUID
 
+from orchestwin.models.proposal_evidence_privacy import (
+    minimize_evidence_event,
+    minimize_evidence_request,
+    minimizes_evidence_request,
+)
 from orchestwin.projects.requirements_primitives import snapshot_content_hash
 
 
@@ -51,7 +56,9 @@ class ProposalEvidenceScope:
         if self.request is not None:
             raise ProposalEvidenceError("ONE_GENERATION_PER_COMMAND_REQUIRED")
         await self.store.begin(
-            owner_user_id=self.owner_user_id, project_id=self.project_id, request=request
+            owner_user_id=self.owner_user_id,
+            project_id=self.project_id,
+            request=minimize_evidence_request(request),
         )
         self.request = request
 
@@ -60,6 +67,9 @@ class ProposalEvidenceScope:
             return
         if kind in self.observed_events:
             raise ProposalEvidenceError("DUPLICATE_GENERATION_EVENT")
+        if minimizes_evidence_request(self.request):
+            payload = minimize_evidence_event(kind, payload)
+            raw_body = None
         await self.store.append(
             generation_id=self.request.request_id,
             owner_user_id=self.owner_user_id,
@@ -131,13 +141,24 @@ def evidence_application(function):
                         },
                     )
                 raise
-            await scope.event(
-                "APPLICATION_RESULT",
-                {
-                    "status": result.status.value,
-                    "issue": getattr(getattr(result, "issue", None), "value", None),
-                },
-            )
+            payload = {
+                "status": result.status.value,
+                "issue": getattr(getattr(result, "issue", None), "value", None),
+            }
+            update = getattr(result, "update", None)
+            if minimizes_evidence_request(scope.request) and update is not None:
+                source = getattr(update, "evidence", None)
+                if source is not None:
+                    payload.update(
+                        twin_update_id=str(update.id),
+                        twin_id=str(update.twin_id),
+                        source_id=str(source.source_id),
+                        source_version=source.source_version,
+                        content_hash=source.content_hash,
+                        accepted_changes=len(update.observations),
+                        rejected_changes=source.rejected_changes,
+                    )
+            await scope.event("APPLICATION_RESULT", payload)
             return result
         finally:
             _SCOPE.reset(token)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
@@ -35,6 +36,29 @@ _CRITIQUE_ASPECTS: Final = (
 )
 _STAGE_COLUMNS: Final = {
     _REQUIREMENTS_STAGE: {
+        "journeys": (
+            "code",
+            "title",
+            "scenario",
+            "actor",
+            "phase_number",
+            "phase_title",
+            "action",
+            "touchpoint",
+            "criticalities",
+            "needs",
+            "sources",
+        ),
+        "needs": (
+            "code",
+            "title",
+            "statement",
+            "scenario_ids",
+            "twins",
+            "sources",
+            "requirements",
+            "user_stories",
+        ),
         "requirements": (
             "code",
             "title",
@@ -152,8 +176,16 @@ TABLE_COLUMNS: Final = {
     table_document(stage, name): columns
     for stage, tables in _STAGE_COLUMNS.items()
     for name, columns in tables.items()
+    if name not in ("needs", "journeys")
 }
+NEEDS_TABLE_COLUMNS: Final = _STAGE_COLUMNS[_REQUIREMENTS_STAGE]["needs"]
+JOURNEYS_TABLE_COLUMNS: Final = _STAGE_COLUMNS[_REQUIREMENTS_STAGE]["journeys"]
 CRITIQUE_VERDICT_COLUMNS: Final = ("verdict", "quote")
+REQUIREMENTS_CHAIN_COLUMNS: Final = {
+    "requirements": ("need_ids",),
+    "user-stories": ("need_ids",),
+    "scenarios": ("context", "goal", "criticalities", "sources", "needs"),
+}
 
 
 def _codes(items: Iterable[Mapping[str, object]]) -> dict[str, str]:
@@ -512,19 +544,106 @@ def _transition_rows(prototype: Mapping[str, object]) -> _Rows:
     return rows
 
 
+def _source_cells(
+    specification: Mapping[str, object], sources: Iterable[Mapping[str, object]]
+) -> list[str]:
+    known = {
+        str(item["twin_id"]): str(item["name"]) for item in specification["user_twin_references"]
+    }
+    known.update(
+        {
+            str(item["artifact_id"]): name.replace("_", " ")
+            for name, item in specification["context"].items()
+            if isinstance(item, Mapping) and "artifact_id" in item
+        }
+    )
+    values: list[str] = []
+    for source in sources:
+        internal = next(
+            (name for identifier, name in known.items() if identifier in str(source["source_id"])),
+            None,
+        )
+        if internal is None:
+            values.append(json.dumps(source, sort_keys=True, ensure_ascii=False))
+        else:
+            locator = str(source.get("locator") or "")
+            for identifier, name in known.items():
+                locator = locator.replace(identifier, name)
+            values.append(
+                " · ".join(value for value in (str(source["kind"]), internal, locator) if value)
+            )
+    return values
+
+
 def requirements_tables(specification: Mapping[str, object]) -> dict[str, str]:
     codes = _Codes.of(specification)
-    return _stage_tables(
-        _REQUIREMENTS_STAGE,
-        {
-            "requirements": _requirement_rows(specification),
-            "user-stories": _story_rows(specification, codes),
-            "acceptance-criteria": _criterion_rows(specification, codes),
-            "scenarios": _scenario_rows(specification, codes),
-            "risks": _risk_rows(specification, codes),
-            "definition-of-done": _done_rows(specification, codes),
-        },
-    )
+    tables: dict[str, _Rows] = {
+        "requirements": _requirement_rows(specification),
+        "user-stories": _story_rows(specification, codes),
+        "acceptance-criteria": _criterion_rows(specification, codes),
+        "scenarios": _scenario_rows(specification, codes),
+        "risks": _risk_rows(specification, codes),
+        "definition-of-done": _done_rows(specification, codes),
+    }
+    extra = None
+    if specification.get("schema_version", 1) == 2:
+        needs = specification["needs"]
+        need_codes = _codes(needs)
+        scenario_codes = _codes(specification["scenarios"])
+        scenario_actors = {
+            str(item["id"]): item["actor"]["name"] for item in specification["scenarios"]
+        }
+        requirement_links = _backlinks(specification["requirements"], "need_ids")
+        story_links = _backlinks(specification["user_stories"], "need_ids")
+        need_links = _backlinks(needs, "scenario_ids")
+        tables["needs"] = [
+            {
+                "code": need["code"],
+                "title": need["title"],
+                "statement": need["statement"],
+                "scenario_ids": _references(need["scenario_ids"], scenario_codes),
+                "twins": sorted(
+                    {scenario_actors[str(identifier)] for identifier in need["scenario_ids"]}
+                ),
+                "sources": _source_cells(specification, need["sources"]),
+                "requirements": _linked(requirement_links, need),
+                "user_stories": _linked(story_links, need),
+            }
+            for need in needs
+        ]
+        for name, key in (("requirements", "requirements"), ("user-stories", "user_stories")):
+            for row, item in zip(tables[name], specification[key], strict=True):
+                row["need_ids"] = _references(item["need_ids"], need_codes)
+        for row, scenario in zip(tables["scenarios"], specification["scenarios"], strict=True):
+            row.update(
+                {
+                    "context": scenario["context"],
+                    "goal": scenario["goal"],
+                    "criticalities": scenario["criticalities"],
+                    "sources": _source_cells(specification, scenario["sources"]),
+                    "needs": _linked(need_links, scenario),
+                }
+            )
+        extra = REQUIREMENTS_CHAIN_COLUMNS
+        if specification.get("journeys"):
+            tables["journeys"] = [
+                {
+                    "code": journey["code"],
+                    "title": journey["title"],
+                    "scenario": _code(journey["scenario_id"], scenario_codes),
+                    "actor": scenario_actors[str(journey["scenario_id"])],
+                    "phase_number": index,
+                    "phase_title": phase["title"],
+                    "action": phase["action"],
+                    "touchpoint": phase["touchpoint"],
+                    "criticalities": phase["criticalities"],
+                    "needs": _references(phase["need_ids"], need_codes),
+                    "sources": _source_cells(specification, journey["sources"]),
+                }
+                for journey in specification["journeys"]
+                for index, phase in enumerate(journey["phases"], 1)
+            ]
+    return _stage_tables(_REQUIREMENTS_STAGE, tables, extra)
 
 
 def design_tables(
@@ -560,6 +679,9 @@ def knowledge_tables(
 
 __all__ = [
     "CRITIQUE_VERDICT_COLUMNS",
+    "JOURNEYS_TABLE_COLUMNS",
+    "NEEDS_TABLE_COLUMNS",
+    "REQUIREMENTS_CHAIN_COLUMNS",
     "TABLE_COLUMNS",
     "design_tables",
     "knowledge_tables",

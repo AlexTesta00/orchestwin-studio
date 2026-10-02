@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from "pinia";
+import { createPinia, getActivePinia, setActivePinia } from "pinia";
 
 import { DOMWrapper, flushPromises, mount } from "@vue/test-utils";
 
@@ -16,12 +16,13 @@ import {
   generationJobsApi,
   type GenerationRequestJob,
 } from "../api/generationJobs";
-import { userModelingApi } from "../api/userModeling";
+import { UserModelingApiError, userModelingApi } from "../api/userModeling";
 
 import { useTeamStore } from "../stores/team";
 import { useUserModelingStore } from "../stores/userModeling";
 
 import type {
+  ArchetypePayload,
   HumanGatePayload,
   PersonaProposalCommandPayload,
   PersonaVersionPayload,
@@ -448,7 +449,7 @@ function mountFlow(attachTo?: HTMLElement) {
   return mount(ProjectUserModelingFlow, {
     ...(attachTo === undefined ? {} : { attachTo }),
     global: {
-      plugins: [createAppI18n("en")],
+      plugins: [getActivePinia()!, createAppI18n("en")],
     },
     props: {
       projectId: PROJECT_ID,
@@ -563,6 +564,7 @@ describe("ProjectUserModelingFlow", () => {
       },
       ACCESS_TOKEN,
     );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
 
     expect(
       store.currentPersonas.some((persona) => persona.profile.confirmation_status === "CONFIRMED"),
@@ -598,7 +600,7 @@ describe("ProjectUserModelingFlow", () => {
     await flushPromises();
     expect(document.activeElement?.id).toBe(`persona-reason-${PERSONA_ID}`);
     expect(wrapper.get(`#persona-reason-${PERSONA_ID}`).attributes("placeholder")).toBe(
-      "Explain why this profile does not describe who will use the product…",
+      "Explain why this archetype does not describe who will use the product…",
     );
 
     await wrapper.get('[data-testid="persona-card"] [data-variant="quiet"]').trigger("click");
@@ -644,17 +646,19 @@ describe("ProjectUserModelingFlow", () => {
     expect(bar.find('[data-testid="decision-secondary"]').exists()).toBe(false);
     expect(decisionPrimary(wrapper, "generate").text()).toBe("Create the twins");
     expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeDefined();
-    expect(bar.text()).toContain("Confirm or set aside every proposed profile");
+    expect(bar.text()).toContain("Confirm or set aside every proposed archetype");
 
     store.personaVersions = [confirmedPersona];
     await flushPromises();
 
     expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
-    expect(bar.text()).toContain("Confirmed profiles: 1.");
+    expect(bar.text()).toContain("Confirmed archetypes: 1.");
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
     await decisionPrimary(wrapper, "generate").trigger("click");
     await flushPromises();
 
     expect(generate).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
 
   it("renders User Twin epistemic status, confidence, validation requirement and provenance", async () => {
@@ -684,7 +688,7 @@ describe("ProjectUserModelingFlow", () => {
 
     expect(openProfileInPage()).toBe(true);
     const profile = profilePanel().get('[data-testid="twin-profile-details"]');
-    expect(profile.text()).toContain("Model inferred");
+    expect(profile.text()).toContain("Inferred");
 
     expect(profile.text()).toContain("42%");
 
@@ -717,7 +721,7 @@ describe("ProjectUserModelingFlow", () => {
     expect(card.get('[data-testid="hypothesis-chip"]').text()).toBe("1 hypothesis to verify");
     expect(card.text()).toContain("Goals");
     expect(card.text()).toContain("Reduce booking errors");
-    expect(card.text()).toContain("Hotel receptionist");
+    expect(card.text()).toContain("Unknown");
     expect(wrapper.get('[data-testid="user-modeling-count"]').text()).toBe(
       "1 twin to approve. The twins' answers are simulated: hypotheses to weigh, not opinions of real people.",
     );
@@ -949,8 +953,8 @@ describe("ProjectUserModelingFlow", () => {
       "OWNER_APPROVED_UT",
     );
 
-    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toContain(
-      "Ready for requirements definition",
+    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
+      "Ready for the Definition.",
     );
 
     expect(twinVersion.profile.validation_status).toBe("PROJECT_GROUNDED_UT");
@@ -959,7 +963,102 @@ describe("ProjectUserModelingFlow", () => {
     expect(wrapper.text()).toContain("You have approved these user profiles.");
     expect(wrapper.get('[data-testid="starting-personas"]').attributes("open")).toBeUndefined();
     expect(wrapper.find('[data-testid="twins-decision"]').exists()).toBe(false);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
+
+  it.each(["en", "it"] as const)(
+    "names the region of the step User Twin for screen readers in %s",
+    (locale) => {
+      const wrapper = mount(ProjectUserModelingFlow, {
+        global: { plugins: [createAppI18n(locale)] },
+        props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale, autoLoad: false },
+      });
+
+      expect(wrapper.get('[data-testid="user-modeling-step"]').attributes("aria-label")).toBe(
+        "User Twin",
+      );
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["en", " · Decision no. 1"],
+    ["it", " · Decisione n. 1"],
+  ] as const)(
+    "numbers the decision on the twins in %s without a limit of attempts",
+    async (locale, counter) => {
+      const store = useUserModelingStore();
+      store.activateProject(PROJECT_ID);
+      store.applySnapshot(snapshot);
+      store.readiness = readinessReview;
+      store.currentGate = pendingGate;
+      const wrapper = mount(ProjectUserModelingFlow, {
+        global: { plugins: [createAppI18n(locale)] },
+        props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale, autoLoad: false },
+      });
+
+      await openTechnicalDetails(wrapper);
+
+      const details = wrapper.get('[data-testid="user-modeling-technical-details"]').text();
+      expect(details).toContain(counter);
+      expect(details).not.toMatch(/ of 3| di 3/);
+      wrapper.unmount();
+    },
+  );
+
+  it("says in Italian that the approved twins are ready for the Definition", () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.readiness = readinessApproved;
+    store.currentGate = approvedGate;
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("it")] },
+      props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale: "it", autoLoad: false },
+    });
+
+    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
+      "Pronto per la Definizione.",
+    );
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      "The model did not complete its response. Your project has been preserved. You can try again.",
+    ],
+    [
+      "it",
+      "Il modello non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
+    ],
+  ] as const)(
+    "says in %s that the model, not an assistant, did not complete its response",
+    async (locale, sentence) => {
+      const store = useUserModelingStore();
+      store.activateProject(PROJECT_ID);
+      store.applySnapshot(snapshot);
+      store.readiness = {
+        ...readinessReview,
+        gate_exists: false,
+        gate_id: null,
+        gate_status: null,
+      };
+      vi.spyOn(userModelingApi, "submitGate").mockRejectedValue(new Error("INCOMPLETE_OUTPUT"));
+      const wrapper = mount(ProjectUserModelingFlow, {
+        global: { plugins: [createAppI18n(locale)] },
+        props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale, autoLoad: false },
+      });
+
+      await decisionPrimary(wrapper, "approve").trigger("click");
+      await flushPromises();
+
+      expect(wrapper.get('[role="alert"]').text()).toContain(sentence);
+      expect(wrapper.text()).not.toMatch(/assistant|assistente/i);
+      expect(wrapper.emitted("sections-changed")).toBeUndefined();
+      wrapper.unmount();
+    },
+  );
 
   it("confirms the twins with one press that submits them and then approves them", async () => {
     const store = useUserModelingStore();
@@ -1150,7 +1249,7 @@ describe("ProjectUserModelingFlow", () => {
     );
   });
 
-  it("asks to create the twins again when the brief or the team changed", () => {
+  it("asks to create the twins again when the brief or the perspectives changed", () => {
     const store = useUserModelingStore();
     store.activateProject(PROJECT_ID);
     store.applySnapshot(snapshot);
@@ -1158,13 +1257,53 @@ describe("ProjectUserModelingFlow", () => {
     store.currentGate = pendingGate;
     const wrapper = mountFlow();
 
-    expect(wrapper.get('[data-testid="user-modeling-stale-context"]').text()).toContain(
-      "The brief or team changed",
+    expect(wrapper.get('[data-testid="user-modeling-stale-context"]').text()).toBe(
+      "The brief or the perspectives changed: generate and approve a new User Twin version before continuing.",
     );
     expect(decisionPrimary(wrapper, "generate").text()).toBe("Create the twins again");
     expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
     expect(wrapper.find('[data-testid="twins-other-decisions"]').exists()).toBe(false);
   });
+
+  it.each([
+    [
+      "en",
+      "The brief or the perspectives changed: generate and approve a new User Twin version before continuing.",
+      "The brief or the perspectives changed: use «Update and confirm» above to keep these twins and re-anchor them, or create them again.",
+    ],
+    [
+      "it",
+      "Brief o prospettive sono cambiati: genera una nuova versione degli User Twin e approvala prima di proseguire.",
+      "Brief o prospettive sono cambiati: usa «Aggiorna e conferma» qui sopra per tenere questi twin e riagganciarli, oppure creali di nuovo.",
+    ],
+  ] as const)(
+    "names in %s the gesture above for twins behind the brief or the perspectives only in sections mode",
+    async (locale, firstPass, sections) => {
+      const store = useUserModelingStore();
+      store.activateProject(PROJECT_ID);
+      store.applySnapshot(snapshot);
+      store.readiness = { ...readinessReview, context_current: false };
+      store.currentGate = pendingGate;
+      const wrapper = mount(ProjectUserModelingFlow, {
+        global: { plugins: [createAppI18n(locale)] },
+        props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale, autoLoad: false },
+      });
+
+      const notice = () => wrapper.get('[data-testid="user-modeling-stale-context"]').text();
+      const bar = () => wrapper.get('[data-testid="twins-decision"][data-decision="generate"]');
+      expect(notice()).toBe(firstPass);
+      expect(bar().text()).toContain(firstPass);
+      expect(notice()).not.toMatch(/team|squadra/i);
+
+      await wrapper.setProps({ sectionsMode: true });
+
+      expect(notice()).toBe(sections);
+      expect(bar().text()).toContain(sections);
+      expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
+      await expectAccessible(wrapper.element);
+      wrapper.unmount();
+    },
+  );
 
   it("mounts its decision in the bar of the page when the page offers one", async () => {
     const target = document.createElement("div");
@@ -1621,6 +1760,7 @@ describe("ProjectUserModelingFlow", () => {
 
     expect(load).toHaveBeenCalledTimes(1);
     expect(load).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
     expect(store.currentSnapshot?.id).toBe(snapshotTwo.id);
     expect(
       wrapper.findAll('[data-testid="open-twin-chat"]').map((button) => button.text()),
@@ -1642,6 +1782,226 @@ describe("ProjectUserModelingFlow", () => {
     ).toBe(true);
     expect(wrapper.findComponent(TwinImportPanel).exists()).toBe(true);
     await expectAccessible(wrapper.element);
+  });
+});
+
+describe("ProjectUserModelingFlow archetypes", () => {
+  const data = {
+    name: "Receptionist",
+    description: "Checks in hotel guests",
+    role: "Receptionist",
+    goals: ["Fast check-in"],
+    context: null,
+  };
+  const archetype: ArchetypePayload = {
+    ...data,
+    persona_id: PERSONA_ID,
+    version_id: PERSONA_VERSION_ID,
+    version_number: 2,
+    source: "OWNER_PROVIDED",
+    confirmation_status: "CONFIRMED",
+    archived: false,
+  };
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    document.body.innerHTML = "";
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("creates a manual archetype and refreshes the flow without generating twins", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.archetypes = [];
+    const create = vi.spyOn(userModelingApi, "createArchetype").mockResolvedValue(archetype);
+    vi.spyOn(userModelingApi, "getArchetypes").mockResolvedValue([archetype]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([confirmedPersona]);
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue({
+      ...readinessReview,
+      snapshot_exists: false,
+      archetypes_current: false,
+    });
+    const generate = vi.spyOn(store, "generateSnapshot");
+    const wrapper = mountFlow();
+    await wrapper.get('[data-testid="archetype-add"]').trigger("click");
+    await wrapper.get('[data-testid="archetype-name"]').setValue(data.name);
+    await wrapper.get('[data-testid="archetype-description"]').setValue(data.description);
+    await wrapper.get('[data-testid="archetype-role"]').setValue(data.role);
+    await wrapper.get('[data-testid="archetype-goals"]').setValue("Fast check-in");
+    await wrapper.get('[data-testid="archetype-save"]').trigger("submit");
+    await flushPromises();
+    expect(create).toHaveBeenCalledWith(PROJECT_ID, data, ACCESS_TOKEN);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+    expect(wrapper.find('[data-testid="archetype-save"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain("Archetypes");
+    expect(decisionPrimary(wrapper, "generate").text()).toContain("Create the twins");
+    expect(decisionPrimary(wrapper, "generate").text()).not.toContain("again");
+    expect(wrapper.text()).not.toContain("The archetypes changed.");
+    expect(generate).not.toHaveBeenCalled();
+    await expectAccessible(wrapper.element);
+  });
+
+  it("edits with the displayed version and keeps the old snapshot for reference", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.archetypes = [archetype];
+    const edited = {
+      ...archetype,
+      version_number: 3,
+      description: "Works the morning reception shift",
+    };
+    const edit = vi.spyOn(userModelingApi, "editArchetype").mockResolvedValue(edited);
+    vi.spyOn(userModelingApi, "getArchetypes").mockResolvedValue([edited]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([
+      { ...confirmedPersona, version_number: 3 },
+    ]);
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue({
+      ...readinessReview,
+      context_current: true,
+      archetypes_current: false,
+    });
+    const generate = vi.spyOn(store, "generateSnapshot").mockResolvedValue({
+      status: "CREATED",
+      issue: null,
+      proposal_issue: null,
+      snapshot_version: snapshot,
+      twin_versions: [twinVersion],
+    });
+    const wrapper = mountFlow();
+    await wrapper.get(`[data-testid="archetype-edit-${PERSONA_ID}"]`).trigger("click");
+    await wrapper.get('[data-testid="archetype-description"]').setValue(edited.description);
+    await wrapper.get('[data-testid="archetype-save"]').trigger("submit");
+    await flushPromises();
+    expect(edit).toHaveBeenCalledWith(
+      PROJECT_ID,
+      PERSONA_ID,
+      { ...data, description: edited.description, based_on_version_number: 2 },
+      ACCESS_TOKEN,
+    );
+    expect(store.currentSnapshot).toEqual(snapshot);
+    expect(store.snapshotHistory).toEqual([snapshot]);
+    expect(wrapper.text()).toContain("The archetypes changed.");
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+    expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
+    await decisionPrimary(wrapper, "generate").trigger("click");
+    await flushPromises();
+    expect(generate).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(2);
+  });
+
+  it("requires explicit archival confirmation and preserves snapshot history", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.archetypes = [archetype];
+    const archive = vi
+      .spyOn(userModelingApi, "archiveArchetype")
+      .mockResolvedValue({ ...archetype, archived: true, version_number: 3 });
+    vi.spyOn(userModelingApi, "getArchetypes").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue({
+      ...readinessReview,
+      archetypes_current: false,
+    });
+    const wrapper = mountFlow();
+    await wrapper.get(`[data-testid="archetype-delete-${PERSONA_ID}"]`).trigger("click");
+    expect(archive).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("history preserved");
+    expect(wrapper.text()).toContain("requirements and design");
+    await wrapper.get('[data-testid="archetype-delete-confirm"]').trigger("click");
+    await flushPromises();
+    expect(archive).toHaveBeenCalledWith(
+      PROJECT_ID,
+      PERSONA_ID,
+      { based_on_version_number: 2 },
+      ACCESS_TOKEN,
+    );
+    expect(store.currentSnapshot).toEqual(snapshot);
+    expect(store.currentTwins).toEqual([twinVersion]);
+    expect(store.currentPersonas).toEqual([]);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+    expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeDefined();
+  });
+
+  it("explains a conflict and discards the stale draft only after reloading", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.archetypes = [archetype];
+    const edit = vi.spyOn(userModelingApi, "editArchetype").mockRejectedValue(
+      new UserModelingApiError("ARCHETYPE_VERSION_CONFLICT", {
+        code: "ARCHETYPE_VERSION_CONFLICT",
+        status: 409,
+        payload: null,
+      }),
+    );
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue({
+      ...readinessReview,
+      snapshot_exists: false,
+      gate_exists: false,
+      archetypes_current: false,
+    });
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([confirmedPersona]);
+    vi.spyOn(userModelingApi, "getSnapshotHistory").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getArchetypes").mockResolvedValue([
+      { ...archetype, version_number: 3, description: "Current description" },
+    ]);
+    const wrapper = mountFlow();
+    await wrapper.get(`[data-testid="archetype-edit-${PERSONA_ID}"]`).trigger("click");
+    await wrapper.get('[data-testid="archetype-save"]').trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("This archetype changed.");
+    expect(edit).toHaveBeenCalledTimes(1);
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
+    await wrapper.get('[data-testid="archetype-reload"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="archetype-save"]').exists()).toBe(false);
+    await wrapper.get(`[data-testid="archetype-edit-${PERSONA_ID}"]`).trigger("click");
+    expect(
+      (wrapper.get('[data-testid="archetype-description"]').element as HTMLTextAreaElement).value,
+    ).toBe("Current description");
+  });
+
+  it("makes contestation an explicit choice with a required explanation", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    const propose = vi.spyOn(store, "proposeRevision").mockResolvedValue({
+      status: "CREATED",
+      issue: null,
+      proposal_issue: null,
+      diff: proposedDiff,
+      twin_version: null,
+      snapshot_version: null,
+    });
+    const wrapper = mountFlow();
+    await wrapper.get('[data-testid="open-twin-profile"]').trigger("click");
+    const panel = profilePanel();
+    await panel.get('[data-testid="edit-twin-observation"]').trigger("click");
+    expect((panel.get('input[value="USER_PROVIDED"]').element as HTMLInputElement).checked).toBe(
+      true,
+    );
+    await panel.get('input[value="CONTESTED"]').setValue(true);
+    await panel.get('[data-testid="submit-revision"]').trigger("submit");
+    expect(propose).not.toHaveBeenCalled();
+    await panel
+      .get('[data-testid="revision-rationale"]')
+      .setValue("Guests are served by several roles");
+    await panel.get('[data-testid="submit-revision"]').trigger("submit");
+    await flushPromises();
+    expect(propose).toHaveBeenCalledWith(
+      PROJECT_ID,
+      TWIN_ID,
+      [
+        expect.objectContaining({
+          field: "goals",
+          epistemic_status: "CONTESTED",
+          rationale: "Guests are served by several roles",
+          human_validation: "REQUIRED",
+        }),
+      ],
+      ACCESS_TOKEN,
+    );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
 });
 

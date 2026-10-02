@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.clarification import HumanGateEventResponse, HumanGateResponse
+from orchestwin.api.design_context import require_current_design_context
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
 from orchestwin.artifacts.design import (
@@ -889,6 +890,7 @@ def create_design_router() -> APIRouter:
     async def propose_revision_endpoint(
         project_id: UUID,
         payload: DesignRevisionRequest,
+        request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
             DesignRevisionService,
@@ -903,6 +905,11 @@ def create_design_router() -> APIRouter:
         except (TypeError, ValueError) as error:
             raise _unprocessable("INVALID_DESIGN_PACKAGE") from error
 
+        await require_current_design_context(
+            getattr(request.app.state, "application_runtime", None),
+            owner_user_id=user.id,
+            project_id=project_id,
+        )
         result = await service.propose_revision(
             owner_user_id=user.id,
             project_id=project_id,
@@ -966,12 +973,19 @@ def create_design_router() -> APIRouter:
         project_id: UUID,
         diff_id: UUID,
         payload: DesignRevisionDecisionRequest,
+        request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
             DesignRevisionService,
             Depends(design_revision_service_dependency),
         ],
     ) -> DesignRevisionPayload:
+        if payload.decision is DesignRevisionDecision.APPROVE:
+            await require_current_design_context(
+                getattr(request.app.state, "application_runtime", None),
+                owner_user_id=user.id,
+                project_id=project_id,
+            )
         result = await service.decide_revision(
             owner_user_id=user.id,
             project_id=project_id,

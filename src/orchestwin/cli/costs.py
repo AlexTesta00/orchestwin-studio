@@ -36,6 +36,11 @@ ESTIMATES: Final[Mapping[str, Estimate]] = MappingProxyType(
         "ITERATION": Estimate(0.85, 1.33, 7.0),
         "DESIGN_EVALUATION": Estimate(0.27, 0.40, 1.5),
         "TWIN_CHAT": Estimate(0.02, 0.05, 0.3),
+        "CODE_CHANGE_REVIEW": Estimate(0.15, 0.25, 1.0),
+        "CODE_ALIGNMENT": Estimate(0.15, 0.30, 1.0),
+        "TEST_PLAN": Estimate(0.15, 0.30, 2.0),
+        "TEST_REVIEW": Estimate(0.10, 0.20, 1.0),
+        "TWIN_UPDATE": Estimate(0.10, 0.25, 1.0),
     }
 )
 
@@ -62,8 +67,11 @@ def confirm_spending(
     if budget is None:
         return
     console = context.console
-    amount = amount_text(total, context.language)
     duration = minutes_text(total.minutes)
+    if usage.on_subscription(budget):
+        console.say("costs.subscription", minutes=duration)
+        return
+    amount = amount_text(total, context.language)
     remaining = usage.remaining_usd(budget)
     if remaining is None:
         console.say("costs.estimate_no_credit", amount=amount, minutes=duration)
@@ -83,6 +91,13 @@ def confirm_spending(
         return
     if not ask or not console.confirm("costs.confirm", default=True):
         raise CliError("SPENDING_REFUSED")
+
+
+def uses_subscription(client: StudioClient) -> bool:
+    try:
+        return usage.on_subscription(usage.budget(client))
+    except CliError:
+        return False
 
 
 def usd_text(value: float, language: str) -> str:

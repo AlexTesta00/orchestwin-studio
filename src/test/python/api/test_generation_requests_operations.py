@@ -10,8 +10,20 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from orchestwin.api.acceptance_tests import (
+    AcceptanceTestApplication,
+    TestPlanResult,
+    TestPlanStatus,
+    TestReviewResult,
+    TestReviewStatus,
+)
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings, current_user_dependency
+from orchestwin.api.code_changes import (
+    ChangeReviewResult,
+    ChangeReviewStatus,
+    CodeChangeApplication,
+)
 from orchestwin.api.design_discussion import (
     DesignDiscussionApplication,
     DesignDiscussionCommandStatus,
@@ -20,6 +32,11 @@ from orchestwin.api.design_discussion import (
 from orchestwin.api.design_loop import DesignLoopApplication
 from orchestwin.api.generation_requests import PREFERENCE_APPLIED, RESPOND_ASYNC, SERVER_ERROR
 from orchestwin.api.services import ApplicationRuntime
+from orchestwin.api.twin_learning import (
+    TwinLearningApplication,
+    TwinUpdateResult,
+    TwinUpdateStatus,
+)
 from orchestwin.config import ApplicationSettings
 from orchestwin.evaluation.proposer_evaluator import TWIN_REVIEW_TASK
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
@@ -53,6 +70,14 @@ from src.test.python.artifacts.test_design_package_extension import (
     extended_version,
     fixture_package,
 )
+from src.test.python.projects.test_acceptance_tests import (
+    RUN_ID,
+    page,
+    sample_plan,
+    sample_review,
+)
+from src.test.python.projects.test_code_changes import review_run
+from src.test.python.projects.test_twin_learning import TWIN, twin_update
 from src.test.python.twins.test_user_modeling_persistence import (
     persona_version,
     snapshot_version,
@@ -80,6 +105,15 @@ OPENING = {
     "owner_note": "Parlate del modulo di registrazione.",
 }
 ROUND = {"expected_round_count": 1, "owner_note": "Siate concreti."}
+COMMIT = "a1" * 20
+CHANGE_REVIEW = {"locale": "it-IT", "again": False}
+TEST_PLAN = {
+    "locale": "it-IT",
+    "application": {"kind": "STATIC", "address": "dist"},
+    "snapshot": page().to_snapshot(),
+}
+TEST_REVIEW = {"locale": "it-IT", "again": False}
+TWIN_UPDATE = {"locale": "it-IT"}
 ROUTES = {
     "PERSONA_PROPOSAL": ("/user-modeling/personas/proposals", None),
     "USER_TWIN_GENERATION": ("/user-modeling/snapshots/generate", None),
@@ -89,6 +123,10 @@ ROUTES = {
     "DESIGN_EVALUATION": ("/design/evaluations", EVALUATION),
     "DISCUSSION_START": ("/design/discussions", OPENING),
     "DISCUSSION_ROUND": (f"/design/discussions/{DISCUSSION_ID}/rounds", ROUND),
+    "CODE_CHANGE_REVIEW": (f"/code-changes/{COMMIT}/reviews", CHANGE_REVIEW),
+    "TEST_PLAN": ("/test-plans", TEST_PLAN),
+    "TEST_REVIEW": (f"/test-runs/{RUN_ID}/reviews", TEST_REVIEW),
+    "TWIN_UPDATE": (f"/user-twins/{TWIN}/updates", TWIN_UPDATE),
 }
 
 
@@ -131,6 +169,10 @@ def studio(scripted: Scripted, monkeypatch):
     monkeypatch.setattr(DesignLoopApplication, "evaluate", scripted)
     monkeypatch.setattr(DesignDiscussionApplication, "start", scripted)
     monkeypatch.setattr(DesignDiscussionApplication, "next_round", scripted)
+    monkeypatch.setattr(CodeChangeApplication, "review", scripted)
+    monkeypatch.setattr(AcceptanceTestApplication, "plan", scripted)
+    monkeypatch.setattr(AcceptanceTestApplication, "review", scripted)
+    monkeypatch.setattr(TwinLearningApplication, "propose", scripted)
     commands = SimpleNamespace(
         propose_personas=scripted,
         generate_grounded_snapshot=scripted,
@@ -275,6 +317,69 @@ CASES = [
         "DISCUSSION_ROUND",
         lambda _: HTTPException(422, detail={"code": "DISCUSSION_NOTE_INVALID"}),
     ),
+    (
+        "CODE_CHANGE_REVIEW",
+        lambda _: ChangeReviewResult(status=ChangeReviewStatus.REVIEWED, run=review_run()),
+    ),
+    (
+        "CODE_CHANGE_REVIEW",
+        lambda _: HTTPException(409, detail={"code": "CODE_CHANGE_REVIEW_EXISTS"}),
+    ),
+    (
+        "CODE_CHANGE_REVIEW",
+        lambda _: HTTPException(503, detail={"code": "CHANGE_REVIEW_MODEL_NOT_CONFIGURED"}),
+    ),
+    ("CODE_CHANGE_REVIEW", lambda _: ProposalGenerationError("INVALID_PROVIDER_OUTPUT")),
+    ("CODE_CHANGE_REVIEW", lambda _: ProposalGenerationError("GENERATION_BUDGET_EXCEEDED")),
+    (
+        "TEST_PLAN",
+        lambda _: TestPlanResult(status=TestPlanStatus.PLANNED, plan=sample_plan()),
+    ),
+    (
+        "TEST_PLAN",
+        lambda _: HTTPException(409, detail={"code": "REQUIREMENTS_APPROVAL_REQUIRED"}),
+    ),
+    (
+        "TEST_PLAN",
+        lambda _: HTTPException(
+            422, detail={"code": "ACCEPTANCE_CRITERION_UNKNOWN", "codes": ["AC-009"]}
+        ),
+    ),
+    (
+        "TEST_PLAN",
+        lambda _: HTTPException(503, detail={"code": "TEST_MODEL_NOT_CONFIGURED"}),
+    ),
+    ("TEST_PLAN", lambda _: ProposalGenerationError("INVALID_PROVIDER_OUTPUT")),
+    ("TEST_PLAN", lambda _: ProposalGenerationError("GENERATION_BUDGET_EXCEEDED")),
+    (
+        "TEST_REVIEW",
+        lambda _: TestReviewResult(status=TestReviewStatus.REVIEWED, review=sample_review()),
+    ),
+    ("TEST_REVIEW", lambda _: HTTPException(404, detail={"code": "TEST_RUN_NOT_FOUND"})),
+    ("TEST_REVIEW", lambda _: HTTPException(409, detail={"code": "TEST_REVIEW_EXISTS"})),
+    (
+        "TEST_REVIEW",
+        lambda _: HTTPException(409, detail={"code": "USER_MODELING_APPROVAL_REQUIRED"}),
+    ),
+    ("TEST_REVIEW", lambda _: ProposalGenerationError("GENERATION_BUDGET_UNAVAILABLE")),
+    (
+        "TWIN_UPDATE",
+        lambda _: TwinUpdateResult(status=TwinUpdateStatus.PROPOSED, update=twin_update()),
+    ),
+    (
+        "TWIN_UPDATE",
+        lambda _: HTTPException(
+            409,
+            detail={"code": "TWIN_UPDATE_PENDING", "update_id": str(twin_update().id)},
+        ),
+    ),
+    ("TWIN_UPDATE", lambda _: HTTPException(409, detail={"code": "TWIN_UPDATE_NOTHING_NEW"})),
+    (
+        "TWIN_UPDATE",
+        lambda _: HTTPException(503, detail={"code": "TWIN_UPDATE_MODEL_NOT_CONFIGURED"}),
+    ),
+    ("TWIN_UPDATE", lambda _: ProposalGenerationError("INVALID_PROVIDER_OUTPUT")),
+    ("TWIN_UPDATE", lambda _: ProposalGenerationError("GENERATION_BUDGET_EXCEEDED")),
 ]
 
 
@@ -366,6 +471,14 @@ def test_a_refused_proposal_gives_its_reason_with_and_without_the_preference(
         ("DESIGN_EVALUATION", {**EVALUATION, "design_content_hash": "short"}),
         ("DISCUSSION_START", {**OPENING, "locale": "?"}),
         ("DISCUSSION_ROUND", {**ROUND, "expected_round_count": 0}),
+        ("CODE_CHANGE_REVIEW", {**CHANGE_REVIEW, "locale": "?"}),
+        ("CODE_CHANGE_REVIEW", {**CHANGE_REVIEW, "again": "maybe"}),
+        ("TEST_PLAN", {**TEST_PLAN, "locale": "?"}),
+        ("TEST_PLAN", {**TEST_PLAN, "snapshot": None}),
+        ("TEST_PLAN", {**TEST_PLAN, "criteria": []}),
+        ("TEST_REVIEW", {**TEST_REVIEW, "again": "maybe"}),
+        ("TWIN_UPDATE", {**TWIN_UPDATE, "locale": "?"}),
+        ("TWIN_UPDATE", {**TWIN_UPDATE, "again": True}),
     ],
 )
 def test_an_invalid_body_is_refused_at_once_with_or_without_the_preference(

@@ -1,0 +1,17 @@
+{
+  "description": "Where the development of an OrchesTwin project stands, with buttons that write the ut commands in the terminal of the editor.",
+  "container.title": "OrchesTwin",
+  "view.name": "Project",
+  "command.refresh": "Refresh the panel",
+  "command.status": "Show where the project stands (ut status)",
+  "command.test": "Verify the acceptance criteria (ut test, may spend)",
+  "command.align": "Review and align the commits (ut align, may spend)",
+  "command.recheck": "Review again the commits of an earlier design (ut align --recheck, may spend)",
+  "command.code": "Start the coding agent on the open tasks (ut code, on your own account)",
+  "command.tasks": "List the tasks for the code (ut tasks)",
+  "command.twinsUpdate": "Let the twins learn from the development (ut twins update, may spend)",
+  "command.openReport": "Open the report of the latest test run",
+  "command.connectAgents": "Connect the twins to the agents of the editor",
+  "configuration.title": "OrchesTwin",
+  "configuration.utCommand": "The program that the buttons of the panel start in the terminal: ut, or its full path."
+}

@@ -1,32 +1,22 @@
 """SQLAlchemy adapters for Project Definition."""
 
-from orchestwin.projects.persistence.brief_gate import (
-    SqlAlchemyCurrentProjectBriefRepository,
-    SqlAlchemyProjectBriefGateUnitOfWork,
-    SqlAlchemyProjectBriefGateUnitOfWorkFactory,
-)
-from orchestwin.projects.persistence.briefs import (
-    SqlAlchemyProjectBriefRepository,
-)
-from orchestwin.projects.persistence.clarification import (
-    SqlAlchemyBriefAssumptionRepository,
-)
-from orchestwin.projects.persistence.clarification_uow import (
-    SqlAlchemyProjectClarificationUnitOfWork,
-    SqlAlchemyProjectClarificationUnitOfWorkFactory,
-)
-from orchestwin.projects.persistence.models import (
-    BriefAssumptionRecord,
-    ProjectBriefVersionRecord,
-    ProjectRecord,
-)
-from orchestwin.projects.persistence.repositories import (
-    SqlAlchemyProjectRepository,
-)
-from orchestwin.projects.persistence.unit_of_work import (
-    SqlAlchemyProjectUnitOfWork,
-    SqlAlchemyProjectUnitOfWorkFactory,
-)
+from importlib import import_module
+
+_EXPORT_MODULES = {
+    "BriefAssumptionRecord": "models",
+    "ProjectBriefVersionRecord": "models",
+    "ProjectRecord": "models",
+    "SqlAlchemyBriefAssumptionRepository": "clarification",
+    "SqlAlchemyCurrentProjectBriefRepository": "brief_gate",
+    "SqlAlchemyProjectBriefGateUnitOfWork": "brief_gate",
+    "SqlAlchemyProjectBriefGateUnitOfWorkFactory": "brief_gate",
+    "SqlAlchemyProjectBriefRepository": "briefs",
+    "SqlAlchemyProjectClarificationUnitOfWork": "clarification_uow",
+    "SqlAlchemyProjectClarificationUnitOfWorkFactory": "clarification_uow",
+    "SqlAlchemyProjectRepository": "repositories",
+    "SqlAlchemyProjectUnitOfWork": "unit_of_work",
+    "SqlAlchemyProjectUnitOfWorkFactory": "unit_of_work",
+}
 
 __all__ = [
     "BriefAssumptionRecord",
@@ -43,3 +33,12 @@ __all__ = [
     "SqlAlchemyProjectUnitOfWork",
     "SqlAlchemyProjectUnitOfWorkFactory",
 ]
+
+
+def __getattr__(name):
+    module = _EXPORT_MODULES.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(f"{__name__}.{module}"), name)
+    globals()[name] = value
+    return value

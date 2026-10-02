@@ -38,6 +38,11 @@ STAGE_ACTIONS: Final[Mapping[str, str]] = MappingProxyType(
         "PACKAGE": "DOWNLOAD_FOLDER",
     }
 )
+DOWNLOAD_FOLDER: Final = "DOWNLOAD_FOLDER"
+UPDATE_SECTIONS: Final = "UPDATE_SECTIONS"
+PREPARE_TWINS: Final = "PREPARE_TWINS"
+PREPARE_DESIGN: Final = "PREPARE_DESIGN"
+ALIGN_COMMAND: Final = "ut align"
 NEXT_COMMANDS: Final[Mapping[str, str]] = MappingProxyType(
     {
         "DESCRIBE_IDEA": "ut init",
@@ -46,7 +51,10 @@ NEXT_COMMANDS: Final[Mapping[str, str]] = MappingProxyType(
         "CONFIRM_TWINS": "ut init",
         "APPROVE_REQUIREMENTS": "ut init",
         "APPROVE_DESIGN": "ut design",
-        "DOWNLOAD_FOLDER": "ut package publish",
+        DOWNLOAD_FOLDER: "ut package publish",
+        UPDATE_SECTIONS: "ut sections update",
+        PREPARE_TWINS: "ut init",
+        PREPARE_DESIGN: "ut design regenerate",
     }
 )
 
@@ -57,6 +65,12 @@ class StepState:
     state: str
     version: int | None
     approved: bool
+
+
+def next_command(action: str, *, folder_current: bool = False) -> str | None:
+    if action == DOWNLOAD_FOLDER and folder_current:
+        return ALIGN_COMMAND
+    return NEXT_COMMANDS.get(action)
 
 
 def list_projects(client: StudioClient) -> list[Mapping[str, object]]:

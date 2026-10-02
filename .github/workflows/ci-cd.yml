@@ -112,6 +112,9 @@ jobs:
       - name: Run frontend tests
         run: npm run test:frontend
 
+      - name: Run editor panel tests
+        run: npm run test:editor
+
       - name: Upgrade PostgreSQL to Alembic head
         run: orchestwin-migrate upgrade head
 

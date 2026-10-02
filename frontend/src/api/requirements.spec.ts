@@ -46,6 +46,24 @@ function firstCall<T>(values: readonly T[], label: string): T {
 }
 
 describe("Requirements API client", () => {
+  it.each([false, true])(
+    "sends the journey flag only for an explicit request (%s)",
+    async (includeJourneys) => {
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        void input;
+        void init;
+        return response({ status: "CREATED", diff: null }, 201);
+      });
+      const api = createRequirementsApi({ fetchImpl: fetchMock });
+      await api.requestChange(PROJECT_ID, "Add journeys", ACCESS_TOKEN, includeJourneys);
+      const [input, init] = firstCall(fetchMock.mock.calls, "journey request");
+      expect(input).toBe(`/api/v1/projects/${PROJECT_ID}/requirements/change-requests`);
+      expect(JSON.parse(String(init?.body))).toEqual({
+        request: "Add journeys",
+        ...(includeJourneys ? { include_journeys: true } : {}),
+      });
+    },
+  );
   it("sends an authenticated request to the readiness endpoint", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       void input;

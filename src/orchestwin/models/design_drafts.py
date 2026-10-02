@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.artifacts import design as domain
 from orchestwin.artifacts.design_packages import (
     create_design_concern,
@@ -65,7 +66,7 @@ from orchestwin.twins.epistemics import ConfidenceScore, ObservationProvenance
 
 TITLE_LENGTH: Final = 200
 TEXT_LENGTH: Final = 2000
-HOSTED_DESIGN_CONTRACT_VERSION: Final = 101
+HOSTED_DESIGN_CONTRACT_VERSION: Final = 104
 LANGUAGE_GROUPS: Final = ("requirements", "stories", "criteria", "scenarios")
 LANGUAGE_MIN_WORDS: Final = 4
 ALTERNATIVE_TEXT_LISTS: Final = (
@@ -207,8 +208,12 @@ class HostedDesignDraft(DesignDraft):
     critiques: Annotated[tuple[HostedCritiqueDraft, ...], Field(min_length=2)]
 
 
-def hosted_design_context(context):
-    return {**context, "purpose": HOSTED_DESIGN_PURPOSE}
+def hosted_design_context(context, selected_agent_ids):
+    return {
+        **context,
+        "purpose": HOSTED_DESIGN_PURPOSE,
+        "perspectives": perspective_guidance(selected_agent_ids, GuidanceStage.DESIGN),
+    }
 
 
 def requirement_code_map(spec):
@@ -223,6 +228,14 @@ def requirements_view(version):
     """Semantic view of an exact immutable requirements version, without repeated hashes."""
     spec = version.specification
     codes = {str(value): key for key, value in requirement_code_map(spec).items()}
+    if spec.schema_version == 2:
+        codes.update(
+            {
+                str(item.id): item.code
+                for group in (spec.scenarios, spec.needs, spec.journeys)
+                for item in group
+            }
+        )
     twins = {str(ref.twin_id): f"T{i}" for i, ref in enumerate(spec.user_twin_references, 1)}
 
     def compact(value):
@@ -238,19 +251,25 @@ def requirements_view(version):
             }
         return value
 
-    return {
+    view = {
         "reference": {
             "id": str(version.id),
             "version": version.version_number,
             "content_hash": version.content_hash,
         },
-        "requirements": compact(wire_value(spec.requirements)),
-        "stories": compact(wire_value(spec.user_stories)),
-        "criteria": compact(wire_value(spec.acceptance_criteria)),
-        "scenarios": compact(wire_value(spec.scenarios)),
-        "risks": compact(wire_value(spec.risks)),
-        "definition_of_done": compact(wire_value(spec.definition_of_done)),
+        "requirements": compact([item.to_snapshot() for item in spec.requirements]),
+        "stories": compact([item.to_snapshot() for item in spec.user_stories]),
+        "criteria": compact([item.to_snapshot() for item in spec.acceptance_criteria]),
+        "scenarios": compact([item.to_snapshot() for item in spec.scenarios]),
+        "risks": compact([item.to_snapshot() for item in spec.risks]),
+        "definition_of_done": compact([item.to_snapshot() for item in spec.definition_of_done]),
     }
+    if spec.schema_version == 2:
+        view["schema_version"] = 2
+        view["needs"] = compact([item.to_snapshot() for item in spec.needs])
+        if spec.journeys:
+            view["journeys"] = compact([item.to_snapshot() for item in spec.journeys])
+    return view
 
 
 def _strings(value):
@@ -267,8 +286,8 @@ def _strings(value):
 def requirements_language(view):
     code = dominant_language(
         text
-        for group in LANGUAGE_GROUPS
-        for text in _strings(view[group])
+        for group in (*LANGUAGE_GROUPS, "needs")
+        for text in _strings(view.get(group, []))
         if word_count(text) >= LANGUAGE_MIN_WORDS
     )
     return None if code is None else {"code": code, "name": LANGUAGE_NAMES[code]}

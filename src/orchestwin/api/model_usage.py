@@ -46,7 +46,7 @@ def create_model_usage_router() -> APIRouter:
         if ceilings is None:
             raise HTTPException(503, detail={"code": "GENERATION_BUDGET_NOT_CONFIGURED"})
         spent = await _store(request).spent_microusd(since=ceilings.period_start)
-        return ceilings.report(spent)
+        return {**ceilings.report(spent), "billing": getattr(real, "billing", None)}
 
     return router
 

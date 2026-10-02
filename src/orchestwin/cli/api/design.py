@@ -33,6 +33,7 @@ class Capabilities:
 class ModelRuntime:
     model: bool
     budget: bool
+    billing: str = usage.API_BILLING
 
 
 NO_CAPABILITIES: Final = Capabilities(
@@ -51,7 +52,11 @@ def model_runtime(client: StudioClient) -> ModelRuntime:
         raise failure
     document = payload(reply)
     total = document.get("total_microusd") if isinstance(document, dict) else None
-    return ModelRuntime(model=True, budget=isinstance(total, int) and not isinstance(total, bool))
+    return ModelRuntime(
+        model=True,
+        budget=isinstance(total, int) and not isinstance(total, bool),
+        billing=usage.billing(document),
+    )
 
 
 def design_path(project_id: str) -> str:
@@ -60,6 +65,10 @@ def design_path(project_id: str) -> str:
 
 def proposals_path(project_id: str) -> str:
     return f"{design_path(project_id)}/proposals"
+
+
+def regenerations_path(project_id: str) -> str:
+    return f"{design_path(project_id)}/regenerations"
 
 
 def evaluations_path(project_id: str) -> str:

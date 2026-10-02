@@ -514,6 +514,86 @@ describe("Generation Jobs API client", () => {
     );
   });
 
+  it("reads the job of a review of a commit started from the terminal", () => {
+    const review = {
+      ...job(),
+      operation: "CODE_CHANGE_REVIEW",
+      status: "SUCCEEDED",
+      stage: null,
+      finished_at: "2026-09-28T10:03:00+00:00",
+      response: { status_code: 201, body: { status: "REVIEWED", run: { id: "run-1" } } },
+    };
+
+    expect(generationJobOf(review)).toEqual(
+      job({
+        operation: "CODE_CHANGE_REVIEW",
+        status: "SUCCEEDED",
+        stage: null,
+        finished_at: "2026-09-28T10:03:00+00:00",
+        response: { status_code: 201, body: { status: "REVIEWED", run: { id: "run-1" } } },
+      }),
+    );
+  });
+
+  it.each([
+    ["TEST_PLAN", { status: "PLANNED", plan: { id: "plan-1" } }],
+    ["TEST_REVIEW", { status: "REVIEWED", review: { id: "review-1" } }],
+  ] as const)("reads the job of a %s started by ut test", (operation, body) => {
+    const ended = {
+      ...job(),
+      operation,
+      status: "SUCCEEDED",
+      stage: null,
+      finished_at: "2026-09-28T10:03:00+00:00",
+      response: { status_code: 201, body },
+    };
+
+    expect(generationJobOf(ended)).toEqual(
+      job({
+        operation,
+        status: "SUCCEEDED",
+        stage: null,
+        finished_at: "2026-09-28T10:03:00+00:00",
+        response: { status_code: 201, body },
+      }),
+    );
+  });
+
+  it("reads and lists the proposal of what a twin learned started by ut twins update", async () => {
+    const running = job({ operation: "TWIN_UPDATE" });
+    const ended = {
+      ...job(),
+      operation: "TWIN_UPDATE",
+      status: "SUCCEEDED",
+      stage: null,
+      finished_at: "2026-09-28T10:01:00+00:00",
+      response: { status_code: 201, body: { status: "PROPOSED", update: { id: "update-1" } } },
+    };
+    const api = createGenerationJobsApi({ fetchImpl: async () => json({ items: [running] }) });
+
+    await expect(api.list(PROJECT_ID, "token", "RUNNING")).resolves.toEqual([running]);
+    expect(generationJobOf(ended)).toEqual(
+      job({
+        operation: "TWIN_UPDATE",
+        status: "SUCCEEDED",
+        stage: null,
+        finished_at: "2026-09-28T10:01:00+00:00",
+        response: { status_code: 201, body: { status: "PROPOSED", update: { id: "update-1" } } },
+      }),
+    );
+  });
+
+  it("lists the running plan and review of the acceptance tests started by ut test", async () => {
+    const plan = job({ operation: "TEST_PLAN" });
+    const review = job({
+      job_id: "00000000-0000-4000-8000-0000000000ab",
+      operation: "TEST_REVIEW",
+    });
+    const api = createGenerationJobsApi({ fetchImpl: async () => json({ items: [plan, review] }) });
+
+    await expect(api.list(PROJECT_ID, "token", "RUNNING")).resolves.toEqual([plan, review]);
+  });
+
   it("names a missing or cancelled job as a lost generation", () => {
     expect(isGenerationLost(GENERATION_JOB_NOT_FOUND)).toBe(true);
     expect(isGenerationLost(GENERATION_JOB_CANCELLED)).toBe(true);

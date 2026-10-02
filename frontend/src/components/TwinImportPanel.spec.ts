@@ -15,6 +15,12 @@ import TwinImportPanel from "./TwinImportPanel.vue";
 
 const PROJECT_ID = "project-current";
 
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
+
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("token");
 
 const ZETA: TwinImportCandidatePayload = {
@@ -350,7 +356,7 @@ describe("TwinImportPanel", () => {
     const success = wrapper.get('[data-testid="twin-import-success"]');
     expect(success.attributes("role")).toBe("status");
     expect(success.text()).toBe(
-      "✓ Giulia was added. Now approve the twins again at the end of this step.",
+      "✓ Giulia was added. Now approve the twins again at the bottom of the page.",
     );
     expect(wrapper.find('[data-testid="twin-import-step-1"]').exists()).toBe(false);
     expect(focusedText()).toBe("Reuse a twin from another project");
@@ -496,7 +502,7 @@ describe("TwinImportPanel", () => {
     expect(api.importFromProject).not.toHaveBeenCalled();
     expect(wrapper.emitted("imported")).toEqual([[imported("Sara")]]);
     expect(wrapper.get('[data-testid="twin-import-success"]').text()).toContain(
-      "Sara was added. Now approve the twins again at the end of this step.",
+      "Sara was added. Now approve the twins again at the bottom of the page.",
     );
   });
 
@@ -549,7 +555,7 @@ describe("TwinImportPanel", () => {
       TWIN_BELONGS_TO_PROJECT: "Questo twin viene proprio da questo progetto.",
       USER_TWINS_REQUIRED: "Questo progetto non ha ancora twin: creali prima.",
       USER_TWINS_OUTDATED:
-        "Il Brief o la Squadra di questo progetto sono cambiati: prima crea di nuovo i suoi twin.",
+        "Il Brief o le Prospettive di questo progetto sono cambiati: prima aggiorna i suoi twin.",
       TWIN_DOCUMENT_UNKNOWN_REASON: "Questo twin non si può aggiungere qui.",
     };
     const api = new FakeTwinImports();
@@ -586,7 +592,7 @@ describe("TwinImportPanel", () => {
       TWIN_BELONGS_TO_PROJECT: "Questo twin viene proprio da questo progetto.",
       USER_TWINS_REQUIRED: "Questo progetto non ha ancora twin: creali prima.",
       USER_TWINS_OUTDATED:
-        "Il Brief o la Squadra di questo progetto sono cambiati: prima crea di nuovo i suoi twin.",
+        "Il Brief o le Prospettive di questo progetto sono cambiati: prima aggiorna i suoi twin.",
       CONTEXT_CHANGED: "Nel frattempo i twin di questo progetto sono cambiati. Riprova.",
       PERSISTENCE_REJECTED: "Non è stato possibile salvare il twin. Riprova.",
       PROJECT_NOT_FOUND: "Questo progetto non si trova. Ricarica la pagina.",
@@ -594,7 +600,7 @@ describe("TwinImportPanel", () => {
       SOURCE_TWIN_NOT_FOUND: "Quel twin non è più tra i twin approvati del suo progetto.",
       SOURCE_TWINS_NOT_APPROVED: "I twin di quel progetto non sono ancora approvati.",
       BRIEF_APPROVAL_REQUIRED: "Prima approva il Brief di questo progetto.",
-      TEAM_APPROVAL_REQUIRED: "Prima approva la Squadra di questo progetto.",
+      TEAM_APPROVAL_REQUIRED: "Prima approva le Prospettive di questo progetto.",
       TWIN_DOCUMENT_INVALID: "Il file del twin è danneggiato o incompleto.",
       TWIN_DOCUMENT_UNSUPPORTED:
         "Il file del twin viene da un'altra versione dello Studio e non si può usare.",
@@ -657,7 +663,7 @@ describe("TwinImportPanel", () => {
     );
     expect(wrapper.find('[data-testid="twin-import-error"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="twin-import-success"]').text()).toBe(
-      "✓ Il twin «Giulia» è stato aggiunto. Ora approva di nuovo i twin in fondo a questo passo.",
+      "✓ Il twin «Giulia» è stato aggiunto. Ora approva di nuovo i twin in fondo alla pagina.",
     );
     expect(wrapper.emitted("imported")).toHaveLength(1);
   });
@@ -680,9 +686,58 @@ describe("TwinImportPanel", () => {
     await flushPromises();
 
     expect(wrapper.get('[data-testid="twin-import-success"]').text()).toBe(
-      "✓ Il twin «Sara» è stato aggiunto. Ora approva di nuovo i twin in fondo a questo passo.",
+      "✓ Il twin «Sara» è stato aggiunto. Ora approva di nuovo i twin in fondo alla pagina.",
     );
   });
+
+  it.each([
+    [
+      "it",
+      "Non disponibile.",
+      "Il Brief o le Prospettive di questo progetto sono cambiati: prima aggiorna i suoi twin.",
+      "Prima approva le Prospettive di questo progetto.",
+      "✓ Il twin «Giulia» è stato aggiunto. Ora approva di nuovo i twin in fondo alla pagina.",
+    ],
+    [
+      "en",
+      "Not available.",
+      "The Brief or the Perspectives of this project changed: update its twins first.",
+      "Approve the Perspectives of this project first.",
+      "✓ Giulia was added. Now approve the twins again at the bottom of the page.",
+    ],
+  ] as const)(
+    "names no step by its old name and speaks of no team in %s",
+    async (locale, unavailable, outdated, approval, added) => {
+      const api = new FakeTwinImports();
+      api.source.mockResolvedValue({
+        ...SOURCE,
+        twins: [
+          twin("Giulia"),
+          twin("Marco", { issue: "USER_TWINS_OUTDATED" }),
+          twin("Sara", { issue: "TEAM_APPROVAL_REQUIRED" }),
+        ],
+      });
+      const wrapper = mountPanel(api, { locale });
+      await openPanel(wrapper);
+      await showTwinsOf(wrapper, "project-alpha");
+
+      expect(
+        wrapper.findAll('[data-testid="twin-import-issue"]').map((issue) => issue.text()),
+      ).toEqual([`${unavailable} ${outdated}`, `${unavailable} ${approval}`]);
+      expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+      expect(wrapper.text()).not.toMatch(TEAM_WORDS);
+
+      await chooseTwin(wrapper, "twin-giulia");
+      expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+      expect(wrapper.text()).not.toMatch(TEAM_WORDS);
+
+      await wrapper.get('[data-testid="twin-import-add"]').trigger("click");
+      await flushPromises();
+      expect(wrapper.get('[data-testid="twin-import-success"]').text()).toBe(added);
+      expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+      expect(wrapper.text()).not.toMatch(TEAM_WORDS);
+    },
+  );
 
   it("explains in Italian why the twins of a project cannot be shown", async () => {
     const api = new FakeTwinImports();

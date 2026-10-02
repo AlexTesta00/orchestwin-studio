@@ -14,6 +14,13 @@ from orchestwin.models.requirements import (
     RequirementsProposalResult,
     RequirementsProposalStatus,
 )
+from orchestwin.models.requirements_drafts import (
+    RequirementsDraft,
+    _require_journey_scope,
+    requirements_context,
+    requirements_limits,
+    requirements_view,
+)
 from orchestwin.projects.requirements import (
     Requirement,
     RequirementKind,
@@ -22,6 +29,8 @@ from orchestwin.projects.requirements import (
     create_requirement,
     create_user_story,
 )
+from orchestwin.projects.requirements_journeys import create_journey_phase, create_user_journey
+from orchestwin.projects.requirements_needs import create_user_need
 from orchestwin.projects.requirements_primitives import (
     RequirementSourceKind,
     RequirementSourceReference,
@@ -63,7 +72,7 @@ class _RequirementSeed:
     kind: RequirementKind
     priority: RequirementPriority
     statement: str
-    locator: str
+    locators: tuple[str, ...]
 
 
 class FakeDeterministicRequirementsAdapter:
@@ -78,18 +87,15 @@ class FakeDeterministicRequirementsAdapter:
             return _rejected(RequirementsProposalIssueCode.REQUIREMENTS_ANALYST_REQUIRED)
 
         if request.current_specification is not None and request.owner_request is not None:
-            return _changed(request.current_specification, request.owner_request)
+            return _changed(request)
 
-        seeds = _requirement_seeds(request)
-
-        if not seeds:
+        if not _requirement_seeds(request):
             return _rejected(RequirementsProposalIssueCode.GROUNDED_INPUT_REQUIRED)
 
         try:
-            specification = _build_specification(
-                request,
-                seeds,
-            )
+            seeds = _merged_seeds(request)
+            specification = _build_specification(request, seeds)
+            _validate_specification(request, specification)
         except ValueError:
             return _rejected(RequirementsProposalIssueCode.INVALID_PROVIDER_OUTPUT)
 
@@ -102,19 +108,24 @@ class FakeDeterministicRequirementsAdapter:
         )
 
 
-def _changed(
-    specification: RequirementsSpecification,
-    owner_request: str,
-) -> RequirementsProposalResult:
+def _changed(request: RequirementsProposalRequest) -> RequirementsProposalResult:
+    specification = request.current_specification
     first, *others = specification.requirements
-    statement = " ".join(f"{first.statement} ({owner_request})".split())
 
     try:
-        changed = replace(
-            specification,
-            requirements=(replace(first, statement=statement), *others),
-        )
-    except ValueError:
+        if specification.schema_version == 1:
+            specification = _enriched_legacy(request)
+            first, *others = specification.requirements
+        if request.include_journeys:
+            changed = replace(specification, journeys=_journeys(request, specification))
+        else:
+            statement = _bounded_text(f"{first.statement} ({request.owner_request})")
+            changed = replace(
+                specification,
+                requirements=(replace(first, statement=statement), *others),
+            )
+        _validate_specification(request, changed)
+    except (ValueError, KeyError):
         return _rejected(RequirementsProposalIssueCode.INVALID_PROVIDER_OUTPUT)
 
     return RequirementsProposalResult(
@@ -126,6 +137,138 @@ def _changed(
     )
 
 
+def _enriched_legacy(request):
+    specification = request.current_specification
+    requirements = {item.id: item for item in specification.requirements}
+    twins = {item.reference: item for item in request.user_modeling.user_twins}
+    scenarios = tuple(
+        replace(
+            item,
+            context=_context(request),
+            goal=_bounded_text(_story_goal(twins[item.actor].observations, item.title)),
+            sources=_scenario_sources(
+                request,
+                twins[item.actor],
+                tuple(requirements[value] for value in item.requirement_ids),
+            ),
+        )
+        for item in specification.scenarios
+    )
+    actors = {item.actor for item in scenarios}
+    next_code = max(int(item.code.split("-")[1]) for item in scenarios) + 1
+    added = []
+    for story in specification.user_stories:
+        if story.user_twin_reference in actors:
+            continue
+        actors.add(story.user_twin_reference)
+        added.append(
+            create_usage_scenario(
+                scenario_id=_artifact_id(request.content_hash, "scenario", next_code),
+                code=f"SCN-{next_code:03d}",
+                title=_title(story.goal),
+                actor=story.user_twin_reference,
+                preconditions=(),
+                trigger=f"{story.user_twin_reference.name} starts the requested workflow.",
+                steps=tuple(requirements[value].statement for value in story.requirement_ids),
+                expected_outcome=_scenario_outcome(story, specification.acceptance_criteria),
+                requirement_ids=story.requirement_ids,
+                acceptance_criterion_ids=tuple(
+                    item.id
+                    for item in specification.acceptance_criteria
+                    if set(item.requirement_ids).intersection(story.requirement_ids)
+                ),
+                context=_context(request),
+                goal=story.goal,
+                sources=_scenario_sources(
+                    request,
+                    twins[story.user_twin_reference],
+                    tuple(requirements[value] for value in story.requirement_ids),
+                ),
+            )
+        )
+        next_code += 1
+    scenarios = (*scenarios, *added)
+    needs = _needs(request.content_hash, scenarios)
+    need_ids = tuple(sorted((item.id for item in needs), key=lambda value: value.hex))
+    actor_needs = {
+        item.actor: tuple(
+            sorted(
+                (need.id for need in needs if item.id in need.scenario_ids),
+                key=lambda value: value.hex,
+            )
+        )
+        for item in scenarios
+    }
+    return replace(
+        specification,
+        requirements=tuple(replace(item, need_ids=need_ids) for item in specification.requirements),
+        user_stories=tuple(
+            replace(item, need_ids=actor_needs[item.user_twin_reference])
+            for item in specification.user_stories
+        ),
+        scenarios=scenarios,
+        needs=needs,
+        schema_version=2,
+    )
+
+
+def _validate_specification(request, specification):
+    _, sources, twins = requirements_context(request)
+    draft = RequirementsDraft.model_validate(requirements_view(specification, sources, twins))
+    for name, limit in requirements_limits(request).items():
+        if len(getattr(draft, name)) > limit:
+            raise ValueError(f"fake list {name} exceeds its limit of {limit}")
+    _require_journey_scope(request, specification)
+
+
+def _journeys(request, specification):
+    existing = {item.scenario_id: item for item in specification.journeys}
+    next_code = (
+        max((int(item.code.split("-")[1]) for item in specification.journeys), default=0) + 1
+    )
+    journeys = list(specification.journeys)
+    for scenario in specification.scenarios:
+        if scenario.id in existing:
+            continue
+        needs = tuple(item for item in specification.needs if scenario.id in item.scenario_ids)
+        count = min(len(scenario.steps), 32)
+        actions = tuple(
+            _bounded_text(
+                "; ".join(
+                    scenario.steps[
+                        index * len(scenario.steps) // count : (index + 1)
+                        * len(scenario.steps)
+                        // count
+                    ]
+                )
+            )
+            for index in range(count)
+        )
+        journeys.append(
+            create_user_journey(
+                journey_id=_artifact_id(request.content_hash, "journey", next_code),
+                code=f"JRN-{next_code:03d}",
+                title=scenario.title,
+                scenario_id=scenario.id,
+                phases=tuple(
+                    create_journey_phase(
+                        title=_title(action),
+                        action=action,
+                        touchpoint=None,
+                        criticalities=scenario.criticalities if index == 0 else (),
+                        need_ids=tuple(item.id for item in needs),
+                    )
+                    for index, action in enumerate(actions)
+                ),
+                sources=tuple(
+                    {*scenario.sources, *(source for item in needs for source in item.sources)}
+                ),
+            )
+        )
+        next_code += 1
+    return tuple(sorted(journeys, key=lambda item: item.code))
+
+
 def _requirement_seeds(
     request: RequirementsProposalRequest,
 ) -> tuple[_RequirementSeed, ...]:
@@ -135,43 +278,90 @@ def _requirement_seeds(
     for (
         index,
         statement,
-    ) in enumerate(request.brief.functional_requirements):
+    ) in enumerate(_known_list(request, "functional_requirements")):
         seeds.append(
             _RequirementSeed(
                 kind=(RequirementKind.FUNCTIONAL),
                 priority=(RequirementPriority.MUST),
                 statement=statement,
-                locator=(f"functional_requirements[{index}]"),
+                locators=(f"functional_requirements[{index}]",),
             )
         )
 
     for (
         index,
         statement,
-    ) in enumerate(request.brief.non_functional_requirements):
+    ) in enumerate(_known_list(request, "non_functional_requirements")):
         seeds.append(
             _RequirementSeed(
                 kind=(RequirementKind.NON_FUNCTIONAL),
                 priority=(RequirementPriority.SHOULD),
                 statement=statement,
-                locator=(f"non_functional_requirements[{index}]"),
+                locators=(f"non_functional_requirements[{index}]",),
             )
         )
 
     for (
         index,
         statement,
-    ) in enumerate(request.brief.technical_constraints):
+    ) in enumerate(_known_list(request, "technical_constraints")):
         seeds.append(
             _RequirementSeed(
                 kind=(RequirementKind.CONSTRAINT),
                 priority=(RequirementPriority.MUST),
                 statement=statement,
-                locator=(f"technical_constraints[{index}]"),
+                locators=(f"technical_constraints[{index}]",),
             )
         )
 
     return tuple(seeds)
+
+
+def _known_list(request, name):
+    return () if name in request.brief.unknown_fields else getattr(request.brief, name)
+
+
+def _bounded_text(text):
+    normalized = " ".join(text.split())
+    if not normalized or len(normalized) > 2000:
+        raise ValueError("fake content cannot preserve all brief text within the draft text limit")
+    return normalized
+
+
+def _merged_seeds(request):
+    seeds = _requirement_seeds(request)
+    maximum = requirements_limits(request)["requirements"]
+    groups = {kind: tuple(seed for seed in seeds if seed.kind is kind) for kind in RequirementKind}
+    quality_kinds = [
+        kind for kind in groups if kind is not RequirementKind.FUNCTIONAL and groups[kind]
+    ]
+    slots = {kind: 1 for kind in quality_kinds}
+    remaining = min(
+        sum(len(groups[kind]) for kind in quality_kinds),
+        maximum - len(groups[RequirementKind.FUNCTIONAL]),
+    ) - len(slots)
+    while remaining:
+        for kind in quality_kinds:
+            if slots[kind] < len(groups[kind]) and remaining:
+                slots[kind] += 1
+                remaining -= 1
+    slots[RequirementKind.FUNCTIONAL] = len(groups[RequirementKind.FUNCTIONAL])
+    merged = []
+    for kind, items in groups.items():
+        count = slots.get(kind, 0)
+        for index in range(count):
+            group = items[index * len(items) // count : (index + 1) * len(items) // count]
+            merged.append(
+                _RequirementSeed(
+                    kind=kind,
+                    priority=group[0].priority,
+                    statement=_bounded_text("; ".join(item.statement for item in group)),
+                    locators=tuple(locator for item in group for locator in item.locators),
+                )
+            )
+    if len(merged) > maximum:
+        raise ValueError("fake requirements exceed their brief limit")
+    return tuple(merged)
 
 
 def _build_specification(
@@ -200,6 +390,7 @@ def _build_specification(
         stories,
     )
     scenarios = _scenarios(
+        request,
         request_hash,
         requirements,
         stories,
@@ -216,6 +407,8 @@ def _build_specification(
         requirements,
     )
 
+    needs = _needs(request_hash, scenarios)
+
     return create_requirements_specification(
         project_id=(request.project_id),
         project_brief_reference=(request.brief.reference),
@@ -230,6 +423,8 @@ def _build_specification(
         scenarios=scenarios,
         risks=risks,
         definition_of_done=done,
+        needs=needs,
+        schema_version=2,
     )
 
 
@@ -264,8 +459,13 @@ def _requirements(
             sources=(
                 _brief_source(
                     request,
-                    seed.locator,
-                ),
+                    locator,
+                )
+                for locator in seed.locators
+            ),
+            need_ids=tuple(
+                _artifact_id(request_hash, "need", ordinal)
+                for ordinal in range(1, len(request.user_modeling.user_twins) + 1)
             ),
             user_twin_references=(
                 affected_twins if seed.kind is not RequirementKind.CONSTRAINT else ()
@@ -325,6 +525,7 @@ def _user_stories(
             ),
             benefit=benefit,
             requirement_ids=(linked_ids),
+            need_ids=(_artifact_id(request_hash, "need", index),),
         )
         for (
             index,
@@ -361,7 +562,11 @@ def _acceptance_criteria(
                 )
             ),
             code=(f"AC-{index:03d}"),
-            statement=(f"The delivered system demonstrably satisfies: {requirement.statement}"),
+            statement=(
+                f"The delivered system demonstrably satisfies: {requirement.statement}"
+                if len(requirement.statement) <= 1956
+                else requirement.statement
+            ),
             verification_method=(
                 VerificationMethod.AUTOMATED_TEST
                 if requirement.kind is RequirementKind.FUNCTIONAL
@@ -383,6 +588,7 @@ def _acceptance_criteria(
 
 
 def _scenarios(
+    request: RequirementsProposalRequest,
     request_hash: str,
     requirements: tuple[
         Requirement,
@@ -418,7 +624,7 @@ def _scenarios(
             preconditions=(),
             trigger=(f"{story.user_twin_reference.name} starts the requested workflow."),
             steps=tuple(
-                f"Perform the behavior defined by {requirements_by_id[requirement_id].code}."
+                requirements_by_id[requirement_id].statement
                 for requirement_id in story.requirement_ids
             ),
             expected_outcome=(
@@ -427,6 +633,12 @@ def _scenarios(
                     criteria,
                 )
             ),
+            context=_context(request),
+            goal=_bounded_text(story.goal),
+            sources=_scenario_sources(
+                request, request.user_modeling.user_twins[index - 1], requirements
+            ),
+            criticalities=tuple(_bounded_text(value) for value in _known_list(request, "risks")),
             requirement_ids=(story.requirement_ids),
             acceptance_criterion_ids=tuple(
                 criterion.id
@@ -468,7 +680,7 @@ def _risks(
                 )
             ),
             code=(f"RSK-{index:03d}"),
-            summary=summary,
+            summary=_bounded_text(summary),
             likelihood=(RiskLikelihood.POSSIBLE),
             impact=(RiskImpact.MEDIUM),
             mitigation=("Define and verify an explicit mitigation before implementation approval."),
@@ -484,7 +696,7 @@ def _risks(
             index,
             summary,
         ) in enumerate(
-            request.brief.risks,
+            _known_list(request, "risks"),
             start=1,
         )
     )
@@ -502,7 +714,7 @@ def _definition_of_done(
     ...,
 ]:
     """Create explicit completion conditions without claiming satisfaction."""
-    statements = request.brief.definition_of_done or (
+    statements = _known_list(request, "definition_of_done") or (
         "Every acceptance criterion has recorded verification evidence.",
     )
 
@@ -518,7 +730,7 @@ def _definition_of_done(
                 )
             ),
             code=(f"DOD-{index:03d}"),
-            statement=statement,
+            statement=_bounded_text(statement),
             verification_method=(_verification_method(statement)),
             applicability=(DefinitionOfDoneApplicability.REQUIRED),
             requirement_ids=(requirement_ids),
@@ -530,6 +742,57 @@ def _definition_of_done(
             statements,
             start=1,
         )
+    )
+
+
+def _context(request):
+    brief = request.brief
+    if brief.problem is not None and "problem" not in brief.unknown_fields:
+        return _bounded_text(brief.problem)
+    return _bounded_text(brief.name)
+
+
+def _scenario_sources(request, twin, requirements):
+    cited = {source for item in requirements for source in item.sources}
+    context_locator = (
+        "problem"
+        if request.brief.problem is not None and "problem" not in request.brief.unknown_fields
+        else "name"
+    )
+    cited.add(_brief_source(request, context_locator))
+    for index, _ in enumerate(_known_list(request, "risks")):
+        cited.add(_brief_source(request, f"risks[{index}]"))
+    for item in twin.observations:
+        if (
+            item.observation_key == "user_twin.goals"
+            and item.value.kind is not ObservationValueKind.UNKNOWN
+        ):
+            cited.add(
+                RequirementSourceReference(
+                    kind=RequirementSourceKind.USER_TWIN,
+                    source_id=str(twin.reference.twin_id),
+                    source_version=twin.reference.version_number,
+                    content_hash=twin.reference.content_hash,
+                    locator=item.observation_key,
+                )
+            )
+    return tuple(sorted(cited, key=lambda source: source.sort_key))
+
+
+def _needs(request_hash, scenarios):
+    actors = tuple(dict.fromkeys(item.actor for item in scenarios))
+    return tuple(
+        create_user_need(
+            need_id=_artifact_id(request_hash, "need", index),
+            code=f"NED-{index:03d}",
+            title=_title(next(item.goal for item in scenarios if item.actor == actor)),
+            statement=next(item.goal for item in scenarios if item.actor == actor),
+            scenario_ids=tuple(item.id for item in scenarios if item.actor == actor),
+            sources=tuple(
+                {source for item in scenarios if item.actor == actor for source in item.sources}
+            ),
+        )
+        for index, actor in enumerate(actors, 1)
     )
 
 
@@ -583,10 +846,10 @@ def _story_benefit(
     fallback: str,
 ) -> str:
     """Select a benefit from explicit Brief goals or problem context."""
-    if request.brief.goals:
+    if _known_list(request, "goals"):
         return request.brief.goals[0]
 
-    if request.brief.problem is not None:
+    if request.brief.problem is not None and "problem" not in request.brief.unknown_fields:
         return request.brief.problem
 
     return fallback

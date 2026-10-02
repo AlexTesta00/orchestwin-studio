@@ -3,12 +3,15 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+from dataclasses import replace
 
 import anthropic
 import pytest
 
 from orchestwin.models import hosted_schema
+from orchestwin.models.fake_requirements import FakeDeterministicRequirementsAdapter
 from orchestwin.models.hosted_schema import (
+    CLAUDE_CODE_SCHEMA_MAX_CHARACTERS,
     HostedSchemaError,
     SchemaViolation,
     hosted_output_schema,
@@ -17,18 +20,26 @@ from orchestwin.models.hosted_schema import (
 )
 from orchestwin.models.model_proposals import ModelDesignAdapter, ModelRequirementsAdapter
 from orchestwin.models.proposal_generation import ProposalGenerationError, ProposalGenerator
+from orchestwin.models.requirements_drafts import (
+    RequirementsDraft,
+    bind_requirements,
+    requirements_context,
+)
 from orchestwin.models.structured_generation import (
     StructuredGenerationFailureCode,
     StructuredGenerationProviderKind,
     failed_structured_generation_result,
 )
+from orchestwin.projects.requirements_primitives import canonical_json
 from src.test.python.evaluation import test_proposer_evaluator as review
 from src.test.python.models.test_hosted_support import REVIEW_SCHEMA, VALID_REVIEW
 from src.test.python.models.test_model_proposals import make_generator
 from src.test.python.models.test_proposal_evidence import stage_case
+from src.test.python.models.test_requirements_change_proposals import FAKE_RESULT_SHA256
 
 ANTHROPIC = StructuredGenerationProviderKind.ANTHROPIC_HOSTED
 OPENAI = StructuredGenerationProviderKind.OPENAI_COMPATIBLE_HOSTED
+CLAUDE_CODE = StructuredGenerationProviderKind.CLAUDE_CODE_CLI
 TASKS = ("design", "requirements", "user-twin-evaluation")
 ANTHROPIC_UNSUPPORTED = frozenset(
     {
@@ -90,6 +101,7 @@ def real_cases(tmp_path_factory):
     tmp_path = tmp_path_factory.mktemp("hosted-schemas")
     design_request, design_output, *_ = stage_case("design")
     requirements_request, requirements_output, *_ = stage_case("requirements")
+    requirements_output = {**requirements_output, "journeys": []}
     return {
         "design": (
             _captured_schema(tmp_path, lambda g: ModelDesignAdapter(g).propose(design_request)),
@@ -166,10 +178,43 @@ def test_the_openai_schema_lists_every_property_as_required(real_cases, task):
 
 @pytest.mark.parametrize("task", TASKS)
 @pytest.mark.parametrize("kind", [ANTHROPIC, OPENAI])
-def test_the_hosted_schema_accepts_every_answer_the_full_schema_accepts(real_cases, task, kind):
+def test_the_hosted_schema_accepts_complete_answers_the_full_schema_accepts(real_cases, task, kind):
     canonical, answer = real_cases[task]
     assert validate_against_schema(answer, canonical) == ()
     assert validate_against_schema(answer, hosted_output_schema(canonical, kind)) == ()
+
+
+@pytest.mark.parametrize("kind", [ANTHROPIC, OPENAI, CLAUDE_CODE])
+def test_omitted_canonical_journeys_and_empty_hosted_journeys_bind_the_same_specification(
+    real_cases, kind
+):
+    request, omitted, *_ = stage_case("requirements")
+    canonical, complete = real_cases["requirements"]
+    assert "journeys" not in omitted
+    assert complete == {**omitted, "journeys": []}
+    assert canonical["properties"]["journeys"]["default"] == []
+    assert "journeys" not in canonical["required"]
+    assert validate_against_schema(omitted, canonical) == ()
+    assert validate_against_schema(complete, canonical) == ()
+    reduced = hosted_output_schema(canonical, kind)
+    assert "journeys" in reduced["required"]
+    assert validate_against_schema(omitted, reduced) == (SchemaViolation("$", "required"),)
+    assert validate_against_schema(complete, reduced) == ()
+    before = asyncio.run(FakeDeterministicRequirementsAdapter().propose(request))
+    assert before.content_hash == FAKE_RESULT_SHA256
+    request = replace(
+        request,
+        current_specification=before.specification,
+        owner_request="Keep the current specification.",
+    )
+    _, sources, twins = requirements_context(request)
+    omitted_specification, complete_specification = (
+        bind_requirements(RequirementsDraft.model_validate(answer), request, sources, twins)
+        for answer in (omitted, complete)
+    )
+    assert omitted_specification == complete_specification == before.specification
+    assert omitted_specification.content_hash == before.specification.content_hash
+    assert "journeys" not in complete_specification.to_snapshot()
 
 
 def test_design_keeps_the_vocabulary_of_its_definitions(real_cases):
@@ -318,7 +363,7 @@ def test_tuples_and_intersections_become_their_common_definition():
     ],
 )
 def test_constructs_outside_both_subsets_fail_before_any_request(schema, code):
-    for kind in (ANTHROPIC, OPENAI):
+    for kind in (ANTHROPIC, OPENAI, CLAUDE_CODE):
         with pytest.raises(HostedSchemaError) as failure:
             hosted_output_schema(schema, kind)
         assert failure.value.code == code
@@ -408,3 +453,59 @@ def test_the_message_lists_at_most_five_paths():
     message = violation_message(violations)
     assert message.count("(type)") == 5
     assert message.endswith("and 3 more.")
+
+
+@pytest.mark.parametrize("task", TASKS)
+def test_the_claude_code_schema_is_the_anthropic_reduction(real_cases, task):
+    canonical, answer = real_cases[task]
+    before = copy.deepcopy(canonical)
+    reduced = hosted_output_schema(canonical, CLAUDE_CODE)
+    assert canonical == before
+    assert reduced == hosted_output_schema(canonical, ANTHROPIC)
+    assert len(canonical_json(reduced)) <= CLAUDE_CODE_SCHEMA_MAX_CHARACTERS
+    assert validate_against_schema(answer, reduced) == ()
+
+
+def _schema_with_choices(count, padding=0):
+    choices = [f"{index:08d}" for index in range(count)]
+    choices[0] += "x" * padding
+    return {
+        "type": "object",
+        "properties": {"choice": {"type": "string", "enum": choices}},
+        "required": ["choice"],
+        "additionalProperties": False,
+    }
+
+
+def test_a_claude_code_schema_longer_than_the_command_line_allows_is_refused():
+    limit = CLAUDE_CODE_SCHEMA_MAX_CHARACTERS
+    assert limit == 24_000
+    base = len(canonical_json(hosted_output_schema(_schema_with_choices(1), CLAUDE_CODE)))
+    count = (limit - base) // 11 + 1
+    padding = limit - base - 11 * (count - 1)
+    fitting = hosted_output_schema(_schema_with_choices(count, padding), CLAUDE_CODE)
+    assert len(canonical_json(fitting)) == limit
+    longer = _schema_with_choices(count, padding + 1)
+    with pytest.raises(HostedSchemaError) as failure:
+        hosted_output_schema(longer, CLAUDE_CODE)
+    assert failure.value.code == "HOSTED_SCHEMA_TOO_LARGE"
+    assert len(canonical_json(hosted_output_schema(longer, ANTHROPIC))) == limit + 1
+
+
+def test_recursion_is_refused_for_claude_code_as_for_anthropic():
+    schema = {
+        "$defs": {
+            "Node": {
+                "type": "object",
+                "properties": {"children": {"type": "array", "items": {"$ref": "#/$defs/Node"}}},
+                "required": ["children"],
+                "additionalProperties": False,
+            }
+        },
+        "type": "object",
+        "properties": {"root": {"$ref": "#/$defs/Node"}},
+        "required": ["root"],
+        "additionalProperties": False,
+    }
+    with pytest.raises(HostedSchemaError, match="HOSTED_SCHEMA_RECURSION_UNSUPPORTED"):
+        hosted_output_schema(schema, CLAUDE_CODE)

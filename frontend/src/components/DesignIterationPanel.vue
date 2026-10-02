@@ -213,8 +213,8 @@ const FAILURES: Sentences = {
     "La sessione è scaduta. Accedi di nuovo.",
   ],
   GENERATED_MOCKUP_PATH_INACTIVE: [
-    "The model that draws the mockups is not in use for this project: the step shows the simple preview.",
-    "Il modello che disegna i mockup non è in uso per questo progetto: il passo mostra l'anteprima semplice.",
+    "The model that draws the mockups is not in use for this project: Design & Evaluation shows the simple preview.",
+    "Il modello che disegna i mockup non è in uso per questo progetto: Design e valutazione mostra l'anteprima semplice.",
   ],
   REQUIREMENTS_QUERY_UNAVAILABLE: [
     "The Studio could not read the requirements, so it did not start the drawing. Try again in a moment.",

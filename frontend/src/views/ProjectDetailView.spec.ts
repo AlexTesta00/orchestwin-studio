@@ -4,10 +4,11 @@ import { createI18n } from "vue-i18n";
 import { flushPromises, mount, RouterLinkStub, shallowMount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/api/client";
-import type { ProjectBriefVersionResponse, ProjectResponse } from "@/api/contracts";
+import type { ProjectBriefVersionResponse, ProjectResponse, ProjectStage } from "@/api/contracts";
 import { designMockupsApi } from "@/api/designMockups";
 import { clearFollowedGenerations } from "@/api/generationJobs";
 import { projectImportsApi } from "@/api/projectImports";
+import { sectionsApi } from "@/api/sections";
 import type {
   AgentCatalogResponse,
   ProjectReadinessResponse,
@@ -52,6 +53,12 @@ import type {
   RequirementsTraceabilityPayload,
 } from "@/types/requirements";
 import type { RequirementsAlignmentPayload } from "@/types/requirementsAlignment";
+import type {
+  ProjectSectionPayload,
+  ProjectSectionsPayload,
+  SectionsAlignmentPayload,
+  SectionsAlignmentSummaryPayload,
+} from "@/types/sections";
 import type {
   HumanGatePayload as TwinsGatePayload,
   PersonaVersionPayload,
@@ -105,6 +112,7 @@ describe("project route requests", () => {
     state.route = reactive({ params: { projectId: "first" } });
     vi.spyOn(apiClient, "listBriefVersions").mockResolvedValue([]);
     vi.spyOn(projectImportsApi, "origin").mockResolvedValue(null);
+    vi.spyOn(sectionsApi, "read").mockResolvedValue(null);
   });
 
   it.each(["success", "failure"])(
@@ -173,7 +181,12 @@ function hydrateStages(pinia: ReturnType<typeof createPinia>) {
   });
   modeling.$patch({
     projectId: "first",
-    currentSnapshot: { id: "twins", content_hash: "twins-hash", version_number: 1 },
+    currentSnapshot: {
+      id: "twins",
+      content_hash: "twins-hash",
+      version_number: 1,
+      snapshot: { twin_versions: [] },
+    },
     currentGate: gate("twins"),
     readiness: { workflow_state: "READY_FOR_REQUIREMENTS_DEFINITION" },
   });
@@ -212,6 +225,7 @@ describe("progressive project workspace", () => {
     vi.spyOn(apiClient, "getProject").mockResolvedValue(project("first"));
     vi.spyOn(apiClient, "listBriefVersions").mockResolvedValue([BRIEF]);
     vi.spyOn(projectImportsApi, "origin").mockResolvedValue(null);
+    vi.spyOn(sectionsApi, "read").mockResolvedValue(null);
   });
 
   function mountWorkspace(pinia = createPinia()) {
@@ -234,7 +248,11 @@ describe("progressive project workspace", () => {
     expect(wrapper.findComponent({ name: "ProjectDesignFlow" }).exists()).toBe(true);
     useClarificationStore(pinia).$patch({ projectId: "first", gate: gate("brief") });
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(2);
+    expect(wrapper.findAll("[data-stage]").map((step) => step.attributes("data-stage"))).toEqual([
+      "0",
+      "1",
+      "5",
+    ]);
     expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(false);
     wrapper.unmount();
@@ -251,10 +269,10 @@ describe("progressive project workspace", () => {
     expect(wrapper.findAll("[data-stage]")).toHaveLength(6);
     expect(wrapper.findComponent({ name: "ProjectDesignPackagePanel" }).props("stages")).toEqual([
       { label: "Brief", version: 1, approved: true },
-      { label: "Team", version: 1, approved: true },
-      { label: "User Twins", version: 1, approved: true },
-      { label: "Requirements", version: 1, approved: true },
-      { label: "Design", version: 1, approved: true },
+      { label: "Perspectives", version: 1, approved: true },
+      { label: "User Twin", version: 1, approved: true },
+      { label: "Definition", version: 1, approved: true },
+      { label: "Design & Evaluation", version: 1, approved: true },
     ]);
     await wrapper.get('[data-stage="0"]').trigger("click");
     await flushPromises();
@@ -280,12 +298,202 @@ describe("progressive project workspace", () => {
     expect(wrapper.findAll("[data-stage]")).toHaveLength(6);
     stores.requirements.$patch({ current: { content_hash: "revised-hash" } });
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(4);
+    expect(wrapper.findAll("[data-stage]").map((step) => step.attributes("data-stage"))).toEqual([
+      "0",
+      "1",
+      "2",
+      "3",
+      "5",
+    ]);
     expect(wrapper.get('[data-testid="stage-requirements"]').isVisible()).toBe(true);
     stores.clarification.$patch({ projectId: "another-project" });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(1);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("opens the package step as soon as the brief is approved while the later steps keep their own rules", async () => {
+    const pinia = createPinia();
+    const wrapper = mountWorkspace(pinia);
+    await flushPromises();
+    const packageStep = () => wrapper.get('[data-testid="stepper"] li:last-child button');
+    const header = () => wrapper.findComponent({ name: "UiStepHeader" });
+    expect(packageStep().attributes("disabled")).toBeDefined();
+
+    useClarificationStore(pinia).$patch({ projectId: "first", gate: gate("brief") });
+    await flushPromises();
+
+    expect(packageStep().attributes("disabled")).toBeUndefined();
+    expect(packageStep().attributes("data-status")).toBe("pending");
+    expect(packageStep().attributes("aria-current")).toBeUndefined();
+    expect(packageStep().text()).toContain("Partial folder");
+    expect(wrapper.find('[data-stage="2"]').exists()).toBe(false);
+    expect(header().props("status")).toBe("current");
+    expect(wrapper.get("#step-decision-bar").isVisible()).toBe(true);
+
+    await wrapper.get('[data-stage="5"]').trigger("click");
+
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(false);
+    expect(header().props("title")).toBe("Dossier");
+    expect(header().props("status")).toBe("pending");
+    expect(wrapper.get("#step-decision-bar").isVisible()).toBe(false);
+    expect(wrapper.find('[data-testid="step-read-only"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="step-ahead"] p').text()).toBe(
+      "The project goes on at the Perspectives step: the folder holds only the steps approved so far.",
+    );
+    expect(wrapper.findComponent({ name: "ProjectDesignPackagePanel" }).props("stages")).toEqual([
+      { label: "Brief", version: 1, approved: true },
+      { label: "Perspectives", version: null, approved: false },
+      { label: "User Twin", version: null, approved: false },
+      { label: "Definition", version: null, approved: false },
+      { label: "Design & Evaluation", version: null, approved: false },
+    ]);
+    expect(
+      wrapper
+        .findAllComponents({ name: "UiTechnicalDetails" })
+        .find((row) => row.attributes("data-testid") === "technical-details")
+        ?.props("summary"),
+    ).toBe("No folder prepared yet");
+
+    await wrapper.get('[data-testid="back-to-current"]').trigger("click");
+
+    expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(false);
+    expect(wrapper.get("#step-decision-bar").isVisible()).toBe(true);
+    expect(wrapper.find('[data-testid="step-ahead"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("keeps the opened package step while a later step is approved and closes it with the approval of the brief", async () => {
+    const pinia = createPinia();
+    const wrapper = mountWorkspace(pinia);
+    await flushPromises();
+    useClarificationStore(pinia).$patch({ projectId: "first", gate: gate("brief") });
+    await flushPromises();
+    await wrapper.get('[data-stage="5"]').trigger("click");
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+
+    useTeamStore(pinia).$patch({
+      projectId: "first",
+      currentVersion: {
+        id: "team",
+        content_hash: "team-hash",
+        version_number: 1,
+        brief_version_number: 1,
+        brief_content_hash: "brief-hash",
+      },
+      gate: gate("team"),
+      readiness: { status: "READY_FOR_MAIN_WORKFLOW" },
+    });
+    await flushPromises();
+
+    expect(wrapper.findAll("[data-stage]").map((step) => step.attributes("data-stage"))).toEqual([
+      "0",
+      "1",
+      "2",
+      "5",
+    ]);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="step-ahead"] p').text()).toContain(
+      "goes on at the User Twin step",
+    );
+
+    useClarificationStore(pinia).$patch({ projectId: "another-project" });
+    await flushPromises();
+
+    expect(wrapper.findAll("[data-stage]")).toHaveLength(1);
+    expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(false);
+    expect(wrapper.find('[data-testid="step-ahead"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("names the partial folder and the way back in Italian", async () => {
+    const pinia = createPinia();
+    const wrapper = shallowMount(ProjectDetailView, {
+      attachTo: document.body,
+      global: {
+        plugins: [pinia, createAppI18n("it")],
+        stubs: { UiStepper: false },
+      },
+    });
+    await flushPromises();
+    useClarificationStore(pinia).$patch({ projectId: "first", gate: gate("brief") });
+    await flushPromises();
+
+    expect(wrapper.get('[data-stage="5"]').text()).toContain("Cartella parziale");
+    await wrapper.get('[data-stage="5"]').trigger("click");
+
+    expect(wrapper.get('[data-testid="step-ahead"] p').text()).toBe(
+      "Il progetto continua dal passo Prospettive: la cartella contiene solo i passi approvati finora.",
+    );
+    await expectAccessible(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it("reads the drawn mockup of the package only once the design is approved", async () => {
+    const pinia = createPinia();
+    const { design } = hydrateStages(pinia);
+    const version = {
+      ...SELECTED_DESIGN_VERSION,
+      id: "design",
+      project_id: "first",
+      content_hash: "design-hash",
+      package: {
+        ...SELECTED_DESIGN_VERSION.package,
+        generated_mockup: {
+          mockup: {
+            contract_version: 1,
+            design_alternative_id: DESIGN_ALTERNATIVE_ID,
+            title: "Reservation desk",
+            styles: ".desk{display:grid}",
+            screens: [{ code: "SCR-001", title: "Desk", state: "DEFAULT" as const, markup: "" }],
+          },
+          requirement_ids_by_code: {},
+        },
+      },
+    };
+    design.$patch({ current: version, readiness: { status: "DESIGN_APPROVAL_REQUIRED" } });
+    useDesignMockupsStore(pinia).activate("first", version);
+    const readDocument = vi.spyOn(designMockupsApi, "document").mockResolvedValue({
+      html: "<!doctype html><html><body><h1>Desk</h1></body></html>",
+      content_hash: "c".repeat(64),
+      source: "applied",
+      alternative_id: DESIGN_ALTERNATIVE_ID,
+      title: "Reservation desk",
+      entry_screen: "SCR-001",
+      screens: [{ code: "SCR-001", title: "Desk", state: "DEFAULT" }],
+    });
+    const PackageStep = defineComponent({
+      name: "ProjectDesignPackagePanel",
+      setup(_props, { slots }) {
+        return () => h("div", { "data-testid": "package-stub" }, slots.preview?.({}));
+      },
+    });
+    const wrapper = shallowMount(ProjectDetailView, {
+      attachTo: document.body,
+      global: {
+        plugins: [pinia, createAppI18n("en")],
+        stubs: { UiStepper: false, ProjectDesignPackagePanel: PackageStep },
+      },
+    });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+
+    await wrapper.get('[data-stage="5"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(readDocument).not.toHaveBeenCalled();
+
+    design.$patch({ readiness: { status: "READY_FOR_ARCHITECTURE_PLANNING" } });
+    await flushPromises();
+
+    expect(readDocument).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(wrapper.find('[data-testid="step-ahead"]').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -311,7 +519,11 @@ describe("progressive project workspace", () => {
     );
     clarification.$patch({ gate: gate("clarified-brief") });
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(2);
+    expect(wrapper.findAll("[data-stage]").map((step) => step.attributes("data-stage"))).toEqual([
+      "0",
+      "1",
+      "5",
+    ]);
     wrapper.unmount();
   });
 
@@ -471,7 +683,7 @@ describe("progressive project workspace", () => {
     await wrapper.get('[data-stage="1"]').trigger("click");
     expect(wrapper.get("#step-decision-bar").isVisible()).toBe(false);
     expect(wrapper.get('[data-testid="step-read-only"]').text()).toContain(
-      "You already approved the team: you can read it again. You can still switch the optional roles on or off",
+      "You already approved the perspectives: you can read them again. You can still switch on or off the ones left to your choice",
     );
     expect(wrapper.get('[data-testid="step-read-only"]').text()).not.toMatch(/not change/i);
     await wrapper.get('[data-testid="back-to-current"]').trigger("click");
@@ -494,7 +706,7 @@ describe("progressive project workspace", () => {
     expect(wrapper.find('[data-testid="step-read-only"]').exists()).toBe(false);
     const sentences = [
       "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
-      "Hai già approvato la squadra: puoi rileggerla. Puoi ancora attivare o togliere i ruoli facoltativi: ogni cambio che salvi crea una nuova versione della squadra da approvare di nuovo.",
+      "Hai già approvato le prospettive: puoi rileggerle. Puoi ancora attivare o togliere quelle a tua scelta: ogni cambio che salvi crea una nuova versione da approvare di nuovo.",
       "Hai già approvato gli user twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
       "Hai già approvato i requisiti: puoi rileggerli. Se ne modifichi uno, nasce una nuova versione da approvare di nuovo.",
       "Hai già approvato il design: puoi rileggerlo e provare il mockup. Se cambi la scelta o il design, nasce una nuova versione da approvare di nuovo.",
@@ -908,6 +1120,616 @@ describe("progressive project workspace", () => {
     expect(panel?.props("title")).toBe(
       "Conversazione con Twin del volontario della mensa solidale",
     );
+    wrapper.unmount();
+  });
+});
+
+const STAGE_KEYS: ProjectStage[] = [
+  "BRIEF",
+  "TEAM",
+  "USER_TWINS",
+  "REQUIREMENTS",
+  "DESIGN",
+  "PACKAGE",
+];
+
+const FLOWS = [
+  "ProjectClarificationFlow",
+  "ProjectTeamSelectionFlow",
+  "ProjectUserModelingFlow",
+  "ProjectRequirementsFlow",
+  "ProjectDesignFlow",
+  "ProjectDesignPackagePanel",
+] as const;
+
+function pageSections(
+  overrides: Partial<Record<ProjectStage, Partial<ProjectSectionPayload>>> = {},
+  alignment: Partial<SectionsAlignmentSummaryPayload> = {},
+  firstPassComplete = true,
+): ProjectSectionsPayload {
+  return {
+    first_pass_complete: firstPassComplete,
+    sections: STAGE_KEYS.map((key, index) => ({
+      key,
+      state: "FINE",
+      version_number: index + 1,
+      reasons: [],
+      blocked: null,
+      codes: [],
+      ...overrides[key],
+    })),
+    alignment: { available: false, sections: [], uncovered_codes: [], ...alignment },
+  };
+}
+
+const BEHIND_SECTIONS = pageSections(
+  {
+    USER_TWINS: { state: "TO_UPDATE", reasons: ["PERSPECTIVES_CHANGED"] },
+    REQUIREMENTS: { state: "TO_UPDATE", reasons: ["PERSPECTIVES_CHANGED", "USER_TWINS_CHANGED"] },
+    DESIGN: { state: "TO_UPDATE", reasons: ["REQUIREMENTS_CHANGED"] },
+  },
+  { available: true, sections: ["USER_TWINS", "REQUIREMENTS", "DESIGN"] },
+);
+
+const ALIGNED_SECTIONS = pageSections({
+  DESIGN: { state: "UPDATE_AVAILABLE", reasons: ["EVALUATION_MISSING"] },
+});
+
+const ALIGNED_ANSWER: SectionsAlignmentPayload = {
+  status: "ALIGNED",
+  results: [
+    { key: "USER_TWINS", outcome: "ALIGNED", issue: null, version_number: 4, codes: [] },
+    { key: "REQUIREMENTS", outcome: "ALIGNED", issue: null, version_number: 5, codes: [] },
+    { key: "DESIGN", outcome: "ALIGNED", issue: null, version_number: 6, codes: [] },
+  ],
+  sections: ALIGNED_SECTIONS,
+};
+
+function countingFlows(setups: Record<string, number>) {
+  return Object.fromEntries(
+    FLOWS.map((name) => [
+      name,
+      defineComponent({
+        name,
+        props: { sectionsMode: { type: Boolean, default: undefined } },
+        emits: ["sections-changed"],
+        setup(step) {
+          setups[name] = (setups[name] ?? 0) + 1;
+          return () =>
+            h("div", { "data-flow": name, "data-sections-mode": String(step.sectionsMode) });
+        },
+      }),
+    ]),
+  );
+}
+
+describe("sections after the first pass", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    state.route = reactive({ params: { projectId: "first" } });
+    vi.spyOn(apiClient, "getProject").mockResolvedValue(project("first"));
+    vi.spyOn(apiClient, "listBriefVersions").mockResolvedValue([BRIEF]);
+    vi.spyOn(projectImportsApi, "origin").mockResolvedValue(null);
+  });
+
+  function mountSections(
+    locale: "en" | "it" = "en",
+    stubs: Record<string, unknown> = {},
+    pinia = createPinia(),
+  ) {
+    return shallowMount(ProjectDetailView, {
+      attachTo: document.body,
+      global: {
+        plugins: [pinia, createAppI18n(locale)],
+        stubs: { UiStepper: false, UiStepHeader: false, UiButton: false, ...stubs },
+      },
+    });
+  }
+
+  const states = pageSections({
+    USER_TWINS: { state: "UPDATE_AVAILABLE", reasons: ["TWINS_LEARNED"] },
+    REQUIREMENTS: { state: "IN_PROGRESS" },
+    DESIGN: {
+      state: "TO_UPDATE",
+      reasons: ["REQUIREMENTS_CHANGED"],
+      blocked: "UPSTREAM_NOT_READY",
+    },
+    PACKAGE: { state: "NOT_STARTED", version_number: null },
+  });
+
+  it.each<["en" | "it", string[], string, string]>([
+    [
+      "en",
+      [
+        "✓ Up to date · v1",
+        "✓ Up to date · v2",
+        "+ Update available · v3",
+        "● Your turn · v4",
+        "↻ To update · v5",
+        "○ Waiting",
+      ],
+      "Sections",
+      "All sections",
+    ],
+    [
+      "it",
+      [
+        "✓ A posto · v1",
+        "✓ A posto · v2",
+        "+ Aggiornamento disponibile · v3",
+        "● Tocca a te · v4",
+        "↻ Da aggiornare · v5",
+        "○ In attesa",
+      ],
+      "Sezioni",
+      "Tutte le sezioni",
+    ],
+  ])(
+    "shows in %s every section with its state and version and locks none of them",
+    async (locale, lines, navigation, toggle) => {
+      vi.spyOn(sectionsApi, "read").mockResolvedValue(states);
+      const wrapper = mountSections(locale);
+      await flushPromises();
+
+      const stepper = wrapper.get('[data-testid="stepper"]');
+      expect(stepper.attributes("aria-label")).toBe(navigation);
+      expect(
+        wrapper
+          .findAll('[data-testid="stepper-section"]')
+          .map((line) => line.text().replace(/\s+/g, " ")),
+      ).toEqual(lines);
+      expect(wrapper.findAll("[data-stage]").map((step) => step.attributes("data-stage"))).toEqual([
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+      ]);
+      expect(stepper.findAll("button[disabled]")).toHaveLength(0);
+      expect(wrapper.get('[data-testid="project-steps-toggle"]').text()).toBe(toggle);
+      wrapper.unmount();
+    },
+  );
+
+  it.each<["en" | "it", string, string]>([
+    ["en", "● Your turn", "v4"],
+    ["it", "● Tocca a te", "v4"],
+  ])(
+    "shows in %s the state and the version of the open section in place of its position",
+    async (locale, chip, version) => {
+      vi.spyOn(sectionsApi, "read").mockResolvedValue(states);
+      const wrapper = mountSections(locale);
+      await flushPromises();
+
+      const header = wrapper.get('[data-testid="step-header"]');
+      expect(header.text()).not.toMatch(/Step \d of 6|Passo \d di 6/);
+      expect(header.get('[data-testid="step-section-state"]').text().replace(/\s+/g, " ")).toBe(
+        chip,
+      );
+      expect(header.get('[data-testid="step-version"]').text()).toBe(version);
+      expect(header.find('[data-testid="step-status"]').exists()).toBe(false);
+      expect(header.get("h1").text()).toBe(locale === "it" ? "Definizione" : "Definition");
+      wrapper.unmount();
+    },
+  );
+
+  it.each<[string, ProjectSectionsPayload, string]>([
+    [
+      "the first section in progress",
+      pageSections({
+        TEAM: { state: "IN_PROGRESS" },
+        USER_TWINS: { state: "TO_UPDATE", blocked: "UPSTREAM_NOT_READY" },
+        DESIGN: { state: "IN_PROGRESS" },
+      }),
+      "stage-team",
+    ],
+    [
+      "the first section to update when none is in progress",
+      pageSections({
+        REQUIREMENTS: { state: "TO_UPDATE" },
+        DESIGN: { state: "TO_UPDATE" },
+        PACKAGE: { state: "TO_UPDATE", reasons: ["FOLDER_BEHIND"] },
+      }),
+      "stage-requirements",
+    ],
+    [
+      "the Dossier when every section is fine",
+      pageSections({ USER_TWINS: { state: "UPDATE_AVAILABLE", reasons: ["TWINS_LEARNED"] } }),
+      "stage-package",
+    ],
+  ])("opens on %s when the person chose nothing", async (_label, sections, stage) => {
+    vi.spyOn(sectionsApi, "read").mockResolvedValue(sections);
+    const wrapper = mountSections();
+    await flushPromises();
+
+    const visible = [
+      "stage-brief",
+      "stage-team",
+      "stage-twins",
+      "stage-requirements",
+      "stage-design",
+      "stage-package",
+    ].filter((name) => wrapper.get(`[data-testid="${name}"]`).isVisible());
+    expect(visible).toEqual([stage]);
+    wrapper.unmount();
+  });
+
+  it("shows the decision area and the technical row on an approved section that the person opens", async () => {
+    vi.spyOn(sectionsApi, "read").mockResolvedValue(pageSections());
+    const pinia = createPinia();
+    const wrapper = mountSections("en", {}, pinia);
+    await flushPromises();
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+
+    for (const stage of [1, 0, 3]) {
+      await wrapper.get(`[data-stage="${stage}"]`).trigger("click");
+      expect(wrapper.get(`#studio-stage-${stage}`).isVisible()).toBe(true);
+      expect(wrapper.get("#step-decision-bar").isVisible()).toBe(true);
+      expect(wrapper.get("#step-technical-row").isVisible()).toBe(true);
+      expect(wrapper.find('[data-testid="step-read-only"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="step-ahead"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="back-to-current"]').exists()).toBe(false);
+    }
+    hydrateStages(pinia);
+    await flushPromises();
+    await wrapper.get('[data-stage="1"]').trigger("click");
+    expect(wrapper.get("#step-decision-bar").isVisible()).toBe(true);
+    expect(wrapper.find('[data-testid="step-read-only"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("keeps the section the person chose and otherwise follows the section that needs attention", async () => {
+    const read = vi
+      .spyOn(sectionsApi, "read")
+      .mockResolvedValueOnce(pageSections({ REQUIREMENTS: { state: "IN_PROGRESS" } }))
+      .mockResolvedValueOnce(pageSections({ DESIGN: { state: "TO_UPDATE" } }))
+      .mockResolvedValue(pageSections({ BRIEF: { state: "IN_PROGRESS" } }));
+    const setups: Record<string, number> = {};
+    const wrapper = mountSections("en", countingFlows(setups));
+    await flushPromises();
+    expect(wrapper.get('[data-testid="stage-requirements"]').isVisible()).toBe(true);
+
+    wrapper.findComponent({ name: "ProjectRequirementsFlow" }).vm.$emit("sections-changed");
+    await flushPromises();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+
+    await wrapper.get('[data-stage="2"]').trigger("click");
+    wrapper.findComponent({ name: "ProjectDesignFlow" }).vm.$emit("sections-changed");
+    await flushPromises();
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(wrapper.get('[data-testid="stage-twins"]').isVisible()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("reads the sections once when it opens and once after every change a flow reports", async () => {
+    const read = vi.spyOn(sectionsApi, "read").mockResolvedValue(pageSections());
+    const setups: Record<string, number> = {};
+    const wrapper = mountSections("en", countingFlows(setups));
+    await flushPromises();
+
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledWith("first", "token");
+    expect(
+      FLOWS.map((name) => wrapper.get(`[data-flow="${name}"]`).attributes("data-sections-mode")),
+    ).toEqual(["true", "true", "true", "true", "true", "true"]);
+    for (const [index, name] of FLOWS.entries()) {
+      wrapper.findComponent({ name }).vm.$emit("sections-changed");
+      await flushPromises();
+      expect(read).toHaveBeenCalledTimes(index + 2);
+    }
+    expect(Object.values(setups)).toEqual([1, 1, 1, 1, 1, 1]);
+    wrapper.unmount();
+  });
+
+  it("keeps every flow in the first pass until the first design is approved", async () => {
+    const read = vi.spyOn(sectionsApi, "read").mockResolvedValue(pageSections({}, {}, false));
+    const wrapper = mountSections("en", countingFlows({}));
+    await flushPromises();
+
+    expect(
+      FLOWS.map((name) => wrapper.get(`[data-flow="${name}"]`).attributes("data-sections-mode")),
+    ).toEqual(["false", "false", "false", "false", "false", "false"]);
+    expect(wrapper.find('[data-testid="sections-notice"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "ProjectSectionsNotice" }).exists()).toBe(false);
+    expect(wrapper.get('[data-testid="step-header"]').text()).toContain("Step 1 of 6");
+    wrapper.findComponent({ name: "ProjectTeamSelectionFlow" }).vm.$emit("sections-changed");
+    await flushPromises();
+    expect(read).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it.each(["it", "en"] as const)(
+    "shows evidence review codes and real downstream states before the first design approval in %s",
+    async (locale) => {
+      const affected = { scenarios: ["SCN-001"], needs: ["NED-001"], requirements: ["REQ-001"] };
+      const data = pageSections(
+        {
+          REQUIREMENTS: {
+            state: "TO_UPDATE",
+            version_number: 3,
+            reasons: ["USER_TWINS_CHANGED"],
+            affected_codes: affected,
+          },
+          DESIGN: {
+            state: "IN_PROGRESS",
+            version_number: 1,
+            reasons: ["USER_TWINS_CHANGED"],
+            affected_codes: affected,
+          },
+          PACKAGE: {
+            state: "TO_UPDATE",
+            version_number: 5,
+            reasons: ["FOLDER_BEHIND"],
+            affected_codes: affected,
+          },
+        },
+        { available: true, sections: ["REQUIREMENTS"] },
+        false,
+      );
+      vi.spyOn(sectionsApi, "read").mockResolvedValue(data);
+      const align = vi.spyOn(sectionsApi, "align");
+      const pinia = createPinia();
+      const stores = hydrateStages(pinia);
+      stores.design.$patch({ gate: null, readiness: { status: "DESIGN_APPROVAL_REQUIRED" } });
+      const wrapper = mountSections(
+        locale,
+        { ProjectSectionsNotice: false, ...countingFlows({}) },
+        pinia,
+      );
+      await flushPromises();
+
+      expect(
+        FLOWS.map((name) => wrapper.get(`[data-flow="${name}"]`).attributes("data-sections-mode")),
+      ).toEqual(["false", "false", "false", "false", "false", "false"]);
+      expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+      const notice = wrapper.get('[data-testid="sections-notice"]');
+      for (const code of ["SCN-001", "NED-001", "REQ-001"]) expect(notice.text()).toContain(code);
+      expect(notice.get('[data-kind="affected"]').text()).toContain(
+        locale === "it" ? "controlla ciò che dicono" : "review what these items say",
+      );
+      const definition = wrapper.get('[data-stage="3"]');
+      expect(definition.attributes("data-state")).toBe("TO_UPDATE");
+      expect(definition.text()).toContain(locale === "it" ? "Da aggiornare" : "To update");
+      expect(wrapper.get('[data-stage="4"]').attributes("data-state")).toBe("IN_PROGRESS");
+      expect(wrapper.get('[data-testid="step-section-state"]').attributes("data-state")).toBe(
+        "IN_PROGRESS",
+      );
+      expect(wrapper.get('[data-stage="5"]').text()).toContain(
+        locale === "it" ? "Cartella parziale" : "Partial folder",
+      );
+      expect(wrapper.get('[data-stage="5"]').attributes("data-state")).toBe("TO_UPDATE");
+      expect(align).not.toHaveBeenCalled();
+
+      await definition.trigger("click");
+      expect(wrapper.get('[data-testid="step-section-state"]').attributes("data-state")).toBe(
+        "TO_UPDATE",
+      );
+      expect(wrapper.get('[data-testid="step-read-only"]').isVisible()).toBe(true);
+      await wrapper.get('[data-testid="back-to-current"]').trigger("click");
+      expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+      await wrapper.get('[data-stage="5"]').trigger("click");
+      expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+      expect(wrapper.get('[data-testid="step-section-state"]').attributes("data-state")).toBe(
+        "TO_UPDATE",
+      );
+      expect(wrapper.get('[data-testid="step-ahead"]').isVisible()).toBe(true);
+      expect(align).not.toHaveBeenCalled();
+      await expectAccessible(wrapper.element);
+      wrapper.unmount();
+    },
+  );
+
+  it("keeps future steps locked when evidence reopens an existing Definition during the first pass", async () => {
+    const data = pageSections(
+      {
+        REQUIREMENTS: {
+          state: "TO_UPDATE",
+          version_number: 3,
+          reasons: ["USER_TWINS_CHANGED"],
+          affected_codes: { scenarios: ["SCN-001"], needs: ["NED-001"], requirements: ["REQ-001"] },
+        },
+        DESIGN: { state: "NOT_STARTED", version_number: null },
+      },
+      {},
+      false,
+    );
+    vi.spyOn(sectionsApi, "read").mockResolvedValue(data);
+    const pinia = createPinia();
+    const stores = hydrateStages(pinia);
+    stores.requirements.$patch({
+      gate: null,
+      readiness: { status: "REQUIREMENTS_APPROVAL_REQUIRED" },
+    });
+    stores.design.$patch({ current: null, gate: null, readiness: null });
+    const wrapper = mountSections(
+      "it",
+      { ProjectSectionsNotice: false, ...countingFlows({}) },
+      pinia,
+    );
+    await flushPromises();
+    expect(wrapper.get('[data-testid="sections-notice"]').text()).toContain("REQ-001");
+    expect(wrapper.get('[data-testid="stage-requirements"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="step-section-state"]').attributes("data-state")).toBe(
+      "TO_UPDATE",
+    );
+    const future = wrapper.findAll('[data-testid="stepper"] button')[4];
+    expect(future?.attributes("disabled")).toBeDefined();
+    expect(future?.attributes("data-state")).toBeUndefined();
+    expect(wrapper.find('[data-stage="4"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "ProjectDesignFlow" }).props("sectionsMode")).toBe(false);
+    wrapper.unmount();
+  });
+
+  it.each([
+    ["answers 404", () => Promise.resolve(null)],
+    ["cannot be reached", () => Promise.reject(new Error("network down"))],
+  ])("keeps the page of today when the sections route %s", async (_label, answer) => {
+    vi.spyOn(sectionsApi, "read").mockImplementation(answer);
+    const wrapper = mountSections("en");
+    await flushPromises();
+
+    expect(wrapper.findAll("[data-stage]").map((step) => step.attributes("data-stage"))).toEqual([
+      "0",
+    ]);
+    expect(wrapper.get('[data-testid="stepper"]').attributes("aria-label")).toBe("Steps");
+    expect(wrapper.get('[data-testid="step-header"]').text()).toContain("Step 1 of 6");
+    expect(wrapper.get('[data-testid="step-status"]').text()).toBe("Your turn");
+    expect(wrapper.get('[data-testid="project-steps-toggle"]').text()).toBe("All steps");
+    expect(wrapper.findComponent({ name: "ProjectSectionsNotice" }).exists()).toBe(false);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("runs the one gesture from the notice above the open section and mounts again the sections it updated", async () => {
+    const read = vi
+      .spyOn(sectionsApi, "read")
+      .mockResolvedValueOnce(BEHIND_SECTIONS)
+      .mockResolvedValue(ALIGNED_SECTIONS);
+    let finish!: (value: SectionsAlignmentPayload) => void;
+    const align = vi.spyOn(sectionsApi, "align").mockImplementation(
+      () =>
+        new Promise<SectionsAlignmentPayload>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const setups: Record<string, number> = {};
+    const wrapper = mountSections("en", { ProjectSectionsNotice: false, ...countingFlows(setups) });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="stage-twins"]').isVisible()).toBe(true);
+    const notice = wrapper.get('[data-testid="sections-notice"]');
+    expect(
+      wrapper.get('[data-testid="step-header"]').element.compareDocumentPosition(notice.element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      notice.element.compareDocumentPosition(wrapper.get('[data-testid="stage-brief"]').element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(notice.get('[data-kind="behind"]').text()).toBe(
+      "User Twin, Definition and Design & Evaluation to update: something upstream changed. The content you approved stays the same, it is only re-anchored to the new versions.",
+    );
+
+    await wrapper.get('[data-testid="sections-align"]').trigger("click");
+    await wrapper.get('[data-testid="sections-align"]').trigger("click");
+    await flushPromises();
+    expect(align).toHaveBeenCalledTimes(1);
+    expect(align).toHaveBeenCalledWith("first", "token");
+    expect(wrapper.get('[data-testid="sections-align"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.get('[data-testid="sections-notice-running"]').text()).toBe(
+      "Updating the sections…",
+    );
+
+    finish(ALIGNED_ANSWER);
+    await flushPromises();
+
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('[data-kind="done"]').text()).toBe(
+      "✓ Sections updated: User Twin, Definition and Design & Evaluation.",
+    );
+    expect(wrapper.get('[data-kind="evaluation"]').text()).toBe(
+      "The design was re-anchored to the new Definition: you can ask the twins for a new evaluation.",
+    );
+    expect(wrapper.find('[data-testid="sections-align"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="stage-twins"]').isVisible()).toBe(true);
+    expect(wrapper.findAll('[data-testid="stepper-section"]').map((line) => line.text())).toEqual(
+      expect.arrayContaining([expect.stringContaining("Update available")]),
+    );
+    expect(setups).toEqual({
+      ProjectClarificationFlow: 1,
+      ProjectTeamSelectionFlow: 1,
+      ProjectUserModelingFlow: 2,
+      ProjectRequirementsFlow: 2,
+      ProjectDesignFlow: 2,
+      ProjectDesignPackagePanel: 2,
+    });
+
+    wrapper.findComponent({ name: "ProjectDesignFlow" }).vm.$emit("sections-changed");
+    await flushPromises();
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(wrapper.find('[data-kind="done"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("mounts again only the sections from the first one that the gesture updated", async () => {
+    vi.spyOn(sectionsApi, "read").mockResolvedValue(
+      pageSections({ DESIGN: { state: "TO_UPDATE" } }, { available: true, sections: ["DESIGN"] }),
+    );
+    vi.spyOn(sectionsApi, "align").mockResolvedValue({
+      status: "ALIGNED",
+      results: [{ key: "DESIGN", outcome: "ALIGNED", issue: null, version_number: 6, codes: [] }],
+      sections: pageSections(),
+    });
+    const setups: Record<string, number> = {};
+    const wrapper = mountSections("it", { ProjectSectionsNotice: false, ...countingFlows(setups) });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="sections-align"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get('[data-kind="done"]').text()).toBe(
+      "✓ Sezioni aggiornate: Design e valutazione.",
+    );
+    expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+    expect(setups).toEqual({
+      ProjectClarificationFlow: 1,
+      ProjectTeamSelectionFlow: 1,
+      ProjectUserModelingFlow: 1,
+      ProjectRequirementsFlow: 1,
+      ProjectDesignFlow: 2,
+      ProjectDesignPackagePanel: 2,
+    });
+    wrapper.unmount();
+  });
+
+  it("says that the gesture failed, mounts nothing again and keeps the gesture available", async () => {
+    const read = vi.spyOn(sectionsApi, "read").mockResolvedValue(BEHIND_SECTIONS);
+    vi.spyOn(sectionsApi, "align").mockRejectedValue(new Error("network down"));
+    const setups: Record<string, number> = {};
+    const wrapper = mountSections("it", { ProjectSectionsNotice: false, ...countingFlows(setups) });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="sections-align"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get('[data-kind="failed"]').text()).toBe(
+      "Non è stato possibile aggiornare le sezioni: riprova.",
+    );
+    expect(wrapper.get('[data-testid="sections-align"]').attributes("disabled")).toBeUndefined();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(Object.values(setups)).toEqual([1, 1, 1, 1, 1, 1]);
+    wrapper.unmount();
+  });
+
+  it("opens the Perspectives section from the notice when the brief changed", async () => {
+    vi.spyOn(sectionsApi, "read").mockResolvedValue(
+      pageSections({
+        BRIEF: { state: "FINE" },
+        TEAM: { state: "TO_UPDATE", reasons: ["BRIEF_CHANGED"], blocked: "PREPARE_AGAIN" },
+        USER_TWINS: { state: "TO_UPDATE", blocked: "UPSTREAM_NOT_READY" },
+      }),
+    );
+    const wrapper = mountSections("it", { ProjectSectionsNotice: false });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
+    await wrapper.get('[data-stage="0"]').trigger("click");
+
+    expect(wrapper.get('[data-kind="blocked"]').text()).toBe(
+      "Prospettive non si aggiorna da sola: il brief è cambiato: prepara di nuovo le prospettive.",
+    );
+    await wrapper.get('[data-testid="sections-notice-open"]').trigger("click");
+    expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
+    expect(wrapper.find('[data-testid="sections-notice-open"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("has no axe violations in sections mode with the notice", async () => {
+    vi.spyOn(sectionsApi, "read").mockResolvedValue(BEHIND_SECTIONS);
+    const wrapper = mountSections("it", { ProjectSectionsNotice: false });
+    await flushPromises();
+
+    await expectAccessible(wrapper.element);
     wrapper.unmount();
   });
 });
@@ -1597,6 +2419,8 @@ interface Served {
   designDiffs: DesignPackageDiffPayload[];
   latest: Record<string, MockupResultPayload>;
   runs: DesignEvaluationRunPayload[];
+  sections?: ProjectSectionsPayload;
+  alignment?: SectionsAlignmentPayload;
 }
 
 function approvedProject(): Served {
@@ -1667,6 +2491,31 @@ function ok(body: unknown): Reply {
 function missing(code: string): Reply {
   return { status: 404, body: { detail: { code } } };
 }
+
+const DEVELOPMENT_STATE = {
+  project_id: OPEN,
+  reference: { requirements: null, design: null },
+  aligned: null,
+  pending_changes: 0,
+  latest_change: null,
+  tasks: [],
+  review_available: false,
+};
+
+const ACCEPTANCE_TESTS = {
+  project_id: OPEN,
+  reference: { requirements: null, design: null },
+  plan_available: false,
+  plans: 0,
+  runs: 0,
+  latest_run: null,
+};
+
+const TWIN_LEARNING = {
+  project_id: OPEN,
+  update_available: false,
+  twins: [],
+};
 
 type StoreGroup = "clarification" | "team" | "twins" | "requirements" | "design";
 
@@ -1764,12 +2613,20 @@ function fakeStudio(served: Served) {
       [`${base}/design/discussions`]: () => ok([]),
       [`${base}/insight-applications`]: () => ok([]),
       [`${base}/knowledge-packages`]: () => ok({ project_id: OPEN, versions: [] }),
+      [`${base}/alignment`]: () => ok(DEVELOPMENT_STATE),
+      [`${base}/code-changes`]: () => ok({ items: [] }),
+      [`${base}/code-tasks`]: () => ok({ items: [] }),
+      [`${base}/twin-learning`]: () => ok(TWIN_LEARNING),
+      [`${base}/evidence`]: () => ok({ project_id: OPEN, evidence: [], citations: [] }),
+      [`${base}/acceptance-tests`]: () => ok(ACCEPTANCE_TESTS),
       [`${base}/design/mockups/capabilities`]: () => ok(CAPABILITIES),
       [`${base}/design/mockups`]: () =>
         ok(served.latest[query.get("alternative_id") ?? ""] ?? null),
       [`${base}/design/mockups/document`]: () => documentOf(query),
       [`${base}/design/iterations`]: () => ok({ items: [] }),
       [`${base}/model-usage`]: () => ok(USAGE),
+      [`${base}/sections`]: () =>
+        served.sections === undefined ? missing("UNKNOWN_ADDRESS") : ok(served.sections),
     };
     const reading = readings[path];
     if (reading !== undefined) return reading();
@@ -1922,8 +2779,16 @@ function fakeStudio(served: Served) {
     return ok(run);
   }
 
+  function alignSections(): Reply {
+    const answer = served.alignment;
+    if (answer === undefined) return missing("UNKNOWN_ADDRESS");
+    served.sections = answer.sections;
+    return ok(answer);
+  }
+
   function write(path: string, body: unknown): Reply {
     const commands: Record<string, () => Reply> = {
+      [`${base}/sections/alignment`]: alignSections,
       [`${base}/brief-versions`]: saveBrief,
       [`${base}/gates/agent-team/decisions`]: approveTeam,
       [`${base}/user-modeling/personas/proposals`]: proposePersonas,
@@ -2060,8 +2925,16 @@ const OPENING_READINGS: Record<string, number> = {
   "…/design/evaluations/comparison": 1,
   "…/design/evaluations/validations": 1,
   "…/design/discussions": 1,
+  "…/design/requirements-alignment": 1,
   "…/insight-applications": 1,
   "…/knowledge-packages": 1,
+  "…/alignment": 1,
+  "…/code-changes": 1,
+  "…/code-tasks?status=all": 1,
+  "…/twin-learning": 1,
+  "…/evidence?all=true": 1,
+  "…/acceptance-tests": 1,
+  "…/sections": 1,
   [`…/design/mockups/document?alternative_id=${DESIGN_ALTERNATIVE_ID}&source=applied`]: 1,
 };
 
@@ -2100,6 +2973,7 @@ const APPROVED_DESIGN_READINGS: Record<string, number> = {
   "…/design/revisions": 1,
   "…/design/gate": 1,
   "…/design/gate/events": 1,
+  "…/design/requirements-alignment": 1,
 };
 
 const FIRST_DESIGN_VIEW: Record<string, number> = {
@@ -2163,6 +3037,32 @@ describe("readings of the project page", () => {
 
     expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
     expect(studio.readings(secondPass)).toEqual({});
+    expect(studio.writes()).toEqual([]);
+  });
+
+  it("opens the folder of a project in progress without reading or writing anything more", async () => {
+    const studio = fakeStudio(teamWaitingProject());
+    const wrapper = await openInOrder(studio, []);
+    expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
+    const from = studio.calls.length;
+
+    await wrapper.get('[data-stage="5"]').trigger("click");
+    await settle();
+
+    expect(studio.readings(from)).toEqual({});
+    expect(studio.writes()).toEqual([]);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="package-partial"]').text().replace(/\s+/g, " ")).toBe(
+      "The folder holds 1 of 5 steps: Perspectives, User Twin, Definition and Design & Evaluation are still to approve. Each step joins the folder when you approve it.",
+    );
+    expect(wrapper.get('[data-testid="download-package"]').attributes("disabled")).toBeUndefined();
+    expect(wrapper.find('[data-testid="development-panel"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="back-to-current"]').trigger("click");
+    await settle();
+
+    expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
+    expect(studio.readings(from)).toEqual({});
     expect(studio.writes()).toEqual([]);
   });
 
@@ -2251,6 +3151,7 @@ describe("readings of the project page", () => {
     expect(studio.readings(from)).toEqual({
       "…": 1,
       "…/brief-versions": 1,
+      "…/sections": 1,
       "…/brief-dialogue": 1,
       "…/brief-assumptions": 1,
       "…/gates/project-brief/current": 1,
@@ -2294,6 +3195,7 @@ describe("readings of the project page", () => {
         "…/design/readiness": 1,
         "…/design": 1,
         "…/design/revisions": 1,
+        "…/sections": 2,
       });
       expect(wrapper.get('[data-testid="stage-twins"]').isVisible()).toBe(true);
       await settle();
@@ -2384,4 +3286,43 @@ describe("readings of the project page", () => {
       expect(studio.writes()).toHaveLength(3);
     },
   );
+
+  it("after the one gesture reads again, once, what the sections it updated show and generates nothing", async () => {
+    const studio = fakeStudio({
+      ...approvedProject(),
+      sections: BEHIND_SECTIONS,
+      alignment: ALIGNED_ANSWER,
+    });
+    const wrapper = await openInOrder(studio, []);
+    expect(wrapper.get('[data-testid="stage-twins"]').isVisible()).toBe(true);
+    const from = studio.calls.length;
+
+    await wrapper.get('[data-testid="sections-align"]').trigger("click");
+    await settle();
+
+    expect(studio.writes(from)).toEqual(["POST …/sections/alignment"]);
+    expect(studio.readings(from)).toEqual({
+      "…/sections": 1,
+      ...APPROVED_TWINS_READINGS,
+      ...APPROVED_REQUIREMENTS_READINGS,
+      "…/requirements/readiness": 2,
+      ...APPROVED_DESIGN_READINGS,
+      "…/design/evaluations": 1,
+      "…/design/evaluations/comparison": 1,
+      "…/design/evaluations/validations": 1,
+      "…/design/discussions": 1,
+      "…/insight-applications": 1,
+      "…/generation-jobs?status=RUNNING": 1,
+      "…/knowledge-packages": 1,
+      "…/alignment": 1,
+      "…/code-changes": 1,
+      "…/code-tasks?status=all": 1,
+    });
+    expect(wrapper.get('[data-kind="done"]').text()).toBe(
+      "✓ Sections updated: User Twin, Definition and Design & Evaluation.",
+    );
+    expect(wrapper.get('[data-testid="stage-twins"]').isVisible()).toBe(true);
+    await settle();
+    expect(studio.writes(from)).toHaveLength(1);
+  });
 });

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -268,6 +269,130 @@ def test_a_failed_turn_of_the_dialogue_without_a_second_try(tmp_path: Path) -> N
     assert (
         "Dialogue of the brief: the generation did not succeed (TIMEOUT). What you approved is "
         "saved" in run.errors
+    )
+
+
+UNAVAILABLE = {"detail": {"code": "PROVIDER_UNAVAILABLE", "stage": "MODEL_PROPOSAL"}}
+ANSWERS_PATH = "/projects/{project_id}/brief-dialogue/answers"
+
+
+def answers_script(tmp_path: Path) -> Path:
+    path = tmp_path / "answers.json"
+    path.write_text(json.dumps({"name": NAME, "idea": IDEA}), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    ("language", "question"),
+    [
+        (
+            "en",
+            "Try once more? It is a new generation, on the Claude subscription: it spends no "
+            "credit. [Y/n]",
+        ),
+        (
+            "it",
+            "Riprovo una volta? È una nuova generazione, con l'abbonamento di Claude: non spende "
+            "credito. [S/n]",
+        ),
+    ],
+)
+def test_on_the_subscription_a_failed_turn_is_asked_again_without_an_amount(
+    tmp_path: Path, language: str, question: str
+) -> None:
+    answers = [*QUIET_START, DIALOGUE[0], "", *DIALOGUE, "1", "1"]
+    with FakeStudio(language=language, billing="SUBSCRIPTION") as studio:
+        sign_in(studio, tmp_path)
+        studio.fail_next("POST", ANSWERS_PATH, status=503, body=UNAVAILABLE)
+
+        run = ut(tmp_path, *UNTIL_BRIEF, answers=answers, language=language)
+
+        assert run.status == 0, run.errors
+        assert fake_project(studio, tmp_path).approved("brief")
+    assert question in run.output
+    assert "USD" not in run.output
+
+
+@pytest.mark.parametrize("billing", ["MIXED", "API"])
+def test_with_paid_routes_a_failed_turn_is_asked_again_with_its_amount(
+    tmp_path: Path, billing: str
+) -> None:
+    answers = [*QUIET_START, DIALOGUE[0], "y", *DIALOGUE, "1", "1"]
+    with FakeStudio(language="en", billing=billing) as studio:
+        sign_in(studio, tmp_path)
+        studio.fail_next("POST", ANSWERS_PATH, status=503, body=UNAVAILABLE)
+
+        run = ut(tmp_path, *UNTIL_BRIEF, answers=answers)
+
+    assert run.status == 0, run.errors
+    assert "Try once more? It is a new generation, about 0.09 USD. [Y/n]" in run.output
+
+
+@pytest.mark.parametrize(
+    ("language", "line"),
+    [
+        (
+            "en",
+            "Trying once more, because with --yes you already gave your consent (it is a new "
+            "generation on the Claude subscription: it spends no credit).",
+        ),
+        (
+            "it",
+            "Riprovo una volta, perché con --yes hai già dato il tuo consenso (è una nuova "
+            "generazione con l'abbonamento di Claude: non spende credito).",
+        ),
+    ],
+)
+def test_on_the_subscription_an_answers_file_with_yes_tries_once_more(
+    tmp_path: Path, language: str, line: str
+) -> None:
+    script = answers_script(tmp_path)
+    with FakeStudio(language=language, billing="SUBSCRIPTION") as studio:
+        sign_in(studio, tmp_path)
+        studio.fail_next("POST", ANSWERS_PATH, status=503, body=UNAVAILABLE)
+
+        run = ut(tmp_path, *UNTIL_BRIEF, "--answers", str(script), language=language, yes=True)
+
+        assert run.status == 0, run.errors
+        assert fake_project(studio, tmp_path).approved("brief")
+    assert line in run.output.splitlines()
+    assert "USD" not in run.output
+
+
+@pytest.mark.parametrize("billing", ["SUBSCRIPTION", "MIXED", None])
+def test_an_answers_file_without_yes_does_not_try_again(
+    tmp_path: Path, billing: str | None
+) -> None:
+    script = answers_script(tmp_path)
+    with FakeStudio(language="en", billing=billing) as studio:
+        sign_in(studio, tmp_path)
+        studio.fail_next("POST", ANSWERS_PATH, status=503, body=UNAVAILABLE)
+
+        run = ut(tmp_path, *UNTIL_BRIEF, "--answers", str(script))
+
+    assert run.status == 1
+    assert "Trying once more" not in run.output
+    assert (
+        "Dialogue of the brief: the generation did not succeed (PROVIDER_UNAVAILABLE)."
+        in run.errors
+    )
+
+
+@pytest.mark.parametrize("billing", ["MIXED", None])
+def test_with_paid_routes_an_answers_file_with_yes_names_the_amount(
+    tmp_path: Path, billing: str | None
+) -> None:
+    script = answers_script(tmp_path)
+    with FakeStudio(language="en", billing=billing) as studio:
+        sign_in(studio, tmp_path)
+        studio.fail_next("POST", ANSWERS_PATH, status=503, body=UNAVAILABLE)
+
+        run = ut(tmp_path, *UNTIL_BRIEF, "--answers", str(script), yes=True)
+
+    assert run.status == 0, run.errors
+    assert (
+        "Trying once more, because with --yes you already confirmed the spending (about 0.09 "
+        "USD)." in run.output.splitlines()
     )
 
 

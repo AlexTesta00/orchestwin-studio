@@ -43,6 +43,7 @@ const props = withDefaults(
     notes?: Readonly<Record<string, string>>;
     choosing?: string | null;
     disabled?: boolean;
+    paid?: boolean;
     locale?: Locale;
   }>(),
   {
@@ -55,6 +56,7 @@ const props = withDefaults(
     notes: () => ({}),
     choosing: null,
     disabled: false,
+    paid: true,
     locale: "en",
   },
 );
@@ -98,6 +100,7 @@ const messages = {
     draw: "Draw the mockup",
     drawLabel: "Draw the mockup of {code}",
     drawCost: "Drawing uses the hosted model and has a cost.",
+    drawSubscription: "Drawing uses your Claude subscription: it spends no credit.",
     loading: "Preparing the preview…",
     thumbnail: "Preview of {code} · {title}",
     details: "Details of the alternative",
@@ -144,6 +147,7 @@ const messages = {
     draw: "Disegna il mockup",
     drawLabel: "Disegna il mockup di {code}",
     drawCost: "Il disegno usa il modello ospitato e ha un costo.",
+    drawSubscription: "Il disegno usa il tuo abbonamento di Claude: non spende credito.",
     loading: "Preparo l'anteprima…",
     thumbnail: "Anteprima di {code} · {title}",
     details: "Dettagli dell'alternativa",
@@ -392,7 +396,9 @@ onBeforeUnmount(() => {
           >
             {{ copy.draw }}
           </UiButton>
-          <p class="text-xs text-on-night-3">{{ copy.drawCost }}</p>
+          <p class="text-xs text-on-night-3" data-testid="alternative-draw-cost">
+            {{ paid ? copy.drawCost : copy.drawSubscription }}
+          </p>
         </div>
         <div
           v-else-if="card.preview.kind === 'loading'"

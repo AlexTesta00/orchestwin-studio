@@ -74,6 +74,22 @@ const messages = {
         what: "a new round of the discussion",
         of: "of the new round of the discussion",
       },
+      CODE_CHANGE_REVIEW: {
+        what: "the twins' review of a commit",
+        of: "of the twins' review of a commit",
+      },
+      TEST_PLAN: {
+        what: "the paths that verify the acceptance criteria",
+        of: "of the paths that verify the acceptance criteria",
+      },
+      TEST_REVIEW: {
+        what: "the twins' review of the test results",
+        of: "of the twins' review of the test results",
+      },
+      TWIN_UPDATE: {
+        what: "the proposal of what a twin learned",
+        of: "of the proposal of what a twin learned",
+      },
     } satisfies Record<GenerationOperation, Subject>,
   },
   it: {
@@ -112,6 +128,22 @@ const messages = {
       DISCUSSION_ROUND: {
         what: "un nuovo giro della discussione",
         of: "del nuovo giro della discussione",
+      },
+      CODE_CHANGE_REVIEW: {
+        what: "la revisione dei twin su un commit",
+        of: "della revisione dei twin su un commit",
+      },
+      TEST_PLAN: {
+        what: "i percorsi di verifica dei criteri",
+        of: "dei percorsi di verifica dei criteri",
+      },
+      TEST_REVIEW: {
+        what: "la revisione dei twin sui risultati dei test",
+        of: "della revisione dei twin sui risultati dei test",
+      },
+      TWIN_UPDATE: {
+        what: "la proposta di ciò che un twin ha imparato",
+        of: "della proposta di ciò che un twin ha imparato",
       },
     } satisfies Record<GenerationOperation, Subject>,
   },

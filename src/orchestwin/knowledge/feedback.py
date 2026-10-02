@@ -16,7 +16,12 @@ from orchestwin.knowledge.layout import (
     FEEDBACK_REVIEWS,
     KNOWLEDGE_SCHEMA_VERSION,
 )
-from orchestwin.knowledge.sources import KnowledgeSources
+from orchestwin.knowledge.sources import KnowledgeFeedback, KnowledgeSources
+from orchestwin.knowledge.state_documents import (
+    change_critique_lines,
+    learning_feedback_lines,
+    test_critique_lines,
+)
 
 REVIEWS_KIND: Final = "orchestwin.twin-reviews"
 DISCUSSIONS_KIND: Final = "orchestwin.twin-discussions"
@@ -65,11 +70,12 @@ def feedback_documents(sources: KnowledgeSources) -> dict[str, dict[str, object]
 
 
 def feedback_summary(sources: KnowledgeSources) -> dict[str, int]:
-    feedback = sources.feedback
+    exported = "design" in sources.present_stages
+    feedback = sources.feedback if exported else KnowledgeFeedback()
     return {
         "reviews": len(feedback.runs),
         "findings": sum(len(item.findings) for item in feedback.runs),
-        "decisions": len(current_decisions(sources)),
+        "decisions": len(current_decisions(sources)) if exported else 0,
         "discussions": len(feedback.discussions),
         "insights": len(feedback.applications),
     }
@@ -123,7 +129,7 @@ def _review_lines(sources: KnowledgeSources) -> list[str]:
             [
                 f"### Review of {_scope(snapshot, sources)}",
                 "",
-                f"Run {snapshot['id']}, completed on {snapshot['completed_at']}, evaluator "
+                f"Completed on {snapshot['completed_at']}, evaluator "
                 f"{evaluator['evaluator_id']} {evaluator['evaluator_version']}, prompt "
                 f"{evaluator['prompt_version_ref']}.",
                 "",
@@ -235,7 +241,7 @@ def _discussion_lines(sources: KnowledgeSources) -> list[str]:
             [
                 f"### Discussion on {_scope(snapshot, sources)}",
                 "",
-                f"Discussion {snapshot['id']}, approved on {snapshot['decided_at']}.",
+                f"Approved on {snapshot['decided_at']}.",
                 "",
             ]
         )
@@ -284,6 +290,9 @@ def feedback_markdown(sources: KnowledgeSources) -> str:
         *_review_lines(sources),
         *_discussion_lines(sources),
         *_insight_lines(sources),
+        *change_critique_lines(sources),
+        *test_critique_lines(sources),
+        *learning_feedback_lines(sources),
     ]
     return "\n".join(lines)
 

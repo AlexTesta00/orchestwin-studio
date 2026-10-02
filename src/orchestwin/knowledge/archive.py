@@ -11,13 +11,20 @@ from typing import Final
 from orchestwin.artifacts.bound_mockups import BoundGeneratedMockup, bound_mockup_from_snapshot
 from orchestwin.artifacts.generated_mockups import GeneratedMockupError
 from orchestwin.knowledge.layout import (
+    FEEDBACK_CHANGES,
+    FEEDBACK_LEARNING,
+    FEEDBACK_TESTS,
     KNOWLEDGE_FOLDER_KIND,
     KNOWLEDGE_INDEX,
     KNOWLEDGE_MANIFEST,
-    KNOWLEDGE_SCHEMA_VERSION,
     STAGES,
+    STATE_DOCUMENT,
+    STATE_TEXT,
+    SUPPORTED_SCHEMA_VERSIONS,
+    present_stages,
     stage_document,
 )
+from orchestwin.knowledge.research_evidence import EVIDENCE_DOCUMENT, EVIDENCE_TEXT
 from orchestwin.knowledge.schema import (
     MAX_DOCUMENT_DEPTH,
     KnowledgeSchemaError,
@@ -66,6 +73,23 @@ class VerifiedFolder:
     @property
     def content_hash(self) -> str:
         return str(self.manifest["package"]["content_hash"])
+
+    @property
+    def schema_version(self) -> int:
+        return int(self.manifest["schema_version"])
+
+    @property
+    def present_stages(self) -> tuple[str, ...]:
+        return present_stages(self.manifest)
+
+    @property
+    def pending_stage(self) -> str | None:
+        present = self.present_stages
+        return None if len(present) == len(STAGES) else STAGES[len(present)]
+
+    @property
+    def complete(self) -> bool:
+        return self.pending_stage is None
 
 
 def safe_path(name: str) -> bool:
@@ -180,19 +204,43 @@ def _verify_generated_mockup(package: Mapping[str, object]) -> None:
         raise mockup_failure(MOCKUP_PROTOTYPE)
 
 
+def _same_project(document: Mapping[str, object], manifest: Mapping[str, object]) -> bool:
+    return document.get("project_id") == manifest["project"]["id"]
+
+
+def _state_documents(files: Mapping[str, str], manifest: Mapping[str, object]) -> None:
+    if STATE_TEXT not in files:
+        raise KnowledgeArchiveError("FOLDER_DOCUMENT_MISSING", STATE_TEXT)
+    for path in (STATE_DOCUMENT, FEEDBACK_CHANGES):
+        if not _same_project(_json(files, path), manifest):
+            raise KnowledgeArchiveError("FOLDER_TAMPERED", path)
+
+
+def _feedback_document(
+    files: Mapping[str, str], manifest: Mapping[str, object], key: str, path: str
+) -> None:
+    if key not in manifest["feedback"]:
+        if path in files:
+            raise KnowledgeArchiveError("FOLDER_TAMPERED", path)
+        return
+    if not _same_project(_json(files, path), manifest):
+        raise KnowledgeArchiveError("FOLDER_TAMPERED", path)
+
+
 def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
     manifest = _json(files, KNOWLEDGE_MANIFEST)
+    if (
+        manifest.get("kind") != KNOWLEDGE_FOLDER_KIND
+        or manifest.get("schema_version") not in SUPPORTED_SCHEMA_VERSIONS
+    ):
+        raise KnowledgeArchiveError("FOLDER_SCHEMA_UNSUPPORTED")
     try:
         validate_document("manifest", manifest)
     except KnowledgeSchemaError as error:
         raise KnowledgeArchiveError(
-            "FOLDER_DOCUMENT_INVALID", f"{KNOWLEDGE_MANIFEST}: {error.location}"
+            "FOLDER_DOCUMENT_INVALID",
+            f"{KNOWLEDGE_MANIFEST}: {error.location}" if error.location else KNOWLEDGE_MANIFEST,
         ) from error
-    if (
-        manifest["kind"] != KNOWLEDGE_FOLDER_KIND
-        or manifest["schema_version"] != KNOWLEDGE_SCHEMA_VERSION
-    ):
-        raise KnowledgeArchiveError("FOLDER_SCHEMA_UNSUPPORTED")
     digests = manifest["files"]
     for path, digest in digests.items():
         if path not in files:
@@ -208,16 +256,40 @@ def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
         raise KnowledgeArchiveError(
             "FOLDER_DOCUMENT_INVALID", f"{error.document}: {error.location}"
         ) from error
-    documents = {stage: _json(files, stage_document(stage)) for stage in STAGES}
+    present = present_stages(manifest)
+    for stage in STAGES:
+        if stage not in present and stage_document(stage) in files:
+            raise KnowledgeArchiveError("FOLDER_TAMPERED", stage_document(stage))
+    documents = {stage: _json(files, stage_document(stage)) for stage in present}
     for stage, document in documents.items():
         entry = manifest["stages"][stage]
         if (
             document["content_hash"] != entry["content_hash"]
             or document["id"] != entry["version_id"]
-            or document["project_id"] != manifest["project"]["id"]
+            or not _same_project(document, manifest)
         ):
             raise KnowledgeArchiveError("FOLDER_TAMPERED", stage_document(stage))
-    _verify_generated_mockup(documents["design"]["package"])
+    if manifest["schema_version"] >= 3:
+        _state_documents(files, manifest)
+    _feedback_document(files, manifest, "tests", FEEDBACK_TESTS)
+    _feedback_document(files, manifest, "learned", FEEDBACK_LEARNING)
+    declared_evidence = manifest.get("research_evidence")
+    if declared_evidence is not None:
+        if (
+            not isinstance(declared_evidence, Mapping)
+            or declared_evidence.get("document") != EVIDENCE_DOCUMENT
+            or declared_evidence.get("text") != EVIDENCE_TEXT
+        ):
+            raise KnowledgeArchiveError("FOLDER_DOCUMENT_INVALID", EVIDENCE_DOCUMENT)
+        if (
+            not _same_project(_json(files, EVIDENCE_DOCUMENT), manifest)
+            or EVIDENCE_TEXT not in files
+        ):
+            raise KnowledgeArchiveError("FOLDER_TAMPERED", EVIDENCE_DOCUMENT)
+    elif EVIDENCE_DOCUMENT in files or EVIDENCE_TEXT in files:
+        raise KnowledgeArchiveError("FOLDER_TAMPERED", EVIDENCE_DOCUMENT)
+    if "design" in documents:
+        _verify_generated_mockup(documents["design"]["package"])
     return VerifiedFolder(manifest=manifest, documents=documents, files=dict(files))
 
 

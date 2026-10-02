@@ -969,8 +969,8 @@ describe("governed User Modeling journey", () => {
 
     expect(revisedGoals.epistemic_status).toBe("USER_PROVIDED");
 
-    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toContain(
-      "Ready for requirements definition",
+    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
+      "Ready for the Definition.",
     );
   });
 

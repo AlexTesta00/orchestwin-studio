@@ -81,11 +81,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{label}: interrupted after {elapsed}.",
     },
     "common.stage_brief": {"it": "Brief", "en": "Brief"},
-    "common.stage_team": {"it": "Squadra", "en": "Team"},
-    "common.stage_twins": {"it": "User Twin", "en": "User Twins"},
-    "common.stage_requirements": {"it": "Requisiti", "en": "Requirements"},
-    "common.stage_design": {"it": "Design", "en": "Design"},
-    "common.stage_package": {"it": "Pacchetto", "en": "Package"},
+    "common.stage_team": {"it": "Prospettive", "en": "Perspectives"},
+    "common.stage_twins": {"it": "User Twin", "en": "User Twin"},
+    "common.stage_requirements": {"it": "Definizione", "en": "Definition"},
+    "common.stage_design": {"it": "Design e valutazione", "en": "Design & Evaluation"},
+    "common.stage_package": {"it": "Dossier", "en": "Dossier"},
     "common.next_describe_idea": {
         "it": "Racconta la tua idea: lancia `ut init`.",
         "en": "Tell your idea: launch `ut init`.",
@@ -95,8 +95,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Approve the brief: launch `ut init`.",
     },
     "common.next_approve_team": {
-        "it": "Approva la squadra: lancia `ut init`.",
-        "en": "Approve the team: launch `ut init`.",
+        "it": "Approva le prospettive: lancia `ut init`.",
+        "en": "Approve the perspectives: launch `ut init`.",
     },
     "common.next_confirm_twins": {
         "it": "Conferma i twin: lancia `ut init`.",
@@ -113,6 +113,18 @@ MESSAGES: dict[str, dict[str, str]] = {
     "common.next_download_folder": {
         "it": "Scarica la cartella di conoscenza: lancia `ut package publish`.",
         "en": "Download the knowledge folder: launch `ut package publish`.",
+    },
+    "common.next_update_sections": {
+        "it": "Aggiorna le sezioni con `ut sections update`.",
+        "en": "Update the sections with `ut sections update`.",
+    },
+    "common.next_prepare_twins": {
+        "it": "Prepara di nuovo i twin con `ut init`.",
+        "en": "Prepare the twins again with `ut init`.",
+    },
+    "common.next_prepare_design": {
+        "it": "Prepara di nuovo il design con `ut design regenerate`.",
+        "en": "Prepare the design again with `ut design regenerate`.",
     },
     "common.next_unknown": {
         "it": "Prossima azione nello Studio: {code}.",

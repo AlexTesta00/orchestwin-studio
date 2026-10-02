@@ -12,6 +12,14 @@ import {
 } from "vue";
 
 import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
+import ArchetypeEditor from "./ArchetypeEditor.vue";
+import TwinPersonaView from "./TwinPersonaView.vue";
+import {
+  archetypeOf,
+  claimText,
+  observationDisplayStatus,
+  twinRepresentation,
+} from "./twinRepresentation";
 import UserModelingProvenanceInspector from "./UserModelingProvenanceInspector.vue";
 import TwinIdentity from "./TwinIdentity.vue";
 import TwinImportPanel from "./TwinImportPanel.vue";
@@ -34,6 +42,8 @@ import { useTeamStore } from "../stores/team";
 import { useUserModelingStore } from "../stores/userModeling";
 
 import type {
+  ArchetypeInput,
+  ArchetypePayload,
   GateDecisionAction,
   HumanGateEventPayload,
   ObservationValueKind,
@@ -61,12 +71,14 @@ const props = withDefaults(
     autoLoad?: boolean;
     upstream?: UpstreamValue;
     active?: boolean;
+    sectionsMode?: boolean;
   }>(),
   {
     locale: "en",
     autoLoad: true,
     upstream: null,
     active: true,
+    sectionsMode: false,
   },
 );
 
@@ -85,7 +97,10 @@ const autoProposalAttempted = ref(false);
 
 const proposalFollowsApproval = ref(false);
 
-const emit = defineEmits<{ "open-chat": [twin: UserTwinVersionPayload] }>();
+const emit = defineEmits<{
+  "open-chat": [twin: UserTwinVersionPayload];
+  "sections-changed": [];
+}>();
 
 const personaReasons = reactive<Record<string, string>>({});
 
@@ -103,7 +118,13 @@ const editingOriginalKind = ref<ObservationValueKind>("TEXT");
 
 const editingValue = ref("");
 
-const revisionEpistemicStatus = ref<"USER_PROVIDED" | "HUMAN_VALIDATED">("USER_PROVIDED");
+const revisionEpistemicStatus = ref<"USER_PROVIDED" | "HUMAN_VALIDATED" | "CONTESTED">(
+  "USER_PROVIDED",
+);
+const revisionRationale = ref("");
+const archetypeEditorOpen = ref(false);
+const editingArchetype = ref<ArchetypePayload | null>(null);
+const removingArchetype = ref<ArchetypePayload | null>(null);
 
 const rejectingPersonaId = ref<string | null>(null);
 
@@ -130,7 +151,7 @@ const {
   projectId: () => props.projectId,
   operations: ["PERSONA_PROPOSAL", "USER_TWIN_GENERATION"],
   authorize: authorizedJobs,
-  onSettled: loadProject,
+  onSettled: reloadAndTell,
 });
 
 watch(modelingJob, (running) => {
@@ -159,6 +180,10 @@ const userTwinFields = new Set<UserTwinField>([
   "technical_literacy",
   "risk_sensitivity",
   "assumptions",
+  "description",
+  "represents",
+  "does_not_represent",
+  "evidence_gaps",
 ]);
 
 const multiValueFields = new Set<UserTwinField>([
@@ -174,6 +199,9 @@ const multiValueFields = new Set<UserTwinField>([
   "accessibility_needs",
   "operational_constraints",
   "assumptions",
+  "represents",
+  "does_not_represent",
+  "evidence_gaps",
 ]);
 
 const APPROVED_LIFECYCLES = new Set([
@@ -211,6 +239,10 @@ const fieldLabels: Record<Locale, Record<UserTwinField, string>> = {
     technical_literacy: "Technical literacy",
     risk_sensitivity: "Risk sensitivity",
     assumptions: "Assumptions",
+    description: "Description",
+    represents: "Represents",
+    does_not_represent: "Does not represent",
+    evidence_gaps: "Evidence gaps",
   },
 
   it: {
@@ -231,26 +263,29 @@ const fieldLabels: Record<Locale, Record<UserTwinField, string>> = {
     technical_literacy: "Competenza tecnica",
     risk_sensitivity: "Sensibilità al rischio",
     assumptions: "Assunzioni",
+    description: "Descrizione",
+    represents: "Rappresenta",
+    does_not_represent: "Non rappresenta",
+    evidence_gaps: "Limiti delle evidenze",
   },
 };
 
 const messages = {
   en: {
-    region: "User Twins",
+    region: "User Twin",
 
     loading: "Updating user profiles…",
     generating: "Preparing the profiles. This may take a few minutes; keep this page open.",
 
     error: "User Modeling operation failed.",
 
-    personasHeading: "Proposed user profiles",
+    personasHeading: "Archetypes",
 
     twinsHeading: "The twins of your project",
 
-    profilesCount: "{confirmed} of {total} profiles confirmed",
+    profilesCount: "{confirmed} of {total} archetypes confirmed",
 
-    profilesSentence:
-      "They are proposals of the AI: confirm the profiles that truly describe who will use the product.",
+    profilesSentence: "Confirm the archetypes that describe who will use the product.",
 
     twinsCountOne: "1 twin to approve",
 
@@ -263,11 +298,11 @@ const messages = {
     twinsSentence:
       "The twins' answers are simulated: hypotheses to weigh, not opinions of real people.",
 
-    proposePersonas: "Suggest user profiles",
+    proposePersonas: "Suggest archetypes",
 
-    noPersonasTitle: "No user profile yet",
+    noPersonasTitle: "No archetype yet",
 
-    noPersonas: "No personas have been proposed yet.",
+    noPersonas: "Add an archetype or ask for suggestions from the brief.",
 
     noTwins: "No twin in this version.",
 
@@ -303,11 +338,11 @@ const messages = {
 
     reject: "Set aside",
 
-    rejectConfirm: "Set the profile aside",
+    rejectConfirm: "Set the archetype aside",
 
     rejectionReason: "Why do you set it aside?",
 
-    reasonPlaceholder: "Explain why this profile does not describe who will use the product…",
+    reasonPlaceholder: "Explain why this archetype does not describe who will use the product…",
 
     rejectedBecause: "Set aside: {reason}",
 
@@ -319,24 +354,27 @@ const messages = {
 
     pendingDiffsOther: "{n} changes to approve in the profile",
 
-    startingProfiles: "Starting profiles",
+    startingProfiles: "Archetypes",
 
     profileTitle: "Profile of {name}",
 
     staleContext:
-      "The brief or team changed: generate and approve a new User Twin version before continuing.",
+      "The brief or the perspectives changed: generate and approve a new User Twin version before continuing.",
+
+    staleContextSections:
+      "The brief or the perspectives changed: use «Update and confirm» above to keep these twins and re-anchor them, or create them again.",
 
     generateTwins: "Create the twins",
 
     regenerateTwins: "Create the twins again",
 
     decideProfiles:
-      "Confirm or set aside every proposed profile: the twins are born from the confirmed profiles.",
+      "Confirm or set aside every proposed archetype: the twins are born from the confirmed archetypes.",
 
-    confirmOne: "Confirm at least one profile to create the twins.",
+    confirmOne: "Confirm at least one archetype to create the twins.",
 
     readyToGenerate:
-      "Confirmed profiles: {n}. Create their twins: you will be able to talk to them and correct them.",
+      "Confirmed archetypes: {n}. Create their twins: you will be able to talk to them and correct them.",
 
     submitFailed:
       "The twins could not be brought to your approval. Refresh the page and try again.",
@@ -410,7 +448,7 @@ const messages = {
 
     currentSnapshotApproved: "You have approved these user profiles.",
 
-    ready: "Ready for requirements definition.",
+    ready: "Ready for the Definition.",
 
     notReady: "Review and approve your user profiles to continue.",
 
@@ -429,9 +467,9 @@ const messages = {
 
     technicalSummary: "Version {number} · {state}",
 
-    technicalProfiles: "Proposed profiles · twins not created yet",
+    technicalProfiles: "Proposed archetypes · twins not created yet",
 
-    technicalEmpty: "No profile yet",
+    technicalEmpty: "No archetype yet",
 
     stateApproved: "approved",
 
@@ -445,11 +483,11 @@ const messages = {
 
     workflow: "Workflow state",
 
-    decisionCounter: "Decision {n} of {max}",
+    decisionCounter: "Decision no. {n}",
 
     technicalTwins: "Twins",
 
-    technicalPersonas: "Starting profiles",
+    technicalPersonas: "Archetypes",
 
     persistedLifecycle: "Persisted lifecycle",
 
@@ -481,14 +519,13 @@ const messages = {
 
     error: "Operazione User Modeling non riuscita.",
 
-    personasHeading: "Profili degli utenti proposti",
+    personasHeading: "Archetipi",
 
     twinsHeading: "I twin del progetto",
 
-    profilesCount: "{confirmed} di {total} profili confermati",
+    profilesCount: "{confirmed} di {total} archetipi confermati",
 
-    profilesSentence:
-      "Sono proposte dell'AI: conferma i profili che descrivono davvero chi userà il prodotto.",
+    profilesSentence: "Conferma gli archetipi che descrivono chi userà il prodotto.",
 
     twinsCountOne: "1 twin da approvare",
 
@@ -501,11 +538,11 @@ const messages = {
     twinsSentence:
       "Le risposte dei twin sono simulate: ipotesi da pesare, non opinioni di persone reali.",
 
-    proposePersonas: "Proponi i profili degli utenti",
+    proposePersonas: "Proponi archetipi",
 
-    noPersonasTitle: "Ancora nessun profilo degli utenti",
+    noPersonasTitle: "Ancora nessun archetipo",
 
-    noPersonas: "Non è stata ancora proposta alcuna persona.",
+    noPersonas: "Aggiungi un archetipo o chiedi proposte dal brief.",
 
     noTwins: "Nessun twin in questa versione.",
 
@@ -541,11 +578,11 @@ const messages = {
 
     reject: "Scarta",
 
-    rejectConfirm: "Scarta il profilo",
+    rejectConfirm: "Scarta l'archetipo",
 
     rejectionReason: "Perché lo scarti?",
 
-    reasonPlaceholder: "Spiega perché questo profilo non descrive chi userà il prodotto…",
+    reasonPlaceholder: "Spiega perché questo archetipo non descrive chi userà il prodotto…",
 
     rejectedBecause: "Scartato: {reason}",
 
@@ -557,23 +594,26 @@ const messages = {
 
     pendingDiffsOther: "{n} modifiche al profilo da approvare",
 
-    startingProfiles: "Profili di partenza",
+    startingProfiles: "Archetipi",
 
     profileTitle: "Il profilo di {name}",
 
     staleContext:
-      "Brief o team sono cambiati: genera una nuova versione degli User Twin e approvala prima di proseguire.",
+      "Brief o prospettive sono cambiati: genera una nuova versione degli User Twin e approvala prima di proseguire.",
+
+    staleContextSections:
+      "Brief o prospettive sono cambiati: usa «Aggiorna e conferma» qui sopra per tenere questi twin e riagganciarli, oppure creali di nuovo.",
 
     generateTwins: "Crea i twin",
 
     regenerateTwins: "Crea di nuovo i twin",
 
     decideProfiles:
-      "Conferma o scarta ogni profilo proposto: i twin nascono dai profili confermati.",
+      "Conferma o scarta ogni archetipo proposto: i twin nascono dagli archetipi confermati.",
 
-    confirmOne: "Conferma almeno un profilo per creare i twin.",
+    confirmOne: "Conferma almeno un archetipo per creare i twin.",
 
-    readyToGenerate: "Profili confermati: {n}. Crea i loro twin: potrai parlarci e correggerli.",
+    readyToGenerate: "Archetipi confermati: {n}. Crea i loro twin: potrai parlarci e correggerli.",
 
     submitFailed:
       "Non è stato possibile portare i twin alla tua approvazione. Ricarica la pagina e riprova.",
@@ -647,7 +687,7 @@ const messages = {
 
     currentSnapshotApproved: "Hai approvato questi profili degli utenti.",
 
-    ready: "Pronto per la definizione dei requisiti.",
+    ready: "Pronto per la Definizione.",
 
     notReady: "Controlla e approva i profili degli utenti per proseguire.",
 
@@ -667,9 +707,9 @@ const messages = {
 
     technicalSummary: "Versione {number} · {state}",
 
-    technicalProfiles: "Profili proposti · twin non ancora creati",
+    technicalProfiles: "Archetipi proposti · twin non ancora creati",
 
-    technicalEmpty: "Ancora nessun profilo",
+    technicalEmpty: "Ancora nessun archetipo",
 
     stateApproved: "approvata",
 
@@ -683,11 +723,11 @@ const messages = {
 
     workflow: "Stato del flusso",
 
-    decisionCounter: "Decisione {n} di {max}",
+    decisionCounter: "Decisione n. {n}",
 
     technicalTwins: "Twin",
 
-    technicalPersonas: "Profili di partenza",
+    technicalPersonas: "Archetipi",
 
     persistedLifecycle: "Lifecycle persistito",
 
@@ -712,6 +752,37 @@ const messages = {
 } as const;
 
 const copy = computed(() => messages[props.locale]);
+const archetypeCopy = computed(() =>
+  props.locale === "it"
+    ? {
+        heading: "Archetipi",
+        add: "Aggiungi archetipo",
+        edit: "Modifica",
+        remove: "Rimuovi",
+        confirm: "Rimuovi archetipo",
+        cancel: "Annulla",
+        archive:
+          "L'archetipo sarà archiviato e lo storico resterà disponibile. I twin dovranno essere aggiornati; requisiti e design che citano il twin rimosso possono richiedere una nuova preparazione.",
+        stale:
+          "Gli archetipi sono cambiati. Genera i twin aggiornati e approvali: i riferimenti precedenti restano nello storico.",
+        contested: "Contestato",
+        rationale: "Perché contesti questa informazione?",
+      }
+    : {
+        heading: "Archetypes",
+        add: "Add archetype",
+        edit: "Edit",
+        remove: "Remove",
+        confirm: "Remove archetype",
+        cancel: "Cancel",
+        archive:
+          "The archetype will be archived and its history preserved. The twins will need updating; requirements and design that cite the removed twin may need preparing again.",
+        stale:
+          "The archetypes changed. Generate the updated twins and approve them: earlier references remain in the history.",
+        contested: "Contested",
+        rationale: "Why do you contest this information?",
+      },
+);
 
 function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/gu, (_match, key: string) => String(values[key] ?? ""));
@@ -721,13 +792,37 @@ const errorMessage = computed(() => {
   const code = localError.value ?? store.error?.code ?? store.error?.message;
   if (!code || isGenerationInterrupted(code)) return null;
   const errors: Record<string, [string, string]> = {
+    ARCHETYPE_VERSION_CONFLICT: [
+      "This archetype changed. Reload the latest version before saving.",
+      "L'archetipo è cambiato. Ricarica la versione corrente prima di salvare.",
+    ],
+    ARCHETYPE_LIMIT_REACHED: [
+      "You can keep up to eight active archetypes.",
+      "Puoi mantenere fino a otto archetipi attivi.",
+    ],
+    ARCHETYPE_ALREADY_ARCHIVED: [
+      "This archetype has already been removed.",
+      "Questo archetipo è già stato rimosso.",
+    ],
+    ARCHETYPE_NOT_FOUND: [
+      "This archetype is no longer available. Reload the list.",
+      "Questo archetipo non è più disponibile. Ricarica l'elenco.",
+    ],
+    USER_TWIN_REVISION_PENDING: [
+      "Decide the pending twin changes before changing the archetypes or generating new twins.",
+      "Decidi le modifiche in attesa dei twin prima di cambiare gli archetipi o generare nuovi twin.",
+    ],
+    PERSISTENCE_REJECTED: [
+      "The change could not be saved. Reload the current version.",
+      "La modifica non è stata salvata. Ricarica la versione corrente.",
+    ],
     INVALID_PROVIDER_OUTPUT: [
       "The model returned an incomplete or invalid proposal. No artifact was accepted. You can try again.",
       "Il modello ha restituito una proposta incompleta o non valida. Nessun artefatto è stato accettato. Puoi riprovare.",
     ],
     INCOMPLETE_OUTPUT: [
-      "The assistant did not complete its response. Your project has been preserved. You can try again.",
-      "L’assistente non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
+      "The model did not complete its response. Your project has been preserved. You can try again.",
+      "Il modello non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
     ],
     PROVIDER_UNAVAILABLE: [
       "The local model is unavailable. Check model status above.",
@@ -746,6 +841,16 @@ const errorMessage = computed(() => {
 });
 
 const personas = computed(() => store.currentPersonas);
+const archetypes = computed(
+  () =>
+    store.archetypes ??
+    personas.value
+      .filter(
+        (persona) =>
+          persona.profile.confirmation_status !== "REJECTED" && !persona.profile.archived,
+      )
+      .map(archetypeOf),
+);
 
 const twins = computed(() => store.currentTwins);
 
@@ -763,7 +868,9 @@ const confirmedPersonas = computed(() =>
 
 const canGenerateTwins = computed(
   () =>
-    (store.currentSnapshot === null || store.readiness?.context_current === false) &&
+    (store.currentSnapshot === null ||
+      store.readiness?.context_current === false ||
+      store.readiness?.archetypes_current === false) &&
     personas.value.length > 0 &&
     pendingPersonas.value.length === 0 &&
     confirmedPersonas.value.length > 0,
@@ -816,11 +923,22 @@ const gatePaused = computed(
 const decisionCounter = computed(() =>
   fill(messages[props.locale].decisionCounter, {
     n: store.currentGate?.iteration ?? 1,
-    max: store.currentGate?.max_iterations ?? 1,
   }),
 );
 
-const contextStale = computed(() => store.readiness?.context_current === false);
+const contextStale = computed(
+  () =>
+    store.currentSnapshot !== null &&
+    (store.readiness?.context_current === false || store.readiness?.archetypes_current === false),
+);
+
+const staleContextText = computed(() =>
+  store.readiness?.archetypes_current === false
+    ? archetypeCopy.value.stale
+    : props.sectionsMode
+      ? copy.value.staleContextSections
+      : copy.value.staleContext,
+);
 
 const phase = computed<Phase>(() => {
   if (store.currentSnapshot !== null) return "twins";
@@ -870,7 +988,7 @@ const decisionCopy = computed(() => {
             : fill(text.readyToGenerate, { n: confirmedPersonas.value.length });
       return {
         primary: contextStale.value ? text.regenerateTwins : text.generateTwins,
-        description: contextStale.value ? `${text.staleContext} ${description}` : description,
+        description: contextStale.value ? `${staleContextText.value} ${description}` : description,
         disabled: !canGenerateTwins.value,
       };
     }
@@ -982,9 +1100,28 @@ const profileTitle = computed(() => {
   return fill(copy.value.profileTitle, { name });
 });
 
-const profileObservations = computed(
-  () => profileTwin.value?.profile.observations ?? profilePersona.value?.profile.observations ?? [],
-);
+const profileObservations = computed(() => {
+  const observations =
+    profileTwin.value?.profile.observations ?? profilePersona.value?.profile.observations ?? [];
+  if (profileTwin.value === null) return observations;
+  return [
+    ...observations,
+    ...(["description", "represents", "does_not_represent", "evidence_gaps"] as const)
+      .filter(
+        (field) =>
+          !observations.some((observation) => observation.observation_key === `user_twin.${field}`),
+      )
+      .map((field): ProfileObservationPayload => ({
+        observation_key: `user_twin.${field}`,
+        value: { kind: "UNKNOWN", text: null, items: [], reason: null },
+        epistemic_status: "UNSUPPORTED_ASSUMPTION",
+        confidence: 0,
+        provenance: [],
+        human_validation: "REQUIRED",
+        rationale: null,
+      })),
+  ];
+});
 
 const profileDiffsForTwin = computed(() => {
   const twin = profileTwin.value;
@@ -1095,10 +1232,17 @@ function summaryOf(
 }
 
 function twinSummary(twin: UserTwinVersionPayload): string | null {
-  return summaryOf(
-    twin.profile.observations,
-    twin.profile.persona_reference.persona_id,
-    twin.profile.name,
+  const claim = twinRepresentation(twin, citedPersona(twin)).persona.description;
+  return claim.value.kind === "UNKNOWN" || claim.value.kind === "ABSTAINED"
+    ? null
+    : claimText(claim, props.locale);
+}
+function citedPersona(twin: UserTwinVersionPayload): PersonaVersionPayload | undefined {
+  return store.currentSnapshot?.snapshot.persona_versions.find(
+    (persona) =>
+      persona.persona_id === twin.profile.persona_reference.persona_id &&
+      persona.version_number === twin.profile.persona_reference.version_number &&
+      persona.content_hash === twin.profile.persona_reference.content_hash,
   );
 }
 
@@ -1162,13 +1306,13 @@ function twinConfirmed(twin: UserTwinVersionPayload): boolean {
 
 function observationSummary(observation: ProfileObservationPayload): string {
   const labels = {
-    MODEL_INFERRED: ["Ipotesi del modello", "Model suggestion"],
-    UNSUPPORTED_ASSUMPTION: ["Ipotesi da verificare", "Unverified assumption"],
-    USER_PROVIDED: ["Informazione fornita dall'utente", "Provided by a user"],
-    HUMAN_VALIDATED: ["Verificato da una persona", "Reviewed by a person"],
-    EMPIRICALLY_SUPPORTED: ["Supportato da osservazioni reali", "Supported by real observations"],
+    INFERRED: ["Dedotto", "Inferred"],
+    HYPOTHESIZED: ["Ipotizzato", "Hypothesized"],
+    CONTESTED: ["Contestato", "Contested"],
+    EVIDENCED: ["Evidenziato", "Evidenced"],
+    UNKNOWN: ["Sconosciuto", "Unknown"],
   };
-  const label = labels[observation.epistemic_status][props.locale === "it" ? 0 : 1];
+  const label = labels[observationDisplayStatus(observation)][props.locale === "it" ? 0 : 1];
   return observation.human_validation === "REQUIRED"
     ? `${label} · ${props.locale === "it" ? "da verificare" : "needs review"}`
     : (label ?? copy.value.unknown);
@@ -1252,10 +1396,29 @@ function authorizedJobs<T>(operation: (token: string) => Promise<T>): Promise<T>
   return props.authorize ? props.authorize(operation) : operation(props.accessToken);
 }
 
+function changed(): void {
+  emit("sections-changed");
+}
+
+async function reloadAndTell(): Promise<void> {
+  await loadProject();
+  changed();
+}
+
+async function reloadArchetypes(): Promise<void> {
+  await loadProject();
+  if (store.error !== null || localError.value !== null) return;
+  archetypeEditorOpen.value = false;
+  editingArchetype.value = null;
+  removingArchetype.value = null;
+}
+
 async function proposePersonas(): Promise<void> {
   if (modelingJob.value !== null) return;
   dismissModelingJob();
-  await runAction((token) => store.proposePersonas(props.projectId, token));
+  if (await runAction((token) => store.proposePersonas(props.projectId, token))) {
+    changed();
+  }
 }
 
 const teamApproved = computed(
@@ -1333,12 +1496,41 @@ async function decidePersona(
   if (applied && rejectingPersonaId.value === persona.persona_id) {
     rejectingPersonaId.value = null;
   }
+
+  if (applied) {
+    changed();
+  }
 }
 
 async function generateTwins(): Promise<void> {
   if (modelingJob.value !== null) return;
   dismissModelingJob();
-  await runAction((token) => store.generateSnapshot(props.projectId, token));
+  if (await runAction((token) => store.generateSnapshot(props.projectId, token))) {
+    changed();
+  }
+}
+function editArchetype(archetype: ArchetypePayload | null): void {
+  editingArchetype.value = archetype;
+  archetypeEditorOpen.value = true;
+  removingArchetype.value = null;
+}
+async function saveArchetype(data: ArchetypeInput): Promise<void> {
+  if (
+    await runAction((token) =>
+      store.saveArchetype(props.projectId, data, token, editingArchetype.value),
+    )
+  ) {
+    archetypeEditorOpen.value = false;
+    changed();
+  }
+}
+async function archiveArchetype(): Promise<void> {
+  const archetype = removingArchetype.value;
+  if (archetype === null) return;
+  if (await runAction((token) => store.archiveArchetype(props.projectId, archetype, token))) {
+    removingArchetype.value = null;
+    changed();
+  }
 }
 
 function openProfile(kind: ProfileTarget["kind"], id: string): void {
@@ -1366,6 +1558,7 @@ function startRevision(twin: UserTwinVersionPayload, observation: ProfileObserva
   editingOriginalKind.value = observation.value.kind;
 
   revisionEpistemicStatus.value = "USER_PROVIDED";
+  revisionRationale.value = "";
 
   if (observation.value.kind === "ITEMS") {
     editingValue.value = observation.value.items.join("\n");
@@ -1383,6 +1576,7 @@ function startRevision(twin: UserTwinVersionPayload, observation: ProfileObserva
 }
 
 function cancelRevision(): void {
+  revisionRationale.value = "";
   editingTwinId.value = null;
   editingField.value = null;
   editingOriginalKind.value = "TEXT";
@@ -1457,6 +1651,11 @@ async function submitRevision(): Promise<void> {
   }
 
   const humanValidated = revisionEpistemicStatus.value === "HUMAN_VALIDATED";
+  const contested = revisionEpistemicStatus.value === "CONTESTED";
+  if (contested && revisionRationale.value.trim().length === 0) {
+    localError.value = archetypeCopy.value.rationale;
+    return;
+  }
 
   const replacement: ProfileReplacementRequest = {
     field,
@@ -1488,9 +1687,9 @@ async function submitRevision(): Promise<void> {
       },
     ],
 
-    human_validation: "NOT_REQUIRED",
+    human_validation: contested ? "REQUIRED" : "NOT_REQUIRED",
 
-    rationale: null,
+    rationale: contested ? revisionRationale.value.trim() : null,
   };
 
   const applied = await runAction((token) =>
@@ -1499,6 +1698,7 @@ async function submitRevision(): Promise<void> {
 
   if (applied) {
     cancelRevision();
+    changed();
   }
 }
 
@@ -1514,7 +1714,7 @@ async function decideDiff(
     return;
   }
 
-  await runAction((token) =>
+  const decided = await runAction((token) =>
     store.decideRevision(
       props.projectId,
       diff.id,
@@ -1523,6 +1723,10 @@ async function decideDiff(
       reason.length > 0 ? reason : null,
     ),
   );
+
+  if (decided) {
+    changed();
+  }
 }
 
 async function submitGate(): Promise<boolean> {
@@ -1549,6 +1753,10 @@ async function decideGate(action: GateDecisionAction, note?: string): Promise<bo
 
   if (applied && note === undefined) {
     gateReason.value = "";
+  }
+
+  if (applied) {
+    changed();
   }
 
   return applied;
@@ -1640,6 +1848,9 @@ watch(
     autoProposalAttempted.value = false;
 
     proposalFollowsApproval.value = false;
+    archetypeEditorOpen.value = false;
+    editingArchetype.value = null;
+    removingArchetype.value = null;
 
     if (!autoLoad || projectId.trim().length === 0 || accessToken.trim().length === 0) {
       return;
@@ -1699,6 +1910,102 @@ watchUpstream(
     <p v-else class="sr-only" role="status">{{ store.isBusy ? copy.loading : "" }}</p>
 
     <UiStateBlock v-if="errorMessage !== null" kind="error" :text="errorMessage" />
+    <UiButton
+      v-if="
+        store.error?.code === 'ARCHETYPE_VERSION_CONFLICT' ||
+        store.error?.code === 'ARCHETYPE_NOT_FOUND'
+      "
+      variant="quiet"
+      :disabled="store.isBusy"
+      data-testid="archetype-reload"
+      @click="reloadArchetypes"
+      >{{ locale === "it" ? "Ricarica archetipi" : "Reload archetypes" }}</UiButton
+    >
+
+    <section
+      class="grid gap-3"
+      :aria-label="locale === 'it' ? 'Gestisci archetipi' : 'Manage archetypes'"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="m-0 text-base font-semibold">{{ archetypeCopy.heading }}</h2>
+        <UiButton
+          variant="secondary"
+          :disabled="store.isBusy || modelingJob !== null || archetypes.length >= 8"
+          data-testid="archetype-add"
+          @click="editArchetype(null)"
+          >{{ archetypeCopy.add }}</UiButton
+        >
+      </div>
+      <ArchetypeEditor
+        v-if="archetypeEditorOpen"
+        :archetype="editingArchetype"
+        :busy="store.isBusy"
+        :locale="locale"
+        @save="saveArchetype"
+        @cancel="archetypeEditorOpen = false"
+      />
+      <details
+        v-if="archetypes.length > 0"
+        class="rounded-panel border border-night-line bg-night-raised"
+        :open="phase !== 'twins'"
+        data-testid="archetype-list"
+      >
+        <summary class="flex min-h-11 cursor-pointer items-center px-4 text-sm font-semibold">
+          {{ archetypeCopy.heading }} ({{ archetypes.length }})
+        </summary>
+        <ul class="m-0 grid list-none gap-3 border-t border-night-line p-4">
+          <li v-for="archetype in archetypes" :key="archetype.persona_id" class="grid gap-1.5">
+            <strong class="text-sm"
+              >{{ archetype.name }}
+              <span class="font-normal text-on-night-3"
+                >· v{{ archetype.version_number }}</span
+              ></strong
+            >
+            <p class="m-0 line-clamp-2 text-sm text-on-night-2">
+              {{ archetype.description ?? copy.unknown }}
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <UiButton
+                variant="quiet"
+                :disabled="store.isBusy"
+                :data-testid="`archetype-edit-${archetype.persona_id}`"
+                :aria-label="`${archetypeCopy.edit}: ${archetype.name}`"
+                @click="editArchetype(archetype)"
+                >{{ archetypeCopy.edit }}</UiButton
+              >
+              <UiButton
+                variant="quiet"
+                :disabled="store.isBusy"
+                :data-testid="`archetype-delete-${archetype.persona_id}`"
+                :aria-label="`${archetypeCopy.remove}: ${archetype.name}`"
+                @click="removingArchetype = archetype"
+                >{{ archetypeCopy.remove }}</UiButton
+              >
+            </div>
+          </li>
+        </ul>
+      </details>
+      <section
+        v-if="removingArchetype !== null"
+        class="grid gap-3 rounded-panel border border-warn-on-night/40 p-4"
+        :aria-label="`${archetypeCopy.remove}: ${removingArchetype.name}`"
+      >
+        <strong>{{ archetypeCopy.remove }}: {{ removingArchetype.name }}</strong>
+        <p class="m-0 text-sm leading-normal text-on-night-2">{{ archetypeCopy.archive }}</p>
+        <div class="flex flex-wrap gap-2">
+          <UiButton
+            variant="danger"
+            :disabled="store.isBusy"
+            data-testid="archetype-delete-confirm"
+            @click="archiveArchetype"
+            >{{ archetypeCopy.confirm }}</UiButton
+          >
+          <UiButton variant="quiet" :disabled="store.isBusy" @click="removingArchetype = null">{{
+            archetypeCopy.cancel
+          }}</UiButton>
+        </div>
+      </section>
+    </section>
 
     <UiStateBlock
       v-if="phase === 'empty' && !longOperation"
@@ -1743,7 +2050,7 @@ watchUpstream(
         :project-id="projectId"
         :locale="locale"
         :authorize="authorize"
-        @imported="loadProject"
+        @imported="reloadAndTell"
       />
     </div>
 
@@ -1753,7 +2060,7 @@ watchUpstream(
       role="status"
       data-testid="user-modeling-stale-context"
     >
-      {{ copy.staleContext }}
+      {{ staleContextText }}
     </div>
 
     <div
@@ -1987,6 +2294,12 @@ watchUpstream(
             <p v-if="twinSummary(twin)" class="m-0 text-[15px] leading-[1.55]">
               {{ twinSummary(twin) }}
             </p>
+            <TwinPersonaView
+              :twin="twin"
+              :persona="citedPersona(twin)"
+              :locale="locale"
+              :show-description="false"
+            />
             <dl
               v-if="cardFacts(twin.profile.observations).length > 0"
               class="m-0 flex flex-col gap-2.5 text-sm leading-normal"
@@ -2301,6 +2614,7 @@ watchUpstream(
                 <p class="m-0 text-sm leading-normal">{{ formatObservation(operation.after) }}</p>
                 <UserModelingEpistemicBadge
                   :status="operation.after.epistemic_status"
+                  :observation="operation.after"
                   :confidence="operation.after.confidence"
                   :human-validation="operation.after.human_validation"
                   :locale="locale"
@@ -2430,7 +2744,28 @@ watchUpstream(
                   />
                   {{ copy.humanValidated }}
                 </label>
+                <label class="flex min-h-11 items-center gap-3 text-sm text-on-night-2">
+                  <input
+                    v-model="revisionEpistemicStatus"
+                    type="radio"
+                    value="CONTESTED"
+                    class="size-4 accent-petrol-on-night"
+                  />
+                  {{ archetypeCopy.contested }}
+                </label>
               </fieldset>
+              <label
+                v-if="revisionEpistemicStatus === 'CONTESTED'"
+                class="grid gap-1.5 text-sm text-on-night-2"
+              >
+                {{ archetypeCopy.rationale }}
+                <textarea
+                  v-model="revisionRationale"
+                  required
+                  class="rounded-field border border-night-line bg-night-panel px-3 py-2 text-on-night"
+                  data-testid="revision-rationale"
+                />
+              </label>
               <p
                 class="m-0 rounded-field border border-warn-on-night/40 bg-warn-on-night/8 p-3 text-xs leading-5 text-warn-on-night"
               >
@@ -2455,6 +2790,7 @@ watchUpstream(
               <div class="grid gap-3 pt-1 pb-1">
                 <UserModelingEpistemicBadge
                   :status="observation.epistemic_status"
+                  :observation="observation"
                   :confidence="observation.confidence"
                   :human-validation="observation.human_validation"
                   :locale="locale"

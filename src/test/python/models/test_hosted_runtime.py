@@ -12,7 +12,7 @@ import pytest
 from orchestwin.models import real_runtime
 from orchestwin.models.generation_budget import GenerationBudget
 from orchestwin.models.generation_routing import RoutingProposalGenerator
-from orchestwin.models.proposal_generation import ProposalGenerator
+from orchestwin.models.proposal_generation import ProposalGenerationError, ProposalGenerator
 from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.models.real_runtime import RealModelRuntimeError, build_real_model_runtime
 from orchestwin.models.serialized_generation import SerializedGenerationPort
@@ -20,14 +20,21 @@ from orchestwin.models.structured_generation import StructuredGenerationProvider
 from src.test.python.models.test_hosted_generation import Review
 from src.test.python.models.test_hosted_support import (
     ANTHROPIC_KEY_ENV,
+    CLAUDE_CODE_PRICES,
     GATEWAY_KEY,
     GATEWAY_KEY_ENV,
     TEST_KEY,
     FakeAnthropicClient,
+    FakeClaudeRunner,
     SpendingEvidence,
+    claude_answer,
+    claude_code_document,
+    finished,
     message,
+    model_entry,
     model_info,
     providers_document,
+    readiness_runner,
     status_error,
 )
 from src.test.python.models.test_local_evaluator_runtime import (
@@ -88,13 +95,23 @@ def write_manifest(tmp_path, document=None, **manifest):
     return path, providers_file
 
 
-def build(path, factory=None, fetch=gateway_fetch):
+def build(path, factory=None, fetch=gateway_fetch, claude_code_run=None):
     return build_real_model_runtime(
         path,
         env_file=".env",
         anthropic_client_factory=factory or ClientFactory(),
         openai_model_fetch=fetch,
+        claude_code_run=claude_code_run,
     )
+
+
+@pytest.fixture
+def keyless(tmp_path, monkeypatch):
+    for name in tuple(os.environ):
+        if name.upper().startswith("ORCHESTWIN_"):
+            monkeypatch.delenv(name)
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
 
 
 def test_a_version_two_manifest_routes_every_adapter_through_one_router(environment):
@@ -406,5 +423,127 @@ def test_a_version_one_runtime_keeps_its_shape(tmp_path, monkeypatch):
     runtime = build_real_model_runtime(manifest)
     assert runtime.schema_version == 1
     assert runtime.budget is None and runtime.providers is None and runtime.routes_report() is None
+    assert runtime.billing is None
     assert isinstance(runtime.team.generator, ProposalGenerator)
     assert isinstance(runtime.team.generator.port, SerializedGenerationPort)
+
+
+def review_generation(router, **options):
+    return router.generate(
+        task="team",
+        context={"project_id": "p"},
+        output_type=Review,
+        instruction="Review.",
+        **options,
+    )
+
+
+def test_a_manifest_with_only_claude_code_builds_without_any_api_key(keyless):
+    program = str(keyless / "claude-synthetic")
+    path, _ = write_manifest(keyless, claude_code_document(executable=program))
+    factory = ClientFactory()
+    runner = FakeClaudeRunner(finished(claude_answer({"assessment": "Clear."})))
+    runtime = build(path, factory, claude_code_run=runner)
+    assert factory.keys == [] and runtime._clients == ()
+    assert runtime.billing == "SUBSCRIPTION"
+    router = runtime.team.generator
+    design = router.route("design")
+    assert design.configuration.provider_kind is StructuredGenerationProviderKind.CLAUDE_CODE_CLI
+    assert design.budget is runtime.budget and not isinstance(design.port, SerializedGenerationPort)
+    assert runtime.routes_report()["tasks"]["design"] == {
+        "model_entry": "design",
+        "provider_kind": "CLAUDE_CODE_CLI",
+        "model": "claude-opus-5-5",
+    }
+    assert asyncio.run(review_generation(router)) == Review(assessment="Clear.")
+    [call] = runner.calls
+    assert call.arguments[:2] == [program, "--print"]
+    assert call.arguments[call.arguments.index("--effort") + 1] == "medium"
+
+
+def test_the_claude_code_readiness_reports_the_contract_keys_without_inference(
+    keyless, monkeypatch
+):
+    monkeypatch.setattr(real_runtime, "_check_schema", _schema)
+    program = str(keyless / "claude-synthetic")
+    path, _ = write_manifest(keyless, claude_code_document(executable=program))
+    runner = readiness_runner()
+    report = asyncio.run(build(path, claude_code_run=runner).check_readiness(None))
+    assert report["ready"] is True
+    assert set(report["components"]) == {"provider:claude-code", "database"}
+    assert report["components"]["provider:claude-code"] == {
+        "ready": True,
+        "kind": "CLAUDE_CODE_CLI",
+        "executable": program,
+        "version": "2.1.286",
+        "logged_in": True,
+        "subscription": "max",
+        "models": {
+            "design": {"model": "claude-opus-5-5", "ready": True},
+            "general": {"model": "claude-opus-5-5", "ready": True},
+        },
+    }
+    assert [call.arguments[1:] for call in runner.calls] == [["--version"], ["auth", "status"]]
+    assert report["routes"]["tasks"]["requirements"]["provider_kind"] == "CLAUDE_CODE_CLI"
+    assert report["budget"]["total_microusd"] == 60_000_000
+    assert report["generation_performed"] is False
+
+
+def test_a_program_that_cannot_be_found_is_reported_and_fails_the_generation(keyless, monkeypatch):
+    monkeypatch.setattr(real_runtime, "_check_schema", _schema)
+    (keyless / "empty").mkdir()
+    monkeypatch.setenv("PATH", str(keyless / "empty"))
+    path, _ = write_manifest(keyless, claude_code_document())
+    runner = FakeClaudeRunner()
+    runtime = build(path, claude_code_run=runner)
+    report = asyncio.run(runtime.check_readiness(None))
+    component = report["components"]["provider:claude-code"]
+    assert report["ready"] is False and component["ready"] is False
+    assert (component["code"], component["executable"], component["version"]) == (
+        "CLAUDE_CODE_NOT_FOUND",
+        None,
+        None,
+    )
+    with pytest.raises(ProposalGenerationError, match="PROVIDER_UNAVAILABLE"):
+        asyncio.run(review_generation(runtime.team.generator, retry_transient_failures=False))
+    assert runner.calls == []
+
+
+def test_billing_reports_api_mixed_and_subscription_routes(environment):
+    path, _ = write_manifest(environment)
+    assert build(path).billing == "API"
+    document = providers_document()
+    document["providers"].append(
+        {
+            "id": "claude-code",
+            "kind": "CLAUDE_CODE_CLI",
+            "executable": str(environment / "claude-synthetic"),
+        }
+    )
+    document["models"].append(
+        model_entry(
+            "subscription", "claude-code", "claude-opus-5-5", prices=dict(CLAUDE_CODE_PRICES)
+        )
+    )
+    document["routes"]["tasks"]["design"] = "subscription"
+    path, _ = write_manifest(environment, document)
+    mixed = build(path)
+    assert mixed.billing == "MIXED"
+    checks = {check.provider_id: type(check).__name__ for check in mixed._hosted_checks}
+    assert checks == {
+        "anthropic": "HostedProviderCheck",
+        "gateway": "HostedProviderCheck",
+        "claude-code": "ClaudeCodeProviderCheck",
+    }
+    document["routes"] = {"default": "subscription", "tasks": {}, "purposes": {}}
+    path, _ = write_manifest(environment, document)
+    assert build(path).billing == "SUBSCRIPTION"
+
+
+def test_a_priced_subscription_model_stops_the_runtime(keyless):
+    document = claude_code_document(executable=str(keyless / "claude-synthetic"))
+    document["models"][0]["prices"]["output"] = "1.00"
+    path, _ = write_manifest(keyless, document)
+    with pytest.raises(RealModelRuntimeError) as failure:
+        build(path)
+    assert str(failure.value) == "SUBSCRIPTION_MODEL_PRICED"

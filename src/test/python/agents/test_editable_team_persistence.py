@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
+import pytest
 from sqlalchemy.dialects import (
     postgresql,
 )
@@ -22,6 +23,9 @@ from orchestwin.agents.catalog import (
 from orchestwin.agents.persistence.models import (
     TeamProposalVersionRecord,
 )
+from orchestwin.agents.persistence.repositories import (
+    proposal_from_snapshot,
+)
 from orchestwin.agents.persistence.team_gate import (
     SqlAlchemyEditableTeamProposalRepository,
     latest_owned_team_proposal_for_update_statement,
@@ -34,6 +38,7 @@ from orchestwin.agents.selection_rules import (
     determine_team_constraints,
 )
 from orchestwin.agents.team_gate import (
+    OWNER_CHOICE_STATEMENT,
     OwnerEditedProposalPersistenceStatus,
 )
 from orchestwin.models.fake_team_proposals import (
@@ -63,6 +68,7 @@ PROJECT_ID = UUID("00000000-0000-4000-8000-000000000010")
 INITIAL_PROPOSAL_ID = UUID("00000000-0000-4000-8000-000000000020")
 EDITED_PROPOSAL_ID = UUID("00000000-0000-4000-8000-000000000021")
 BRIEF_VERSION_ID = UUID("00000000-0000-4000-8000-000000000030")
+CONTRADICTION = "Una app con database ma senza backend."
 NOW = datetime(
     2026,
     8,
@@ -91,7 +97,12 @@ def ordered_members(
     )
 
 
-async def build_versions():
+async def build_versions(
+    *,
+    description: str = "A Vue web application with a FastAPI backend.",
+    added_agent_id: AgentIdentifier = AgentIdentifier.MOBILE_ENGINEER,
+    statement: str = "Add optional mobile expertise.",
+):
     """Create a generated version and an owner-edited proposal."""
     provided = {
         BriefField.NAME,
@@ -100,7 +111,7 @@ async def build_versions():
     }
     brief = create_project_brief(
         name="Persistence project",
-        description=("A Vue web application with a FastAPI backend."),
+        description=description,
         technical_constraints=[
             "Vue frontend",
             "FastAPI backend",
@@ -141,14 +152,14 @@ async def build_versions():
         created_by_user_id=OWNER_ID,
         created_at=NOW,
     )
-    mobile = ProposedTeamMember(
-        agent_id=(AgentIdentifier.MOBILE_ENGINEER),
+    added = ProposedTeamMember(
+        agent_id=added_agent_id,
         source=(TeamProposalMemberSource.OWNER_ADDED),
         justifications=(
             TeamProposalJustification(
                 kind=(TeamProposalJustificationKind.OWNER_RATIONALE),
                 code=("OWNER_SELECTED_ROLE"),
-                statement=("Add optional mobile expertise."),
+                statement=statement,
             ),
         ),
     )
@@ -156,7 +167,7 @@ async def build_versions():
         initial.proposal,
         members=ordered_members(
             *initial.proposal.members,
-            mobile,
+            added,
         ),
     )
 
@@ -304,3 +315,82 @@ def test_owner_added_snapshot_round_trips() -> None:
 
     assert mobile.source is (TeamProposalMemberSource.OWNER_ADDED)
     assert mobile.justifications[0].kind is (TeamProposalJustificationKind.OWNER_RATIONALE)
+
+
+def contested_versions():
+    return asyncio.run(
+        build_versions(
+            description=CONTRADICTION,
+            added_agent_id=AgentIdentifier.BACKEND_ENGINEER,
+            statement=OWNER_CHOICE_STATEMENT,
+        )
+    )
+
+
+def test_owner_added_contested_member_round_trips_with_the_issue() -> None:
+    initial, edited = contested_versions()
+
+    reconstructed = proposal_from_snapshot(edited.to_snapshot())
+    backend = reconstructed.member_for(AgentIdentifier.BACKEND_ENGINEER)
+
+    assert initial.proposal.constraints.conflicting_agent_ids == (AgentIdentifier.BACKEND_ENGINEER,)
+    assert reconstructed == edited
+    assert reconstructed.content_hash == edited.content_hash
+    assert reconstructed.constraints.issues == initial.proposal.constraints.issues
+    assert backend.source is (TeamProposalMemberSource.OWNER_ADDED)
+    assert backend.justifications[0].statement == "Chosen by the owner."
+
+
+def test_stored_contested_member_must_come_from_the_owner() -> None:
+    _, edited = contested_versions()
+    snapshot = edited.to_snapshot()
+    backend = next(
+        member for member in snapshot["members"] if member["agent_id"] == "BACKEND_ENGINEER"
+    )
+    backend["source"] = "PROPOSER_SUGGESTED"
+    backend["justifications"][0]["kind"] = "PROPOSER_RATIONALE"
+
+    with pytest.raises(ValueError, match="contested agent may join only as the owner's addition"):
+        proposal_from_snapshot(snapshot)
+
+
+def test_stored_impossible_member_is_still_refused() -> None:
+    with pytest.raises(ValueError, match="cannot include an impossible agent"):
+        asyncio.run(build_versions(description="A Vue web application with no mobile application."))
+
+
+def test_repository_creates_owner_edited_version_with_a_contested_member() -> None:
+    initial, edited = contested_versions()
+    project = ProjectRecord(
+        id=PROJECT_ID,
+        owner_user_id=OWNER_ID,
+        display_name="Persistence project",
+        mode=(ProjectMode.GREENFIELD_GENERATION.value),
+        current_brief_version=1,
+        archived_at=None,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    session = Mock(spec=AsyncSession)
+    session.scalar = AsyncMock(side_effect=[project, record_from_version(initial)])
+    session.flush = AsyncMock()
+    repository = SqlAlchemyEditableTeamProposalRepository(
+        session,
+        clock=lambda: NOW,
+        uuid_factory=lambda: EDITED_PROPOSAL_ID,
+    )
+
+    result = asyncio.run(
+        repository.create_owner_edited_owned(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            based_on=initial,
+            proposal=edited,
+        )
+    )
+
+    assert result.status is (OwnerEditedProposalPersistenceStatus.CREATED)
+    assert result.version is not None
+    assert result.version.proposal == edited
+    assert result.version.proposal.constraints.issues == initial.proposal.constraints.issues
+    assert session.add.call_args.args[0].content == edited.to_snapshot()

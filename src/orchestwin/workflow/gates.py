@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -430,6 +431,33 @@ def mark_human_gate_stale(
         status=HumanGateTransitionStatus.APPLIED,
         gate=updated_gate,
         event=event,
+    )
+
+
+def next_human_gate_iteration(
+    latest: HumanGate,
+    events: Iterable[HumanGateEvent] = (),
+) -> tuple[int, int] | None:
+    iteration = latest.iteration + 1
+    approved = latest.status is HumanGateStatus.APPROVED or any(
+        event.gate_id == latest.id
+        and event.kind is HumanGateEventKind.ARTIFACT_SUPERSEDED
+        and event.previous_status is HumanGateStatus.APPROVED
+        for event in events
+    )
+
+    if approved:
+        return (
+            iteration,
+            iteration + DEFAULT_GATE_ITERATION_LIMIT - 1,
+        )
+
+    if iteration > latest.max_iterations:
+        return None
+
+    return (
+        iteration,
+        latest.max_iterations,
     )
 
 

@@ -18,6 +18,8 @@ UNCHANGED: Final = "REQUIREMENTS_UNCHANGED"
 PRIORITIES: Final = ("MUST", "SHOULD", "COULD", "WONT_FOR_NOW")
 KINDS: Final = ("FUNCTIONAL", "NON_FUNCTIONAL", "CONSTRAINT")
 ARTIFACT_KINDS: Final = (
+    "NEED",
+    "JOURNEY",
     "REQUIREMENT",
     "USER_STORY",
     "ACCEPTANCE_CRITERION",
@@ -26,10 +28,12 @@ ARTIFACT_KINDS: Final = (
     "DEFINITION_OF_DONE",
 )
 ARTIFACT_KEYS: Final = {
+    "JOURNEY": "journey",
     "REQUIREMENT": "requirement",
     "USER_STORY": "user_story",
     "ACCEPTANCE_CRITERION": "acceptance_criterion",
     "SCENARIO": "scenario",
+    "NEED": "need",
     "RISK": "risk",
     "DEFINITION_OF_DONE": "definition_of_done",
 }
@@ -49,8 +53,8 @@ def change_path(project_id: str) -> str:
     return f"{requirements_path(project_id)}/change-requests"
 
 
-def change_body(request: str) -> dict[str, object]:
-    return {"request": request}
+def change_body(request: str, *, include_journeys: bool = False) -> dict[str, object]:
+    return {"request": request, **({"include_journeys": True} if include_journeys else {})}
 
 
 def readiness(client: StudioClient, project_id: str) -> Mapping[str, object]:

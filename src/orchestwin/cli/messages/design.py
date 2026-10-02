@@ -88,9 +88,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "design.option_action": {
         "it": "che cosa fare: show (mostra), open (apre le anteprime), choose (sceglie "
         "un'alternativa), change (chiede una modifica), review (revisione dei twin), approve "
-        "(approva); senza azione il comando ti guida passo per passo",
+        "(approva), regenerate (rigenera le alternative); senza azione il comando ti guida "
+        "passo per passo",
         "en": "what to do: show, open (the previews), choose (an alternative), change (ask for "
-        "a change), review (by the twins), approve; without an action the command guides you "
+        "a change), review (by the twins), approve, regenerate (the alternatives); without "
+        "an action the command guides you "
         "step by step",
     },
     "design.option_value": {
@@ -179,7 +181,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Launch `ut design` to have the mockups drawn.",
     },
     "design.next_mockups_ready": {
-        "it": "Guarda le anteprime con `ut design open`, poi scegli con `ut design choose CODICE`.",
+        "it": "Guarda le anteprime con `ut design open`, poi scegli con `ut design choose CODE`.",
         "en": "Look at the previews with `ut design open`, then choose with `ut design choose "
         "CODE`.",
     },
@@ -196,7 +198,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "version to approve.",
     },
     "design.next_choose": {
-        "it": "Scegli un'alternativa con `ut design choose CODICE`.",
+        "it": "Scegli un'alternativa con `ut design choose CODE`.",
         "en": "Choose an alternative with `ut design choose CODE`.",
     },
     "design.next_chosen_approve": {
@@ -352,6 +354,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "stima {amount} USD, circa {minutes}",
         "en": "estimate {amount} USD, about {minutes}",
     },
+    "design.estimate_subscription": {
+        "it": "abbonamento di Claude, nessun credito speso, circa {minutes}",
+        "en": "Claude subscription, no credit spent, about {minutes}",
+    },
     "design.menu": {"it": "Che cosa vuoi fare?", "en": "What do you want to do?"},
     "design.menu_open": {
         "it": "Apri le anteprime nel browser",
@@ -496,6 +502,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The other alternatives remain usable. Drawing {code} again is a new spending "
         "({amount} USD, about {minutes}): `ut design` offers it in its menu.",
     },
+    "design.mockup_again_subscription": {
+        "it": "Le altre alternative restano utilizzabili. Disegnare di nuovo {code} usa "
+        "l'abbonamento di Claude e non spende credito (circa {minutes}): `ut design` te lo "
+        "propone nel menu.",
+        "en": "The other alternatives remain usable. Drawing {code} again runs on the Claude "
+        "subscription and spends no credit (about {minutes}): `ut design` offers it in its menu.",
+    },
     "design.mockup_again_plain": {
         "it": "Le altre alternative restano utilizzabili. `ut design` ti propone nel menu di "
         "disegnare di nuovo {code}.",
@@ -576,15 +589,102 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "design.folder_contents": {
         "it": "Dentro trovi ORCHESTWIN.md, da leggere per primo: descrive il progetto e dice "
-        "dove sono brief, squadra, twin, requisiti e design, ognuno in un documento di testo e "
-        "in uno JSON. Un agente dell'editor, per esempio in Visual Studio Code, parte da lì; "
-        "orchestwin.json elenca i file con la loro impronta, così si vede se qualcosa è stato "
-        "cambiato a mano.",
+        "dove sono brief, prospettive, twin, requisiti e design, ognuno in un documento di "
+        "testo e in uno JSON. Un agente dell'editor, per esempio in Visual Studio Code, parte da "
+        "lì; orchestwin.json elenca i file con la loro impronta, così si vede se qualcosa è "
+        "stato cambiato a mano.",
         "en": "Inside you find ORCHESTWIN.md, to be read first: it describes the project and "
-        "says where the brief, the team, the twins, the requirements and the design are, each "
-        "in a text document and in a JSON one. An agent of the editor, for example in Visual "
-        "Studio Code, starts from there; orchestwin.json lists the files with their "
+        "says where the brief, the perspectives, the twins, the requirements and the design "
+        "are, each in a text document and in a JSON one. An agent of the editor, for example in "
+        "Visual Studio Code, starts from there; orchestwin.json lists the files with their "
         "fingerprint, so that a change made by hand shows.",
+    },
+    "design.after_heading": {
+        "it": "Lo sviluppo continua con questi comandi:",
+        "en": "The development goes on with these commands:",
+    },
+    "design.after_code": {
+        "it": "`ut code` scrive l'applicazione con il tuo agente di programmazione.",
+        "en": "`ut code` writes the application with your coding agent.",
+    },
+    "design.after_test": {
+        "it": "`ut test` verifica i criteri di accettazione nei browser.",
+        "en": "`ut test` checks the acceptance criteria in the browsers.",
+    },
+    "design.after_tasks": {
+        "it": "`ut tasks` mostra le cose che restano da fare.",
+        "en": "`ut tasks` shows the things left to do.",
+    },
+    "design.after_align": {
+        "it": "`ut align` confronta i commit con i requisiti e il design.",
+        "en": "`ut align` compares the commits with the requirements and the design.",
+    },
+    "design.after_twins": {
+        "it": "`ut twins update` mostra che cosa hanno imparato i twin.",
+        "en": "`ut twins update` shows what the twins learned.",
+    },
+    "design.after_watch": {
+        "it": "`ut watch` osserva i commit e li registra nello Studio.",
+        "en": "`ut watch` watches the commits and records them in the Studio.",
+    },
+    "design.behind": {
+        "it": "Il design è rimasto indietro rispetto alle sezioni a monte, quindi per ora lo "
+        "Studio non lo cambia: non ho applicato nulla. Riaggancialo con `ut sections update`, "
+        "con i contenuti invariati, poi riprova.",
+        "en": "The design is behind the sections upstream, so for now the Studio does not change "
+        "it: nothing was applied. Re-anchor it with `ut sections update`, with its content "
+        "unchanged, then try again.",
+    },
+    "design.recovery_requirement_removed": {
+        "it": "Il design cita {codes}, che la Definizione non contiene più. Puoi leggere le "
+        "anteprime storiche; per continuare rigenera le alternative con `ut design regenerate`.",
+        "en": "The design cites {codes}, which the Definition no longer contains. You can read "
+        "the historical previews; to continue, regenerate the alternatives with "
+        "`ut design regenerate`.",
+    },
+    "design.recovery_prepare_again": {
+        "it": "Questo design va preparato di nuovo. Puoi leggere le anteprime storiche; "
+        "per continuare rigenera le alternative con `ut design regenerate`.",
+        "en": "This design needs to be prepared again. You can read the historical previews; "
+        "to continue, regenerate the alternatives with `ut design regenerate`.",
+    },
+    "design.recovery_revision_pending": {
+        "it": "C'è una modifica proposta da decidere nello Studio web. Decidila prima di "
+        "rigenerare o cambiare il design; non ho avviato alcuna generazione.",
+        "en": "A proposed change is waiting for your decision in the web Studio. Decide it "
+        "before regenerating or changing the design; no generation was started.",
+    },
+    "design.recovery_blocked": {
+        "it": "Il design non può essere rigenerato o cambiato adesso. {blocked} "
+        "`ut sections` mostra che cosa completare prima.",
+        "en": "The design cannot be regenerated or changed now. {blocked} "
+        "`ut sections` shows what needs to be completed first.",
+    },
+    "design.menu_regenerate": {
+        "it": "Rigenera le alternative dai passi approvati",
+        "en": "Regenerate the alternatives from the approved steps",
+    },
+    "design.menu_update_sections": {
+        "it": "Aggiorna i collegamenti con `ut sections update`",
+        "en": "Update the links with `ut sections update`",
+    },
+    "design.regenerate_explicit": {
+        "it": "Preparo nuove alternative dai passi approvati. Il design precedente resta "
+        "nello storico; dovrai scegliere e approvare il nuovo design.",
+        "en": "I will prepare new alternatives from the approved steps. The previous design "
+        "stays in the history; you will need to choose and approve the new design.",
+    },
+    "design.no_model_regenerate": {
+        "it": "Questo Studio non ha un modello collegato per rigenerare le alternative. "
+        "Chi gestisce lo Studio può collegarne uno.",
+        "en": "This Studio has no model connected to regenerate the alternatives. Whoever "
+        "runs the Studio can connect one.",
+    },
+    "design.behind_blocked": {
+        "it": "Il design è rimasto indietro rispetto alle sezioni a monte, quindi per ora lo "
+        "Studio non lo cambia: non ho applicato nulla. {blocked}",
+        "en": "The design is behind the sections upstream, so for now the Studio does not change "
+        "it: nothing was applied. {blocked}",
     },
     "design.change_needs_choice": {
         "it": "Per chiedere una modifica scegli prima un'alternativa, per esempio con "
@@ -875,15 +975,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "again, and a new attempt is a new generation.",
     },
     "design.errors.PROPOSAL_REJECTED.UX_DESIGNER_REQUIRED": {
-        "it": "Le alternative di design non sono state preparate: la squadra approvata di "
-        "questo progetto non ha il designer UX/UI, lo specialista che le prepara ({reason}). "
-        "Una squadra approvata prima del 29 settembre 2026 può non averlo; le squadre nuove lo "
-        "hanno sempre. Cambia la squadra e approvala di nuovo nello Studio web, poi rilancia "
-        "`ut design`.",
-        "en": "The design alternatives were not prepared: the approved team of this project "
-        "has no UX/UI designer, the specialist who prepares them ({reason}). A team approved "
-        "before 29 September 2026 may lack the designer; new teams always have one. Change the "
-        "team and approve it again in the web Studio, then launch `ut design` again.",
+        "it": "Le alternative di design non sono state preparate: nelle prospettive approvate di "
+        "questo progetto l'Esperienza d'uso (UX) non è applicata per intero ({reason}). Può "
+        "succedere con le prospettive approvate prima del 29 settembre 2026. Prepara di nuovo "
+        "le prospettive e approvale nello Studio web, poi rilancia `ut design`.",
+        "en": "The design alternatives were not prepared: in the approved perspectives of this "
+        "project User experience (UX) is not fully applied ({reason}). It can happen with "
+        "perspectives approved before 29 September 2026. Prepare the perspectives again and "
+        "approve them in the web Studio, then launch `ut design` again.",
     },
     "design.errors.PROPOSAL_REJECTED.GROUNDED_INPUT_REQUIRED": {
         "it": "Le alternative di design non sono state preparate: i passi approvati non danno "
@@ -970,10 +1069,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The design is not ready for approval: choose an alternative first ({code}).",
     },
     "design.errors.ITERATION_LIMIT_REACHED": {
-        "it": "Lo Studio non accetta altre approvazioni per questo passo: il design è già stato "
-        "approvato il numero massimo di volte ({code}).",
-        "en": "The Studio accepts no more approvals for this step: the design has already been "
-        "approved the maximum number of times ({code}).",
+        "it": "Lo Studio non accetta un'altra versione del design: le ultime tre non sono state "
+        "approvate ({code}).",
+        "en": "The Studio does not accept another version of the design: the last three were not "
+        "approved ({code}).",
     },
     "design.errors.GATE_BLOCKED": {
         "it": "L'approvazione del design è sospesa nello Studio ({code}): riprendila "

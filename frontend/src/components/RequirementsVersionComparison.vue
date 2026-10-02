@@ -47,6 +47,8 @@ const messages = {
     changed: "Changed",
     unchanged: "Unchanged",
     kinds: {
+      NEED: "Need",
+      JOURNEY: "Journey",
       REQUIREMENT: "Requirement",
       USER_STORY: "User story",
       ACCEPTANCE_CRITERION: "Acceptance criterion",
@@ -68,6 +70,8 @@ const messages = {
     changed: "Modificato",
     unchanged: "Invariato",
     kinds: {
+      NEED: "Bisogno",
+      JOURNEY: "Journey",
       REQUIREMENT: "Requisito",
       USER_STORY: "Storia dell'utente",
       ACCEPTANCE_CRITERION: "Criterio di accettazione",
@@ -181,6 +185,18 @@ function artifacts(version: RequirementsSpecificationVersionPayload): Comparable
   const specification = version.specification;
 
   return [
+    ...(specification.journeys ?? []).map((value) => ({
+      kind: "JOURNEY" as const,
+      id: value.id,
+      code: value.code,
+      snapshot: value,
+    })),
+    ...(specification.needs ?? []).map((value) => ({
+      kind: "NEED" as const,
+      id: value.id,
+      code: value.code,
+      snapshot: value,
+    })),
     ...specification.requirements.map((value) => ({
       kind: "REQUIREMENT" as const,
       id: value.id,

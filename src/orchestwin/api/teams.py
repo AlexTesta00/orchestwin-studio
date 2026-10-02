@@ -31,6 +31,14 @@ from orchestwin.agents.catalog import (
     AgentSelectionPolicy,
     all_agent_catalog_entries,
 )
+from orchestwin.agents.perspectives import (
+    AspectView,
+    Perspective,
+    PerspectiveAspect,
+    PerspectiveStanding,
+    PerspectiveView,
+    perspective_views,
+)
 from orchestwin.agents.proposals import (
     TeamProposalApplicationResult,
     TeamProposalApplicationService,
@@ -260,6 +268,65 @@ class TeamSelectionIssueResponse(BaseModel):
         )
 
 
+class PerspectiveAspectResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    key: PerspectiveAspect
+    agent_id: AgentIdentifier
+    standing: PerspectiveStanding
+    applied: bool
+    editable: bool
+    requested: RuleEvidenceResponse
+    excluded: RuleEvidenceResponse
+
+    @classmethod
+    def from_domain(
+        cls,
+        view: AspectView,
+    ) -> PerspectiveAspectResponse:
+        return cls(
+            key=view.key,
+            agent_id=view.agent_id,
+            standing=view.standing,
+            applied=view.applied,
+            editable=view.editable,
+            requested=RuleEvidenceResponse.from_domain(view.requested),
+            excluded=RuleEvidenceResponse.from_domain(view.excluded),
+        )
+
+
+class PerspectiveResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    key: Perspective
+    standing: PerspectiveStanding
+    applied: bool
+    editable: bool
+    agent_id: AgentIdentifier | None
+    requested: RuleEvidenceResponse
+    excluded: RuleEvidenceResponse
+    aspects: tuple[
+        PerspectiveAspectResponse,
+        ...,
+    ]
+
+    @classmethod
+    def from_domain(
+        cls,
+        view: PerspectiveView,
+    ) -> PerspectiveResponse:
+        return cls(
+            key=view.key,
+            standing=view.standing,
+            applied=view.applied,
+            editable=view.editable,
+            agent_id=view.agent_id,
+            requested=RuleEvidenceResponse.from_domain(view.requested),
+            excluded=RuleEvidenceResponse.from_domain(view.excluded),
+            aspects=tuple(PerspectiveAspectResponse.from_domain(aspect) for aspect in view.aspects),
+        )
+
+
 class TeamProposalJustificationResponse(BaseModel):
     """Typed rationale for including one team member."""
 
@@ -359,6 +426,10 @@ class TeamProposalVersionResponse(BaseModel):
         ProposedTeamMemberResponse,
         ...,
     ]
+    perspectives: tuple[
+        PerspectiveResponse,
+        ...,
+    ]
 
     created_by_user_id: UUID
     created_at: datetime
@@ -400,6 +471,10 @@ class TeamProposalVersionResponse(BaseModel):
             ),
             members=tuple(
                 ProposedTeamMemberResponse.from_domain(member) for member in proposal.members
+            ),
+            perspectives=tuple(
+                PerspectiveResponse.from_domain(view)
+                for view in perspective_views(proposal.constraints, proposal.selected_agent_ids)
             ),
             created_by_user_id=(version.created_by_user_id),
             created_at=version.created_at,

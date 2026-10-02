@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Final, NoReturn
 
 from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import design as design_api
+from orchestwin.cli.api import usage
 from orchestwin.cli.client import api_failure
 from orchestwin.cli.console import ProgressOutcome
 from orchestwin.cli.errors import BUDGET_CODES, INTERRUPTED_STATUS, ApiFailure, CliError
@@ -67,7 +68,11 @@ class Prices:
         return self._runtime
 
     def shown(self) -> bool:
-        return self.runtime().budget
+        return self.runtime().budget and not self.subscription()
+
+    def subscription(self) -> bool:
+        runtime = self.runtime()
+        return runtime.budget and runtime.billing == usage.SUBSCRIPTION_BILLING
 
     def modelless(self, state: DesignState) -> bool:
         return state.version is not None and not state.generated and not self.runtime().model
@@ -302,6 +307,8 @@ def start_design(
     project: ProjectFolder,
     state: DesignState,
     prices: Prices,
+    *,
+    route: str | None = None,
 ) -> bool:
     console = context.console
     generated = state.generated
@@ -318,14 +325,31 @@ def start_design(
         context,
         client,
         state.project_id,
-        design_api.proposals_path(state.project_id),
+        design_api.proposals_path(state.project_id) if route is None else route,
         label=context.text("design.label_proposal"),
     )
     if result.status_code >= 400:
         raise_failure(failure_of(result.status_code, result.body))
+    if isinstance(result.body, Mapping) and result.body.get("status") == REJECTED:
+        issue = result.body.get("issue")
+        proposal_issue = result.body.get(PROPOSAL_ISSUE)
+        raise_failure(
+            ApiFailure(
+                issue if isinstance(issue, str) and issue else PROPOSAL_REJECTED,
+                http_status=409,
+                detail=result.body,
+                values={"reason": proposal_issue} if isinstance(proposal_issue, str) else None,
+            )
+        )
     fresh = design_state.read_state(client, project)
     if fresh.version is None:
         raise ApiFailure("API_FAILURE", http_status=result.status_code)
+    if (
+        route is not None
+        and state.version is not None
+        and fresh.version.get("id") == state.version.get("id")
+    ):
+        raise CliError(CONTEXT_CHANGED)
     design_state.show_alternatives(context, fresh, mockups=False)
     design_state.show_verdicts(context, fresh)
     if not generated:
@@ -469,10 +493,17 @@ def report_job(context: CommandContext, outcome: Outcome) -> bool:
 
 
 def say_again(context: CommandContext, alternative: Alternative, prices: Prices) -> None:
+    estimate = costs.estimate(["MOCKUP"])
+    if prices.subscription():
+        context.console.say(
+            "design.mockup_again_subscription",
+            code=alternative.code,
+            minutes=costs.minutes_text(estimate.minutes),
+        )
+        return
     if not prices.shown():
         context.console.say("design.mockup_again_plain", code=alternative.code)
         return
-    estimate = costs.estimate(["MOCKUP"])
     context.console.say(
         "design.mockup_again",
         code=alternative.code,
@@ -482,13 +513,20 @@ def say_again(context: CommandContext, alternative: Alternative, prices: Prices)
 
 
 def estimate_text(
-    context: CommandContext, operations: Sequence[str], *, minutes: float | None = None
+    context: CommandContext,
+    operations: Sequence[str],
+    *,
+    minutes: float | None = None,
+    subscription: bool = False,
 ) -> str:
     total = costs.estimate(operations, minutes=minutes)
+    duration = costs.minutes_text(total.minutes)
+    if subscription:
+        return context.text("design.estimate_subscription", minutes=duration)
     return context.text(
         "design.estimate",
         amount=costs.amount_text(total, context.language),
-        minutes=costs.minutes_text(total.minutes),
+        minutes=duration,
     )
 
 

@@ -28,6 +28,7 @@ from orchestwin.models.structured_generation import (
 )
 from src.test.python.models.test_hosted_support import (
     SpendingEvidence,
+    claude_code_document,
     providers,
     structured_request,
 )
@@ -198,3 +199,25 @@ def test_ceilings_come_from_the_configuration_and_must_be_ordered():
     for values in ((0, 1, 2), (3, 2, 4), (1, 3, 2), (1.5, 2, 3), (True, 2, 3)):
         with pytest.raises(ValueError):
             GenerationBudget(*values)
+
+
+def test_a_route_without_prices_is_never_refused_whatever_was_spent():
+    configuration = providers(claude_code_document()).hosted_model("design")
+    request = structured_request(configuration, max_output_tokens=64_000)
+    note = "The previous answer was not one complete JSON object; answer again."
+    assert estimated_cost_microusd(request, configuration) == 0
+    assert estimated_cost_microusd(request, configuration, note) == 0
+    spent = SpendingEvidence(project=10**12, total=10**12)
+    assert _refusal(CEILINGS, request, configuration, spent) is None
+    assert spent.reads == []
+    assert _refusal(CEILINGS, request, configuration) is None
+    assert _refusal(CEILINGS, request, configuration, MemoryEvidence()) is None
+    assert set(CEILINGS.report(10**12)) == {
+        "currency",
+        "per_generation_microusd",
+        "per_project_microusd",
+        "total_microusd",
+        "spent_total_microusd",
+        "remaining_total_microusd",
+        "period_start",
+    }

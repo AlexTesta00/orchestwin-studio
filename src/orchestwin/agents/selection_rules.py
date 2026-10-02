@@ -29,6 +29,8 @@ from orchestwin.projects.domain import (
 
 _BRIEF_FIELD_ORDER: Final = tuple(BriefField)
 
+_SENTENCE_BOUNDARY: Final = re.compile(r"[.;:!?](?=\s)|[\r\n]")
+
 
 def _ordered_fields(
     fields: Iterable[BriefField],
@@ -48,6 +50,16 @@ def _normalize_search_text(
             r"[^\W_]+",
             value.casefold(),
         )
+    )
+
+
+def _normalized_sentences(
+    value: str,
+) -> tuple[str, ...]:
+    return tuple(
+        normalized
+        for sentence in _SENTENCE_BOUNDARY.split(value)
+        if (normalized := _normalize_search_text(sentence))
     )
 
 
@@ -127,6 +139,17 @@ class RuleEvidence:
             raise ValueError("rule evidence terms must be unique and lexicographically ordered")
 
 
+def merge_rule_evidence(
+    evidence: Iterable[RuleEvidence],
+) -> RuleEvidence:
+    items = tuple(evidence)
+
+    return RuleEvidence(
+        fields=_ordered_fields(field for item in items for field in item.fields),
+        terms=tuple(sorted({term for item in items for term in item.terms})),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class TeamSelectionReason:
     """One typed explanation for a role constraint."""
@@ -163,7 +186,10 @@ class TeamRoleConstraint:
     @property
     def owner_editable(self) -> bool:
         """Return whether the owner may add or remove this role."""
-        return self.kind is TeamRoleConstraintKind.OPTIONAL
+        return self.kind in (
+            TeamRoleConstraintKind.OPTIONAL,
+            TeamRoleConstraintKind.CONFLICT,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +211,32 @@ class TeamSelectionIssue:
         """Require evidence for both sides of a conflict."""
         if not self.mandatory_reasons or not self.impossible_reasons:
             raise ValueError("a team-selection conflict requires mandatory and impossible reasons")
+
+
+_IMPOSSIBLE_REASON_CODES: Final = frozenset(
+    {
+        TeamSelectionReasonCode.CATALOG_MODE_INCOMPATIBLE,
+        TeamSelectionReasonCode.EXPLICIT_SCOPE_EXCLUSION,
+    }
+)
+
+
+def contradiction_issue(
+    constraint: TeamRoleConstraint,
+) -> TeamSelectionIssue:
+    if constraint.kind is not TeamRoleConstraintKind.CONFLICT:
+        raise ValueError("only a conflicting role constraint describes a contradiction")
+
+    return TeamSelectionIssue(
+        code=TeamSelectionIssueCode.CONTRADICTORY_ROLE_SIGNALS,
+        agent_id=constraint.agent_id,
+        mandatory_reasons=tuple(
+            reason for reason in constraint.reasons if reason.code not in _IMPOSSIBLE_REASON_CODES
+        ),
+        impossible_reasons=tuple(
+            reason for reason in constraint.reasons if reason.code in _IMPOSSIBLE_REASON_CODES
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -605,6 +657,43 @@ _NO_INTEGRATION_MARKERS: Final = (
 )
 
 
+_NEGATION_WORDS: Final = frozenset(
+    _normalized_terms(
+        (
+            "senza",
+            "nessun",
+            "nessuna",
+            "nessuno",
+            "niente",
+            "non",
+            "né",
+            "nè",
+            "no",
+            "not",
+            "without",
+            "never",
+            "nor",
+        )
+    )
+)
+
+
+_CONTRAST_WORDS: Final = frozenset(
+    _normalized_terms(
+        (
+            "ma",
+            "però",
+            "bensì",
+            "but",
+            "however",
+        )
+    )
+)
+
+
+_NEGATION_WINDOW: Final = 5
+
+
 _SIGNAL_RULES: Final[
     tuple[
         _RoleSignalRule,
@@ -680,15 +769,7 @@ def _provided_evidence(
             value,
             str,
         ):
-            normalized = _normalize_search_text(value)
-
-            if normalized:
-                values.append(
-                    (
-                        field,
-                        normalized,
-                    )
-                )
+            values.extend((field, sentence) for sentence in _normalized_sentences(value))
 
             continue
 
@@ -697,15 +778,7 @@ def _provided_evidence(
             tuple,
         ):
             for item in value:
-                normalized = _normalize_search_text(item)
-
-                if normalized:
-                    values.append(
-                        (
-                            field,
-                            normalized,
-                        )
-                    )
+                values.extend((field, sentence) for sentence in _normalized_sentences(item))
 
     return tuple(values)
 
@@ -734,6 +807,75 @@ def _contains_phrase(
     return f" {phrase} " in f" {value} "
 
 
+def _phrase_starts(
+    tokens: tuple[str, ...],
+    phrase: str,
+) -> tuple[int, ...]:
+    phrase_tokens = tuple(phrase.split())
+    width = len(phrase_tokens)
+
+    return tuple(
+        start
+        for start in range(len(tokens) - width + 1)
+        if tokens[start : start + width] == phrase_tokens
+    )
+
+
+def _is_negated(
+    tokens: tuple[str, ...],
+    start: int,
+    negated_within: int,
+) -> bool:
+    for position in reversed(range(max(start - negated_within, 0), start)):
+        if tokens[position] in _CONTRAST_WORDS:
+            return False
+
+        if tokens[position] in _NEGATION_WORDS:
+            return True
+
+    return False
+
+
+def _counted_terms(
+    value: str,
+    terms: tuple[str, ...],
+    ignored_phrases: tuple[str, ...],
+    negated_within: int,
+) -> tuple[str, ...]:
+    if negated_within <= 0:
+        searchable = _remove_phrases(
+            value,
+            ignored_phrases,
+        )
+
+        return tuple(
+            term
+            for term in terms
+            if _contains_phrase(
+                searchable,
+                term,
+            )
+        )
+
+    tokens = tuple(value.split())
+    ignored_positions = {
+        position
+        for phrase in ignored_phrases
+        for start in _phrase_starts(tokens, phrase)
+        for position in range(start, start + len(phrase.split()))
+    }
+
+    return tuple(
+        term
+        for term in terms
+        if any(
+            ignored_positions.isdisjoint(range(start, start + len(term.split())))
+            and not _is_negated(tokens, start, negated_within)
+            for start in _phrase_starts(tokens, term)
+        )
+    )
+
+
 def _match_terms(
     evidence_values: tuple[
         tuple[
@@ -745,6 +887,7 @@ def _match_terms(
     terms: Iterable[str],
     *,
     ignored_phrases: Iterable[str] = (),
+    negated_within: int = 0,
 ) -> RuleEvidence:
     """Return fields and markers matching a deterministic rule."""
     normalized_terms = _normalized_terms(terms)
@@ -757,18 +900,14 @@ def _match_terms(
         field,
         value,
     ) in evidence_values:
-        searchable = _remove_phrases(
+        for term in _counted_terms(
             value,
+            normalized_terms,
             normalized_ignored,
-        )
-
-        for term in normalized_terms:
-            if _contains_phrase(
-                searchable,
-                term,
-            ):
-                matched_fields.add(field)
-                matched_terms.add(term)
+            negated_within,
+        ):
+            matched_fields.add(field)
+            matched_terms.add(term)
 
     return RuleEvidence(
         fields=_ordered_fields(matched_fields),
@@ -868,6 +1007,7 @@ def determine_team_constraints(
                 evidence_values,
                 rule.positive_terms,
                 ignored_phrases=(rule.exclusion_terms),
+                negated_within=_NEGATION_WINDOW,
             )
 
             if positive_evidence.fields:

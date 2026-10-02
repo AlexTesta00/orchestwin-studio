@@ -2,10 +2,16 @@ import { mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import GenerationJobNotice from "./GenerationJobNotice.vue";
-import type { GenerationRequestJob } from "../api/generationJobs";
+import { GENERATION_OPERATIONS, type GenerationRequestJob } from "../api/generationJobs";
 import { expectAccessible } from "../test/axe";
 
 const STARTED_AT = "2026-09-28T10:00:00+00:00";
+
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
 
 function job(overrides: Partial<GenerationRequestJob> = {}): GenerationRequestJob {
   return {
@@ -63,6 +69,110 @@ describe("GenerationJobNotice", () => {
     expect(wrapper.text()).toContain("You can leave this page and come back later");
   });
 
+  it("names the review of a commit started from the terminal in both languages", () => {
+    const english = mount(GenerationJobNotice, {
+      props: { job: job({ operation: "CODE_CHANGE_REVIEW" }), locale: "en" },
+    });
+    const italian = mount(GenerationJobNotice, {
+      props: {
+        job: null,
+        failure: { operation: "CODE_CHANGE_REVIEW", code: "PROVIDER_UNAVAILABLE", lost: false },
+        locale: "it",
+      },
+    });
+
+    expect(english.get("[data-testid='generation-job-notice']").attributes("data-operation")).toBe(
+      "CODE_CHANGE_REVIEW",
+    );
+    expect(english.get("[role='status']").text()).toBe(
+      "The Studio is generating the twins' review of a commit.",
+    );
+    expect(italian.get("[data-testid='generation-job-failure']").text()).toContain(
+      "La generazione della revisione dei twin su un commit non è riuscita.",
+    );
+    english.unmount();
+    italian.unmount();
+  });
+
+  it.each([
+    [
+      "TEST_PLAN",
+      "en",
+      "The Studio is generating the paths that verify the acceptance criteria.",
+      "The generation of the paths that verify the acceptance criteria did not succeed.",
+    ],
+    [
+      "TEST_PLAN",
+      "it",
+      "Lo Studio sta generando i percorsi di verifica dei criteri.",
+      "La generazione dei percorsi di verifica dei criteri non è riuscita.",
+    ],
+    [
+      "TEST_REVIEW",
+      "en",
+      "The Studio is generating the twins' review of the test results.",
+      "The generation of the twins' review of the test results did not succeed.",
+    ],
+    [
+      "TEST_REVIEW",
+      "it",
+      "Lo Studio sta generando la revisione dei twin sui risultati dei test.",
+      "La generazione della revisione dei twin sui risultati dei test non è riuscita.",
+    ],
+  ] as const)("names the %s started by ut test in %s", (operation, locale, running, failed) => {
+    const started = mount(GenerationJobNotice, { props: { job: job({ operation }), locale } });
+    const stopped = mount(GenerationJobNotice, {
+      props: {
+        job: null,
+        failure: { operation, code: "PROVIDER_UNAVAILABLE", lost: false },
+        locale,
+      },
+    });
+
+    expect(started.get("[data-testid='generation-job-notice']").attributes("data-operation")).toBe(
+      operation,
+    );
+    expect(started.get("[role='status']").text()).toBe(running);
+    expect(stopped.get("[data-testid='generation-job-failure']").text()).toContain(failed);
+    started.unmount();
+    stopped.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      "The Studio is generating the proposal of what a twin learned.",
+      "The generation of the proposal of what a twin learned did not succeed.",
+    ],
+    [
+      "it",
+      "Lo Studio sta generando la proposta di ciò che un twin ha imparato.",
+      "La generazione della proposta di ciò che un twin ha imparato non è riuscita.",
+    ],
+  ] as const)(
+    "names the update of a twin started by ut twins update in %s",
+    (locale, running, failed) => {
+      const started = mount(GenerationJobNotice, {
+        props: { job: job({ operation: "TWIN_UPDATE" }), locale },
+      });
+      const stopped = mount(GenerationJobNotice, {
+        props: {
+          job: null,
+          failure: { operation: "TWIN_UPDATE", code: "PROVIDER_UNAVAILABLE", lost: false },
+          locale,
+        },
+      });
+
+      expect(
+        started.get("[data-testid='generation-job-notice']").attributes("data-operation"),
+      ).toBe("TWIN_UPDATE");
+      expect(started.get("[role='status']").text()).toBe(running);
+      expect(stopped.get("[data-testid='generation-job-failure']").text()).toContain(failed);
+      started.unmount();
+      stopped.unmount();
+    },
+  );
+
   it("says in plain words that an interrupted generation can be started again", async () => {
     const wrapper = mount(GenerationJobNotice, {
       props: {
@@ -96,7 +206,41 @@ describe("GenerationJobNotice", () => {
     expect(wrapper.text()).toContain(
       "The generation of the new round of the discussion did not succeed.",
     );
-    expect(wrapper.text()).toContain("The AI assistant cannot be reached.");
+    expect(wrapper.text()).toContain("The model cannot be reached.");
+  });
+
+  it.each([
+    [
+      "en",
+      "The User experience (UX) perspective is missing: open Perspectives and prepare them again.",
+    ],
+    ["it", "Manca la prospettiva Esperienza d'uso (UX): apri Prospettive e preparale di nuovo."],
+  ] as const)("names no step by its old name and speaks of no team in %s", (locale, missing) => {
+    for (const operation of GENERATION_OPERATIONS) {
+      for (const failure of [
+        null,
+        { operation, code: "PROVIDER_UNAVAILABLE", lost: false },
+        { operation, code: "UX_DESIGNER_REQUIRED", lost: false },
+        { operation, code: "REQUIREMENTS_ANALYST_REQUIRED", lost: false },
+        { operation, code: "GENERATION_JOB_NOT_FOUND", lost: true },
+      ]) {
+        const wrapper = mount(GenerationJobNotice, {
+          props: { job: failure === null ? job({ operation }) : null, failure, locale },
+        });
+        expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+        expect(wrapper.text()).not.toMatch(TEAM_WORDS);
+        wrapper.unmount();
+      }
+    }
+    const refused = mount(GenerationJobNotice, {
+      props: {
+        job: null,
+        failure: { operation: "DESIGN_PROPOSAL", code: "UX_DESIGNER_REQUIRED", lost: false },
+        locale,
+      },
+    });
+    expect(refused.get("[data-testid='generation-job-failure']").text()).toContain(missing);
+    refused.unmount();
   });
 
   it("tells that a very long generation may still be ready later", () => {

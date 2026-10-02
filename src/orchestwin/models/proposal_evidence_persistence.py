@@ -15,6 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from orchestwin.models.generation_budget import provider_result_cost_microusd
 from orchestwin.models.hosted_configuration import HOSTED_RUNTIME_IDS
 from orchestwin.models.proposal_evidence import ProposalEvidenceError, evidence_snapshot
+from orchestwin.models.proposal_evidence_privacy import (
+    RETENTION_POLICY,
+    minimize_evidence_event,
+    minimize_evidence_request,
+)
 from orchestwin.persistence.orm import OrmBase
 from orchestwin.projects.persistence.models import ProjectRecord
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
@@ -299,6 +304,7 @@ class SqlAlchemyProposalEvidenceStore:
         return records
 
     async def begin(self, *, owner_user_id, project_id, request):
+        request = minimize_evidence_request(request)
         context = json.loads(request.input_payload_json)["context"]
         if "request" in context:
             context = context["request"]
@@ -345,16 +351,6 @@ class SqlAlchemyProposalEvidenceStore:
     async def append(
         self, *, generation_id, owner_user_id, project_id, kind, payload, raw_body=None
     ):
-        snapshot, digest = evidence_snapshot(
-            {
-                "generation_id": str(generation_id),
-                "kind": kind,
-                "payload": payload,
-                "raw_body_sha256": None
-                if raw_body is None
-                else hashlib.sha256(raw_body).hexdigest(),
-            }
-        )
         try:
             async with self._sessions() as session, session.begin():
                 row = (
@@ -368,7 +364,20 @@ class SqlAlchemyProposalEvidenceStore:
                 )
                 if row is None:
                     raise ProposalEvidenceError("GENERATION_NOT_OWNED")
-                _verify(row)
+                generation = _verify(row)
+                if generation["request"].get("retention_policy") == RETENTION_POLICY:
+                    payload = minimize_evidence_event(kind, payload)
+                    raw_body = None
+                snapshot, digest = evidence_snapshot(
+                    {
+                        "generation_id": str(generation_id),
+                        "kind": kind,
+                        "payload": payload,
+                        "raw_body_sha256": None
+                        if raw_body is None
+                        else hashlib.sha256(raw_body).hexdigest(),
+                    }
+                )
                 await session.execute(
                     sa.insert(EVENTS).values(
                         id=uuid4(),

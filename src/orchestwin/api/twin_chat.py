@@ -17,6 +17,8 @@ from orchestwin.models.proposal_evidence import (
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.twin_chat import answer_as_twin, bind_insights, twin_chat_context
 from orchestwin.projects.persistence.briefs import SqlAlchemyProjectBriefRepository
+from orchestwin.projects.persistence.twin_learning import SqlAlchemyTwinLearningRepository
+from orchestwin.projects.twin_learning import learned_view
 from orchestwin.twins.conversations import (
     MAX_QUESTION_CHARACTERS,
     MAX_TURNS_PER_CONVERSATION,
@@ -88,6 +90,11 @@ class TwinChatApplication:
             briefs = await SqlAlchemyProjectBriefRepository(session).list_owned_versions(
                 project_id=project_id, owner_user_id=owner_user_id
             )
+            learned = learned_view(
+                await SqlAlchemyTwinLearningRepository(
+                    session, owner_user_id=owner_user_id
+                ).observations(project_id, twin_id)
+            )
         current = latest if latest is not None and latest.twin_version_id == twin.id else None
         turns = current.turns if current is not None else ()
         if body.expected_turn_count != len(turns):
@@ -105,6 +112,7 @@ class TwinChatApplication:
                 brief=briefs[-1].brief if briefs else None,
                 turns=turns,
                 question=question,
+                learned=learned,
             ),
         )
         scope = current_proposal_evidence()

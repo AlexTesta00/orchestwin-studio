@@ -1,19 +1,34 @@
 from __future__ import annotations
 
+import contextlib
+import dataclasses
 import io
+import os
+import signal
+import subprocess
 import sys
+import threading
+from collections.abc import Iterator
 from datetime import UTC
+from pathlib import Path
 
 import pytest
 
 from orchestwin.cli import environment as module
 from orchestwin.cli.environment import (
+    Environment,
+    ProcessResult,
+    default_run_interactive,
+    default_run_process,
+    default_start_process,
+    interrupts_left_to_the_program,
     language_code,
     prepare_stream,
     real_environment,
     system_language,
     utc_now,
 )
+from orchestwin.cli.errors import CliError
 from orchestwin.cli.http import UrlTransport
 
 
@@ -49,9 +64,314 @@ def test_the_real_environment_reads_the_machine_once(monkeypatch: pytest.MonkeyP
     assert isinstance(environment.transport, UrlTransport)
     assert environment.home.is_absolute()
     assert environment.working_directory.is_absolute()
+    assert environment.run_process is default_run_process
+    assert environment.start_process is default_start_process
+    assert environment.run_interactive is default_run_interactive
     stdin.detach()
     stdout.detach()
     stderr.detach()
+
+
+def test_the_interactive_runner_is_the_last_field_and_every_runner_has_a_default() -> None:
+    fields = {field.name: field for field in dataclasses.fields(Environment)}
+    last = dataclasses.fields(Environment)[-1]
+
+    assert last.name == "run_interactive"
+    assert last.default is default_run_interactive
+    assert fields["run_process"].default is default_run_process
+    assert fields["start_process"].default is default_start_process
+
+
+class WaitedPopen:
+    def __init__(self, command: list[str], **options: object) -> None:
+        self.command = command
+        self.options = options
+        self.waits = 0
+        self.handlers: list[object] = []
+
+    def wait(self, timeout: float | None = None) -> int:
+        self.waits += 1
+        self.handlers.append(signal.getsignal(signal.SIGINT))
+        return 4
+
+
+def test_an_interactive_program_keeps_the_terminal_of_ut_and_has_no_shell(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[WaitedPopen] = []
+
+    def record(command: list[str], **options: object) -> WaitedPopen:
+        started.append(WaitedPopen(command, **options))
+        return started[-1]
+
+    monkeypatch.setattr(module.subprocess, "Popen", record)
+
+    status = default_run_interactive([Path("agent"), "--print", "a b"], tmp_path, {"A": "1"})
+
+    assert status == 4
+    assert started[0].command == ["agent", "--print", "a b"]
+    assert started[0].options == {"cwd": tmp_path, "env": {"A": "1"}}
+    assert started[0].waits == 1
+
+
+def test_ctrl_c_belongs_to_the_interactive_program_while_it_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[WaitedPopen] = []
+
+    def record(command: list[str], **options: object) -> WaitedPopen:
+        started.append(WaitedPopen(command, **options))
+        return started[-1]
+
+    monkeypatch.setattr(module.subprocess, "Popen", record)
+    before = signal.getsignal(signal.SIGINT)
+
+    default_run_interactive(["agent"], tmp_path, {})
+
+    assert started[0].handlers == [signal.SIG_IGN]
+    assert signal.getsignal(signal.SIGINT) is before
+
+
+def test_an_interrupt_before_the_wait_still_waits_for_the_program(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[WaitedPopen] = []
+    entered: list[int] = []
+
+    def record(command: list[str], **options: object) -> WaitedPopen:
+        started.append(WaitedPopen(command, **options))
+        return started[-1]
+
+    @contextlib.contextmanager
+    def interrupted_once() -> Iterator[None]:
+        entered.append(1)
+        if len(entered) == 1:
+            raise KeyboardInterrupt
+        yield
+
+    monkeypatch.setattr(module.subprocess, "Popen", record)
+    monkeypatch.setattr(module, "interrupts_left_to_the_program", interrupted_once)
+
+    with pytest.raises(KeyboardInterrupt):
+        default_run_interactive(["agent"], tmp_path, {})
+
+    assert started[0].waits == 1
+    assert len(entered) == 2
+
+
+def test_the_signals_are_left_alone_outside_the_main_thread() -> None:
+    before = signal.getsignal(signal.SIGINT)
+    failures: list[BaseException] = []
+
+    def enter() -> None:
+        try:
+            with interrupts_left_to_the_program():
+                pass
+        except BaseException as failure:
+            failures.append(failure)
+
+    worker = threading.Thread(target=enter)
+    worker.start()
+    worker.join(timeout=60)
+
+    assert not worker.is_alive()
+    assert failures == []
+    assert signal.getsignal(signal.SIGINT) is before
+
+
+def test_an_interactive_program_runs_in_its_folder_and_its_status_comes_back(
+    tmp_path: Path,
+) -> None:
+    code = (
+        "import os, sys\n"
+        "same = os.path.samefile(os.getcwd(), sys.argv[1])\n"
+        "sys.exit(7 if same and os.environ.get('ORCHESTWIN_PROBE') == 'yes' else 3)\n"
+    )
+    variables = {**os.environ, "ORCHESTWIN_PROBE": "yes"}
+
+    status = default_run_interactive(
+        [sys.executable, "-c", code, str(tmp_path)], tmp_path, variables
+    )
+
+    assert status == 7
+    assert default_run_interactive([sys.executable, "-c", "pass"], tmp_path, variables) == 0
+
+
+def test_a_missing_interactive_program_does_not_start(tmp_path: Path) -> None:
+    missing = tmp_path / "orchestwin-no-such-agent"
+
+    with pytest.raises(CliError) as caught:
+        default_run_interactive([missing, "--print"], tmp_path, dict(os.environ))
+
+    assert caught.value.code == "CODE_AGENT_NOT_STARTED"
+    assert caught.value.status == 1
+    assert caught.value.values == {
+        "program": "orchestwin-no-such-agent",
+        "detail": "program not found",
+    }
+
+
+def test_an_interactive_program_that_the_system_refuses_does_not_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refused(command: list[str], **options: object) -> WaitedPopen:
+        raise PermissionError(13, "denied")
+
+    monkeypatch.setattr(module.subprocess, "Popen", refused)
+
+    with pytest.raises(CliError) as caught:
+        default_run_interactive(["agent"], tmp_path, {})
+
+    assert caught.value.code == "CODE_AGENT_NOT_STARTED"
+    assert caught.value.values == {"program": "agent", "detail": "denied"}
+
+
+class RecordedPopen:
+    def __init__(self, command: list[str], **options: object) -> None:
+        self.command = command
+        self.options = options
+
+
+def test_a_started_process_has_no_shell_no_window_and_no_terminal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[RecordedPopen] = []
+
+    def record(command: list[str], **options: object) -> RecordedPopen:
+        started.append(RecordedPopen(command, **options))
+        return started[-1]
+
+    monkeypatch.setattr(module.subprocess, "Popen", record)
+
+    process = default_start_process([Path("browser"), "--headless"], tmp_path, {"A": "1"})
+
+    assert process is started[0]
+    assert started[0].command == ["browser", "--headless"]
+    options = started[0].options
+    assert options["cwd"] == tmp_path
+    assert options["env"] == {"A": "1"}
+    assert options["stdin"] == subprocess.DEVNULL
+    assert options["stdout"] == subprocess.DEVNULL
+    assert options["stderr"] == subprocess.DEVNULL
+    assert "shell" not in options
+    expected = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    assert options["creationflags"] == expected
+
+
+def test_a_started_process_runs_in_its_folder_with_the_given_variables(tmp_path: Path) -> None:
+    code = (
+        "import os, sys\n"
+        "same = os.path.samefile(os.getcwd(), sys.argv[1])\n"
+        "sys.exit(0 if same and os.environ.get('ORCHESTWIN_PROBE') == 'yes' else 3)\n"
+    )
+    variables = {**os.environ, "ORCHESTWIN_PROBE": "yes"}
+
+    process = default_start_process(
+        [sys.executable, "-c", code, str(tmp_path)], tmp_path, variables
+    )
+
+    assert process.wait(timeout=60) == 0
+    assert process.poll() == 0
+
+
+def test_an_empty_program_ends_at_once(tmp_path: Path) -> None:
+    process = default_start_process([sys.executable, "-c", "pass"], tmp_path, dict(os.environ))
+
+    assert process.wait(timeout=60) == 0
+
+
+def test_a_missing_program_does_not_start(tmp_path: Path) -> None:
+    missing = tmp_path / "orchestwin-no-such-browser"
+
+    with pytest.raises(CliError) as caught:
+        default_start_process([missing, "--headless"], tmp_path, {})
+
+    assert caught.value.code == "BROWSER_NOT_STARTED"
+    assert caught.value.status == 1
+    assert caught.value.values == {
+        "program": "orchestwin-no-such-browser",
+        "detail": "program not found",
+    }
+
+
+def test_a_program_that_the_system_refuses_does_not_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refused(command: list[str], **options: object) -> RecordedPopen:
+        raise PermissionError(13, "denied")
+
+    monkeypatch.setattr(module.subprocess, "Popen", refused)
+
+    with pytest.raises(CliError) as caught:
+        default_start_process(["browser"], tmp_path, {})
+
+    assert caught.value.code == "BROWSER_NOT_STARTED"
+    assert caught.value.values == {"program": "browser", "detail": "denied"}
+
+
+def test_a_process_runs_in_its_folder_and_is_read_as_utf8(tmp_path: Path) -> None:
+    code = (
+        "import os, sys\n"
+        "sys.stdout.buffer.write((os.getcwd() + '|caff\\u00e8').encode('utf-8'))\n"
+        "sys.stderr.buffer.write('attenzione'.encode('utf-8'))\n"
+        "sys.exit(3)\n"
+    )
+
+    result = default_run_process([sys.executable, "-c", code], tmp_path, 60.0)
+
+    assert result.status == 3
+    folder, word = result.output.split("|")
+    assert Path(folder).resolve() == tmp_path.resolve()
+    assert word == "caffè"
+    assert result.errors == "attenzione"
+
+
+def test_bytes_that_are_not_utf8_are_replaced(tmp_path: Path) -> None:
+    code = "import sys\nsys.stdout.buffer.write(b'caff\\xe8')\n"
+
+    result = default_run_process([sys.executable, "-c", code], tmp_path, 60.0)
+
+    assert result == ProcessResult(0, "caff�", "")
+
+
+def test_a_missing_program_answers_127(tmp_path: Path) -> None:
+    result = default_run_process(["orchestwin-no-such-program"], tmp_path, 5.0)
+
+    assert result == ProcessResult(127, "", "orchestwin-no-such-program: not found")
+
+
+def test_a_process_that_takes_too_long_answers_124(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, object] = {}
+
+    def slow(arguments: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+        seen.update(options)
+        raise subprocess.TimeoutExpired(cmd=arguments, timeout=1.5)
+
+    monkeypatch.setattr(module.subprocess, "run", slow)
+
+    assert default_run_process(["git", "status"], tmp_path, 1.5) == ProcessResult(
+        124, "", "timeout"
+    )
+    assert seen["timeout"] == 1.5
+    assert seen["cwd"] == tmp_path
+    assert seen["stdin"] == subprocess.DEVNULL
+    assert "shell" not in seen
+
+
+def test_a_program_that_cannot_start_answers_126(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refused(arguments: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(module.subprocess, "run", refused)
+
+    result = default_run_process(["git", "status"], tmp_path, 5.0)
+
+    assert (result.status, result.output) == (126, "")
+    assert result.errors.startswith("git: ")
 
 
 def test_an_output_terminal_keeps_its_encoding_and_replaces_what_it_cannot_write() -> None:

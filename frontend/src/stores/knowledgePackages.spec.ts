@@ -44,6 +44,8 @@ function packageVersion(versionNumber: number): KnowledgePackageVersionPayload {
     archive_size: 20480,
     created_at: `2026-09-2${versionNumber}T09:00:00Z`,
     stages: [],
+    progress: { approved: ["brief"], pending: "team", complete: false },
+    state: { changes: 0, pending_changes: 0, aligned_commit: null, open_tasks: 0 },
     twins: [],
     feedback: {
       reviews: 0,
@@ -51,6 +53,7 @@ function packageVersion(versionNumber: number): KnowledgePackageVersionPayload {
       decisions: 0,
       discussions: 0,
       insights: 0,
+      change_reviews: 0,
     },
     diagram_count: 6,
     table_count: 4,
