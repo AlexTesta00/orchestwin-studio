@@ -485,4 +485,59 @@ describe("RequirementsTableView", () => {
 
     await expectAccessible(wrapper.element);
   });
+
+  it("renders journey phase rows in their narrative order with full linked titles and sources", () => {
+    const wrapper = mounted({
+      ...SPECIFICATION,
+      needs: [
+        {
+          id: "need-32",
+          code: "NED-001",
+          title: "Recognize guests",
+          statement: "Recognize guests",
+          scenario_ids: [SPECIFICATION.scenarios[0]!.id],
+          sources: [],
+        },
+      ],
+      journeys: [
+        {
+          id: "journey-32",
+          code: "JRN-001",
+          title: "Welcome the guest",
+          scenario_id: SPECIFICATION.scenarios[0]!.id,
+          sources: [
+            {
+              kind: "SYSTEM_ARTIFACT",
+              source_id: "https://example.org/material",
+              source_version: null,
+              content_hash: "f".repeat(64),
+              locator: "page 7",
+            },
+          ],
+          phases: [
+            {
+              title: "Verify",
+              action: "Find the guest",
+              touchpoint: "Guest list",
+              criticalities: ["Possible shared names"],
+              need_ids: ["need-32"],
+            },
+            {
+              title: "Arrival",
+              action: "Record the arrival",
+              touchpoint: null,
+              criticalities: [],
+              need_ids: ["need-32"],
+            },
+          ],
+        },
+      ],
+    });
+    const rows = rowsOf(wrapper, "journeys");
+    expect(rows.map((row) => row[3])).toEqual(["1. Verify", "2. Arrival"]);
+    expect(rows[0]).toContain("Recognize guests");
+    expect(rows[0]).toContain("Guest list");
+    expect(rows[0]!.at(-1)).toContain("f".repeat(64));
+    expect(rows[0]!.at(-1)).toContain("https://example.org/material");
+  });
 });

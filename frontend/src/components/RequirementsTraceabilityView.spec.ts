@@ -68,15 +68,19 @@ describe("RequirementsTraceabilityView", () => {
       const twin = { kind: "USER_TWIN" as const, artifact_id: "twin-32" };
       const scenario = { kind: "SCENARIO" as const, artifact_id: "scenario-32" };
       const need = { kind: "NEED" as const, artifact_id: "need-32" };
+      const journey = { kind: "JOURNEY" as const, artifact_id: "journey-32" };
       traceability.nodes.push(
         { reference: twin, display_code: "Receptionist" },
         { reference: scenario, display_code: "SCN-001" },
         { reference: need, display_code: "NED-001" },
+        { reference: journey, display_code: "JRN-001" },
       );
       traceability.links.push(
         { kind: "PARTICIPATES_IN", source: twin, target: scenario },
         { kind: "REVEALS", source: scenario, target: need },
         { kind: "MOTIVATES", source: need, target: traceability.nodes[1]!.reference },
+        { kind: "EXPANDS", source: scenario, target: journey },
+        { kind: "REVEALS", source: journey, target: need },
       );
       const wrapper = mount(RequirementsTraceabilityView, {
         props: { traceability, coverage: COVERAGE, locale },
@@ -84,6 +88,8 @@ describe("RequirementsTraceabilityView", () => {
       expect(wrapper.text()).toContain("NED-001");
       expect(wrapper.text()).toContain(locale === "it" ? "partecipa a" : "participates in");
       expect(wrapper.text()).toContain(locale === "it" ? "rivela" : "reveals");
+      expect(wrapper.text()).toContain("JRN-001");
+      expect(wrapper.text()).toContain(locale === "it" ? "espande" : "expands");
     },
   );
   it("renders typed traceability links with readable codes", () => {

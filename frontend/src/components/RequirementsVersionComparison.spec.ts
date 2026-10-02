@@ -64,6 +64,36 @@ function version(
 }
 
 describe("RequirementsVersionComparison", () => {
+  it("compares journey phase changes by the surviving journey identity", () => {
+    const before = version(1, "Search guests.");
+    const after = version(2, "Search guests.");
+    const journey = {
+      id: "journey-32",
+      code: "JRN-001",
+      title: "Welcome the guest",
+      scenario_id: "scenario-32",
+      sources: [],
+      phases: [
+        {
+          title: "Identify",
+          action: "Find the guest",
+          touchpoint: null,
+          criticalities: [],
+          need_ids: ["need-32"],
+        },
+      ],
+    };
+    before.specification.journeys = [journey];
+    after.specification.journeys = [
+      { ...journey, phases: [{ ...journey.phases[0]!, action: "Find and confirm the guest" }] },
+    ];
+    const wrapper = mount(RequirementsVersionComparison, {
+      props: { versions: [before, after], locale: "it" },
+    });
+    const row = wrapper.findAll("tbody tr").find((row) => row.text().includes("JRN-001"))!;
+    expect(row.text()).toContain("Journey");
+    expect(row.text()).toContain("Modificato");
+  });
   it("compares a need by its surviving identity across definition versions", () => {
     const before = version(1, "Search guests.");
     const after = version(2, "Search guests.");

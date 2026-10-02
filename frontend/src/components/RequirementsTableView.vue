@@ -50,6 +50,13 @@ const props = withDefaults(
 const messages = {
   en: {
     needs: { title: "Needs", description: "Needs linked to their scenarios and sources." },
+    journeys: {
+      title: "Journey",
+      description: "Ordered phases linked to a scenario and its needs.",
+    },
+    phase: "Phase",
+    action: "Action",
+    touchpoint: "Touchpoint",
     noNeeds: "Needs were not recorded in this definition.",
     context: "Context",
     criticalities: "Potential difficulties",
@@ -157,6 +164,13 @@ const messages = {
   },
   it: {
     needs: { title: "Bisogni", description: "Bisogni collegati ai loro scenari e alle fonti." },
+    journeys: {
+      title: "Journey",
+      description: "Fasi ordinate collegate a uno scenario e ai suoi bisogni.",
+    },
+    phase: "Fase",
+    action: "Azione",
+    touchpoint: "Punto di contatto",
     noNeeds: "I bisogni non erano registrati in questa definizione.",
     context: "Contesto",
     criticalities: "Criticità",
@@ -277,6 +291,44 @@ const sections = computed<TableSection[]>(() => {
   const scenarioTitles = new Map(specification.scenarios.map((item) => [item.id, item.title]));
 
   return [
+    ...((specification.journeys ?? []).length > 0
+      ? [
+          {
+            key: "journeys",
+            ...text.journeys,
+            columns: [
+              { key: "code", label: text.code },
+              { key: "title", label: text.title },
+              { key: "scenario", label: text.scenariosColumn },
+              { key: "phase", label: text.phase },
+              { key: "action", label: text.action },
+              { key: "touchpoint", label: text.touchpoint },
+              { key: "needs", label: text.needsColumn },
+              { key: "criticalities", label: text.criticalities },
+              { key: "sources", label: text.sources },
+            ],
+            rows: (specification.journeys ?? []).flatMap((journey) =>
+              journey.phases.map((phase, index) => ({
+                code: journey.code,
+                title: journey.title,
+                scenario: scenarioTitles.get(journey.scenario_id) ?? journey.scenario_id,
+                phase: `${index + 1}. ${phase.title}`,
+                action: phase.action,
+                touchpoint: phase.touchpoint ?? "",
+                needs: referenceCodes(phase.need_ids, needTitles),
+                criticalities: phase.criticalities.join("\n"),
+                sources: journey.sources
+                  .map((source) =>
+                    Object.values(source)
+                      .filter((value) => value !== null)
+                      .join(" · "),
+                  )
+                  .join("\n"),
+              })),
+            ),
+          },
+        ]
+      : []),
     {
       key: "requirements",
       ...text.requirements,
@@ -445,12 +497,26 @@ const sections = computed<TableSection[]>(() => {
     },
   ].sort(
     (left, right) =>
-      ["scenarios", "needs", "stories", "requirements", "criteria", "risks", "done"].indexOf(
-        left.key,
-      ) -
-      ["scenarios", "needs", "stories", "requirements", "criteria", "risks", "done"].indexOf(
-        right.key,
-      ),
+      [
+        "scenarios",
+        "needs",
+        "journeys",
+        "stories",
+        "requirements",
+        "criteria",
+        "risks",
+        "done",
+      ].indexOf(left.key) -
+      [
+        "scenarios",
+        "needs",
+        "journeys",
+        "stories",
+        "requirements",
+        "criteria",
+        "risks",
+        "done",
+      ].indexOf(right.key),
   );
 });
 

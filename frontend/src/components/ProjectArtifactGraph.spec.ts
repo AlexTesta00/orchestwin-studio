@@ -88,6 +88,7 @@ describe("ProjectArtifactGraph", () => {
         version_number: null,
         content_hash: null,
       };
+      const journey = { ...need, kind: "JOURNEY" as const, artifact_id: "journey-32" };
       graph.nodes.push(
         {
           reference: scenario,
@@ -101,19 +102,28 @@ describe("ProjectArtifactGraph", () => {
           display_code: "NED-001",
           title: "Recognize guests",
         },
+        {
+          reference: journey,
+          stage: "REQUIREMENTS",
+          display_code: "JRN-001",
+          title: "Welcome the guest",
+        },
       );
       graph.links.push(
         { kind: "PARTICIPATES_IN", source: twin.reference, target: scenario },
         { kind: "REVEALS", source: scenario, target: need },
         { kind: "MOTIVATES", source: need, target: requirement.reference },
+        { kind: "EXPANDS", source: scenario, target: journey },
+        { kind: "REVEALS", source: journey, target: need },
       );
-      graph.stage_counts.REQUIREMENTS += 2;
+      graph.stage_counts.REQUIREMENTS += 3;
       const wrapper = mountGraph({ locale, api: { ...fakeApi(), current: async () => graph } });
       await flushPromises();
       expect(wrapper.text()).toContain(locale === "it" ? "partecipa a" : "participates in");
       expect(wrapper.text()).toContain(locale === "it" ? "rivela" : "reveals");
+      expect(wrapper.text()).toContain(locale === "it" ? "espande" : "expands");
       await wrapper.get('[data-testid="artifact-kind-filter"]').setValue("NEED");
-      expect(wrapper.findAll("tbody tr")).toHaveLength(2);
+      expect(wrapper.findAll("tbody tr")).toHaveLength(3);
       expect(
         wrapper.findAll("tbody tr").every((row) => row.text().includes("Recognize guests")),
       ).toBe(true);
@@ -121,6 +131,9 @@ describe("ProjectArtifactGraph", () => {
       expect(wrapper.get('[data-testid="artifact-kind-filter"]').text()).toContain(
         locale === "it" ? "Bisogno" : "Need",
       );
+      await wrapper.get('[data-testid="artifact-kind-filter"]').setValue("JOURNEY");
+      expect(wrapper.findAll("tbody tr")).toHaveLength(2);
+      expect(wrapper.findAll("h5").map((heading) => heading.text())).toEqual(["Welcome the guest"]);
     },
   );
   beforeEach(() => {

@@ -89,6 +89,69 @@ function specification(): RequirementsSpecificationPayload {
 
 describe("RequirementsDefinitionView", () => {
   it.each(["en", "it"] as const)(
+    "shows journey phases on demand with scenario and need links in %s",
+    async (locale) => {
+      const value = specification();
+      value.journeys = [
+        {
+          id: "journey",
+          code: "JRN-001",
+          title: "Welcome a guest",
+          scenario_id: "scenario",
+          sources: [source],
+          phases: [
+            {
+              title: "Identify",
+              action: "Find the guest's name",
+              touchpoint: "Guest list",
+              criticalities: ["Possible shared names"],
+              need_ids: ["need"],
+            },
+            {
+              title: "Welcome",
+              action: "Confirm the arrival",
+              touchpoint: null,
+              criticalities: [],
+              need_ids: ["need"],
+            },
+          ],
+        },
+      ];
+      const wrapper = mount(RequirementsDefinitionView, {
+        props: { specification: value, locale },
+      });
+      expect(
+        wrapper
+          .findAll("section")
+          .slice(0, 2)
+          .map((section) => section.attributes("data-testid")),
+      ).toEqual(["definition-section-scenarios", "definition-section-needs"]);
+      const journey = wrapper.get('[data-testid="definition-journeys-item"]');
+      expect(journey.get("summary").text()).toBe("Welcome a guest");
+      expect(journey.attributes("open")).toBeUndefined();
+      wrapper.vm.openItem("JRN-001");
+      await wrapper.vm.$nextTick();
+      expect(journey.attributes("open")).toBeDefined();
+      expect(
+        journey.findAll('[data-testid="journey-phase"] h4').map((phase) => phase.text()),
+      ).toEqual(["1. Identify", "2. Welcome"]);
+      expect(journey.text()).toContain("Receptionist");
+      expect(journey.text()).toContain("Find the guest's name");
+      expect(journey.text()).toContain("Guest list");
+      expect(journey.text()).toContain("Possible shared names");
+      expect(journey.text()).toContain(locale === "it" ? "Punto di contatto" : "Touchpoint");
+      expect(journey.get('[data-testid="definition-source-reference"]').text()).toContain(
+        source.source_id,
+      );
+      await journey.findAll('[data-testid="journey-phase"]')[0]!.get("button").trigger("click");
+      expect(wrapper.emitted("select-item")).toEqual([["NED-001"]]);
+      await journey.get('button[data-testid="definition-reference-link"]').trigger("click");
+      expect(wrapper.emitted("select-item")?.[1]).toEqual(["SCN-001"]);
+      await expectAccessible(wrapper.element);
+    },
+  );
+
+  it.each(["en", "it"] as const)(
     "shows titles in chain order with closed details and exact sources in %s",
     async (locale) => {
       const wrapper = mount(RequirementsDefinitionView, {
