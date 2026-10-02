@@ -26,6 +26,7 @@ from orchestwin.agents.team_gate import (
     ProjectWorkflowReadiness,
     TeamEditResult,
 )
+from orchestwin.api.artifact_why import WhyQueryService
 from orchestwin.api.artifacts import ArtifactGraphQueryService
 from orchestwin.api.design import (
     DesignGateService,
@@ -37,6 +38,7 @@ from orchestwin.api.runtime_configuration import load_runtime_connection_setting
 from orchestwin.api.sections import build_sections_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
+from orchestwin.artifacts.why_runtime import SqlAlchemyWhyQueryService
 from orchestwin.config import (
     ApplicationSettings,
     ModelRuntimeMode,
@@ -211,6 +213,7 @@ class ApplicationRuntime:
     design_query_service: DesignQueryService | None = None
     design_gate_service: DesignGateService | None = None
     artifact_graph_query_service: ArtifactGraphQueryService | None = None
+    why_query_service: WhyQueryService | None = None
     project_diagram_service: ProjectDiagramService | None = None
     knowledge_package_service: KnowledgePackageService | None = None
     twin_import_service: TwinImportService | None = None
@@ -310,6 +313,7 @@ def create_default_runtime(
     artifact_graph_query_service = SqlAlchemyArtifactGraphQueryService(
         database_runtime.session_factory
     )
+    why_query_service = SqlAlchemyWhyQueryService(database_runtime.session_factory)
     project_diagram_service = ProjectDiagramService(
         project_service=project_service,
         requirements_query_service=requirements.queries,
@@ -401,6 +405,7 @@ def create_default_runtime(
         design_query_service=design.queries,
         design_gate_service=design.gate,
         artifact_graph_query_service=artifact_graph_query_service,
+        why_query_service=why_query_service,
         project_diagram_service=project_diagram_service,
         knowledge_package_service=knowledge_package_service,
         twin_import_service=twin_import_service,
