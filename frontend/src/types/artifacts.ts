@@ -11,6 +11,7 @@ export type ArtifactGraphStage = "CONTEXT" | "REQUIREMENTS" | "DESIGN";
 
 export type ArtifactGraphNodeKind =
   | "NEED"
+  | "JOURNEY"
   | "PROJECT_BRIEF"
   | "AGENT_TEAM"
   | "USER_MODELING"
@@ -33,6 +34,7 @@ export type ArtifactGraphNodeKind =
 export type ArtifactGraphLinkKind =
   | "PARTICIPATES_IN"
   | "REVEALS"
+  | "EXPANDS"
   | "CONTAINS"
   | "GROUNDED_IN"
   | "ACTS_AS"

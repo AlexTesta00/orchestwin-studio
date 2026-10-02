@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 
 import type {
+  JourneyPhasePayload,
   RequirementSourcePayload,
   RequirementsSpecificationPayload,
 } from "../types/requirements";
@@ -23,6 +24,10 @@ const messages = {
     scenarios: "Scenarios",
     needs: "Needs",
     stories: "User stories",
+    journeys: "Journey",
+    phases: "Phases",
+    action: "Action",
+    touchpoint: "Touchpoint",
     actor: "Actor",
     context: "Context",
     goal: "Goal",
@@ -51,6 +56,10 @@ const messages = {
     scenarios: "Scenari",
     needs: "Bisogni",
     stories: "Storie",
+    journeys: "Journey",
+    phases: "Fasi",
+    action: "Azione",
+    touchpoint: "Punto di contatto",
     actor: "Attore",
     context: "Contesto",
     goal: "Obiettivo",
@@ -86,6 +95,9 @@ const itemById = computed(
         (item) => [item.id, { code: item.code, title: item.title }] as const,
       ),
       ...needs.value.map((item) => [item.id, { code: item.code, title: item.title }] as const),
+      ...(props.specification.journeys ?? []).map(
+        (item) => [item.id, { code: item.code, title: item.title }] as const,
+      ),
       ...props.specification.user_stories.map(
         (item) => [item.id, { code: item.code, title: item.goal }] as const,
       ),
@@ -104,6 +116,7 @@ const sections = computed(() => {
         id: item.id,
         code: item.code,
         title: item.title,
+        phases: [] as JourneyPhasePayload[],
         fields: [
           [text.actor, item.actor.name],
           [text.context, item.context],
@@ -122,6 +135,12 @@ const sections = computed(() => {
               .map((need) => need.id),
           ],
           [text.requirements, item.requirement_ids],
+          [
+            text.journeys,
+            (props.specification.journeys ?? [])
+              .filter((journey) => journey.scenario_id === item.id)
+              .map((journey) => journey.id),
+          ],
         ] as const,
         sources: item.sources ?? [],
       })),
@@ -133,6 +152,7 @@ const sections = computed(() => {
         id: item.id,
         code: item.code,
         title: item.title,
+        phases: [] as JourneyPhasePayload[],
         fields: [[text.needs, item.statement]],
         links: [
           [text.scenarios, item.scenario_ids],
@@ -148,10 +168,39 @@ const sections = computed(() => {
               .filter((requirement) => requirement.need_ids?.includes(item.id))
               .map((requirement) => requirement.id),
           ],
+          [
+            text.journeys,
+            (props.specification.journeys ?? [])
+              .filter((journey) => journey.phases.some((phase) => phase.need_ids.includes(item.id)))
+              .map((journey) => journey.id),
+          ],
         ] as const,
         sources: item.sources,
       })),
     },
+    ...((props.specification.journeys ?? []).length > 0
+      ? [
+          {
+            key: "journeys",
+            title: text.journeys,
+            items: (props.specification.journeys ?? []).map((item) => ({
+              id: item.id,
+              code: item.code,
+              title: item.title,
+              phases: item.phases,
+              fields: [
+                [
+                  text.actor,
+                  props.specification.scenarios.find((scenario) => scenario.id === item.scenario_id)
+                    ?.actor.name,
+                ],
+              ],
+              links: [[text.scenarios, [item.scenario_id]]] as const,
+              sources: item.sources,
+            })),
+          },
+        ]
+      : []),
     {
       key: "stories",
       title: text.stories,
@@ -159,6 +208,7 @@ const sections = computed(() => {
         id: item.id,
         code: item.code,
         title: item.goal,
+        phases: [] as JourneyPhasePayload[],
         fields: [
           [text.actor, item.user_twin_reference.name],
           [text.benefit, item.benefit],
@@ -256,12 +306,51 @@ defineExpose({ openItem });
               <button
                 type="button"
                 class="max-w-full cursor-pointer text-left underline"
+                data-testid="definition-reference-link"
                 @click="emit('select-item', linked.code)"
               >
                 {{ linked.title }}
               </button>
             </template>
           </p>
+          <div
+            v-if="item.phases.length > 0"
+            class="grid min-w-0 gap-3"
+            data-testid="journey-phases"
+          >
+            <h3 class="m-0 text-base font-semibold">{{ copy.phases }}</h3>
+            <section
+              v-for="(phase, phaseIndex) in item.phases"
+              :key="phaseIndex"
+              data-testid="journey-phase"
+              class="grid min-w-0 gap-2"
+            >
+              <h4 class="m-0 font-semibold">{{ phaseIndex + 1 }}. {{ phase.title }}</h4>
+              <p class="m-0 whitespace-pre-line">
+                <strong>{{ copy.action }}:</strong> {{ phase.action }}
+              </p>
+              <p v-if="phase.touchpoint" class="m-0 whitespace-pre-line">
+                <strong>{{ copy.touchpoint }}:</strong> {{ phase.touchpoint }}
+              </p>
+              <p v-if="phase.criticalities.length > 0" class="m-0 whitespace-pre-line">
+                <strong>{{ copy.criticalities }}:</strong> {{ phase.criticalities.join("\n") }}
+              </p>
+              <p class="m-0">
+                <strong>{{ copy.needs }}:</strong>{{ " " }}
+                <template v-for="(linked, linkIndex) in links(phase.need_ids)" :key="linked.code">
+                  <span v-if="linkIndex > 0"> · </span>
+                  <button
+                    type="button"
+                    class="max-w-full cursor-pointer text-left underline"
+                    data-testid="definition-reference-link"
+                    @click="emit('select-item', linked.code)"
+                  >
+                    {{ linked.title }}
+                  </button>
+                </template>
+              </p>
+            </section>
+          </div>
           <div
             v-if="item.sources.length > 0"
             class="max-w-full min-w-0"
@@ -271,7 +360,9 @@ defineExpose({ openItem });
             <ul class="m-0 grid max-w-full min-w-0 gap-1 pl-5">
               <li v-for="(source, index) in item.sources" :key="index" class="min-w-0">
                 <span>{{ copy.sourceKinds[source.kind] }}</span
-                ><span class="block text-xs">{{ sourceDetails(source) }}</span>
+                ><span class="block text-xs" data-testid="definition-source-reference">{{
+                  sourceDetails(source)
+                }}</span>
               </li>
             </ul>
           </div>

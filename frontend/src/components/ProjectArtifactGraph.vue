@@ -81,6 +81,8 @@ const messages = {
     kindFilter: "Item filter",
     allKinds: "All items",
     need: "Need",
+    journey: "Journey",
+    expands: "expands",
     scenario: "Scenario",
     participates: "participates in",
     reveals: "reveals",
@@ -125,6 +127,8 @@ const messages = {
     kindFilter: "Filtro degli elementi",
     allKinds: "Tutti gli elementi",
     need: "Bisogno",
+    journey: "Journey",
+    expands: "espande",
     scenario: "Scenario",
     participates: "partecipa a",
     reveals: "rivela",
@@ -181,16 +185,24 @@ const nodeKinds = computed(() => [
 ]);
 
 function nodeKindLabel(kind: ArtifactGraphNodeKind): string {
-  return kind === "NEED" ? copy.value.need : kind === "SCENARIO" ? copy.value.scenario : kind;
+  return kind === "JOURNEY"
+    ? copy.value.journey
+    : kind === "NEED"
+      ? copy.value.need
+      : kind === "SCENARIO"
+        ? copy.value.scenario
+        : kind;
 }
 function linkKindLabel(kind: ArtifactGraphLinkKind): string {
-  return kind === "PARTICIPATES_IN"
-    ? copy.value.participates
-    : kind === "REVEALS"
-      ? copy.value.reveals
-      : kind === "MOTIVATES"
-        ? copy.value.motivates
-        : kind;
+  return kind === "EXPANDS"
+    ? copy.value.expands
+    : kind === "PARTICIPATES_IN"
+      ? copy.value.participates
+      : kind === "REVEALS"
+        ? copy.value.reveals
+        : kind === "MOTIVATES"
+          ? copy.value.motivates
+          : kind;
 }
 
 function referenceKey(reference: ArtifactGraphReferencePayload): string {

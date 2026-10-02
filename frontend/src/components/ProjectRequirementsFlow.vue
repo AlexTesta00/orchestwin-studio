@@ -274,6 +274,10 @@ const messages = {
       "Your request for changes could not be recorded. Your note is still there: try again in a moment.",
     requestPlaceholder:
       "Write what is wrong: the request is recorded with your note. Then you can propose the change on the requirements.",
+    requestJourneys: "Request journeys",
+    journeyCount: ["journey", "journeys"],
+    journeyRequest:
+      "Add user journeys for the existing scenarios, with ordered phases, actions, grounded touchpoints and linked needs. Preserve the rest of the Definition.",
     changePlaceholder:
       "Write what to change: the analyst writes the requirements again and you decide whether to apply the new version.",
     moreActions: "Other choices on the approval",
@@ -458,6 +462,10 @@ const messages = {
       "Non è stato possibile registrare la tua richiesta di modifiche. La nota è ancora lì: riprova tra poco.",
     requestPlaceholder:
       "Scrivi che cosa non va: la richiesta viene registrata con la tua nota. Poi potrai proporre la modifica sui requisiti.",
+    requestJourneys: "Richiedi journey",
+    journeyCount: ["journey", "journey"],
+    journeyRequest:
+      "Aggiungi journey per gli scenari esistenti, con fasi ordinate, azioni, punti di contatto fondati e bisogni collegati. Conserva il resto della Definizione.",
     changePlaceholder:
       "Scrivi che cosa cambiare: l'analista riscrive i requisiti e decidi tu se applicare la nuova versione.",
     moreActions: "Altre scelte sull'approvazione",
@@ -571,6 +579,9 @@ const summaryLine = computed(() => {
     counted(value.user_stories.length, text.storyCount),
     counted(value.requirements.length, text.requirementCount),
     counted(value.acceptance_criteria.length, text.criterionCount),
+    ...((value.journeys ?? []).length > 0
+      ? [counted(value.journeys!.length, text.journeyCount)]
+      : []),
   ];
 
   return `${text.preparedBy} · ${counts.join(", ")}`;
@@ -677,6 +688,7 @@ const diagramLinks = computed<DiagramLink[]>(() => {
 
   return [
     ...(value.needs ?? []).map((item) => link(item.code, item.title)),
+    ...(value.journeys ?? []).map((item) => link(item.code, item.title)),
     ...value.requirements.map((item) => link(item.code, item.title)),
     ...value.user_stories.map((item) => link(item.code, item.goal)),
     ...value.acceptance_criteria.map((item) => link(item.code, item.statement)),
@@ -1326,10 +1338,16 @@ async function recordRequest(reason: string): Promise<boolean> {
   return requested;
 }
 
-async function askForChange(request: string): Promise<void> {
+async function askForChange(request: string, includeJourneys = false): Promise<void> {
   const projectId = props.projectId;
   changeText.value = request;
-  const asked = store.requestChange(projectId, request, authorizedRequest, api.value);
+  const asked = store.requestChange(
+    projectId,
+    request,
+    authorizedRequest,
+    api.value,
+    includeJourneys,
+  );
   void revealChange();
 
   try {
@@ -1366,7 +1384,7 @@ async function askForChange(request: string): Promise<void> {
   }
 }
 
-async function requestChanges(note: string): Promise<void> {
+async function requestChanges(note: string, includeJourneys = false): Promise<void> {
   const request = note.trim();
 
   if (request.length === 0 || deciding.value || store.isBusy || changeRunning.value) {
@@ -1389,7 +1407,11 @@ async function requestChanges(note: string): Promise<void> {
       if (!(await recordRequest(request))) {
         return;
       }
-    } else if (decisionState.value !== "revision" && !approvedChanges.value) {
+    } else if (
+      decisionState.value !== "revision" &&
+      !approvedChanges.value &&
+      !(includeJourneys && decisionState.value === "approved")
+    ) {
       return;
     }
 
@@ -1398,7 +1420,7 @@ async function requestChanges(note: string): Promise<void> {
       return;
     }
 
-    await askForChange(request);
+    await askForChange(request, includeJourneys);
   } finally {
     deciding.value = false;
   }
@@ -1410,6 +1432,8 @@ function envelopeSummary(envelope: RequirementsArtifactEnvelope | null): string 
   }
 
   switch (envelope.kind) {
+    case "JOURNEY":
+      return envelope.journey?.title ?? copy.value.none;
     case "NEED":
       return envelope.need?.statement ?? copy.value.none;
     case "REQUIREMENT":
@@ -1850,6 +1874,17 @@ onBeforeUnmount(() => {
           :locale="locale"
           @select-item="openItem"
         />
+
+        <UiButton
+          v-if="['approve', 'revision', 'approved'].includes(decisionState)"
+          variant="outline"
+          class="justify-self-start"
+          :disabled="store.isBusy || deciding || changeRunning || pendingDiffs.length > 0"
+          data-testid="definition-request-journeys"
+          @click="requestChanges(copy.journeyRequest, true)"
+        >
+          {{ copy.requestJourneys }}
+        </UiButton>
 
         <section
           class="rounded-tile border border-night-line bg-night-raised px-5 pt-2 pb-2 sm:px-6"

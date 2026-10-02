@@ -1565,6 +1565,34 @@ describe("ProjectRequirementsFlow", () => {
 });
 
 describe("ProjectRequirementsFlow and the titles first", () => {
+  it.each(["en", "it"] as const)(
+    "requests journeys explicitly through the existing owner revision in %s",
+    async (locale) => {
+      const api = readyApi(PENDING_GATE);
+      api.changeOutcome = "proposed";
+      const request = vi.spyOn(api, "requestChange");
+      const generated = vi.spyOn(api, "generate");
+      const wrapper = mountFlow(api, true, { locale });
+      await flushPromises();
+      expect(request).not.toHaveBeenCalled();
+      expect(generated).not.toHaveBeenCalled();
+      const button = wrapper.get('[data-testid="definition-request-journeys"]');
+      expect(button.text()).toBe(locale === "it" ? "Richiedi journey" : "Request journeys");
+      await button.trigger("click");
+      await flushPromises();
+      expect(request).toHaveBeenCalledWith(
+        PROJECT_ID,
+        expect.stringContaining("journey"),
+        "access-token",
+        true,
+      );
+      expect(api.calls).toEqual(["decide:REQUEST_REVISION", "request-change"]);
+      expect(wrapper.find('[data-testid="requirements-pending-change"]').exists()).toBe(true);
+      expect(generated).not.toHaveBeenCalled();
+      wrapper.unmount();
+    },
+  );
+
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.spyOn(requirementsAlignmentApi, "status").mockResolvedValue(ALIGNED);
