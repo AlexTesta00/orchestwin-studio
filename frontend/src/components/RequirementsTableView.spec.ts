@@ -208,22 +208,23 @@ function rowHeaders(wrapper: VueWrapper, key: string): string[] {
 }
 
 describe("RequirementsTableView", () => {
-  it("shows the six tables in order with a heading and an explanation each", async () => {
+  it("shows the scenario chain and technical tables in order with a heading and an explanation each", async () => {
     const wrapper = mounted();
 
     expect(wrapper.findAll("h2").map((heading) => heading.text())).toEqual([
-      "Requirements",
+      "Scenarios",
+      "Needs",
       "User stories",
+      "Requirements",
       "Acceptance criteria",
-      "Usage scenarios",
       "Risks",
       "When the work is done",
     ]);
     expect(wrapper.findAll("caption").map((caption) => caption.text())).toEqual([
-      "Requirements",
+      "Scenarios",
       "User stories",
+      "Requirements",
       "Acceptance criteria",
-      "Usage scenarios",
       "Risks",
       "When the work is done",
     ]);
@@ -232,10 +233,11 @@ describe("RequirementsTableView", () => {
     await wrapper.setProps({ locale: "it" });
 
     expect(wrapper.findAll("h2").map((heading) => heading.text())).toEqual([
+      "Scenari",
+      "Bisogni",
+      "Storie",
       "Requisiti",
-      "Storie degli utenti",
       "Criteri di accettazione",
-      "Scenari d'uso",
       "Rischi",
       "Quando il lavoro è finito",
     ]);
@@ -306,12 +308,12 @@ describe("RequirementsTableView", () => {
     ).toContain("text-warn");
   });
 
-  it("keeps the table of the requirements open and the other tables closed until asked", async () => {
+  it("keeps the table of the scenarios open and the other tables closed until asked", async () => {
     const wrapper = mounted(SPECIFICATION, "it");
-    const others = ["stories", "criteria", "scenarios", "risks", "done"];
+    const others = ["needs", "stories", "requirements", "criteria", "risks", "done"];
 
-    expect(section(wrapper, "requirements").element.tagName).toBe("SECTION");
-    expect(section(wrapper, "requirements").get("h2").classes()).toContain("sr-only");
+    expect(section(wrapper, "scenarios").element.tagName).toBe("SECTION");
+    expect(section(wrapper, "scenarios").get("h2").classes()).toContain("sr-only");
     expect(wrapper.text()).toContain("Altre tabelle");
     for (const key of others) {
       const details = section(wrapper, key);
@@ -319,7 +321,7 @@ describe("RequirementsTableView", () => {
       expect(details.attributes("open")).toBeUndefined();
     }
     expect(section(wrapper, "stories").get("summary").text()).toContain("2 righe");
-    expect(section(wrapper, "scenarios").get("summary").text()).toContain("1 riga");
+    expect(section(wrapper, "needs").get("summary").text()).toContain("0 righe");
     expect(section(wrapper, "risks").get("summary h2").text()).toBe("Rischi");
   });
 
@@ -462,7 +464,7 @@ describe("RequirementsTableView", () => {
   it("keeps a section with a short text when its table is empty", async () => {
     const wrapper = mounted({ ...SPECIFICATION, risks: [], scenarios: [] }, "it");
 
-    expect(wrapper.findAll("h2")).toHaveLength(6);
+    expect(wrapper.findAll("h2")).toHaveLength(7);
     expect(section(wrapper, "risks").find("table").exists()).toBe(false);
     expect(section(wrapper, "risks").get('[data-testid="artifact-table-empty"]').text()).toBe(
       "Ancora nulla da mostrare.",
