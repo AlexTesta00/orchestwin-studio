@@ -6,7 +6,13 @@ const { agentsState } = require("./agents");
 
 const LOCAL_FOLDER = ".orchestwin";
 const KNOWLEDGE_FOLDER = "orchestwin";
-const STAGES = Object.freeze(["brief", "team", "twins", "requirements", "design"]);
+const STAGES = Object.freeze([
+  "brief",
+  "team",
+  "twins",
+  "requirements",
+  "design",
+]);
 const VERDICTS = Object.freeze([
   "ALIGNED",
   "CODE_DRIFT",
@@ -40,6 +46,7 @@ const FOLDER_FILES = Object.freeze({
   tests: "twins/feedback/tests.json",
   learned: "twins/feedback/learned.json",
   requirements: "requirements/requirements.json",
+  evidence: "twins/evidence.json",
 });
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const FORBIDDEN_FOLDER_CHARACTERS = /[/\\:*?"<>|\0]/;
@@ -98,7 +105,8 @@ function readJson(root, relative) {
   try {
     content = fs.readFileSync(file, "utf8");
   } catch (error) {
-    const missing = error && (error.code === "ENOENT" || error.code === "ENOTDIR");
+    const missing =
+      error && (error.code === "ENOENT" || error.code === "ENOTDIR");
     return { status: missing ? "MISSING" : "UNREADABLE", value: null };
   }
   try {
@@ -245,7 +253,8 @@ function isStale(reference, current) {
     return false;
   }
   return (
-    reference.requirements_version_number !== current.requirements_version_number ||
+    reference.requirements_version_number !==
+      current.requirements_version_number ||
     reference.design_version_number !== current.design_version_number ||
     reference.alternative_code !== current.alternative_code
   );
@@ -276,7 +285,10 @@ function developmentOf(stateDocument, manifest) {
   const aligned =
     alignedCommit === null
       ? null
-      : { commit: alignedCommit, decidedAt: textOf(alignedDocument.decided_at) };
+      : {
+          commit: alignedCommit,
+          decidedAt: textOf(alignedDocument.decided_at),
+        };
   let pending = 0;
   for (const change of changes) {
     if (aligned !== null && change.commit === aligned.commit) {
@@ -285,9 +297,13 @@ function developmentOf(stateDocument, manifest) {
     pending += 1;
   }
   const pendingChanges = changes.slice(0, pending);
-  const flagged = changes.some((change) => typeof objectOf(change.review).stale === "boolean");
+  const flagged = changes.some(
+    (change) => typeof objectOf(change.review).stale === "boolean",
+  );
   const counted = countOf(objectOf(manifest.state).stale_reviews);
-  const staleChanges = pendingChanges.filter((change) => objectOf(change.review).stale === true);
+  const staleChanges = pendingChanges.filter(
+    (change) => objectOf(change.review).stale === true,
+  );
   return {
     available: true,
     problem: null,
@@ -296,7 +312,9 @@ function developmentOf(stateDocument, manifest) {
     pending,
     staleKnown: flagged || counted !== null,
     stale: flagged ? staleChanges.length : (counted ?? 0),
-    staleCommits: staleChanges.map((change) => textOf(change.commit)).filter(Boolean),
+    staleCommits: staleChanges
+      .map((change) => textOf(change.commit))
+      .filter(Boolean),
     latest: changes.length > 0 ? changeOf(changes[0]) : null,
   };
 }
@@ -352,7 +370,9 @@ function statementsOf(requirementsDocument) {
     return statements;
   }
   const document = requirementsDocument.value;
-  const criteria = Array.isArray(objectOf(document.specification).acceptance_criteria)
+  const criteria = Array.isArray(
+    objectOf(document.specification).acceptance_criteria,
+  )
     ? document.specification.acceptance_criteria
     : listOf(document.acceptance_criteria);
   for (const criterion of criteria.filter(isObject)) {
@@ -383,7 +403,10 @@ function runOf(run, source, statements, current) {
     finishedAt: textOf(run.finished_at),
     browsers: listOf(run.browsers)
       .filter(isObject)
-      .map((browser) => ({ name: textOf(browser.name), version: textOf(browser.version) }))
+      .map((browser) => ({
+        name: textOf(browser.name),
+        version: textOf(browser.version),
+      }))
       .filter((browser) => browser.name !== null),
     summary: {
       passed: countOf(summary.passed) ?? 0,
@@ -444,7 +467,8 @@ function reportOf(root, pointer) {
 function testsOf(root, reader, documents, current) {
   const found = documents.tests;
   const broken = found.status !== "OK" && found.status !== "MISSING";
-  const runs = found.status === "OK" ? listOf(found.value.runs).filter(isObject) : [];
+  const runs =
+    found.status === "OK" ? listOf(found.value.runs).filter(isObject) : [];
   const latest = reader.read(LOCAL_FILES.tests);
   const pointer = latest.status === "OK" ? latest.value : null;
   const local = pointer === null ? null : localRun(reader, pointer, runs);
@@ -455,7 +479,9 @@ function testsOf(root, reader, documents, current) {
     problem: broken && local === null ? found.status : null,
     runs: runs.length,
     latest:
-      run === null ? null : runOf(run, local === null ? "FOLDER" : "LOCAL", statements, current),
+      run === null
+        ? null
+        : runOf(run, local === null ? "FOLDER" : "LOCAL", statements, current),
     report: pointer === null ? null : reportOf(root, pointer),
   };
 }
@@ -543,7 +569,11 @@ function latestObservations(entry) {
       moment: momentOf(observation.approved_at),
     }));
   items.sort((left, right) => {
-    if (left.moment !== null && right.moment !== null && left.moment !== right.moment) {
+    if (
+      left.moment !== null &&
+      right.moment !== null &&
+      left.moment !== right.moment
+    ) {
       return right.moment - left.moment;
     }
     return right.index - left.index;
@@ -558,7 +588,9 @@ function latestObservations(entry) {
 
 function twinsOf(manifest, documents) {
   const learning = documents.learned.status === "OK";
-  const entries = learning ? listOf(documents.learned.value.twins).filter(isObject) : [];
+  const entries = learning
+    ? listOf(documents.learned.value.twins).filter(isObject)
+    : [];
   let base = twinsFromSnapshot(documents.twins);
   if (base.length === 0) {
     base = twinsFromManifest(manifest);
@@ -570,23 +602,31 @@ function twinsOf(manifest, documents) {
     return emptyTwins(documents.twins.status);
   }
   const changeRuns =
-    documents.changes.status === "OK" ? listOf(documents.changes.value.runs).filter(isObject) : [];
+    documents.changes.status === "OK"
+      ? listOf(documents.changes.value.runs).filter(isObject)
+      : [];
   const testRuns =
-    documents.tests.status === "OK" ? listOf(documents.tests.value.runs).filter(isObject) : [];
+    documents.tests.status === "OK"
+      ? listOf(documents.tests.value.runs).filter(isObject)
+      : [];
   const items = base.map((twin) => {
     const entry =
       entries.find((item) =>
-        twin.id !== null ? item.twin_id === twin.id : item.twin_name === twin.name,
+        twin.id !== null
+          ? item.twin_id === twin.id
+          : item.twin_name === twin.name,
       ) ?? null;
     const onCommit = latestCritique(changeRuns, twin);
     const onTest = latestCritique(testRuns, twin);
-    return {
+    const result = {
       id: twin.id,
       name: twin.name,
       profileVersion: twin.profileVersion,
-      developmentVersion: entry === null ? null : countOf(entry.development_version_number),
+      developmentVersion:
+        entry === null ? null : countOf(entry.development_version_number),
       label: labelOf(entry, twin.profileVersion),
-      learned: entry === null ? 0 : listOf(entry.observations).filter(isObject).length,
+      learned:
+        entry === null ? 0 : listOf(entry.observations).filter(isObject).length,
       observations: latestObservations(entry),
       commit:
         onCommit === null
@@ -606,6 +646,39 @@ function twinsOf(manifest, documents) {
               reviewedAt: textOf(onTest.run.reviewed_at),
             },
     };
+    const evidence = documents.evidence;
+    if (
+      evidence &&
+      evidence.status === "OK" &&
+      evidence.value.kind === "orchestwin.research-evidence" &&
+      evidence.value.schema_version === 1
+    ) {
+      const sources = listOf(evidence.value.evidence).filter(isObject);
+      result.evidence = listOf(evidence.value.citations)
+        .filter(isObject)
+        .filter((item) => item.twin_id === twin.id)
+        .map((item) => {
+          const citation = objectOf(item.citation);
+          const source = sources.find(
+            (entry) =>
+              entry.id === citation.source_id &&
+              entry.version === citation.source_version,
+          );
+          return {
+            code: source ? textOf(source.code) : null,
+            title: source ? textOf(source.title) : null,
+            version: countOf(citation.source_version),
+            status: textOf(item.status),
+            effect: textOf(item.effect),
+            field: textOf(item.field),
+            quote: textOf(citation.quote),
+            first: countOf(citation.start_line),
+            last: countOf(citation.end_line),
+            limitations: source ? textOf(source.limitations) : null,
+          };
+        });
+    }
+    return result;
   });
   return { available: true, problem: null, learning, items };
 }
@@ -630,7 +703,9 @@ function codeOf(found) {
     exitStatus: Number.isInteger(document.exit_status)
       ? document.exit_status
       : textOf(document.exit_status),
-    changedFiles: Array.isArray(document.changed_files) ? document.changed_files.length : null,
+    changedFiles: Array.isArray(document.changed_files)
+      ? document.changed_files.length
+      : null,
   };
 }
 
@@ -667,10 +742,18 @@ function readLinkedProject(root) {
       learned: reader.read(inFolder(FOLDER_FILES.learned)),
       requirements: reader.read(inFolder(FOLDER_FILES.requirements)),
     };
+    if (isObject(manifest.value.research_evidence)) {
+      documents.evidence = reader.read(inFolder(FOLDER_FILES.evidence));
+    }
     state.reference = referenceOf(documents.state);
     state.development = developmentOf(documents.state, manifest.value);
     state.tasks = tasksOf(documents.state);
-    state.tests = testsOf(root, reader, documents, currentReference(state.reference));
+    state.tests = testsOf(
+      root,
+      reader,
+      documents,
+      currentReference(state.reference),
+    );
     state.twins = twinsOf(manifest.value, documents);
   } else {
     const problem = state.folder.problem;

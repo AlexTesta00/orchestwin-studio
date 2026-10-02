@@ -42,7 +42,8 @@ const MESSAGES = Object.freeze({
     "panel.error":
       "The panel cannot show this project: see where it stands in the terminal (`ut status`).",
     "header.folderVersion": "Knowledge folder version {version}",
-    "header.folderPublished": "Knowledge folder version {version}, published on {date}",
+    "header.folderPublished":
+      "Knowledge folder version {version}, published on {date}",
     "header.folderMissing": "The knowledge folder ({folder}/) is not here yet.",
     "header.folderBroken": "The knowledge folder ({folder}/) cannot be read.",
     "header.steps": "Steps of the project",
@@ -58,13 +59,15 @@ const MESSAGES = Object.freeze({
     "notice.label": "Files the panel could not read",
     "notice.INVALID_JSON": "{file} is not valid JSON: the panel skips it.",
     "notice.UNREADABLE": "{file} cannot be read: the panel skips it.",
-    "notice.UNEXPECTED": "{file} does not hold what the panel expects: the panel skips it.",
+    "notice.UNEXPECTED":
+      "{file} does not hold what the panel expects: the panel skips it.",
     "next.title": "Next step",
     "next.noFolder":
       "Open the folder of an OrchesTwin project in the editor. To start a new project, launch `ut init` in the terminal of that folder.",
     "next.notLinked":
       "This folder is not linked to an OrchesTwin project yet: launch `ut init` in the terminal to create the project and link the folder.",
-    "next.folderMissing": "The knowledge folder is not here yet: see where the project stands.",
+    "next.folderMissing":
+      "The knowledge folder is not here yet: see where the project stands.",
     "next.folderBroken":
       "Some files of the knowledge folder cannot be read: download the folder again.",
     "next.init":
@@ -120,7 +123,8 @@ const MESSAGES = Object.freeze({
     "development.stale": "To re-review",
     "development.none": "none",
     "development.reference": "Reference",
-    "development.referenceValue": "requirements v{requirements} · design v{design}",
+    "development.referenceValue":
+      "requirements v{requirements} · design v{design}",
     "development.latest": "Latest commit",
     "development.noCommits":
       "No commit recorded yet: after your first commit, have it reviewed by the twins (`ut align`).",
@@ -189,7 +193,8 @@ const MESSAGES = Object.freeze({
     "status.FAILED": "Failed",
     "status.BLOCKED": "Blocked",
     "twins.title": "Twins",
-    "twins.notYet": "The twins are not approved yet: the guided path gets to them (`ut init`).",
+    "twins.notYet":
+      "The twins are not approved yet: the guided path gets to them (`ut init`).",
     "twins.none": "No twin in the approved user modeling.",
     "twins.version": "version {label}",
     "twins.onCommit": "On commit {commit}",
@@ -201,6 +206,9 @@ const MESSAGES = Object.freeze({
       "Learned {count} things during the development",
     ],
     "twins.learnedNone": "Nothing learned during the development yet",
+    "twins.evidence": "Evidence references",
+    "twins.evidenceLimit":
+      "Approved quotations, without original documents. Owner approval is not empirical research or human validation.",
     "critique.FINE": "No concerns",
     "critique.CONCERN": "Some concerns",
     "critique.DRIFT": "Off course",
@@ -212,8 +220,10 @@ const MESSAGES = Object.freeze({
     "agents.CONNECTED": "Connected in .vscode/mcp.json",
     "agents.NOT_CONNECTED": "Not connected yet",
     "agents.MISSING": "Not connected yet",
-    "agents.INVALID": ".vscode/mcp.json is not valid JSON: the panel does not overwrite it",
-    "agents.UNREADABLE": ".vscode/mcp.json cannot be read: the panel does not overwrite it",
+    "agents.INVALID":
+      ".vscode/mcp.json is not valid JSON: the panel does not overwrite it",
+    "agents.UNREADABLE":
+      ".vscode/mcp.json cannot be read: the panel does not overwrite it",
     "footer.note":
       "The panel reads the files of this folder: it never calls the Studio and never spends. The buttons write the commands of `ut` in the terminal, which asks before any paid step.",
     "status.sent": "Written in the terminal: {command}",
@@ -241,9 +251,12 @@ const MESSAGES = Object.freeze({
     "panel.error":
       "Il pannello non riesce a mostrare questo progetto: guarda a che punto è nel terminale (`ut status`).",
     "header.folderVersion": "Cartella di conoscenza versione {version}",
-    "header.folderPublished": "Cartella di conoscenza versione {version}, pubblicata il {date}",
-    "header.folderMissing": "La cartella di conoscenza ({folder}/) non è ancora qui.",
-    "header.folderBroken": "La cartella di conoscenza ({folder}/) non si legge.",
+    "header.folderPublished":
+      "Cartella di conoscenza versione {version}, pubblicata il {date}",
+    "header.folderMissing":
+      "La cartella di conoscenza ({folder}/) non è ancora qui.",
+    "header.folderBroken":
+      "La cartella di conoscenza ({folder}/) non si legge.",
     "header.steps": "Passi del progetto",
     "header.partial":
       "Il design non è ancora approvato: lo sviluppo parte dopo l'approvazione del design.",
@@ -321,7 +334,8 @@ const MESSAGES = Object.freeze({
     "development.stale": "Da riesaminare",
     "development.none": "nessuno",
     "development.reference": "Riferimento",
-    "development.referenceValue": "requisiti v{requirements} · design v{design}",
+    "development.referenceValue":
+      "requisiti v{requirements} · design v{design}",
     "development.latest": "Ultimo commit",
     "development.noCommits":
       "Nessun commit registrato: dopo il primo commit, fallo esaminare ai twin (`ut align`).",
@@ -332,7 +346,8 @@ const MESSAGES = Object.freeze({
     "verdict.REQUIREMENTS_OUTDATED": "Vanno aggiornati i requisiti",
     "decision.ALIGNED": "Decisione: punto allineato",
     "decision.DESIGN_CHANGE": "Decisione: chiesto un nuovo design",
-    "decision.REQUIREMENTS_CHANGE": "Decisione: chiesta una modifica dei requisiti",
+    "decision.REQUIREMENTS_CHANGE":
+      "Decisione: chiesta una modifica dei requisiti",
     "decision.CODE_TASKS": "Decisione: compiti per il codice",
     "decision.DISMISSED": "Decisione: niente da fare",
     "chip.stale": "Da riesaminare",
@@ -368,7 +383,8 @@ const MESSAGES = Object.freeze({
       "Nessuna verifica ancora: i test aprono la tua applicazione nei browser e verificano i criteri di accettazione (`ut test`).",
     "tests.latest": "Ultima verifica",
     "tests.browsers": "Browser",
-    "tests.local": "Letta da questo computer: non è ancora nella cartella di conoscenza.",
+    "tests.local":
+      "Letta da questo computer: non è ancora nella cartella di conoscenza.",
     "tests.counts": "Criteri per esito",
     "tests.PASSED": ["{count} superato", "{count} superati"],
     "tests.FAILED": ["{count} fallito", "{count} falliti"],
@@ -390,7 +406,8 @@ const MESSAGES = Object.freeze({
     "status.FAILED": "Fallito",
     "status.BLOCKED": "Bloccato",
     "twins.title": "Twin",
-    "twins.notYet": "I twin non sono ancora approvati: ci arriva il percorso guidato (`ut init`).",
+    "twins.notYet":
+      "I twin non sono ancora approvati: ci arriva il percorso guidato (`ut init`).",
     "twins.none": "Nessun twin nella modellazione degli utenti approvata.",
     "twins.version": "versione {label}",
     "twins.onCommit": "Sul commit {commit}",
@@ -402,6 +419,9 @@ const MESSAGES = Object.freeze({
       "Ha imparato {count} cose durante lo sviluppo",
     ],
     "twins.learnedNone": "Non ha ancora imparato niente durante lo sviluppo",
+    "twins.evidence": "Riferimenti alle evidenze",
+    "twins.evidenceLimit":
+      "Citazioni approvate, senza documenti originali. L'approvazione del proprietario non è ricerca empirica o validazione umana.",
     "critique.FINE": "Nessun dubbio",
     "critique.CONCERN": "Qualche dubbio",
     "critique.DRIFT": "Fuori strada",
@@ -413,18 +433,24 @@ const MESSAGES = Object.freeze({
     "agents.CONNECTED": "Collegati in .vscode/mcp.json",
     "agents.NOT_CONNECTED": "Non ancora collegati",
     "agents.MISSING": "Non ancora collegati",
-    "agents.INVALID": ".vscode/mcp.json non è un JSON valido: il pannello non lo sovrascrive",
-    "agents.UNREADABLE": ".vscode/mcp.json non si può leggere: il pannello non lo sovrascrive",
+    "agents.INVALID":
+      ".vscode/mcp.json non è un JSON valido: il pannello non lo sovrascrive",
+    "agents.UNREADABLE":
+      ".vscode/mcp.json non si può leggere: il pannello non lo sovrascrive",
     "footer.note":
       "Il pannello legge i file di questa cartella: non chiama mai lo Studio e non spende mai. I pulsanti scrivono i comandi di `ut` nel terminale, che chiede conferma prima di ogni passo a pagamento.",
     "status.sent": "Scritto nel terminale: {command}",
     "status.noFolder": "Apri prima la cartella di un progetto.",
-    "status.noReport": "Nessun rapporto ancora: lo scrivono i test (`ut test`).",
+    "status.noReport":
+      "Nessun rapporto ancora: lo scrivono i test (`ut test`).",
     "status.reportOpened": "Rapporto aperto nel browser.",
     "status.reportFailed": "Non è stato possibile aprire il rapporto.",
-    "status.connect.CREATED": "Creato .vscode/mcp.json con il server dei twin (orchestwin-twins).",
-    "status.connect.UPDATED": "Aggiunto il server dei twin (orchestwin-twins) a .vscode/mcp.json.",
-    "status.connect.UNCHANGED": ".vscode/mcp.json ha già il server dei twin (orchestwin-twins).",
+    "status.connect.CREATED":
+      "Creato .vscode/mcp.json con il server dei twin (orchestwin-twins).",
+    "status.connect.UPDATED":
+      "Aggiunto il server dei twin (orchestwin-twins) a .vscode/mcp.json.",
+    "status.connect.UNCHANGED":
+      ".vscode/mcp.json ha già il server dei twin (orchestwin-twins).",
     "status.connect.INVALID":
       ".vscode/mcp.json non è un JSON valido: il pannello l'ha lasciato com'è. Correggilo, o aggiungi il server che stampa `ut mcp --config vscode`.",
     "status.connect.UNREADABLE":
@@ -434,7 +460,9 @@ const MESSAGES = Object.freeze({
 });
 
 function languageOf(value) {
-  return typeof value === "string" && value.toLowerCase().startsWith("it") ? "it" : "en";
+  return typeof value === "string" && value.toLowerCase().startsWith("it")
+    ? "it"
+    : "en";
 }
 
 function template(language, key) {
@@ -450,7 +478,11 @@ function template(language, key) {
 
 function fill(pattern, values) {
   return pattern.replace(/\{(\w+)\}/g, (match, name) => {
-    if (!Object.hasOwn(values, name) || values[name] === null || values[name] === undefined) {
+    if (
+      !Object.hasOwn(values, name) ||
+      values[name] === null ||
+      values[name] === undefined
+    ) {
       return match;
     }
     return String(values[name]);
