@@ -42,7 +42,6 @@ LAST_SENTENCES = {
 }
 HIDDEN = {"en": "Result Total Each person pays", "it": "Risultato Totale A testa"}
 SNAPSHOT_KEYS = ["url", "title", "text", "hidden_text", "elements"]
-FOLDER_VERSIONS = (2, 4)
 FIRST_SENTENCES = {
     "en": "With 30 euros and 15 percent the tip is 4.50 euros.",
     "it": "Con 30 euro e il 15 per cento la mancia è di 4,50 euro.",
@@ -91,10 +90,18 @@ class Session:
 
     def fit_plan(self) -> None:
         document = self.plan_document()
-        requirements, design = FOLDER_VERSIONS
+        requirements, design = self.folder_versions()
         document["plan"]["reference"]["requirements_version_number"] = requirements
         document["plan"]["reference"]["design_version_number"] = design
         (self.tests / "plan.json").write_text(json.dumps(document), encoding="utf-8")
+
+    def folder_versions(self) -> tuple[int, int]:
+        manifest = json.loads(
+            (self.root / "orchestwin" / "orchestwin.json").read_text(encoding="utf-8")
+        )
+        return tuple(
+            manifest["stages"][stage]["version_number"] for stage in ("requirements", "design")
+        )
 
     def latest(self) -> dict[str, object]:
         return json.loads((self.tests / "latest.json").read_text(encoding="utf-8"))
@@ -358,14 +365,18 @@ def test_a_plan_written_for_other_versions_is_replaced(
 ) -> None:
     with session(tmp_path, monkeypatch) as work:
         work.ut("test", "--url", ADDRESS, "--no-review")
+        requirements, design = work.folder_versions()
+        document = work.plan_document()
+        document["plan"]["reference"]["design_version_number"] = design - 1
+        (work.tests / "plan.json").write_text(json.dumps(document), encoding="utf-8")
         again = work.ut("test", "--no-review")
         forced = work.ut("test", "--no-review", "--plan", "new")
         planned = len(work.requests("POST", "/test-plans"))
 
     assert (again.status, forced.status) == (0, 0)
     assert (
-        "The saved test plan was written for requirements version 1 and design version 2; the "
-        "knowledge folder has requirements version 2 and design version 4: a new plan is needed."
+        f"The saved test plan was written for requirements version {requirements} and design version {design - 1}; the "
+        f"knowledge folder has requirements version {requirements} and design version {design}: a new plan is needed."
         in lines_of(again)
     )
     assert not any("saved test plan" in line for line in lines_of(forced))

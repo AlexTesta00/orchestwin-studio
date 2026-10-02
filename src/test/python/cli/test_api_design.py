@@ -111,6 +111,7 @@ def design_session(
     twins: int = 2,
     team_without: Sequence[str] = (),
     billing: str | None = None,
+    requirements_schema_version: int = 2,
 ) -> Iterator[Session]:
     with FakeStudio(
         language=language,
@@ -122,7 +123,11 @@ def design_session(
     ) as studio:
         studio.add_account(EMAIL, PASSWORD)
         project = studio.seed_project(
-            owner=EMAIL, name=PROJECT, through=through, team_without=team_without
+            owner=EMAIL,
+            name=PROJECT,
+            through=through,
+            team_without=team_without,
+            requirements_schema_version=requirements_schema_version,
         )
         login = run_ut(
             ["login", "--studio", studio.address, "--email", EMAIL, "--password-stdin"],
@@ -183,6 +188,21 @@ def prototype_package(session: Session, code: str) -> dict[str, object]:
     assert version is not None
     other = session.studio.seed_project(owner=EMAIL, name="Other", through="design")
     prototype = copy.deepcopy(other.current("design")["package"]["prototype"])
+    source = other.current("requirements")["specification"]
+    target = session.project.current("requirements")["specification"]
+    references = {
+        item["id"]: next(entry["id"] for entry in target[group] if entry["code"] == item["code"])
+        for group in ("requirements", "user_stories", "acceptance_criteria")
+        for item in source[group]
+    }
+    for item in [
+        *prototype["screens"],
+        *prototype["transitions"],
+        *(element for screen in prototype["screens"] for element in screen["elements"]),
+    ]:
+        for key in ("requirement_ids", "user_story_ids", "acceptance_criterion_ids"):
+            if key in item:
+                item[key] = sorted(references[identifier] for identifier in item[key])
     chosen = session.alternative(code)
     prototype["design_alternative_id"] = chosen
     package = copy.deepcopy(version["package"])

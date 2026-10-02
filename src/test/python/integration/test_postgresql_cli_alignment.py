@@ -570,26 +570,82 @@ def check_the_requirements_tool(scene: Scene, requirements: Mapping[str, object]
     current = scene.document("/requirements/current")
     specification = current["specification"]
     codes = {item["id"]: item["code"] for item in specification["requirements"]}
+    stories = {item["id"]: item["code"] for item in specification["user_stories"]}
+    criteria = {item["id"]: item["code"] for item in specification["acceptance_criteria"]}
+    scenarios = {item["id"]: item["code"] for item in specification["scenarios"]}
+    needs = {item["id"]: item["code"] for item in specification["needs"]}
     assert requirements["version_number"] == current["version_number"]
+    assert requirements["schema_version"] == specification["schema_version"] == 2
+    assert needs
     assert requirements["requirements"] == [
-        {key: item[key] for key in ("code", "title", "statement", "kind", "priority")}
+        {
+            **{key: item[key] for key in ("code", "title", "statement", "kind", "priority")},
+            "need_codes": [needs[identifier] for identifier in item["need_ids"]],
+            "user_twin_references": item["user_twin_references"],
+            "sources": item["sources"],
+        }
         for item in specification["requirements"]
     ]
-    assert [(item["code"], item["requirement_codes"]) for item in requirements["user_stories"]] == [
-        (item["code"], [codes[identifier] for identifier in item["requirement_ids"]])
+    assert requirements["user_stories"] == [
+        {
+            "code": item["code"],
+            "goal": item["goal"],
+            "benefit": item["benefit"],
+            "requirement_codes": [codes[identifier] for identifier in item["requirement_ids"]],
+            "need_codes": [needs[identifier] for identifier in item["need_ids"]],
+            "user_twin_reference": item["user_twin_reference"],
+        }
         for item in specification["user_stories"]
     ]
-    assert [
-        (item["code"], item["statement"], item["requirement_codes"])
-        for item in requirements["acceptance_criteria"]
-    ] == [
-        (
-            item["code"],
-            item["statement"],
-            [codes[identifier] for identifier in item["requirement_ids"]],
-        )
+    assert requirements["acceptance_criteria"] == [
+        {
+            "code": item["code"],
+            "statement": item["statement"],
+            "verification_method": item["verification_method"],
+            "requirement_codes": [codes[identifier] for identifier in item["requirement_ids"]],
+            "user_story_codes": [stories[identifier] for identifier in item["user_story_ids"]],
+        }
         for item in specification["acceptance_criteria"]
     ]
+    assert requirements["scenarios"] == [
+        {
+            **{
+                key: item[key]
+                for key in (
+                    "code",
+                    "title",
+                    "context",
+                    "goal",
+                    "preconditions",
+                    "trigger",
+                    "steps",
+                    "criticalities",
+                    "expected_outcome",
+                    "actor",
+                    "sources",
+                )
+            },
+            "requirement_codes": [codes[identifier] for identifier in item["requirement_ids"]],
+            "acceptance_criterion_codes": [
+                criteria[identifier] for identifier in item["acceptance_criterion_ids"]
+            ],
+        }
+        for item in specification["scenarios"]
+    ]
+    assert requirements["needs"] == [
+        {
+            "code": item["code"],
+            "title": item["title"],
+            "statement": item["statement"],
+            "scenario_codes": [scenarios[identifier] for identifier in item["scenario_ids"]],
+            "sources": item["sources"],
+        }
+        for item in specification["needs"]
+    ]
+    assert len(requirements["actors"]) == len(specification["user_twin_references"])
+    assert {actor["twin_id"]: actor for actor in requirements["actors"]} == {
+        actor["twin_id"]: actor for actor in specification["user_twin_references"]
+    }
 
 
 def local_twins(scene: Scene) -> int:

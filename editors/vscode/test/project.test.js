@@ -439,3 +439,28 @@ describe("readProject", () => {
     });
   });
 });
+
+for (const schemaVersion of [1, 2]) {
+  it(`reads criteria and current references from Definition schema ${schemaVersion}`, () => {
+    const base = fixtures.makeTemporaryFolder();
+    try {
+      const root = fixtures.writeCompleteProject(path.join(base, "definition"), "new");
+      const file = "orchestwin/requirements/requirements.json";
+      const document = fixtures.readJson(root, file);
+      document.specification.schema_version = schemaVersion;
+      if (schemaVersion === 2) {
+        document.specification.needs = [{ code: "NED-001", title: "Settle the bill", scenario_ids: ["scenario"] }];
+        document.specification.scenarios = [{ id: "scenario", code: "SCN-001", context: "At the table", goal: "Settle the bill" }];
+      }
+      fixtures.writeJson(root, file, document);
+      const state = readProject(root);
+      assert.deepEqual(state.notices, []);
+      assert.deepEqual(state.reference, { requirements: 1, design: 5, alternative: "DES-002" });
+      assert.equal(state.tests.latest.stale, false);
+      assert.deepEqual(state.tests.latest.problems.map((item) => item.statement), [fixtures.STATEMENTS["AC-003"], fixtures.STATEMENTS["AC-004"]]);
+      assert.equal(state.twins.items.length, 2);
+    } finally {
+      fixtures.removeFolder(base);
+    }
+  });
+}

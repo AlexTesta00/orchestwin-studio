@@ -10,6 +10,7 @@ from orchestwin.cli.api.projects import approves
 from orchestwin.cli.console import Choice
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows.answers import APPROVE
+from orchestwin.cli.views.definition import show as show_definition
 
 if TYPE_CHECKING:
     from orchestwin.cli.commands.init import Journey
@@ -163,70 +164,11 @@ def decide(
 
 
 def summary(journey: Journey, version: Mapping[str, object]) -> None:
-    items = requirements_api.entries(version, "requirements")
-    journey.console.write()
-    journey.say(
-        "init.requirements_heading",
-        version=_number(version) or "-",
-        requirements=len(items),
-        stories=len(requirements_api.entries(version, "user_stories")),
-        criteria=len(requirements_api.entries(version, "acceptance_criteria")),
-    )
-    journey.console.table(
-        [
-            journey.text("init.column_code"),
-            journey.text("init.column_title"),
-            journey.text("init.column_priority"),
-        ],
-        [
-            [str(item.get("code") or ""), str(item.get("title") or ""), _priority(journey, item)]
-            for item in items
-        ],
-    )
+    show_definition(journey.console, version)
 
 
 def everything(journey: Journey, version: Mapping[str, object]) -> None:
-    console = journey.console
-    console.write()
-    console.heading(journey.text("init.all_requirements"))
-    for item in requirements_api.entries(version, "requirements"):
-        console.write(
-            journey.text(
-                "init.requirement_line",
-                code=item.get("code") or "",
-                title=item.get("title") or "",
-                priority=_priority(journey, item),
-                kind=_kind(journey, item),
-            )
-        )
-        console.write(f"  {item.get('statement') or ''}")
-    console.write()
-    console.heading(journey.text("init.all_stories"))
-    for item in requirements_api.entries(version, "user_stories"):
-        twin = item.get("user_twin_reference")
-        name = twin.get("name") if isinstance(twin, Mapping) else None
-        console.write(
-            journey.text(
-                "init.story_line",
-                code=item.get("code") or "",
-                twin=name or journey.text("init.story_someone"),
-                goal=item.get("goal") or "",
-                benefit=item.get("benefit") or "",
-            )
-        )
-    console.write()
-    console.heading(journey.text("init.all_criteria"))
-    for item in requirements_api.entries(version, "acceptance_criteria"):
-        console.write(f"{item.get('code') or ''} {item.get('statement') or ''}")
-        method = item.get("verification_method")
-        if method in VERIFICATIONS:
-            console.write(
-                "  "
-                + journey.text(
-                    "init.criterion_check",
-                    method=journey.text(f"init.verify_{str(method).lower()}"),
-                )
-            )
+    show_definition(journey.console, version, details=True)
 
 
 def show_diff(journey: Journey, diff: Mapping[str, object]) -> None:
@@ -280,20 +222,6 @@ def _request(journey: Journey) -> str | None:
             return text
         journey.say("init.answer_too_long", limit=requirements_api.MAX_REQUEST)
     raise CliError("ANSWER_NOT_VALID")
-
-
-def _priority(journey: Journey, item: Mapping[str, object]) -> str:
-    value = item.get("priority")
-    if value in requirements_api.PRIORITIES:
-        return journey.text(f"init.priority_{str(value).lower()}")
-    return str(value or "")
-
-
-def _kind(journey: Journey, item: Mapping[str, object]) -> str:
-    value = item.get("kind")
-    if value in requirements_api.KINDS:
-        return journey.text(f"init.kind_{str(value).lower()}")
-    return str(value or "")
 
 
 def _mapping(value: object) -> Mapping[str, object] | None:
