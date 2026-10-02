@@ -216,7 +216,9 @@ CASES = {
             fine("TEAM"),
             row("USER_TWINS", "IN_PROGRESS", 2),
             row("REQUIREMENTS", "TO_UPDATE", 1, ("USER_TWINS_CHANGED",), NOT_READY),
-            row("DESIGN", "TO_UPDATE", 1, ("REQUIREMENTS_CHANGED",), NOT_READY),
+            row(
+                "DESIGN", "TO_UPDATE", 1, ("USER_TWINS_CHANGED", "REQUIREMENTS_CHANGED"), NOT_READY
+            ),
             FOLDER_WAITING,
         ],
     ),
@@ -314,7 +316,7 @@ CASES = {
             fine("TEAM", 2),
             fine("USER_TWINS", 2),
             row("REQUIREMENTS", "TO_UPDATE", 1, ("PERSPECTIVES_CHANGED", "USER_TWINS_CHANGED")),
-            row("DESIGN", "TO_UPDATE", 1, ("REQUIREMENTS_CHANGED",)),
+            row("DESIGN", "TO_UPDATE", 1, ("USER_TWINS_CHANGED", "REQUIREMENTS_CHANGED")),
             row("PACKAGE", "TO_UPDATE", 5, ("FOLDER_BEHIND",)),
         ],
     ),
@@ -401,7 +403,9 @@ CASES = {
                 ("USER_TWINS_CHANGED",),
                 "TWIN_NO_LONGER_AVAILABLE",
             ),
-            row("DESIGN", "TO_UPDATE", 1, ("REQUIREMENTS_CHANGED",), NOT_READY),
+            row(
+                "DESIGN", "TO_UPDATE", 1, ("USER_TWINS_CHANGED", "REQUIREMENTS_CHANGED"), NOT_READY
+            ),
             FOLDER_WAITING,
         ],
     ),

@@ -12,8 +12,16 @@ from orchestwin.artifacts.traceability import (
     build_cross_stage_artifact_graph,
     grounded_design,
 )
+from orchestwin.projects.persistence.research_evidence import SqlAlchemyResearchEvidenceRepository
 from orchestwin.projects.requirements_persistence import (
     SqlAlchemyRequirementsSpecificationRepository,
+)
+from orchestwin.twins.persistence.repositories import SqlAlchemyUserModelingSnapshotRepository
+from orchestwin.twins.user_modeling_gate import user_modeling_gate_is_currently_approved
+from orchestwin.workflow.gates import HumanGateType
+from orchestwin.workflow.persistence.repositories import (
+    gate_record_to_domain,
+    latest_owned_gate_statement,
 )
 
 
@@ -48,8 +56,30 @@ class SqlAlchemyArtifactGraphQueryService:
                 return None
 
             design = await design_repository.current(project_id=project_id)
+            evidence_repository = SqlAlchemyResearchEvidenceRepository(
+                session, owner_user_id=owner_user_id
+            )
+            evidence = await evidence_repository.dossier(project_id)
+            modeling = None
+            if evidence.get("evidence"):
+                modeling = await SqlAlchemyUserModelingSnapshotRepository(
+                    session, owner_user_id=owner_user_id
+                ).current(project_id=project_id)
+                gate_record = await session.scalar(
+                    latest_owned_gate_statement(
+                        project_id=project_id,
+                        owner_user_id=owner_user_id,
+                        gate_type=HumanGateType.USER_MODELING,
+                    )
+                )
+                gate = None if gate_record is None else gate_record_to_domain(gate_record)
+                if not user_modeling_gate_is_currently_approved(gate, modeling):
+                    modeling = None
             return build_cross_stage_artifact_graph(
-                requirements, grounded_design(requirements, design)
+                requirements,
+                grounded_design(requirements, design),
+                research_evidence=evidence,
+                evidence_twins=() if modeling is None else modeling.snapshot.twin_versions,
             )
 
 

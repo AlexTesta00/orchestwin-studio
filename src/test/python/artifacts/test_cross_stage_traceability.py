@@ -150,6 +150,9 @@ class Repository:
     async def current(self, *, project_id: UUID) -> object:
         return self.version if project_id == PROJECT_ID else None
 
+    async def dossier(self, project_id: UUID) -> dict:
+        return {"evidence": [], "citations": []}
+
 
 def current_graph(
     monkeypatch: pytest.MonkeyPatch,
@@ -163,6 +166,9 @@ def current_graph(
     )
     monkeypatch.setattr(
         traceability_runtime, "SqlAlchemyDesignPackageRepository", Repository(design)
+    )
+    monkeypatch.setattr(
+        traceability_runtime, "SqlAlchemyResearchEvidenceRepository", Repository(None)
     )
     service = SqlAlchemyArtifactGraphQueryService(Session)
     return asyncio.run(service.current(owner_user_id=OWNER_ID, project_id=PROJECT_ID))

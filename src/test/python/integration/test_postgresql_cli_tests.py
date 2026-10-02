@@ -397,7 +397,8 @@ def serve_the_results(scene: Scene, acceptance: Acceptance) -> None:
     answered = all(answer.get("jsonrpc") == "2.0" and "result" in answer for answer in answers)
     assert answered, run.transcript()
     names = [tool["name"] for tool in answers[1]["result"]["tools"]]
-    assert names[-3:] == [GET_TEST_RESULTS, RUN_TESTS, GET_TASKS], names
+    assert len(names) == 12, names
+    assert names[-4:] == [GET_TEST_RESULTS, RUN_TESTS, GET_TASKS, "get_evidence"], names
     document = read_json(scene.knowledge.joinpath(*TESTS_DOCUMENT))
     assert tool_document(answers[2]) == {"runs": document["runs"][:1]}
     assert document["runs"][0]["id"] == acceptance.runs[0]

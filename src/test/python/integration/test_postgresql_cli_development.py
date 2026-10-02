@@ -939,7 +939,7 @@ def serve_the_agent(scene: Scene, flow: Flow) -> None:
     assert [answer.get("id") for answer in answers] == [1, 2, 3, 4, 5, 6, 7], run.transcript()
     assert all(answer.get("jsonrpc") == "2.0" and "result" in answer for answer in answers)
     names = [tool["name"] for tool in answers[1]["result"]["tools"]]
-    assert (len(names), names) == (11, list(MCP_TOOLS)), names
+    assert (len(names), names) == (12, list(MCP_TOOLS)), names
     state = read_json(scene.knowledge / "state" / "state.json")
     opened = [task for task in state["tasks"] if task["status"] == OPEN]
     assert opened == tasks_of(scene, every=False)

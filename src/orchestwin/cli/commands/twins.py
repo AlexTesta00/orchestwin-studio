@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import folder as knowledge
-from orchestwin.cli.api import modeling, twin_chat
+from orchestwin.cli.api import modeling, research_evidence, twin_chat
 from orchestwin.cli.api import twin_learning as learning_api
 from orchestwin.cli.errors import SIGN_IN_STATUS, USAGE_STATUS, ApiFailure, CliError
 from orchestwin.cli.flows import review, twin_conversation, twin_update
@@ -114,6 +114,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
     _action(actions, parser, REVIEW, help="twins.help_review")
     update = _action(actions, parser, UPDATE, help="twins.help_update")
     update.add_argument("twin", metavar="TWIN", nargs="?", help="twins.option_update_twin")
+    update.add_argument("--evidence", metavar="CODE", help="twins.option_evidence")
     learn = _action(actions, parser, LEARN, help="twins.help_learn")
     learn.add_argument("twin", metavar="TWIN", help="twins.option_twin")
     learn.add_argument("text", metavar="TEXT", nargs="*", help="twins.option_text")
@@ -149,7 +150,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
             return twin_conversation.ask_once(context, client, link.project_id, twin, question)
         return twin_conversation.converse(context, client, link.project_id, twin)
     if action == UPDATE:
-        return update_twins(context, project, link, arguments.twin)
+        return update_twins(context, project, link, arguments.twin, evidence=arguments.evidence)
     twins, online, learning, views = _readable_twins(context, project, link)
     if action == SHOW:
         twin = _selected(context, link, twins, arguments.twin, online=online, learning=learning)
@@ -228,7 +229,12 @@ def studio_view(
 
 
 def update_twins(
-    context: CommandContext, project: ProjectFolder, link: ProjectLink, value: str | None
+    context: CommandContext,
+    project: ProjectFolder,
+    link: ProjectLink,
+    value: str | None,
+    *,
+    evidence: str | None = None,
 ) -> int:
     client = context.client()
     view = studio_view(context, client, link)
@@ -242,8 +248,15 @@ def update_twins(
             return 1
         chosen = (twin,)
     subjects = [twin_update.Subject(twin, learning.entry(twin.twin_id) or {}) for twin in chosen]
+    source = (
+        None
+        if evidence is None
+        else research_evidence.selected(
+            research_evidence.overview(client, link.project_id), evidence
+        )
+    )
     return twin_update.run_update(
-        context, client, project, subjects, available=learning.update_available
+        context, client, project, subjects, available=learning.update_available, evidence=source
     )
 
 

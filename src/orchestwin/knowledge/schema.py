@@ -87,6 +87,7 @@ from orchestwin.knowledge.layout import (
     stage_document,
     twin_document,
 )
+from orchestwin.knowledge.research_evidence import EVIDENCE_DOCUMENT, EVIDENCE_KIND
 from orchestwin.knowledge.state import (
     APPLICATION_KINDS,
     BROWSER_NAMES,
@@ -183,6 +184,7 @@ from orchestwin.twins.personas import (
 from orchestwin.twins.user_twins import (
     USER_MODELING_SNAPSHOT_SCHEMA_VERSION,
     USER_TWIN_PROFILE_SCHEMA_VERSION,
+    UserTwinField,
     UserTwinLifecycleStatus,
 )
 from orchestwin.workflow.gates import HumanGateStatus, HumanGateType
@@ -2607,6 +2609,99 @@ class KnowledgeManifest(_Record):
         return self
 
 
+class ResearchEvidenceCitation(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    source_id: Uuid
+    source_version: _Version
+    content_hash: Sha256
+    quote: Annotated[str, Field(min_length=1, max_length=1000)]
+    start: _Count
+    end: _Count
+    start_line: _Version
+    end_line: _Version
+
+    @model_validator(mode="after")
+    def _interval(self):
+        if self.end != self.start + len(self.quote) or self.end_line < self.start_line:
+            raise ValueError("citation interval does not match the exact quote")
+        if "\r" in self.quote or self.end_line - self.start_line != self.quote[:-1].count("\n"):
+            raise ValueError("citation lines do not match its preserved LF text")
+        return self
+
+
+class ResearchEvidenceLink(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    twin_id: Uuid
+    twin_version: _Version
+    field: Annotated[UserTwinField, _BY_VALUE]
+    effect: Literal["SUPPORTS", "CONTRADICTS", "ADDS"]
+    citation: ResearchEvidenceCitation
+    status: Literal["ACTIVE", "RETIRED"]
+    imported_from: dict[str, object] | None = None
+
+
+class ResearchEvidenceVersion(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    id: Uuid
+    code: Annotated[str, Field(pattern=_code("EVD"))]
+    version: _Version
+    title: str
+    source_kind: Annotated[EvidenceSourceKind, _BY_VALUE]
+    source_ref: str
+    context: str
+    method: str
+    collected_at: str | None
+    limitations: str
+    empirical: bool
+    content_hash: Sha256
+    character_count: Annotated[int, Field(ge=1, le=24000)]
+    byte_count: Annotated[int, Field(ge=1, le=32768)]
+    created_at: Timestamp
+    status: Literal["ACTIVE", "RETIRED"]
+    retired_at: Timestamp | None
+    retired_reason: str | None
+    text_available: bool
+    imported_from: dict[str, object] | None = None
+
+    @model_validator(mode="after")
+    def _nature(self):
+        if (self.source_kind is EvidenceSourceKind.EMPIRICAL_RESEARCH) != self.empirical:
+            raise ValueError("declared empirical nature must match its source kind")
+        if self.empirical and (not self.method.strip() or not self.limitations.strip()):
+            raise ValueError("empirical sources require their method and limitations")
+        if self.status == "RETIRED" and self.retired_at is None:
+            raise ValueError("retired source requires its retirement time")
+        return self
+
+
+class ResearchEvidenceDocument(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    kind: Literal[EVIDENCE_KIND]
+    schema_version: Literal[1]
+    project_id: Uuid
+    evidence: Annotated[list[ResearchEvidenceVersion], Field(max_length=50)]
+    citations: list[ResearchEvidenceLink]
+    omitted_sections: list[dict[str, object]] | None = None
+
+    @model_validator(mode="after")
+    def _references(self):
+        sources = {(item.id, item.version): item for item in self.evidence}
+        if len(sources) != len(self.evidence):
+            raise ValueError("evidence source versions must be unique")
+        for item in self.citations:
+            quote = item.citation
+            source = sources.get((quote.source_id, quote.source_version))
+            if (
+                source is None
+                or quote.content_hash != source.content_hash
+                or quote.end > source.character_count
+            ):
+                raise ValueError("citation does not match its source version")
+            if source.status == "RETIRED" and item.status == "ACTIVE":
+                raise ValueError("a retired source cannot support an active citation")
+        return self
+
+
 _MODELS: Final = {
     "manifest": KnowledgeManifest,
     "brief": BriefDocument,
@@ -2622,9 +2717,14 @@ _MODELS: Final = {
     "changes": ChangeReviewsDocument,
     "tests": TestReviewsDocument,
     "learning": TwinLearningDocument,
+    "evidence": ResearchEvidenceDocument,
 }
 _WRITTEN_BY: Final = "OrchesTwin Studio writes it when it exports the knowledge folder."
 _SCHEMA_TEXTS: Final = {
+    "evidence": (
+        "Research evidence excerpts",
+        "Exact approved quotations, source provenance and limits. Original documents are excluded; owner approval does not establish empirical research or human validation.",
+    ),
     "manifest": (
         "Knowledge folder manifest",
         f"Machine-readable index of a knowledge folder, stored in {KNOWLEDGE_MANIFEST} at the "
@@ -2726,6 +2826,7 @@ _DOCUMENT_PATHS: Final = {
     FEEDBACK_CHANGES: "changes",
     FEEDBACK_TESTS: "tests",
     FEEDBACK_LEARNING: "learning",
+    EVIDENCE_DOCUMENT: "evidence",
 }
 
 
@@ -2792,17 +2893,28 @@ def _published_schema(name: str, *, design_additions: bool) -> dict[str, object]
     }
 
 
-def knowledge_schemas(*, design_additions: bool = False) -> dict[str, dict[str, object]]:
-    return {
-        name: _published_schema(name, design_additions=design_additions) for name in SCHEMA_NAMES
-    }
+def knowledge_schemas(
+    *, design_additions: bool = False, research_evidence: bool = False, only_evidence: bool = False
+) -> dict[str, dict[str, object]]:
+    names = (
+        ("evidence",)
+        if only_evidence
+        else (*SCHEMA_NAMES, *(("evidence",) if research_evidence else ()))
+    )
+    return {name: _published_schema(name, design_additions=design_additions) for name in names}
 
 
-def schema_files(*, design_additions: bool = False) -> dict[str, str]:
+def schema_files(
+    *, design_additions: bool = False, research_evidence: bool = False, only_evidence: bool = False
+) -> dict[str, str]:
     return {
         schema_document(name): json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False)
         + "\n"
-        for name, schema in knowledge_schemas(design_additions=design_additions).items()
+        for name, schema in knowledge_schemas(
+            design_additions=design_additions,
+            research_evidence=research_evidence,
+            only_evidence=only_evidence,
+        ).items()
     }
 
 

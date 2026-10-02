@@ -222,6 +222,9 @@ class Repository:
     async def current(self, *, project_id: UUID) -> object:
         return self.version
 
+    async def dossier(self, project_id: UUID) -> dict:
+        return {"evidence": [], "citations": []}
+
 
 def stored_graph(monkeypatch: pytest.MonkeyPatch, requirements, design):
     monkeypatch.setattr(
@@ -231,6 +234,9 @@ def stored_graph(monkeypatch: pytest.MonkeyPatch, requirements, design):
     )
     monkeypatch.setattr(
         traceability_runtime, "SqlAlchemyDesignPackageRepository", Repository(design)
+    )
+    monkeypatch.setattr(
+        traceability_runtime, "SqlAlchemyResearchEvidenceRepository", Repository(None)
     )
     service = SqlAlchemyArtifactGraphQueryService(Session)
     return client(service).get(f"/api/v1/projects/{PROJECT_ID}/artifacts/graph")

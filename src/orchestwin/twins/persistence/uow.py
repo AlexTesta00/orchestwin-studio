@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceBindings
 from orchestwin.projects.persistence.repositories import owned_project_statement
+from orchestwin.projects.persistence.twin_learning import UPDATES
 from orchestwin.twins.persistence.repositories import (
     PersonaVersionRepository,
     SqlAlchemyPersonaVersionRepository,
@@ -128,6 +129,25 @@ class SqlAlchemyUserModelingUnitOfWork:
         )
 
     async def has_pending_revision(self, *, project_id: UUID) -> bool:
+        return await self.has_pending_manual_revision(
+            project_id=project_id
+        ) or await self.has_pending_evidence_update(project_id=project_id)
+
+    async def has_pending_evidence_update(self, *, project_id: UUID) -> bool:
+        return (
+            await self._session.scalar(
+                sa.select(UPDATES.c.id)
+                .where(
+                    UPDATES.c.project_id == project_id,
+                    UPDATES.c.owner_user_id == self._owner_user_id,
+                    UPDATES.c.status == "PROPOSED",
+                    UPDATES.c.evidence.is_not(None),
+                )
+                .limit(1)
+            )
+        ) is not None
+
+    async def has_pending_manual_revision(self, *, project_id: UUID) -> bool:
         return (
             await self._session.scalar(
                 sa.select(DIFFS.c.id)

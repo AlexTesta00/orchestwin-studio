@@ -147,6 +147,13 @@ class LocalUserTwinProfileRevisionService:
                     issue=(ProfileRevisionApplicationIssueCode.TWIN_NOT_FOUND),
                 )
 
+            pending_evidence = getattr(uow, "has_pending_evidence_update", None)
+            if pending_evidence is not None and await pending_evidence(project_id=project_id):
+                return ProfileRevisionApplicationResult(
+                    status=ProfileRevisionApplicationStatus.REJECTED,
+                    issue=ProfileRevisionApplicationIssueCode.DIFF_ALREADY_PENDING,
+                )
+
             existing = await uow.diffs.current_proposed(
                 project_id=project_id,
                 base_snapshot_version_id=(current_snapshot.id),

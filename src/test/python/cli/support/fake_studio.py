@@ -50,6 +50,7 @@ from orchestwin.api.requirements import (
     RequirementsSpecificationDiffPayload,
     RequirementsSpecificationPayload,
 )
+from orchestwin.api.research_evidence import EvidenceBody
 from orchestwin.artifacts.bound_mockups import create_bound_mockup, markup_requirement_codes
 from orchestwin.artifacts.design_evaluation import (
     ANCHOR_LABEL_LENGTH,
@@ -91,6 +92,7 @@ from orchestwin.knowledge.archive import (
     read_verified_folder,
 )
 from orchestwin.knowledge.folder import build_knowledge_folder, folder_archive
+from orchestwin.knowledge.project_import import plan_documents, plan_project_import
 from orchestwin.knowledge.sources import KnowledgeSources
 from orchestwin.knowledge.stage_documents import stage_versions
 from orchestwin.knowledge.state import (
@@ -145,6 +147,11 @@ from orchestwin.knowledge.state import (
     ProjectStateSources,
     review_is_stale,
 )
+from orchestwin.models.evidence_update import (
+    EvidenceUpdateOutput,
+    bind_evidence_update,
+    evidence_update_context,
+)
 from orchestwin.models.fake_design import (
     _ALTERNATIVE_TEMPLATES,
     FAKE_DESIGN_PROVIDER_ID,
@@ -182,6 +189,11 @@ from orchestwin.projects.clarification_state import (
     reject_brief_assumption,
 )
 from orchestwin.projects.domain import ProjectMode
+from orchestwin.projects.evidence_application import (
+    apply_evidence_change,
+    evidence_profile,
+    withdrawn_observation,
+)
 from orchestwin.projects.progress import (
     CURRENT_CATALOG,
     ArtifactVersion,
@@ -194,6 +206,14 @@ from orchestwin.projects.progress import (
     project_progress,
 )
 from orchestwin.projects.requirements_revisions import propose_requirements_diff
+from orchestwin.projects.research_evidence import (
+    EvidenceChange,
+    EvidenceStatus,
+    EvidenceVersion,
+    ResearchEvidenceError,
+    evidence_content_hash,
+    normalize_evidence_text,
+)
 from orchestwin.projects.sections import (
     BriefFacts,
     DesignFacts,
@@ -206,6 +226,7 @@ from orchestwin.projects.sections import (
     TeamFacts,
     UserTwinsFacts,
     project_sections,
+    requirements_actor_codes,
 )
 from orchestwin.twins.archetypes import ArchetypeFailure, ArchetypeService
 from orchestwin.twins.conversations import (
@@ -217,6 +238,7 @@ from orchestwin.twins.conversations import (
     TwinInsightKind,
     normalized_text,
 )
+from orchestwin.twins.epistemics import EvidenceSourceKind
 from orchestwin.twins.persistence.repositories import VersionAppendStatus
 from orchestwin.twins.persistence.snapshots import (
     persona_profile_from_snapshot,
@@ -535,7 +557,7 @@ FINDING_FIELDS = ("twin_id", "finding")
 TASK_STATUS_FIELDS = ("status", "note")
 DECISION_FIELDS = ("kind", "note", "tasks", "findings")
 CLOSED_STATUSES = ("DONE", "DROPPED")
-UPDATE_FIELDS = ("locale",)
+UPDATE_FIELDS = ("locale", "evidence_id", "evidence_version")
 UPDATE_DECISION_FIELDS = ("decision", "kept", "reason")
 KEPT_FIELDS = ("index", "statement")
 OBSERVATION_FIELDS = ("statement", "about")
@@ -1580,6 +1602,13 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/projects/{project_id}/code-tasks", "create_tasks"),
     Route("POST", "/projects/{project_id}/code-tasks/{code}/status", "task_status"),
     Route("GET", "/projects/{project_id}/twin-learning", "twin_learning"),
+    Route("GET", "/projects/{project_id}/evidence", "evidence_list"),
+    Route("POST", "/projects/{project_id}/evidence", "evidence_add"),
+    Route("GET", "/projects/{project_id}/evidence/{evidence_id}", "evidence_show"),
+    Route("POST", "/projects/{project_id}/evidence/{evidence_id}/versions", "evidence_revise"),
+    Route("POST", "/projects/{project_id}/evidence/{evidence_id}/retire", "evidence_retire"),
+    Route("DELETE", "/projects/{project_id}/evidence/{evidence_id}/text", "evidence_delete"),
+    Route("PUT", "/projects/{project_id}/evidence/{evidence_id}/text", "evidence_associate"),
     Route("POST", "/projects/{project_id}/user-twins/{twin_id}/updates", "propose_update"),
     Route("GET", "/projects/{project_id}/twin-updates/{update_id}", "twin_update"),
     Route("POST", "/projects/{project_id}/twin-updates/{update_id}/decision", "decide_update"),
@@ -2228,6 +2257,9 @@ class FakeProject:
         self.learned: list[dict[str, object]] = []
         self.development: dict[str, int] = {}
         self.updates: list[dict[str, object]] = []
+        self.evidence_versions: list[dict[str, object]] = []
+        self.evidence_texts: dict[tuple[str, int], str] = {}
+        self.evidence_changes: list[dict[str, object]] = []
 
     @property
     def owner(self) -> str:
@@ -7076,6 +7108,7 @@ class FakeStudio:
                 UUID(identifier) for identifier in _referenced_twins(specification)
             ),
             revision_pending=self._pending_requirements_diff(project) is not None,
+            actor_codes=requirements_actor_codes(_fake_requirements(specification)),
         )
 
     def _design_facts(self, project: FakeProject, version: Mapping[str, object]) -> DesignFacts:
@@ -7521,6 +7554,10 @@ class FakeStudio:
         )
         if "twins" in present and not self._archetypes_current(project, project.snapshot):
             return present[:2]
+        if project.evidence_versions:
+            for position in range(1, len(present) + 1):
+                if self._folder_issue(project, present[:position]) is not None:
+                    return present[: position - 1]
         return present
 
     def _folder_issue(self, project: FakeProject, present: Sequence[str]) -> str | None:
@@ -7725,6 +7762,108 @@ class FakeStudio:
         project = self._new_project(call.account, name, mode)
         self._seed(project, "design", approve=False)
         imported_at = self._now()
+        if "twins/evidence.json" in verified.files:
+            from orchestwin.api.design import DesignPackagePayload
+            from orchestwin.api.teams import TeamProposalVersionResponse
+            from orchestwin.api.user_modeling import UserModelingSnapshotVersionPayload
+
+            plan = plan_project_import(
+                verified,
+                project_id=UUID(project.id),
+                brief_version_id=UUID(self._new_id()),
+                owner_user_id=UUID(call.account.id),
+                created_at=imported_at,
+            )
+            documents = plan_documents(
+                plan, owner_user_id=UUID(call.account.id), created_at=imported_at
+            )
+            project.briefs = [_BriefVersion(documents["brief"], plan.brief)]
+            project.teams = [
+                TeamProposalVersionResponse.from_domain(plan.team).model_dump(mode="json")
+            ]
+            project.snapshots = [
+                UserModelingSnapshotVersionPayload.from_domain(plan.modeling).model_dump(
+                    mode="json"
+                )
+            ]
+            project.personas = {
+                item["persona_id"]: [item]
+                for item in project.snapshot["snapshot"]["persona_versions"]
+            }
+            project.twins = {
+                item["twin_id"]: [item] for item in project.snapshot["snapshot"]["twin_versions"]
+            }
+            project.requirements = [
+                {
+                    **documents["requirements"],
+                    "specification": RequirementsSpecificationPayload.from_domain(
+                        plan.requirements.specification
+                    ).model_dump(mode="json"),
+                }
+            ]
+            project.designs = [
+                {
+                    **documents["design"],
+                    "package": DesignPackagePayload.from_domain(plan.design.package).model_dump(
+                        mode="json"
+                    ),
+                }
+            ]
+            project.gates = {}
+            project.gate_events = {}
+            project.evidence_versions = copy.deepcopy(plan.research_evidence["evidence"])
+            for item in plan.research_evidence["citations"]:
+                twin = next(
+                    (twin for twin in plan.twins if str(twin.twin_id) == item["twin_id"]), None
+                )
+                observation = next(
+                    (
+                        observation
+                        for observation in (() if twin is None else twin.profile.observations)
+                        if observation.observation_key == f"user_twin.{item['field']}"
+                    ),
+                    None,
+                )
+                citation = item["citation"]
+                matches = any(
+                    reference.source_id == citation["source_id"]
+                    and reference.source_version == citation["source_version"]
+                    and reference.content_hash == citation["content_hash"]
+                    for reference in (
+                        () if observation is None else observation.provenance.references
+                    )
+                )
+                project.evidence_changes.append(
+                    {
+                        "twin_id": item["twin_id"],
+                        "twin_version": item["twin_version"],
+                        "field": item["field"],
+                        "source_id": citation["source_id"],
+                        "source_version": citation["source_version"],
+                        "change": {
+                            "effect": item["effect"],
+                            "field": item["field"],
+                            **(
+                                {"value": observation.value.to_snapshot()}
+                                if observation is not None
+                                else {"historical_only": True}
+                            ),
+                            "citation": copy.deepcopy(citation),
+                            **(
+                                {"imported_from": copy.deepcopy(item["imported_from"])}
+                                if item.get("imported_from") is not None
+                                else {}
+                            ),
+                        },
+                        "before": None,
+                        "after": observation.to_snapshot()
+                        if observation is not None
+                        else {"kind": "historical-citation", "profile_available": False},
+                        "retired_at": None
+                        if matches and item["status"] == "ACTIVE"
+                        else _iso(imported_at),
+                    }
+                )
         stages = {
             stage: {
                 "version_id": project.artifact(stage)["id"],
@@ -9146,6 +9285,351 @@ class FakeStudio:
             200, {"project_id": project.id, "update_available": self.hosted, "twins": twins}
         )
 
+    def _evidence_citations(self, project: FakeProject) -> list[dict[str, object]]:
+        return [
+            {
+                "twin_id": row["twin_id"],
+                "twin_version": row["twin_version"],
+                "field": row["field"],
+                "effect": row["change"]["effect"],
+                "citation": copy.deepcopy(row["change"]["citation"]),
+                "status": "ACTIVE" if row["retired_at"] is None else "RETIRED",
+                **(
+                    {"imported_from": copy.deepcopy(row["change"]["imported_from"])}
+                    if row["change"].get("imported_from") is not None
+                    else {}
+                ),
+            }
+            for row in project.evidence_changes
+        ]
+
+    def _evidence_dossier(self, project: FakeProject) -> dict[str, object]:
+        result = {
+            "kind": "orchestwin.research-evidence",
+            "schema_version": 1,
+            "project_id": project.id,
+            "evidence": copy.deepcopy(project.evidence_versions),
+            "citations": self._evidence_citations(project),
+        }
+        present = self._publishable(project)
+        if project.evidence_versions and any(
+            project.artifact(stage) is not None for stage in STAGES if stage not in present
+        ):
+            sections = self._project_sections(project)
+            result["omitted_sections"] = []
+            for stage in STAGES:
+                if stage in present or project.artifact(stage) is None:
+                    continue
+                section = sections.section(FOLDER_SECTIONS[stage])
+                result["omitted_sections"].append(
+                    {
+                        "stage": stage,
+                        "reason": ",".join(reason.value for reason in section.reasons)
+                        or "APPROVAL_REQUIRED",
+                        "affected_codes": {
+                            key: list(values) for key, values in section.affected_codes.items()
+                        },
+                    }
+                )
+        return result
+
+    def _evidence_source(self, project: FakeProject, source_id: str, version: int | None = None):
+        found = [
+            item
+            for item in project.evidence_versions
+            if item["id"] == source_id and (version is None or item["version"] == version)
+        ]
+        if not found:
+            raise _Refusal(404, {"code": "EVIDENCE_NOT_FOUND"})
+        return max(found, key=lambda item: item["version"])
+
+    def _route_evidence_list(self, call: _Call) -> _Answer:
+        project = self._code_project(call)
+        values = project.evidence_versions
+        if call.query.get("all") != ["true"]:
+            latest = {item["id"]: item for item in values}
+            values = [
+                item
+                for item in latest.values()
+                if item["status"] == "ACTIVE" and item["text_available"]
+            ]
+        return _Answer(
+            200,
+            {
+                "project_id": project.id,
+                "evidence": copy.deepcopy(values),
+                "citations": self._evidence_citations(project),
+            },
+        )
+
+    def _route_evidence_show(self, call: _Call) -> _Answer:
+        project = self._code_project(call)
+        version = call.query.get("version", [None])[0]
+        try:
+            version = None if version is None else int(version)
+        except ValueError:
+            raise _Refusal(422, {"code": "EVIDENCE_INVALID_TEXT"}) from None
+        source = self._evidence_source(project, call.params["evidence_id"], version)
+        result = copy.deepcopy(source)
+        result["citations"] = [
+            item
+            for item in self._evidence_citations(project)
+            if item["citation"]["source_id"] == source["id"]
+        ]
+        if call.query.get("text") == ["true"]:
+            text = project.evidence_texts.get((source["id"], source["version"]))
+            if text is None:
+                raise _Refusal(409, {"code": "EVIDENCE_TEXT_UNAVAILABLE"})
+            result["text"] = text
+        return _Answer(200, result)
+
+    def _evidence_insert(self, call: _Call, *, revision: bool) -> _Answer:
+        project = self._code_project(call)
+        try:
+            body = EvidenceBody.model_validate(call.json())
+            text = normalize_evidence_text(body.text)
+        except ResearchEvidenceError as error:
+            raise _Refusal(422, {"code": error.code}) from None
+        except ValueError:
+            raise _Refusal(422, {"code": "EVIDENCE_INVALID_TEXT"}) from None
+        if not body.acknowledged:
+            raise _Refusal(422, {"code": "EVIDENCE_ACKNOWLEDGEMENT_REQUIRED"})
+        if (
+            len(project.evidence_versions) >= 50
+            or sum(len(value.encode("utf-8")) for value in project.evidence_texts.values())
+            + len(text.encode("utf-8"))
+            > 1048576
+        ):
+            raise _Refusal(422, {"code": "EVIDENCE_LIMIT", "message": "Split the text into parts."})
+        previous = self._evidence_source(project, call.params["evidence_id"]) if revision else None
+        if previous is not None and previous["status"] != "ACTIVE":
+            raise _Refusal(409, {"code": "EVIDENCE_RETIRED"})
+        source = EvidenceVersion(
+            id=UUID(self._new_id() if previous is None else previous["id"]),
+            code=f"EVD-{len({item['id'] for item in project.evidence_versions}) + 1:03d}"
+            if previous is None
+            else previous["code"],
+            version=1 if previous is None else previous["version"] + 1,
+            title=body.title,
+            source_kind=body.source_kind,
+            source_ref=body.source_ref,
+            context=body.context,
+            method=body.method,
+            collected_at=body.collected_at,
+            limitations=body.limitations,
+            empirical=body.empirical,
+            content_hash=evidence_content_hash(text),
+            character_count=len(text),
+            byte_count=len(text.encode("utf-8")),
+            created_at=self._now(),
+        ).to_snapshot()
+        project.evidence_versions.append(source)
+        project.evidence_texts[(source["id"], source["version"])] = text
+        project.fingerprint = None
+        if revision:
+            self._invalidate_evidence_pending(
+                project, source["id"], "The evidence source has a new version."
+            )
+        return _Answer(
+            201,
+            {
+                "status": "EVIDENCE_REVISED" if revision else "EVIDENCE_ADDED",
+                "evidence": copy.deepcopy(source),
+            },
+        )
+
+    def _route_evidence_add(self, call: _Call) -> _Answer:
+        return self._evidence_insert(call, revision=False)
+
+    def _route_evidence_revise(self, call: _Call) -> _Answer:
+        return self._evidence_insert(call, revision=True)
+
+    def _invalidate_evidence_pending(
+        self, project: FakeProject, source_id: str, reason: str
+    ) -> None:
+        for update in project.updates:
+            if (
+                update["status"] == "PROPOSED"
+                and update.get("evidence", {}).get("source_id") == source_id
+            ):
+                update["status"] = "REJECTED"
+                update["decision"] = {"decided_at": _iso(self._now()), "kept": [], "reason": reason}
+
+    def _append_evidence_profiles(self, project: FakeProject, profiles: Mapping[str, object]):
+        previous = project.snapshot
+        body = copy.deepcopy(previous["snapshot"])
+        twins = []
+        for base in body["twin_versions"]:
+            profile = profiles.get(base["twin_id"])
+            if profile is None:
+                twins.append(base)
+                continue
+            twin = {
+                **base,
+                "id": self._new_id(),
+                "version_number": base["version_number"] + 1,
+                "based_on_version_number": base["version_number"],
+                "created_at": _stamp(self._now()),
+                "profile": profile.to_snapshot(),
+                "content_hash": profile.content_hash,
+            }
+            project.twins[twin["twin_id"]].append(twin)
+            twins.append(twin)
+        body["twin_versions"] = twins
+        version = {
+            **previous,
+            "id": self._new_id(),
+            "version_number": previous["version_number"] + 1,
+            "based_on_version_number": previous["version_number"],
+            "created_at": _stamp(self._now()),
+            "snapshot": body,
+            "content_hash": _fake_modeling(body).content_hash,
+        }
+        project.snapshots.append(version)
+        reference = self._reference(project, "twins")
+        latest = project.gates.get("twins")
+        if latest is not None and latest.status is not HumanGateStatus.STALE:
+            stale = mark_human_gate_stale(
+                latest,
+                current_artifact=reference,
+                occurred_at=self._now(),
+                event_id=UUID(self._new_id()),
+            )
+            if stale.event is not None:
+                self._save_gate(project, "twins", stale.gate, stale.event)
+        gate = create_human_gate(
+            gate_id=UUID(self._new_id()),
+            project_id=UUID(project.id),
+            owner_user_id=UUID(project.account.id),
+            gate_type=GATE_TYPES["twins"],
+            artifact=reference,
+            created_at=self._now(),
+        )
+        for action in (HumanGateAction.SUBMIT, HumanGateAction.APPROVE):
+            transition = transition_human_gate(
+                gate,
+                action=action,
+                actor_user_id=UUID(project.account.id),
+                occurred_at=self._now(),
+                event_id=UUID(self._new_id()),
+            )
+            if transition.event is None:
+                raise _Refusal(409, {"code": "EVIDENCE_CONTEXT_CHANGED"})
+            gate = transition.gate
+            self._save_gate(project, "twins", gate, transition.event)
+        project.fingerprint = None
+        return version
+
+    def _route_evidence_retire(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), ("reason",))
+        reason = fields.text("reason", minimum=1, maximum=300)
+        fields.check()
+        project = self._code_project(call)
+        source_id = call.params["evidence_id"]
+        self._evidence_source(project, source_id)
+        moment = _iso(self._now())
+        for source in project.evidence_versions:
+            if source["id"] == source_id and source["status"] == "ACTIVE":
+                source.update(status="RETIRED", retired_at=moment, retired_reason=reason)
+        self._invalidate_evidence_pending(project, source_id, "The evidence source was withdrawn.")
+        affected = {
+            row["twin_id"]
+            for row in project.evidence_changes
+            if row["source_id"] == source_id and row["retired_at"] is None
+        }
+        for row in project.evidence_changes:
+            if row["source_id"] == source_id:
+                row["retired_at"] = row["retired_at"] or moment
+        profiles = {}
+        review_required = bool(affected) and not self._approvals(project)["twins"]
+        if affected and not review_required:
+            for twin in project.snapshot["snapshot"]["twin_versions"]:
+                if twin["twin_id"] not in affected:
+                    continue
+                profile = _fake_twin_profile(twin["profile"])
+                records = [
+                    row for row in project.evidence_changes if row["twin_id"] == twin["twin_id"]
+                ]
+                fields = {row["field"] for row in records if row["source_id"] == source_id}
+                observations = [
+                    withdrawn_observation(
+                        observation,
+                        [
+                            row
+                            for row in records
+                            if row["field"]
+                            == observation.observation_key.removeprefix("user_twin.")
+                        ],
+                        source_id=UUID(source_id),
+                    )
+                    for observation in profile.observations
+                    if observation.observation_key.removeprefix("user_twin.") in fields
+                ]
+                profiles[twin["twin_id"]] = evidence_profile(profile, observations)
+            self._append_evidence_profiles(project, profiles)
+        project.fingerprint = None
+        result = {
+            "status": "EVIDENCE_RETIRED",
+            "evidence": copy.deepcopy(self._evidence_source(project, source_id)),
+            "affected_twins": sorted(affected),
+        }
+        if review_required:
+            result["review_required"] = True
+        return _Answer(200, result)
+
+    def _route_evidence_delete(self, call: _Call) -> _Answer:
+        project = self._code_project(call)
+        source_id = call.params["evidence_id"]
+        self._evidence_source(project, source_id)
+        body = call.json()
+        if not isinstance(body, dict) or body.get("acknowledged") is not True:
+            raise _Refusal(422, {"code": "EVIDENCE_ACKNOWLEDGEMENT_REQUIRED"})
+        if any(
+            item["id"] == source_id and item["status"] == "ACTIVE"
+            for item in project.evidence_versions
+        ):
+            raise _Refusal(409, {"code": "EVIDENCE_RETIRE_REQUIRED"})
+        for source in project.evidence_versions:
+            if source["id"] == source_id:
+                project.evidence_texts.pop((source_id, source["version"]), None)
+                source["text_available"] = False
+        project.fingerprint = None
+        return _Answer(
+            200,
+            {
+                "status": "EVIDENCE_TEXT_DELETED",
+                "evidence": copy.deepcopy(self._evidence_source(project, source_id)),
+            },
+        )
+
+    def _route_evidence_associate(self, call: _Call) -> _Answer:
+        project = self._code_project(call)
+        body = call.json()
+        if not isinstance(body, dict) or body.get("acknowledged") is not True:
+            raise _Refusal(422, {"code": "EVIDENCE_ACKNOWLEDGEMENT_REQUIRED"})
+        source = self._evidence_source(project, call.params["evidence_id"], body.get("version"))
+        if source["status"] != "ACTIVE":
+            raise _Refusal(409, {"code": "EVIDENCE_RETIRED"})
+        try:
+            text = normalize_evidence_text(body.get("text"))
+        except ResearchEvidenceError as error:
+            raise _Refusal(422, {"code": error.code}) from None
+        if evidence_content_hash(text) != source["content_hash"]:
+            raise _Refusal(409, {"code": "EVIDENCE_CONTEXT_CHANGED"})
+        if (
+            not source["text_available"]
+            and sum(len(value.encode("utf-8")) for value in project.evidence_texts.values())
+            + len(text.encode("utf-8"))
+            > 1048576
+        ):
+            raise _Refusal(422, {"code": "EVIDENCE_LIMIT", "message": "Split the text into parts."})
+        project.evidence_texts[(source["id"], source["version"])] = text
+        source["text_available"] = True
+        project.fingerprint = None
+        return _Answer(
+            200, {"status": "EVIDENCE_TEXT_REASSOCIATED", "evidence": copy.deepcopy(source)}
+        )
+
     def _route_propose_update(self, call: _Call) -> _Answer:
         fields = _Fields(call.json(), UPDATE_FIELDS)
         locale = fields.pattern(
@@ -9156,17 +9640,34 @@ class FakeStudio:
             maximum=MAX_LOCALE_LENGTH,
             default=DEFAULT_LOCALE,
         )
+        source_id = fields.identifier("evidence_id", required=False, nullable=True)
+        source_version = fields.integer("evidence_version", required=False, minimum=1)
         fields.check()
         return self._later(
             call,
             "TWIN_UPDATE",
-            {"locale": locale},
-            lambda: self._proposed_update(call, str(locale)),
+            {
+                "locale": locale,
+                **(
+                    {"evidence_id": source_id, "evidence_version": source_version}
+                    if source_id is not None
+                    else {}
+                ),
+            },
+            lambda: self._proposed_update(
+                call, str(locale), evidence_id=source_id, evidence_version=source_version
+            ),
         )
 
-    def _proposed_update(self, call: _Call, locale: str) -> _Answer:
+    def _proposed_update(
+        self, call: _Call, locale: str, *, evidence_id=None, evidence_version=None
+    ) -> _Answer:
         project = self._code_project(call)
         twin = self._learning_twin(project, call.params["twin_id"])
+        if evidence_id is not None:
+            return self._proposed_evidence_update(
+                project, twin, locale, evidence_id, evidence_version
+            )
         reference = self._alignment_reference(project)
         if reference["requirements"] is None:
             raise _Refusal(409, {"code": "REQUIREMENTS_APPROVAL_REQUIRED"})
@@ -9193,6 +9694,84 @@ class FakeStudio:
         project.updates.insert(0, update)
         return _Answer(201, {"status": "PROPOSED", "update": copy.deepcopy(update)})
 
+    def _proposed_evidence_update(self, project, twin, locale, source_id, source_version):
+        self._refuse_pending(project, str(twin["twin_id"]))
+        source = self._evidence_source(project, source_id, source_version)
+        latest = self._evidence_source(project, source_id)
+        if source["status"] != "ACTIVE":
+            raise _Refusal(409, {"code": "EVIDENCE_RETIRED"})
+        if source["version"] != latest["version"]:
+            raise _Refusal(409, {"code": "EVIDENCE_CONTEXT_CHANGED"})
+        text = project.evidence_texts.get((source_id, source["version"]))
+        if text is None:
+            raise _Refusal(409, {"code": "EVIDENCE_TEXT_UNAVAILABLE"})
+        if not self.hosted:
+            raise _Refusal(503, {"code": "TWIN_UPDATE_MODEL_NOT_CONFIGURED"})
+        it = _locale_language(locale) == "it"
+        passages = [(index, line) for index, line in enumerate(text.split("\n"), 1) if line.strip()]
+        candidates = []
+        fields = ("goals", "context_of_use", "preferred_vocabulary")
+        effects = ("SUPPORTS", "CONTRADICTS", "ADDS")
+        current = {
+            item["observation_key"]: item["value"] for item in twin["profile"]["observations"]
+        }
+        for index, (line, quote) in enumerate(passages[:3]):
+            field, effect = fields[index], effects[index]
+            value = copy.deepcopy(current.get(f"user_twin.{field}"))
+            if effect == "ADDS":
+                value = _items_value([" ".join(quote.split())[:300]])
+            elif value is None or value.get("kind") not in ("TEXT", "ITEMS"):
+                continue
+            value.pop("reason", None)
+            candidates.append(
+                {
+                    "statement": (
+                        "Interpretazione di prova della fonte "
+                        if it
+                        else "Test interpretation of the source "
+                    )
+                    + str(index + 1),
+                    "basis": "Citazione da testo di prova, senza validazione umana."
+                    if it
+                    else "Quotation from test text, without human validation.",
+                    "effect": effect,
+                    "field": field,
+                    "value": value,
+                    "quote": quote[:1000],
+                    "line": line,
+                }
+            )
+        context = evidence_update_context(
+            project_id=project.id, locale=locale, twin=twin, evidence=source, text=text
+        )
+        comment, observations, rejected = bind_evidence_update(
+            EvidenceUpdateOutput(
+                comment="Proposte simulate da testo di prova; il proprietario decide."
+                if it
+                else "Simulated proposals from test text; the owner decides.",
+                changes=candidates,
+            ),
+            context=context,
+        )
+        self._record(project, "TWIN_UPDATE")
+        update = self._update_of(
+            project,
+            twin,
+            locale,
+            [item.to_snapshot() for item in observations],
+            {"changes": 0, "tests": 0},
+            COSTS["TWIN_UPDATE"],
+        )
+        update["comment"] = comment
+        update["evidence"] = {
+            "source_id": source_id,
+            "source_version": source["version"],
+            "content_hash": source["content_hash"],
+            "rejected_changes": rejected,
+        }
+        project.updates.insert(0, update)
+        return _Answer(201, {"status": "PROPOSED", "update": copy.deepcopy(update)})
+
     def _route_twin_update(self, call: _Call) -> _Answer:
         project = self._code_project(call)
         return _Answer(200, copy.deepcopy(self._find_update(project, call.params["update_id"])))
@@ -9211,8 +9790,10 @@ class FakeStudio:
         approving = decision == "APPROVE"
         if approving and development != update["base"]["development_version_number"]:
             raise _Refusal(409, {"code": "TWIN_UPDATE_CONTEXT_CHANGED"})
-        if approving and self._active_count(project, twin_id) + len(kept) > (
-            MAX_LEARNED_OBSERVATIONS
+        if (
+            approving
+            and not update.get("evidence")
+            and self._active_count(project, twin_id) + len(kept) > (MAX_LEARNED_OBSERVATIONS)
         ):
             raise _Refusal(409, {"code": "TWIN_OBSERVATIONS_LIMIT"})
         proposed = update["observations"]
@@ -9234,7 +9815,9 @@ class FakeStudio:
                 },
             )
         moment = _iso(self._now())
-        if approving:
+        if approving and update.get("evidence"):
+            twin = self._decide_evidence_update(project, twin, update, kept)
+        elif approving:
             for item in sorted(kept, key=lambda entry: int(entry["index"])):
                 observation = dict(proposed[item["index"]])
                 if item["statement"] is not None:
@@ -9262,6 +9845,76 @@ class FakeStudio:
                 "update": copy.deepcopy(update),
                 "twin": self._learning_entry(project, twin),
             },
+        )
+
+    def _decide_evidence_update(self, project, twin, update, kept):
+        twin = self._learning_twin(project, str(twin["twin_id"]))
+        reference = update["evidence"]
+        source = self._evidence_source(project, reference["source_id"], reference["source_version"])
+        latest = self._evidence_source(project, reference["source_id"])
+        if source["status"] != "ACTIVE":
+            raise _Refusal(409, {"code": "EVIDENCE_RETIRED"})
+        if (
+            latest["version"] != source["version"]
+            or source["content_hash"] != reference["content_hash"]
+            or twin["version_number"] != update["base"]["profile_version_number"]
+        ):
+            raise _Refusal(409, {"code": "TWIN_UPDATE_CONTEXT_CHANGED"})
+        text = project.evidence_texts.get((source["id"], source["version"]))
+        if text is None:
+            raise _Refusal(409, {"code": "EVIDENCE_TEXT_UNAVAILABLE"})
+        domain_source = EvidenceVersion(
+            **{
+                key: value
+                for key, value in source.items()
+                if key
+                not in {"id", "source_kind", "status", "created_at", "retired_at", "imported_from"}
+            },
+            id=UUID(source["id"]),
+            source_kind=EvidenceSourceKind(source["source_kind"]),
+            status=EvidenceStatus(source["status"]),
+            created_at=datetime.fromisoformat(source["created_at"]),
+            retired_at=None
+            if source["retired_at"] is None
+            else datetime.fromisoformat(source["retired_at"]),
+        )
+        profile = _fake_twin_profile(twin["profile"])
+        observations, rows, touched = [], [], set()
+        for item in kept:
+            proposal = update["observations"][item["index"]]
+            change = EvidenceChange.from_snapshot(proposal["evidence"])
+            if change.field in touched or not change.citation.verify(text):
+                raise _Refusal(409, {"code": "EVIDENCE_CONTEXT_CHANGED"})
+            touched.add(change.field)
+            before = profile.observation_for(change.field)
+            after = apply_evidence_change(
+                before,
+                change,
+                domain_source,
+                statement=item["statement"],
+                rationale=proposal["basis"],
+            )
+            observations.append(after)
+            rows.append(
+                {
+                    "twin_id": twin["twin_id"],
+                    "twin_version": twin["version_number"] + 1,
+                    "field": change.field.value,
+                    "source_id": str(change.citation.source_id),
+                    "source_version": change.citation.source_version,
+                    "change": change.to_snapshot(),
+                    "before": None if before is None else before.to_snapshot(),
+                    "after": after.to_snapshot(),
+                    "retired_at": None,
+                }
+            )
+        updated = evidence_profile(profile, observations)
+        snapshot = self._append_evidence_profiles(project, {twin["twin_id"]: updated})
+        project.evidence_changes.extend(rows)
+        return next(
+            item
+            for item in snapshot["snapshot"]["twin_versions"]
+            if item["twin_id"] == twin["twin_id"]
         )
 
     def _route_learn(self, call: _Call) -> _Answer:
@@ -9762,6 +10415,7 @@ class FakeStudio:
             "project_id": UUID(project.id),
             "project_name": project.name,
             "state": self._state_sources(project, present[-1]),
+            "research_evidence": self._evidence_dossier(project),
         }
         for stage, version in versions.items():
             name = "modeling" if stage == "twins" else stage

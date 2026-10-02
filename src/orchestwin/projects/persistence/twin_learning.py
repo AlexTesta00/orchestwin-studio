@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.knowledge.state import MAX_LEARNED_OBSERVATIONS
 from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.research_evidence import EvidenceUpdateSource
 from orchestwin.projects.twin_learning import (
     KeptObservation,
     LearnedObservation,
@@ -51,6 +52,7 @@ UPDATES = sa.table(
     sa.column("decision_reason", sa.String(length=300)),
     sa.column("generation_ids", postgresql.JSONB()),
     sa.column("cost_microusd", sa.BigInteger()),
+    sa.column("evidence", postgresql.JSONB()),
 )
 
 OBSERVATIONS = sa.table(
@@ -148,6 +150,9 @@ def _update(row: Mapping[str, object]) -> TwinUpdate:
         decision=decision,
         generation_ids=tuple(UUID(str(item)) for item in row["generation_ids"]),
         cost_microusd=row["cost_microusd"],
+        evidence=None
+        if row.get("evidence") is None
+        else EvidenceUpdateSource.from_snapshot(row["evidence"]),
     )
 
 
@@ -281,6 +286,7 @@ class SqlAlchemyTwinLearningRepository:
                 decision_reason=None,
                 generation_ids=[str(item) for item in update.generation_ids],
                 cost_microusd=update.cost_microusd,
+                evidence=None if update.evidence is None else update.evidence.to_snapshot(),
             )
         )
 
@@ -438,7 +444,7 @@ class SqlAlchemyTwinLearningRepository:
         if approving and version != current.base_development_version:
             return TwinLearningWriteResult(TwinLearningWriteStatus.CONTEXT_CHANGED, update=current)
         active = sum(1 for item in records if item.active)
-        if approving and active + len(kept) > MAX_LEARNED_OBSERVATIONS:
+        if approving and current.evidence is None and active + len(kept) > MAX_LEARNED_OBSERVATIONS:
             return TwinLearningWriteResult(TwinLearningWriteStatus.LIMIT_REACHED, update=current)
         position = next(
             (place for place, item in enumerate(kept) if item.index >= len(current.observations)),
@@ -456,7 +462,7 @@ class SqlAlchemyTwinLearningRepository:
         )
         await self._store_decision(decided)
         added: tuple[LearnedObservation, ...] = ()
-        if approving:
+        if approving and current.evidence is None:
             added = await self._insert(
                 project_id,
                 current.twin_id,

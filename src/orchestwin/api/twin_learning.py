@@ -15,10 +15,16 @@ from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.code_changes import ChangeReference
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
+from orchestwin.api.research_evidence import research_evidence_refusal
 from orchestwin.artifacts.design_evaluation import DesignEvaluationError
 from orchestwin.artifacts.design_gate import design_gate_is_currently_approved
 from orchestwin.identity.domain import UserAccount
 from orchestwin.knowledge.state import MAX_OBSERVATION_LENGTH, MAX_UPDATE_OBSERVATIONS
+from orchestwin.models.evidence_update import (
+    bind_evidence_update,
+    evidence_update_context,
+    propose_evidence_update,
+)
 from orchestwin.models.generation_budget import provider_result_cost_microusd
 from orchestwin.models.proposal_evidence import (
     ProposalEvidenceError,
@@ -36,8 +42,10 @@ from orchestwin.models.twin_update import (
     update_material,
 )
 from orchestwin.projects.code_changes import LOCALE_PATTERN, MAX_LOCALE_LENGTH
+from orchestwin.projects.evidence_application import apply_update_changes, current_approved_snapshot
 from orchestwin.projects.persistence.acceptance_tests import SqlAlchemyAcceptanceTestRepository
 from orchestwin.projects.persistence.code_changes import SqlAlchemyCodeChangeRepository
+from orchestwin.projects.persistence.research_evidence import SqlAlchemyResearchEvidenceRepository
 from orchestwin.projects.persistence.twin_learning import (
     SqlAlchemyTwinLearningRepository,
     TwinLearningWriteResult,
@@ -45,6 +53,7 @@ from orchestwin.projects.persistence.twin_learning import (
 )
 from orchestwin.projects.requirements_gate import requirements_gate_is_currently_approved
 from orchestwin.projects.requirements_primitives import snapshot_content_hash
+from orchestwin.projects.research_evidence import EvidenceUpdateSource, ResearchEvidenceError
 from orchestwin.projects.twin_learning import (
     MAX_LEARNING_REASON_LENGTH,
     REQUIREMENT_CODE_PATTERN,
@@ -60,6 +69,7 @@ from orchestwin.projects.twin_learning import (
     normalize_statement,
     requested_observation_number,
 )
+from orchestwin.twins.persistence.uow import SqlAlchemyUserModelingUnitOfWork
 from orchestwin.twins.user_modeling_gate import user_modeling_gate_is_currently_approved
 
 TWIN_LEARNING_API_PREFIX: Final = "/projects/{project_id}"
@@ -99,6 +109,14 @@ class TwinUpdateRequest(_Body):
     locale: str = Field(
         default="it-IT", min_length=2, max_length=MAX_LOCALE_LENGTH, pattern=LOCALE_PATTERN
     )
+    evidence_id: UUID | None = Field(default=None, exclude_if=lambda value: value is None)
+    evidence_version: int | None = Field(default=None, ge=1, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def evidence_reference(self):
+        if self.evidence_version is not None and self.evidence_id is None:
+            raise ValueError("an evidence version requires its source ID")
+        return self
 
 
 class KeptObservationRequest(_Body):
@@ -462,6 +480,10 @@ class TwinLearningApplication:
         self, *, owner_user_id: UUID, project_id: UUID, twin_id: UUID, body
     ) -> TwinUpdateResult:
         await self._owned(owner_user_id, project_id)
+        if getattr(body, "evidence_id", None) is not None:
+            return await self._propose_evidence(
+                owner_user_id=owner_user_id, project_id=project_id, twin_id=twin_id, body=body
+            )
         twin = await self._twin(owner_user_id, project_id, twin_id)
         reference = await self._approved(owner_user_id, project_id)
         created_at = datetime.now(UTC)
@@ -530,6 +552,118 @@ class TwinLearningApplication:
             )
         return TwinUpdateResult(status=TwinUpdateStatus.PROPOSED, update=update)
 
+    async def _evidence_context_guard(
+        self, session, *, owner_user_id: UUID, project_id: UUID, twin_id: UUID, twin=None
+    ):
+        uow = SqlAlchemyUserModelingUnitOfWork(session, owner_user_id=owner_user_id)
+        if not await uow.lock_project(project_id=project_id):
+            raise _refusal(404, PROJECT_NOT_FOUND)
+        if await uow.has_pending_manual_revision(project_id=project_id):
+            raise _refusal(409, "USER_TWIN_REVISION_PENDING")
+        snapshot = await current_approved_snapshot(
+            session, owner_user_id=owner_user_id, project_id=project_id
+        )
+        current = next(
+            (item for item in snapshot.snapshot.twin_versions if item.twin_id == twin_id), None
+        )
+        if current is None:
+            raise _refusal(404, USER_TWIN_NOT_FOUND)
+        if twin is not None and (
+            current.id != twin.id
+            or current.version_number != twin.version_number
+            or current.content_hash != twin.content_hash
+        ):
+            raise ResearchEvidenceError("EVIDENCE_CONTEXT_CHANGED")
+        return current
+
+    async def _propose_evidence(
+        self, *, owner_user_id: UUID, project_id: UUID, twin_id: UUID, body
+    ):
+        try:
+            async with self._sessions()() as session, session.begin():
+                twin = await self._evidence_context_guard(
+                    session, owner_user_id=owner_user_id, project_id=project_id, twin_id=twin_id
+                )
+                learning = self._repository(session, owner_user_id)
+                pending = await learning.pending_update(project_id, twin_id)
+                if pending is not None:
+                    raise _pending(pending)
+                records = await learning.observations(project_id, twin_id)
+                sources = SqlAlchemyResearchEvidenceRepository(session, owner_user_id=owner_user_id)
+                source = await sources.get(project_id, body.evidence_id, body.evidence_version)
+                if source is None:
+                    raise ResearchEvidenceError("EVIDENCE_NOT_FOUND")
+                latest = await sources.get(project_id, source.id)
+                if latest.version != source.version:
+                    raise ResearchEvidenceError("EVIDENCE_CONTEXT_CHANGED")
+                if source.status.value != "ACTIVE":
+                    raise ResearchEvidenceError("EVIDENCE_RETIRED")
+                text = await sources.text(project_id, source.id, source.version)
+                if text is None:
+                    raise ResearchEvidenceError("EVIDENCE_TEXT_UNAVAILABLE")
+            context = evidence_update_context(
+                project_id=project_id,
+                locale=body.locale,
+                twin=twin,
+                evidence=source.to_snapshot(),
+                text=text,
+            )
+            update_id = uuid4()
+            comment, observations, rejected = await _attempt(
+                partial(propose_evidence_update, self._generator(), context),
+                partial(bind_evidence_update, context=context),
+                reference={"twin_update_id": str(update_id)},
+            )
+            generation_ids = _generation_ids()
+            update = TwinUpdate(
+                id=update_id,
+                twin_id=twin.twin_id,
+                twin_name=twin.profile.name,
+                created_at=datetime.now(UTC),
+                locale=body.locale,
+                status=UpdateStatus.PROPOSED if observations else UpdateStatus.EMPTY,
+                base_profile_version=twin.version_number,
+                base_development_version=self._entry(twin, records).development_version_number,
+                comment=comment,
+                observations=observations,
+                generation_ids=generation_ids,
+                cost_microusd=await self._cost(owner_user_id, project_id, generation_ids),
+                evidence=EvidenceUpdateSource(
+                    source.id, source.version, source.content_hash, rejected
+                ),
+            )
+            await _accept(update.to_snapshot())
+            async with self._sessions()() as session, session.begin():
+                await self._evidence_context_guard(
+                    session,
+                    owner_user_id=owner_user_id,
+                    project_id=project_id,
+                    twin_id=twin_id,
+                    twin=twin,
+                )
+                sources = SqlAlchemyResearchEvidenceRepository(session, owner_user_id=owner_user_id)
+                current = await sources.get(project_id, source.id)
+                if (
+                    current is None
+                    or current.status.value != "ACTIVE"
+                    or current.version != source.version
+                    or current.content_hash != source.content_hash
+                ):
+                    raise ResearchEvidenceError("EVIDENCE_CONTEXT_CHANGED")
+                if (
+                    await self._repository(session, owner_user_id).development_version(
+                        project_id, twin_id
+                    )
+                    != update.base_development_version
+                ):
+                    raise ResearchEvidenceError("EVIDENCE_CONTEXT_CHANGED")
+                _written(
+                    await self._repository(session, owner_user_id).create_update(project_id, update)
+                )
+            return TwinUpdateResult(status=TwinUpdateStatus.PROPOSED, update=update)
+        except ResearchEvidenceError as error:
+            raise research_evidence_refusal(error) from error
+
     async def update_of(
         self, *, owner_user_id: UUID, project_id: UUID, update_id: UUID
     ) -> TwinUpdate:
@@ -544,6 +678,13 @@ class TwinLearningApplication:
         self, *, owner_user_id: UUID, project_id: UUID, update_id: UUID, body
     ) -> tuple[TwinUpdate, TwinLearning]:
         await self._owned(owner_user_id, project_id)
+        existing = await self.update_of(
+            owner_user_id=owner_user_id, project_id=project_id, update_id=update_id
+        )
+        if existing.evidence is not None:
+            return await self._decide_evidence(
+                owner_user_id=owner_user_id, project_id=project_id, update_id=update_id, body=body
+            )
         twins = await self.approved_twins(owner_user_id=owner_user_id, project_id=project_id)
         async with self._sessions()() as session, session.begin():
             repository = self._repository(session, owner_user_id)
@@ -568,6 +709,78 @@ class TwinLearningApplication:
             profile_version_number=update.base_profile_version,
             records=records,
         )
+
+    async def _decide_evidence(
+        self, *, owner_user_id: UUID, project_id: UUID, update_id: UUID, body
+    ):
+        try:
+            async with self._sessions()() as session, session.begin():
+                repository = self._repository(session, owner_user_id)
+                if not await repository._lock_project(project_id):
+                    raise _refusal(404, PROJECT_NOT_FOUND)
+                update = await repository.update(project_id, update_id)
+                if update is None:
+                    raise _refusal(404, TWIN_UPDATE_NOT_FOUND)
+                if body.decision is UpdateDecisionKind.APPROVE:
+                    await self._evidence_context_guard(
+                        session,
+                        owner_user_id=owner_user_id,
+                        project_id=project_id,
+                        twin_id=update.twin_id,
+                    )
+                kept = tuple(item.to_domain() for item in body.kept)
+                result = _written(
+                    await repository.decide_update(
+                        project_id,
+                        update_id,
+                        body.decision,
+                        kept,
+                        decided_at=datetime.now(UTC),
+                        reason=body.reason,
+                    )
+                )
+                update = result.update
+                if body.decision is UpdateDecisionKind.APPROVE:
+                    snapshot = await apply_update_changes(
+                        session,
+                        owner_user_id=owner_user_id,
+                        project_id=project_id,
+                        update=update,
+                        kept=kept,
+                        occurred_at=update.decision.decided_at,
+                    )
+                    twin = next(
+                        item
+                        for item in snapshot.snapshot.twin_versions
+                        if item.twin_id == update.twin_id
+                    )
+                else:
+                    snapshot = await SqlAlchemyUserModelingUnitOfWork(
+                        session, owner_user_id=owner_user_id
+                    ).snapshots.current(project_id=project_id)
+                    twin = (
+                        None
+                        if snapshot is None
+                        else next(
+                            (
+                                item
+                                for item in snapshot.snapshot.twin_versions
+                                if item.twin_id == update.twin_id
+                            ),
+                            None,
+                        )
+                    )
+                records = await repository.observations(project_id, update.twin_id)
+            if twin is not None:
+                return update, self._entry(twin, records)
+            return update, build_twin_learning(
+                twin_id=update.twin_id,
+                twin_name=update.twin_name,
+                profile_version_number=update.base_profile_version,
+                records=records,
+            )
+        except ResearchEvidenceError as error:
+            raise research_evidence_refusal(error) from error
 
     async def learn(
         self, *, owner_user_id: UUID, project_id: UUID, twin_id: UUID, body

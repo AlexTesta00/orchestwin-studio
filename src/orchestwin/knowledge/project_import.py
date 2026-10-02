@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ from orchestwin.knowledge.archive import (
     mockup_failure,
 )
 from orchestwin.knowledge.layout import STAGES
+from orchestwin.knowledge.research_evidence import EVIDENCE_DOCUMENT
 from orchestwin.knowledge.sources import StageIdentity, stage_consistency_issue
 from orchestwin.projects.briefs import ProjectBrief
 from orchestwin.projects.requirements_persistence import specification_from_snapshot
@@ -76,6 +78,7 @@ class ProjectImportPlan:
     design: DesignPackageVersion
     identities: Mapping[str, str]
     hashes: Mapping[str, str]
+    research_evidence: Mapping[str, object] | None = None
 
     @property
     def personas(self):
@@ -161,11 +164,13 @@ class _Rewriter:
         identities: Mapping[str, str],
         owner_user_id: UUID,
         created_at: datetime,
+        evidence_ids: frozenset[str] = frozenset(),
     ) -> None:
         self.identities = dict(identities)
         self.hashes: dict[str, str] = {}
         self._owner = str(owner_user_id)
         self._created_at = created_at.isoformat()
+        self.evidence_ids = evidence_ids
 
     def text(self, value: str) -> str:
         renamed = _IDENTITY.sub(lambda match: self.identities.get(match[0], match[0]), value)
@@ -179,6 +184,12 @@ class _Rewriter:
     def rewrite(self, node: object) -> object:
         if isinstance(node, Mapping):
             internal_source = self._internal(node.get("source_id"))
+            research_source = node.get("source_id") in self.evidence_ids
+            if "quote" in node and "start" in node and "source_version" in node:
+                return {
+                    **node,
+                    "source_id": self.identities.get(node["source_id"], node["source_id"]),
+                }
             if frozenset(node) == _SOURCE_KEYS and not internal_source:
                 return dict(node)
             result: dict[str, object] = {}
@@ -191,6 +202,8 @@ class _Rewriter:
                     result[key] = IMPORTED_VERSION_NUMBER
                 elif key in _LINEAGE_KEYS:
                     result[key] = None
+                elif key in {"source_version", "content_hash"} and research_source:
+                    result[key] = value
                 elif key == "source_version" and internal_source and value is not None:
                     result[key] = IMPORTED_VERSION_NUMBER
                 else:
@@ -321,13 +334,24 @@ def _plan(
         raise KnowledgeArchiveError("FOLDER_DOCUMENT_MISSING")
     old_project = str(documents["brief"]["project_id"])
     old_brief = str(documents["brief"]["id"])
+    evidence = (
+        json.loads(folder.files[EVIDENCE_DOCUMENT]) if EVIDENCE_DOCUMENT in folder.files else None
+    )
+    evidence_ids = (
+        frozenset(item["id"] for item in evidence["evidence"]) if evidence else frozenset()
+    )
     identities = {
         old: str(uuid5(project_id, old))
-        for old in sorted(defined_identities(documents) - {old_project, old_brief})
+        for old in sorted((defined_identities(documents) | evidence_ids) - {old_project, old_brief})
     }
     identities[old_project] = str(project_id)
     identities[old_brief] = str(brief_version_id)
-    rewriter = _Rewriter(identities=identities, owner_user_id=owner_user_id, created_at=created_at)
+    rewriter = _Rewriter(
+        identities=identities,
+        owner_user_id=owner_user_id,
+        created_at=created_at,
+        evidence_ids=evidence_ids,
+    )
 
     brief = _parsed("brief", ProjectBrief.from_snapshot, documents["brief"]["brief"])
     if brief.content_hash != documents["brief"]["content_hash"]:
@@ -420,7 +444,53 @@ def _plan(
         design=design,
         identities=dict(rewriter.identities),
         hashes=dict(rewriter.hashes),
+        research_evidence=None
+        if evidence is None
+        else imported_evidence(evidence, identities=rewriter.identities, project_id=project_id),
     )
+
+
+def imported_evidence(
+    document: Mapping[str, object], *, identities: Mapping[str, str], project_id: UUID
+) -> dict[str, object]:
+    return {
+        "kind": document["kind"],
+        "schema_version": document["schema_version"],
+        "project_id": str(project_id),
+        "evidence": [
+            {
+                **source,
+                "id": identities[source["id"]],
+                "text_available": False,
+                "imported_from": source.get("imported_from")
+                or {
+                    "project_id": document["project_id"],
+                    "source_id": source["id"],
+                    "source_version": source["version"],
+                    "content_hash": source["content_hash"],
+                },
+            }
+            for source in document["evidence"]
+        ],
+        "citations": [
+            {
+                **item,
+                "twin_id": identities.get(item["twin_id"], item["twin_id"]),
+                "imported_from": item.get("imported_from")
+                or {
+                    "project_id": document["project_id"],
+                    "twin_id": item["twin_id"],
+                    "twin_version": item["twin_version"],
+                    "status": item["status"],
+                },
+                "citation": {
+                    **item["citation"],
+                    "source_id": identities[item["citation"]["source_id"]],
+                },
+            }
+            for item in document["citations"]
+        ],
+    }
 
 
 def plan_documents(

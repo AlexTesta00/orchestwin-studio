@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
@@ -32,6 +33,7 @@ class ArtifactGraphNodeKind(StrEnum):
     AGENT_TEAM = "AGENT_TEAM"
     USER_MODELING = "USER_MODELING"
     USER_TWIN = "USER_TWIN"
+    RESEARCH_EVIDENCE = "RESEARCH_EVIDENCE"
     REQUIREMENTS_SPECIFICATION = "REQUIREMENTS_SPECIFICATION"
     REQUIREMENT = "REQUIREMENT"
     USER_STORY = "USER_STORY"
@@ -67,6 +69,9 @@ class ArtifactGraphLinkKind(StrEnum):
     TRACES_TO = "TRACES_TO"
     REPRESENTS = "REPRESENTS"
     CRITIQUES = "CRITIQUES"
+    SUPPORTS = "SUPPORTS"
+    CONTRADICTS = "CONTRADICTS"
+    ADDS = "ADDS"
 
 
 _STAGE_ORDER = {
@@ -882,6 +887,9 @@ def grounded_design(
 def build_cross_stage_artifact_graph(
     requirements: RequirementsSpecificationVersion,
     design: DesignPackageVersion | None = None,
+    *,
+    research_evidence: Mapping[str, object] | None = None,
+    evidence_twins: Sequence = (),
 ) -> CrossStageArtifactGraph:
     """Derive a deterministic graph without persisting duplicate relationship state."""
     requirements_exact = _exact_requirements_reference(requirements)
@@ -909,6 +917,8 @@ def build_cross_stage_artifact_graph(
             nodes=nodes,
             links=links,
         )
+    if research_evidence and research_evidence.get("evidence"):
+        _add_evidence_stage(research_evidence, evidence_twins, nodes, links)
 
     return CrossStageArtifactGraph(
         project_id=requirements.project_id,
@@ -917,6 +927,68 @@ def build_cross_stage_artifact_graph(
         nodes=tuple(sorted(nodes, key=lambda node: node.sort_key)),
         links=tuple(sorted(set(links), key=lambda link: link.sort_key)),
     )
+
+
+def _add_evidence_stage(document, twins, nodes, links) -> None:
+    sources = {}
+    for source in document.get("evidence", ()):
+        reference = ArtifactGraphReference(
+            kind=ArtifactGraphNodeKind.RESEARCH_EVIDENCE,
+            artifact_id=UUID(source["id"]),
+            version_number=source["version"],
+            content_hash=source["content_hash"],
+        )
+        sources[(source["id"], source["version"], source["content_hash"])] = reference
+        nodes.append(
+            _node(
+                reference=reference,
+                stage=ArtifactGraphStage.CONTEXT,
+                display_code=f"{source['code']}-v{source['version']}",
+                title=f"{source['title']} ({source['status']})",
+            )
+        )
+    profiles = {str(twin.twin_id): twin for twin in twins}
+    for item in document.get("citations", ()):
+        if item.get("status") != "ACTIVE":
+            continue
+        citation = item["citation"]
+        source = sources.get(
+            (citation["source_id"], citation["source_version"], citation["content_hash"])
+        )
+        twin = profiles.get(item["twin_id"])
+        if source is None or twin is None:
+            continue
+        observation = next(
+            (
+                entry
+                for entry in twin.profile.observations
+                if entry.observation_key == f"user_twin.{item['field']}"
+            ),
+            None,
+        )
+        if observation is None or not any(
+            entry.source_id == citation["source_id"]
+            and entry.source_version == citation["source_version"]
+            and entry.content_hash == citation["content_hash"]
+            for entry in observation.provenance.references
+        ):
+            continue
+        target = ArtifactGraphReference(
+            kind=ArtifactGraphNodeKind.USER_TWIN,
+            artifact_id=twin.twin_id,
+            version_number=twin.version_number,
+            content_hash=twin.content_hash,
+        )
+        if not any(node.reference == target for node in nodes):
+            nodes.append(
+                _node(
+                    reference=target,
+                    stage=ArtifactGraphStage.CONTEXT,
+                    display_code=f"UT-{twin.twin_id.hex[:8].upper()}-v{twin.version_number}",
+                    title=twin.profile.name,
+                )
+            )
+        links.append(_link(ArtifactGraphLinkKind(item["effect"]), source, target))
 
 
 __all__ = [
