@@ -1,12 +1,24 @@
 "use strict";
 
 const { commandLine, costOf } = require("./commands");
-const { formatDate, formatDay, languageOf, plural, text } = require("./messages");
+const {
+  formatDate,
+  formatDay,
+  languageOf,
+  plural,
+  text,
+} = require("./messages");
 
 const SHORT_COMMIT = 7;
 const MAX_TASKS = 8;
 const MAX_PROBLEMS = 6;
-const STAGE_ORDER = Object.freeze(["brief", "team", "twins", "requirements", "design"]);
+const STAGE_ORDER = Object.freeze([
+  "brief",
+  "team",
+  "twins",
+  "requirements",
+  "design",
+]);
 const BROWSER_NAMES = Object.freeze({ chrome: "Chrome", firefox: "Firefox" });
 const OUTCOMES = Object.freeze([
   Object.freeze({ key: "passed", status: "PASSED", tone: "good" }),
@@ -21,9 +33,21 @@ const VERDICT_TONES = Object.freeze({
   DESIGN_OUTDATED: "warn",
   REQUIREMENTS_OUTDATED: "warn",
 });
-const CRITIQUE_TONES = Object.freeze({ FINE: "good", CONCERN: "warn", DRIFT: "bad" });
-const STATUS_TONES = Object.freeze({ PASSED: "good", FAILED: "bad", BLOCKED: "warn" });
-const AGENT_TONES = Object.freeze({ CONNECTED: "good", INVALID: "warn", UNREADABLE: "warn" });
+const CRITIQUE_TONES = Object.freeze({
+  FINE: "good",
+  CONCERN: "warn",
+  DRIFT: "bad",
+});
+const STATUS_TONES = Object.freeze({
+  PASSED: "good",
+  FAILED: "bad",
+  BLOCKED: "warn",
+});
+const AGENT_TONES = Object.freeze({
+  CONNECTED: "good",
+  INVALID: "warn",
+  UNREADABLE: "warn",
+});
 const NEXT_SENTENCES = Object.freeze({
   NO_FOLDER: "next.noFolder",
   NOT_LINKED: "next.notLinked",
@@ -38,7 +62,10 @@ const NEXT_SENTENCES = Object.freeze({
   FIRST_TEST: "next.firstTest",
   TEST: "next.test",
 });
-const ACTION_ICONS = Object.freeze({ openReport: "external", connectAgents: "plug" });
+const ACTION_ICONS = Object.freeze({
+  openReport: "external",
+  connectAgents: "plug",
+});
 const KNOWN_AGENTS = Object.freeze(["claude", "custom"]);
 const ENTITIES = Object.freeze({
   "&": "&amp;",
@@ -364,7 +391,10 @@ const SCRIPT = `(() => {
 })();`;
 
 function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (character) => ENTITIES[character]);
+  return String(value ?? "").replace(
+    /[&<>"']/g,
+    (character) => ENTITIES[character],
+  );
 }
 
 function rich(value) {
@@ -376,7 +406,9 @@ function listOf(value) {
 }
 
 function objectOf(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
 }
 
 function shortCommit(commit) {
@@ -417,7 +449,8 @@ function chip(label, tone) {
 
 function facts(rows) {
   const items = rows.map(
-    ([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${value}</dd></div>`,
+    ([term, value]) =>
+      `<div><dt>${escapeHtml(term)}</dt><dd>${value}</dd></div>`,
   );
   return `<dl class="facts">${items.join("")}</dl>`;
 }
@@ -450,7 +483,9 @@ function actionButton(id, context, options = {}) {
 
 function actions(ids, context) {
   const buttons = ids.filter(Boolean).map((id) => actionButton(id, context));
-  return buttons.length === 0 ? "" : `<div class="actions">${buttons.join("")}</div>`;
+  return buttons.length === 0
+    ? ""
+    : `<div class="actions">${buttons.join("")}</div>`;
 }
 
 function nextStep(state) {
@@ -472,7 +507,8 @@ function nextStep(state) {
     if (approved.includes("requirements")) {
       return { kind: "DESIGN", command: "design", count: null };
     }
-    const stage = STAGE_ORDER.find((item) => !approved.includes(item)) ?? STAGE_ORDER[0];
+    const stage =
+      STAGE_ORDER.find((item) => !approved.includes(item)) ?? STAGE_ORDER[0];
     return { kind: "INIT", command: "init", count: null, stage };
   }
   const development = objectOf(project.development);
@@ -491,7 +527,11 @@ function nextStep(state) {
   const summary = objectOf(latest === null ? null : latest.summary);
   const problems = (summary.failed ?? 0) + (summary.blocked ?? 0);
   if (problems > 0) {
-    return { kind: "TASKS_FROM_TEST", command: "tasksFromTest", count: problems };
+    return {
+      kind: "TASKS_FROM_TEST",
+      command: "tasksFromTest",
+      count: problems,
+    };
   }
   if (development.pending > 0) {
     return { kind: "ALIGN", command: "align", count: development.pending };
@@ -527,7 +567,10 @@ function nextSection(state, context) {
 
 function unlinkedHeader(state, context) {
   const name = folderName(objectOf(state).root);
-  const eyebrow = name === null ? context.t("panel.title") : context.t("panel.unlinkedEyebrow");
+  const eyebrow =
+    name === null
+      ? context.t("panel.title")
+      : context.t("panel.unlinkedEyebrow");
   return [
     '<header class="project">',
     `<p class="eyebrow">${escapeHtml(eyebrow)}</p>`,
@@ -565,16 +608,26 @@ function headerOf(state, context) {
       const meta =
         published === null
           ? context.t("header.folderVersion", { version: folder.version })
-          : context.t("header.folderPublished", { version: folder.version, date: published });
+          : context.t("header.folderPublished", {
+              version: folder.version,
+              date: published,
+            });
       lines.push(`<p class="meta">${escapeHtml(meta)}</p>`);
     }
     lines.push(stepsOf(folder, context));
     if (!folder.approved.includes("design")) {
-      lines.push(`<p class="callout">${escapeHtml(context.t("header.partial"))}</p>`);
+      lines.push(
+        `<p class="callout">${escapeHtml(context.t("header.partial"))}</p>`,
+      );
     }
   } else {
-    const key = folder.problem === "MISSING" ? "header.folderMissing" : "header.folderBroken";
-    lines.push(`<p class="meta">${escapeHtml(context.t(key, { folder: folder.path }))}</p>`);
+    const key =
+      folder.problem === "MISSING"
+        ? "header.folderMissing"
+        : "header.folderBroken";
+    lines.push(
+      `<p class="meta">${escapeHtml(context.t(key, { folder: folder.path }))}</p>`,
+    );
   }
   lines.push("</header>");
   return lines.join("\n");
@@ -605,14 +658,20 @@ function verdictChip(verdict, context) {
   if (verdict === null || verdict === undefined) {
     return chip(context.t("verdict.NONE"), "muted");
   }
-  return chip(context.t(`verdict.${verdict}`), VERDICT_TONES[verdict] ?? "muted");
+  return chip(
+    context.t(`verdict.${verdict}`),
+    VERDICT_TONES[verdict] ?? "muted",
+  );
 }
 
 function critiqueChip(verdict, context) {
   if (verdict === null || verdict === undefined) {
     return "";
   }
-  return chip(context.t(`critique.${verdict}`), CRITIQUE_TONES[verdict] ?? "muted");
+  return chip(
+    context.t(`critique.${verdict}`),
+    CRITIQUE_TONES[verdict] ?? "muted",
+  );
 }
 
 function latestCommitCard(change, context) {
@@ -630,7 +689,9 @@ function latestCommitCard(change, context) {
     `<code>${escapeHtml(shortCommit(change.commit))}</code>`,
     when === null ? "" : `<span class="when">${escapeHtml(when)}</span>`,
     "</p>",
-    change.subject === null ? "" : `<p class="card-text">${escapeHtml(change.subject)}</p>`,
+    change.subject === null
+      ? ""
+      : `<p class="card-text">${escapeHtml(change.subject)}</p>`,
     `<p class="chips">${chips.join("")}</p>`,
     "</div>",
   ].join("");
@@ -658,7 +719,9 @@ function developmentSection(state, context) {
     [context.t("development.pending"), escapeHtml(String(development.pending))],
   ];
   if (development.staleKnown) {
-    const commits = development.staleCommits.map((commit) => asCode(shortCommit(commit)));
+    const commits = development.staleCommits.map((commit) =>
+      asCode(shortCommit(commit)),
+    );
     const value =
       development.stale === 0
         ? context.t("development.none")
@@ -675,23 +738,34 @@ function developmentSection(state, context) {
     });
     rows.push([
       context.t("development.reference"),
-      escapeHtml(reference.alternative === null ? value : `${value} (${reference.alternative})`),
+      escapeHtml(
+        reference.alternative === null
+          ? value
+          : `${value} (${reference.alternative})`,
+      ),
     ]);
   }
   const content = [facts(rows)];
   if (development.latest === null) {
-    content.push(`<p class="note">${rich(context.t("development.noCommits"))}</p>`);
+    content.push(
+      `<p class="note">${rich(context.t("development.noCommits"))}</p>`,
+    );
   } else {
     content.push(`<h3>${escapeHtml(context.t("development.latest"))}</h3>`);
     content.push(latestCommitCard(development.latest, context));
   }
-  content.push(actions(["align", development.stale > 0 ? "recheck" : null], context));
+  content.push(
+    actions(["align", development.stale > 0 ? "recheck" : null], context),
+  );
   return sectionOf("development", title, content);
 }
 
 function originText(task, context) {
   const origin = objectOf(task.origin);
-  const twin = typeof origin.twinName === "string" ? origin.twinName.replace(/`/g, "'") : null;
+  const twin =
+    typeof origin.twinName === "string"
+      ? origin.twinName.replace(/`/g, "'")
+      : null;
   if (origin.kind === "OWNER") {
     return context.t("origin.owner");
   }
@@ -721,7 +795,9 @@ function taskCard(task, context) {
   return [
     '<li class="card">',
     `<p class="card-head"><span class="label">${escapeHtml(task.code ?? "")}</span></p>`,
-    task.text === null ? "" : `<p class="card-text">${escapeHtml(task.text)}</p>`,
+    task.text === null
+      ? ""
+      : `<p class="card-text">${escapeHtml(task.text)}</p>`,
     origin === null ? "" : `<p class="card-note">${rich(origin)}</p>`,
     "</li>",
   ].join("");
@@ -760,7 +836,10 @@ function tasksSection(state, context) {
   if (!tasks.available) {
     return sectionOf("tasks", title, [unavailable(context)]);
   }
-  const counts = [context.n("tasks.open", tasks.open.length), context.n("tasks.done", tasks.done)];
+  const counts = [
+    context.n("tasks.open", tasks.open.length),
+    context.n("tasks.done", tasks.done),
+  ];
   if (tasks.dropped > 0) {
     counts.push(context.n("tasks.dropped", tasks.dropped));
   }
@@ -768,7 +847,9 @@ function tasksSection(state, context) {
   if (tasks.open.length === 0) {
     content.push(`<p class="note">${escapeHtml(context.t("tasks.none"))}</p>`);
   } else {
-    const shown = tasks.open.slice(0, MAX_TASKS).map((task) => taskCard(task, context));
+    const shown = tasks.open
+      .slice(0, MAX_TASKS)
+      .map((task) => taskCard(task, context));
     content.push(`<ul class="cards spaced">${shown.join("")}</ul>`);
     if (tasks.open.length > MAX_TASKS) {
       const more = context.n("tasks.more", tasks.open.length - MAX_TASKS);
@@ -787,7 +868,10 @@ function percent(value) {
 }
 
 function outcomes(summary, context) {
-  const total = OUTCOMES.reduce((sum, outcome) => sum + (summary[outcome.key] ?? 0), 0);
+  const total = OUTCOMES.reduce(
+    (sum, outcome) => sum + (summary[outcome.key] ?? 0),
+    0,
+  );
   const legend = OUTCOMES.map((outcome) => {
     const count = summary[outcome.key] ?? 0;
     return [
@@ -828,7 +912,10 @@ function browsersText(browsers) {
   return browsers
     .map((browser) => {
       const name = BROWSER_NAMES[browser.name] ?? browser.name;
-      const major = typeof browser.version === "string" ? browser.version.split(".")[0] : "";
+      const major =
+        typeof browser.version === "string"
+          ? browser.version.split(".")[0]
+          : "";
       return major === "" ? name : `${name} ${major}`;
     })
     .join(" · ");
@@ -840,7 +927,10 @@ function problemCard(problem, context) {
     '<li class="card">',
     '<p class="card-head">',
     `<span class="label">${escapeHtml(problem.code ?? "")}</span>`,
-    chip(context.t(`status.${problem.status}`), STATUS_TONES[problem.status] ?? "muted"),
+    chip(
+      context.t(`status.${problem.status}`),
+      STATUS_TONES[problem.status] ?? "muted",
+    ),
     "</p>",
     `<p class="card-text${problem.statement === null ? " muted" : ""}">${escapeHtml(statement)}</p>`,
     "</li>",
@@ -864,7 +954,9 @@ function reviewOf(run, context) {
     );
   return [
     `<h3>${escapeHtml(heading)}</h3>`,
-    opinions.length === 0 ? "" : `<ul class="opinions">${opinions.join("")}</ul>`,
+    opinions.length === 0
+      ? ""
+      : `<ul class="opinions">${opinions.join("")}</ul>`,
   ].join("");
 }
 
@@ -887,14 +979,21 @@ function testsSection(state, context) {
     rows.push([context.t("tests.latest"), escapeHtml(when)]);
   }
   if (run.browsers.length > 0) {
-    rows.push([context.t("tests.browsers"), escapeHtml(browsersText(run.browsers))]);
+    rows.push([
+      context.t("tests.browsers"),
+      escapeHtml(browsersText(run.browsers)),
+    ]);
   }
   const content = [facts(rows)];
   if (run.source === "LOCAL") {
-    content.push(`<p class="note muted">${escapeHtml(context.t("tests.local"))}</p>`);
+    content.push(
+      `<p class="note muted">${escapeHtml(context.t("tests.local"))}</p>`,
+    );
   }
   if (run.stale) {
-    content.push(`<p class="callout">${escapeHtml(context.t("tests.stale"))}</p>`);
+    content.push(
+      `<p class="callout">${escapeHtml(context.t("tests.stale"))}</p>`,
+    );
   }
   content.push(outcomes(run.summary, context));
   if (run.problems.length > 0) {
@@ -904,7 +1003,10 @@ function testsSection(state, context) {
       .map((problem) => problemCard(problem, context));
     content.push(`<ul class="cards">${shown.join("")}</ul>`);
     if (run.problems.length > MAX_PROBLEMS) {
-      const more = context.n("tests.moreProblems", run.problems.length - MAX_PROBLEMS);
+      const more = context.n(
+        "tests.moreProblems",
+        run.problems.length - MAX_PROBLEMS,
+      );
       content.push(`<p class="note">${escapeHtml(more)}</p>`);
     }
   }
@@ -920,21 +1022,36 @@ function opinionLine(label, verdict, context) {
 function twinCard(twin, context) {
   const opinions = [];
   if (twin.commit === null) {
-    opinions.push(`<li class="muted">${escapeHtml(context.t("twins.noCommit"))}</li>`);
+    opinions.push(
+      `<li class="muted">${escapeHtml(context.t("twins.noCommit"))}</li>`,
+    );
   } else {
-    const label = context.t("twins.onCommit", { commit: asCode(shortCommit(twin.commit.commit)) });
+    const label = context.t("twins.onCommit", {
+      commit: asCode(shortCommit(twin.commit.commit)),
+    });
     opinions.push(opinionLine(label, twin.commit.verdict, context));
   }
   if (twin.test === null) {
-    opinions.push(`<li class="muted">${escapeHtml(context.t("twins.noTest"))}</li>`);
-  } else {
-    const day = context.day(twin.test.finishedAt) ?? context.day(twin.test.reviewedAt) ?? "";
     opinions.push(
-      opinionLine(context.t("twins.onTest", { date: day }), twin.test.verdict, context),
+      `<li class="muted">${escapeHtml(context.t("twins.noTest"))}</li>`,
+    );
+  } else {
+    const day =
+      context.day(twin.test.finishedAt) ??
+      context.day(twin.test.reviewedAt) ??
+      "";
+    opinions.push(
+      opinionLine(
+        context.t("twins.onTest", { date: day }),
+        twin.test.verdict,
+        context,
+      ),
     );
   }
   const learned =
-    twin.learned > 0 ? context.n("twins.learned", twin.learned) : context.t("twins.learnedNone");
+    twin.learned > 0
+      ? context.n("twins.learned", twin.learned)
+      : context.t("twins.learnedNone");
   const observations = twin.observations.map((observation) => {
     const source =
       observation.source === null
@@ -959,7 +1076,19 @@ function twinCard(twin, context) {
     `<p class="card-head"><span class="twin-name">${escapeHtml(twin.name ?? "")}</span>${version}</p>`,
     `<ul class="opinions">${opinions.join("")}</ul>`,
     `<p class="learned">${escapeHtml(learned)}</p>`,
-    observations.length === 0 ? "" : `<ol class="observations">${observations.join("")}</ol>`,
+    observations.length === 0
+      ? ""
+      : `<ol class="observations">${observations.join("")}</ol>`,
+    listOf(twin.evidence).length === 0
+      ? ""
+      : `<details><summary>${escapeHtml(context.t("twins.evidence"))}</summary><p>${escapeHtml(context.t("twins.evidenceLimit"))}</p>${listOf(
+          twin.evidence,
+        )
+          .map(
+            (item) =>
+              `<p>${escapeHtml(item.code ?? "")} v${escapeHtml(item.version ?? "")} · ${escapeHtml(item.field ?? "")} · ${escapeHtml(item.effect ?? "")} · ${escapeHtml(item.status ?? "")} · L${escapeHtml(item.first ?? "")}–L${escapeHtml(item.last ?? "")}</p><blockquote>${escapeHtml(item.quote ?? "")}</blockquote><p>${escapeHtml(item.limitations ?? "")}</p>`,
+          )
+          .join("")}</details>`,
     "</li>",
   ].join("");
 }
@@ -970,7 +1099,9 @@ function twinsSection(state, context) {
   const folder = state.folder;
   if (!twins.available) {
     const approved = folder.approved.includes("twins");
-    const message = approved ? unavailable(context) : `<p>${rich(context.t("twins.notYet"))}</p>`;
+    const message = approved
+      ? unavailable(context)
+      : `<p>${rich(context.t("twins.notYet"))}</p>`;
     return sectionOf("twins", title, [message]);
   }
   const content = [];
@@ -1007,7 +1138,11 @@ function footerOf(state, context) {
 }
 
 function linkedBody(state, context) {
-  const parts = [headerOf(state, context), noticesOf(state, context), nextSection(state, context)];
+  const parts = [
+    headerOf(state, context),
+    noticesOf(state, context),
+    nextSection(state, context),
+  ];
   const folder = state.folder;
   if (folder.available) {
     if (folder.approved.includes("design")) {
@@ -1033,7 +1168,11 @@ function bodyOf(state, context) {
     if (state.linked === true && typeof state.root === "string") {
       return linkedBody(state, context);
     }
-    return [unlinkedHeader(state, context), noticesOf(state, context), nextSection(state, context)]
+    return [
+      unlinkedHeader(state, context),
+      noticesOf(state, context),
+      nextSection(state, context),
+    ]
       .filter((part) => part !== "")
       .join("\n");
   } catch {
