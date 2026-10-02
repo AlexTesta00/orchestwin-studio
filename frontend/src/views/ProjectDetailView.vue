@@ -24,6 +24,7 @@ import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
 import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
 import ProjectSectionsNotice from "@/components/ProjectSectionsNotice.vue";
 import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
+import ProjectResearchEvidencePanel from "@/components/ProjectResearchEvidencePanel.vue";
 import TwinChatPanel from "@/components/TwinChatPanel.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import UiButton from "@/components/UiButton.vue";
@@ -345,6 +346,20 @@ const sectionsData = computed(() =>
   sectionsStore.projectId === projectId.value ? sectionsStore.sections : null,
 );
 const sectionsMode = computed(() => sectionsData.value?.first_pass_complete === true);
+const evidenceReviewSections = computed<ReadonlySet<ProjectStage>>(
+  () =>
+    new Set(
+      (sectionsData.value?.sections ?? [])
+        .filter(
+          (section) =>
+            section.state !== "NOT_STARTED" &&
+            section.version_number !== null &&
+            Object.values(section.affected_codes ?? {}).some((codes) => codes.length > 0),
+        )
+        .map((section) => section.key),
+    ),
+);
+const evidenceReviewNotice = computed(() => evidenceReviewSections.value.size > 0);
 const sectionSteps = computed<StepSection[]>(() =>
   PROJECT_STAGES.map((key) => {
     const section = sectionsData.value?.sections.find((item) => item.key === key);
@@ -371,6 +386,9 @@ const activeStage = computed(() => {
 });
 const activeKey = computed<ProjectStage>(() => PROJECT_STAGES[activeStage.value] ?? "PACKAGE");
 const activeSection = computed(() => sectionSteps.value[activeStage.value] ?? NO_SECTION);
+const activeSectionShown = computed(
+  () => sectionsMode.value || evidenceReviewSections.value.has(activeKey.value),
+);
 const stageLabels = computed(() =>
   locale.value === "it"
     ? ["Brief", "Prospettive", "User Twin", "Definizione", "Design e valutazione", "Dossier"]
@@ -419,6 +437,18 @@ const stepItems = computed<StepItem[]>(() =>
       item.open = true;
       item.note = t("detail.partialFolder");
     }
+    const key = PROJECT_STAGES[index];
+    if (key !== undefined && evidenceReviewSections.value.has(key)) {
+      const section = sectionSteps.value[index] ?? NO_SECTION;
+      if (index <= currentStage.value || (index === 5 && packageOpen.value)) {
+        item.section = section;
+        if (index === 5 && !designApproved.value) {
+          item.label = `${label} · ${t("detail.partialFolder")}`;
+        }
+      } else {
+        item.note = tg(`ui.sections.states.${section.state}`);
+      }
+    }
     return item;
   }),
 );
@@ -443,7 +473,10 @@ const provenanceOpen = ref(false);
 const chatTwin = ref<UserTwinVersionPayload | null>(null);
 
 function segmentClass(index: number): string {
-  if (sectionsMode.value) return SECTION_SEGMENTS[(sectionSteps.value[index] ?? NO_SECTION).state];
+  const key = PROJECT_STAGES[index];
+  if (sectionsMode.value || (key !== undefined && evidenceReviewSections.value.has(key))) {
+    return SECTION_SEGMENTS[(sectionSteps.value[index] ?? NO_SECTION).state];
+  }
   if (index < currentStage.value) return "bg-petrol-on-night";
   if (index === currentStage.value) return "bg-on-night";
   return "bg-on-night/14";
@@ -765,6 +798,13 @@ function onSectionsChanged(): void {
   void refreshSections();
 }
 
+async function onEvidenceChanged(): Promise<void> {
+  const id = projectId.value;
+  if (!id) return;
+  await authorized((token) => modeling.load(id, token)).catch(() => null);
+  if (id === projectId.value) onSectionsChanged();
+}
+
 async function alignSections(): Promise<void> {
   const id = projectId.value;
   if (!id || sectionsStore.pending.align) return;
@@ -915,8 +955,8 @@ onUnmounted(() => {
           :total="6"
           :title="stageLabels[activeStage] ?? ''"
           :description="stageDescriptions[activeStage]"
-          :status="sectionsMode ? undefined : headerStatus"
-          :section="sectionsMode ? activeSection : undefined"
+          :status="activeSectionShown ? undefined : headerStatus"
+          :section="activeSectionShown ? activeSection : undefined"
         />
         <p
           v-if="importOrigin"
@@ -932,7 +972,7 @@ onUnmounted(() => {
         </p>
 
         <ProjectSectionsNotice
-          v-if="sectionsMode && sectionsData !== null"
+          v-if="(sectionsMode || evidenceReviewNotice) && sectionsData !== null"
           :sections="sectionsData"
           :labels="stageLabels"
           :open-key="activeKey"
@@ -944,7 +984,7 @@ onUnmounted(() => {
           @open="openSection"
         />
         <div
-          v-else-if="activeStage < currentStage"
+          v-if="!sectionsMode && activeStage < currentStage"
           class="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-panel border border-night-line bg-night-raised py-3 pr-3 pl-5"
           aria-live="polite"
           data-testid="step-read-only"
@@ -957,7 +997,7 @@ onUnmounted(() => {
           </UiButton>
         </div>
         <div
-          v-else-if="activeStage > currentStage"
+          v-else-if="!sectionsMode && activeStage > currentStage"
           class="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-panel border border-night-line bg-night-raised py-3 pr-3 pl-5"
           aria-live="polite"
           data-testid="step-ahead"
@@ -1078,6 +1118,19 @@ onUnmounted(() => {
               :sections-mode="sectionsMode"
               @open-chat="chatTwin = $event"
               @sections-changed="onSectionsChanged"
+            />
+            <ProjectResearchEvidencePanel
+              v-if="auth.accessToken"
+              :key="`${projectId}:evidence`"
+              :project-id="projectId"
+              :authorize="authorized"
+              :twins="
+                modeling.currentTwins.map((twin) => ({ id: twin.twin_id, name: twin.profile.name }))
+              "
+              :ready="modeling.isCurrentSnapshotApproved"
+              :active="activeStage === 2"
+              :locale="locale === 'it' ? 'it' : 'en'"
+              @changed="onEvidenceChanged"
             />
           </div>
           <div id="studio-stage-3" v-show="activeStage === 3" data-testid="stage-requirements">

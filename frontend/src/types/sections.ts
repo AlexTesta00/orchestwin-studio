@@ -32,6 +32,11 @@ export interface ProjectSectionPayload {
   reasons: SectionReason[];
   blocked: SectionBlock | null;
   codes: string[];
+  affected_codes?: {
+    scenarios: string[];
+    needs: string[];
+    requirements: string[];
+  };
 }
 
 export interface SectionsAlignmentSummaryPayload {

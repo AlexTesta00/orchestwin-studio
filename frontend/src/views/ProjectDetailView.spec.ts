@@ -181,7 +181,12 @@ function hydrateStages(pinia: ReturnType<typeof createPinia>) {
   });
   modeling.$patch({
     projectId: "first",
-    currentSnapshot: { id: "twins", content_hash: "twins-hash", version_number: 1 },
+    currentSnapshot: {
+      id: "twins",
+      content_hash: "twins-hash",
+      version_number: 1,
+      snapshot: { twin_versions: [] },
+    },
     currentGate: gate("twins"),
     readiness: { workflow_state: "READY_FOR_REQUIREMENTS_DEFINITION" },
   });
@@ -1435,6 +1440,128 @@ describe("sections after the first pass", () => {
     wrapper.unmount();
   });
 
+  it.each(["it", "en"] as const)(
+    "shows evidence review codes and real downstream states before the first design approval in %s",
+    async (locale) => {
+      const affected = { scenarios: ["SCN-001"], needs: ["NED-001"], requirements: ["REQ-001"] };
+      const data = pageSections(
+        {
+          REQUIREMENTS: {
+            state: "TO_UPDATE",
+            version_number: 3,
+            reasons: ["USER_TWINS_CHANGED"],
+            affected_codes: affected,
+          },
+          DESIGN: {
+            state: "IN_PROGRESS",
+            version_number: 1,
+            reasons: ["USER_TWINS_CHANGED"],
+            affected_codes: affected,
+          },
+          PACKAGE: {
+            state: "TO_UPDATE",
+            version_number: 5,
+            reasons: ["FOLDER_BEHIND"],
+            affected_codes: affected,
+          },
+        },
+        { available: true, sections: ["REQUIREMENTS"] },
+        false,
+      );
+      vi.spyOn(sectionsApi, "read").mockResolvedValue(data);
+      const align = vi.spyOn(sectionsApi, "align");
+      const pinia = createPinia();
+      const stores = hydrateStages(pinia);
+      stores.design.$patch({ gate: null, readiness: { status: "DESIGN_APPROVAL_REQUIRED" } });
+      const wrapper = mountSections(
+        locale,
+        { ProjectSectionsNotice: false, ...countingFlows({}) },
+        pinia,
+      );
+      await flushPromises();
+
+      expect(
+        FLOWS.map((name) => wrapper.get(`[data-flow="${name}"]`).attributes("data-sections-mode")),
+      ).toEqual(["false", "false", "false", "false", "false", "false"]);
+      expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+      const notice = wrapper.get('[data-testid="sections-notice"]');
+      for (const code of ["SCN-001", "NED-001", "REQ-001"]) expect(notice.text()).toContain(code);
+      expect(notice.get('[data-kind="affected"]').text()).toContain(
+        locale === "it" ? "controlla ciò che dicono" : "review what these items say",
+      );
+      const definition = wrapper.get('[data-stage="3"]');
+      expect(definition.attributes("data-state")).toBe("TO_UPDATE");
+      expect(definition.text()).toContain(locale === "it" ? "Da aggiornare" : "To update");
+      expect(wrapper.get('[data-stage="4"]').attributes("data-state")).toBe("IN_PROGRESS");
+      expect(wrapper.get('[data-testid="step-section-state"]').attributes("data-state")).toBe(
+        "IN_PROGRESS",
+      );
+      expect(wrapper.get('[data-stage="5"]').text()).toContain(
+        locale === "it" ? "Cartella parziale" : "Partial folder",
+      );
+      expect(wrapper.get('[data-stage="5"]').attributes("data-state")).toBe("TO_UPDATE");
+      expect(align).not.toHaveBeenCalled();
+
+      await definition.trigger("click");
+      expect(wrapper.get('[data-testid="step-section-state"]').attributes("data-state")).toBe(
+        "TO_UPDATE",
+      );
+      expect(wrapper.get('[data-testid="step-read-only"]').isVisible()).toBe(true);
+      await wrapper.get('[data-testid="back-to-current"]').trigger("click");
+      expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+      await wrapper.get('[data-stage="5"]').trigger("click");
+      expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+      expect(wrapper.get('[data-testid="step-section-state"]').attributes("data-state")).toBe(
+        "TO_UPDATE",
+      );
+      expect(wrapper.get('[data-testid="step-ahead"]').isVisible()).toBe(true);
+      expect(align).not.toHaveBeenCalled();
+      await expectAccessible(wrapper.element);
+      wrapper.unmount();
+    },
+  );
+
+  it("keeps future steps locked when evidence reopens an existing Definition during the first pass", async () => {
+    const data = pageSections(
+      {
+        REQUIREMENTS: {
+          state: "TO_UPDATE",
+          version_number: 3,
+          reasons: ["USER_TWINS_CHANGED"],
+          affected_codes: { scenarios: ["SCN-001"], needs: ["NED-001"], requirements: ["REQ-001"] },
+        },
+        DESIGN: { state: "NOT_STARTED", version_number: null },
+      },
+      {},
+      false,
+    );
+    vi.spyOn(sectionsApi, "read").mockResolvedValue(data);
+    const pinia = createPinia();
+    const stores = hydrateStages(pinia);
+    stores.requirements.$patch({
+      gate: null,
+      readiness: { status: "REQUIREMENTS_APPROVAL_REQUIRED" },
+    });
+    stores.design.$patch({ current: null, gate: null, readiness: null });
+    const wrapper = mountSections(
+      "it",
+      { ProjectSectionsNotice: false, ...countingFlows({}) },
+      pinia,
+    );
+    await flushPromises();
+    expect(wrapper.get('[data-testid="sections-notice"]').text()).toContain("REQ-001");
+    expect(wrapper.get('[data-testid="stage-requirements"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="step-section-state"]').attributes("data-state")).toBe(
+      "TO_UPDATE",
+    );
+    const future = wrapper.findAll('[data-testid="stepper"] button')[4];
+    expect(future?.attributes("disabled")).toBeDefined();
+    expect(future?.attributes("data-state")).toBeUndefined();
+    expect(wrapper.find('[data-stage="4"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "ProjectDesignFlow" }).props("sectionsMode")).toBe(false);
+    wrapper.unmount();
+  });
+
   it.each([
     ["answers 404", () => Promise.resolve(null)],
     ["cannot be reached", () => Promise.reject(new Error("network down"))],
@@ -2490,6 +2617,7 @@ function fakeStudio(served: Served) {
       [`${base}/code-changes`]: () => ok({ items: [] }),
       [`${base}/code-tasks`]: () => ok({ items: [] }),
       [`${base}/twin-learning`]: () => ok(TWIN_LEARNING),
+      [`${base}/evidence`]: () => ok({ project_id: OPEN, evidence: [], citations: [] }),
       [`${base}/acceptance-tests`]: () => ok(ACCEPTANCE_TESTS),
       [`${base}/design/mockups/capabilities`]: () => ok(CAPABILITIES),
       [`${base}/design/mockups`]: () =>
@@ -2804,6 +2932,7 @@ const OPENING_READINGS: Record<string, number> = {
   "…/code-changes": 1,
   "…/code-tasks?status=all": 1,
   "…/twin-learning": 1,
+  "…/evidence?all=true": 1,
   "…/acceptance-tests": 1,
   "…/sections": 1,
   [`…/design/mockups/document?alternative_id=${DESIGN_ALTERNATIVE_ID}&source=applied`]: 1,

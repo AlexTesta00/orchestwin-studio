@@ -16,6 +16,7 @@ export type ArtifactGraphNodeKind =
   | "AGENT_TEAM"
   | "USER_MODELING"
   | "USER_TWIN"
+  | "RESEARCH_EVIDENCE"
   | "REQUIREMENTS_SPECIFICATION"
   | "REQUIREMENT"
   | "USER_STORY"
@@ -45,7 +46,10 @@ export type ArtifactGraphLinkKind =
   | "GOVERNS"
   | "TRACES_TO"
   | "REPRESENTS"
-  | "CRITIQUES";
+  | "CRITIQUES"
+  | "SUPPORTS"
+  | "CONTRADICTS"
+  | "ADDS";
 
 export interface VersionedArtifactReferencePayload {
   kind: ArtifactKind;

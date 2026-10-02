@@ -153,6 +153,32 @@ describe("ProjectTwinLearningBlock", () => {
     document.body.innerHTML = "";
   });
 
+  it.each(["it", "en"] as const)(
+    "directs an evidence proposal to its quotes and refusal count in %s",
+    async (locale) => {
+      const proposal: TwinUpdatePayload = {
+        ...PROPOSAL,
+        evidence: {
+          source_id: "99999999-9999-4999-8999-999999999999",
+          source_version: 1,
+          content_hash: "a".repeat(64),
+          rejected_changes: 2,
+        },
+      };
+      const wrapper = mountBlock(
+        learningApi(async () => learning({ twins: [{ ...MANAGER, pending_update: proposal }] })),
+        locale,
+      );
+      await flushPromises();
+      const text = wrapper.get('[data-testid="learning-pending"]').text();
+      expect(text).toContain("User Twin");
+      expect(text).toContain(locale === "it" ? "citazioni esatte" : "exact quotes");
+      expect(text).toContain(locale === "it" ? "rifiutati" : "refused");
+      expect(text).not.toContain("ut twins update");
+      wrapper.unmount();
+    },
+  );
+
   it("reads what the twins learned once and shows every twin with its version", async () => {
     const api = learningApi();
     const wrapper = mountBlock(api);
