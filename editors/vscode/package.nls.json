@@ -13,6 +13,8 @@
   "command.openReport": "Open the report of the latest test run",
   "command.connectAgents": "Connect the twins to the agents of the editor",
   "command.why": "Why? Read the artifact chain from the local folder (ut why --offline)",
+  "command.validation": "Read hypotheses and outcomes from the verified local Dossier (ut validation --offline)",
+  "command.scenarioWalkthrough": "Read a scenario walkthrough from the verified local Dossier (ut validation walkthrough --offline)",
   "configuration.title": "OrchesTwin",
-  "configuration.utCommand": "The program used by the panel: ut, or its full path. Why? runs it offline; development commands run in the terminal."
+  "configuration.utCommand": "The program used by the panel: ut, or its full path. Why? reads offline; validation offers explicit local or Studio reads; development commands run in the terminal."
 }

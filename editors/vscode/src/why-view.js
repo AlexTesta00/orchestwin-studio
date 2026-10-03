@@ -61,9 +61,22 @@ function listOf(value) {
 }
 
 function titleOf(node, context) {
+  if (node.kind === "VALIDATION_OUTCOME" && ["CONFIRMED", "REFUTED", "UNCERTAIN"].includes(node.title)) {
+    return context.t(`validation.state.${node.title}`);
+  }
   return node.title === node.kind && Object.hasOwn(STAGE_TITLES, node.kind)
     ? context.t(STAGE_TITLES[node.kind])
     : (node.title ?? node.code);
+}
+
+function stateOf(node, context) {
+  if (node.kind === "VALIDATION_HYPOTHESIS") {
+    return context.t("validation.operationalHypothesis");
+  }
+  if (node.kind === "VALIDATION_OUTCOME") {
+    return context.t(objectOf(node.declared_context).effective_status === "RETIRED" ? "validation.retired" : "validation.outcomes");
+  }
+  return context.t(`why.${STATES.includes(node.display_status) ? node.display_status : "UNKNOWN"}`);
 }
 
 function referenceOf(reference, context) {
@@ -96,7 +109,7 @@ function citationOf(item, context) {
   const retired = envelope.status === "RETIRED" || source.status === "RETIRED";
   return [
     '<div class="why-citation">',
-    `<p>${escapeHtml(source.title ?? source.code ?? citation.source_id)} · v${escapeHtml(citation.source_version ?? "—")} · ${escapeHtml(envelope.field)} · ${escapeHtml(envelope.effect)} · ${escapeHtml(retired ? context.t("why.retired") : envelope.status)}</p>`,
+    `<p>${escapeHtml(source.title ?? source.code ?? citation.source_id)} · v${escapeHtml(citation.source_version ?? "—")}${envelope.session_kind ? ` · ${escapeHtml(context.t(`validation.session.${envelope.session_kind}`))}` : ` · ${escapeHtml(envelope.field)} · ${escapeHtml(envelope.effect)}`} · ${escapeHtml(retired ? context.t("why.retired") : envelope.status)}</p>`,
     `<p><code>${escapeHtml(citation.content_hash ?? "—")}</code> · ${escapeHtml(citation.start ?? "—")}:${escapeHtml(citation.end ?? "—")} · L${escapeHtml(citation.start_line ?? "—")}–L${escapeHtml(citation.end_line ?? "—")}</p>`,
     `<blockquote>${escapeHtml(citation.quote)}</blockquote>`,
     source.limitations ? `<p>${escapeHtml(source.limitations)}</p>` : "",
@@ -109,15 +122,14 @@ function citationOf(item, context) {
 
 function nodeOf(value, context, navigate = true) {
   const node = objectOf(value);
-  const status = STATES.includes(node.display_status)
-    ? node.display_status
-    : "UNKNOWN";
   const rationale = objectOf(node.rationale);
   const declared = objectOf(node.declared_context);
   return [
     '<li class="card">',
     `<p class="card-head"><strong>${escapeHtml(titleOf(node, context))}</strong></p>`,
-    `<p>${escapeHtml(context.t(`why.${status}`))} · ${escapeHtml(context.t(node.current === true ? "why.current" : "why.historical"))} · <code>${escapeHtml(node.code)}</code></p>`,
+    `<p>${escapeHtml(stateOf(node, context))} · ${escapeHtml(context.t(node.current === true ? "why.current" : "why.historical"))} · <code>${escapeHtml(node.code)}</code></p>`,
+    declared.hypothesis ? `<p>${escapeHtml(context.t("validation.observe"))}</p><ul>${listOf(objectOf(declared.hypothesis).observe).map((item) => `<li class="why-verbatim">${escapeHtml(item)}</li>`).join("")}</ul><p>${escapeHtml(context.t("why.limits"))}</p><p class="why-verbatim">${escapeHtml(objectOf(declared.hypothesis).limitations)}</p>` : "",
+    declared.outcome ? `<p>${escapeHtml(context.t(`validation.session.${objectOf(declared.outcome).session_kind}`))} · <code>${escapeHtml(objectOf(declared.outcome).session_ref)}</code></p>${objectOf(declared.outcome).coverage === "PARTIAL" ? `<p>${escapeHtml(context.t("validation.partial"))}</p>` : ""}<p class="why-verbatim">${escapeHtml(objectOf(declared.outcome).limitations)}</p>` : "",
     declared.observation_value
       ? observationOf(declared.observation_value, context)
       : "",
@@ -234,16 +246,13 @@ function answerOf(answer, context) {
     escapeHtml(context.t(value === true ? "why.yes" : "why.no"));
   const target = objectOf(answer.target);
   const rationale = objectOf(target.rationale);
-  const status = STATES.includes(target.display_status)
-    ? target.display_status
-    : "UNKNOWN";
   const briefRationale =
     typeof rationale.text === "string"
       ? `${rationale.text.slice(0, 240)}${rationale.text.length > 240 ? "…" : ""}`
       : "";
   return [
     `<p class="note">${escapeHtml(context.t("why.offline"))}</p>`,
-    `<h3>${escapeHtml(titleOf(target, context))}</h3><p>${escapeHtml(context.t(`why.${status}`))} · v${escapeHtml(objectOf(target.reference).version_number ?? "—")} · <code>${escapeHtml(target.code)}</code></p>`,
+    `<h3>${escapeHtml(titleOf(target, context))}</h3><p>${escapeHtml(stateOf(target, context))} · v${escapeHtml(objectOf(target.reference).version_number ?? "—")} · <code>${escapeHtml(target.code)}</code></p>`,
     briefRationale
       ? `<p><strong>${escapeHtml(context.t(ORIGINS[rationale.origin] ?? "why.unknownOrigin"))}</strong></p><p class="why-verbatim">${escapeHtml(briefRationale)}</p>`
       : `<p>${escapeHtml(context.t("why.noRationale"))}</p>`,
