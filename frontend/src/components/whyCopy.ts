@@ -59,6 +59,7 @@ export const whyMessages = {
       SOURCE_TEXT_UNAVAILABLE: "Testo originale della fonte non disponibile",
       OMITTED_SECTION: "Dati di questa sezione non disponibili",
       CONTEXT_OUTDATED: "La base appartiene a una versione precedente",
+      VALIDATION_REFERENCE_UNAVAILABLE: "Il riferimento esatto dell'ipotesi non è disponibile",
     },
     perspectives: {
       UX: "Esperienza utente",
@@ -125,6 +126,7 @@ export const whyMessages = {
       SOURCE_TEXT_UNAVAILABLE: "Original source text unavailable",
       OMITTED_SECTION: "Data for this section is unavailable",
       CONTEXT_OUTDATED: "The basis belongs to a previous version",
+      VALIDATION_REFERENCE_UNAVAILABLE: "The exact hypothesis reference is unavailable",
     },
     perspectives: {
       UX: "User experience",
@@ -174,6 +176,14 @@ const containerLabels = {
 } as const;
 
 export function whyNodeTitle(node: WhyNode, locale: "en" | "it"): string {
+  if (node.kind === "VALIDATION_OUTCOME") {
+    const labels = {
+      CONFIRMED: ["Confermata", "Confirmed"],
+      REFUTED: ["Smentita", "Refuted"],
+      UNCERTAIN: ["Incerta", "Uncertain"],
+    } as const;
+    return labels[node.title as keyof typeof labels]?.[locale === "it" ? 0 : 1] ?? node.title;
+  }
   if (node.title === node.kind) {
     const label = containerLabels[node.kind as keyof typeof containerLabels];
     if (label) return label[locale === "it" ? 0 : 1];
@@ -200,6 +210,11 @@ const relationLabels = {
   CLAIM_OF: ["È un claim del twin", "Is a claim of the twin"],
   HAS_CLAIM: ["Ha il claim", "Has claim"],
   CONTAINS: ["Contiene", "Contains"],
+  ORIGINATES_FROM: ["Origina da", "Originates from"],
+  VERIFIES_SCENARIO: ["Verifica lo scenario", "Verifies the scenario"],
+  VERIFIES_DESIGN: ["Verifica il design", "Verifies the design"],
+  TESTS_HYPOTHESIS: ["Verifica l'ipotesi", "Tests the hypothesis"],
+  RECORDED_IN: ["È registrato nella fonte", "Is recorded in the source"],
 } as const;
 
 export function whyRelationLabel(kind: string, locale: "en" | "it"): string {

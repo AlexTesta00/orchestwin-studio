@@ -75,6 +75,8 @@ import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
 import ProjectDetailView from "./ProjectDetailView.vue";
 import { expectAccessible } from "@/test/axe";
+import { validationOverview } from "@/test/humanValidationFixtures";
+import { whyDocument } from "@/test/whyFixtures";
 
 const state = vi.hoisted(() => {
   const shared = {
@@ -2618,6 +2620,9 @@ function fakeStudio(served: Served) {
       [`${base}/code-tasks`]: () => ok({ items: [] }),
       [`${base}/twin-learning`]: () => ok(TWIN_LEARNING),
       [`${base}/evidence`]: () => ok({ project_id: OPEN, evidence: [], citations: [] }),
+      [`${base}/validation`]: () =>
+        ok(validationOverview({ project_id: OPEN, candidates: [], candidate_count: 0 })),
+      [`${base}/artifacts/why/document`]: () => ok({ ...whyDocument([]), project_id: OPEN }),
       [`${base}/acceptance-tests`]: () => ok(ACCEPTANCE_TESTS),
       [`${base}/design/mockups/capabilities`]: () => ok(CAPABILITIES),
       [`${base}/design/mockups`]: () =>
@@ -2977,6 +2982,8 @@ const APPROVED_DESIGN_READINGS: Record<string, number> = {
 };
 
 const FIRST_DESIGN_VIEW: Record<string, number> = {
+  "…/validation": 1,
+  "…/artifacts/why/document": 1,
   "…/design/mockups/capabilities": 1,
   [`…/design/mockups?alternative_id=${DESIGN_ALTERNATIVE_ID}`]: 1,
   [`…/design/mockups?alternative_id=${SECOND_DESIGN_ALTERNATIVE_ID}`]: 1,

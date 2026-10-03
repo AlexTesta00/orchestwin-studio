@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, vShow, withDirectives } from "vue";
 
 import { createAppI18n } from "@/i18n";
-import { createDesignApi, type DesignApi } from "../api/design";
+import { createDesignApi, DesignApiError, type DesignApi } from "../api/design";
 import {
   DesignAlignmentApiError,
   type DesignAlignmentApi,
@@ -887,7 +887,7 @@ function mountFlow(api: FakeDesignApi, options: MountOptions = {}) {
     },
     global: {
       plugins: [...(options.pinia === undefined ? [] : [options.pinia]), createAppI18n(locale)],
-      ...(options.stubs === undefined ? {} : { stubs: options.stubs }),
+      stubs: { ProjectHumanValidationPanel: true, ...options.stubs },
     },
     ...(options.attach === true ? { attachTo: document.body } : {}),
   });
@@ -1024,6 +1024,106 @@ describe("ProjectDesignFlow", () => {
     expect(wrapper.find('[data-testid="design-error"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="design-pending-changes"]').exists()).toBe(false);
   });
+
+  it.each(
+    (["it", "en"] as const).flatMap((locale) =>
+      [UNSELECTED_DESIGN_VERSION, SELECTED_DESIGN_VERSION].flatMap((version) =>
+        (["proposal", "decision"] as const).map((operation) => ({ locale, version, operation })),
+      ),
+    ),
+  )(
+    "explains an outdated upstream step in $locale during $operation and preserves the current choice",
+    async ({ locale, version, operation }) => {
+      const api = new FakeDesignApi(version);
+      const loop = reviewingLoopApi();
+      const rejected = new DesignApiError("The design request failed", {
+        status: 409,
+        code: "DESIGN_CONTEXT_CHANGED",
+        payload: null,
+      });
+      if (operation === "proposal") api.proposeRevision.mockRejectedValueOnce(rejected);
+      else {
+        api.diffsResult = [
+          {
+            ...PROPOSED_DESIGN_DIFF,
+            proposed_package: buildSelectedDesignPackage(
+              version.package,
+              SECOND_DESIGN_ALTERNATIVE_ID,
+            ),
+          },
+        ];
+        api.decideRevision.mockRejectedValueOnce(rejected);
+      }
+      api.savedMockups[SECOND_DESIGN_ALTERNATIVE_ID] = {
+        status: "MOCKUP_GENERATED",
+        generation_id: "saved-generation",
+        design_version_id: version.id,
+        design_content_hash: version.content_hash,
+        package: buildSelectedDesignPackage(version.package, SECOND_DESIGN_ALTERNATIVE_ID),
+      };
+      const wrapper = mountFlow(api, { locale, loop });
+      await flushPromises();
+      await card(wrapper, "DES-002").get('[data-testid="alternative-choose"]').trigger("click");
+      await flushPromises();
+      expect(wrapper.get('[data-testid="design-error"]').text()).toBe(
+        locale === "it"
+          ? "Un passo precedente è da aggiornare. Rivedi quel passo prima di scegliere un'alternativa di design. La scelta attuale non è cambiata."
+          : "An earlier step needs updating. Review that step before choosing a design alternative. Your current choice is unchanged.",
+      );
+      expect(wrapper.get('[data-testid="design-error"]').text()).not.toMatch(
+        /DESIGN_CONTEXT_CHANGED|Riprova|Try again|Premi di nuovo|Press .*again/,
+      );
+      expect(api.proposeRevision).toHaveBeenCalledTimes(operation === "proposal" ? 1 : 0);
+      expect(api.decideRevision).toHaveBeenCalledTimes(operation === "decision" ? 1 : 0);
+      expect(api.readinessResult.version).toBe(version);
+      expect(api.historyResult).toEqual([version]);
+      expect(api.readinessResult.version?.package.owner_selected_alternative_id).toBe(
+        version.package.owner_selected_alternative_id,
+      );
+      expect(card(wrapper, "DES-001").attributes("data-chosen")).toBe(
+        version.package.owner_selected_alternative_id === DESIGN_ALTERNATIVE_ID ? "true" : "false",
+      );
+      expect(card(wrapper, "DES-002").attributes("data-chosen")).toBe("false");
+      expect(api.submissions).toBe(0);
+      expect(api.gateActions).toEqual([]);
+      expect(api.generateMockup).not.toHaveBeenCalled();
+      expect(loop.evaluate).not.toHaveBeenCalled();
+      expect(loop.regenerate).not.toHaveBeenCalled();
+      expect(wrapper.emitted("sections-changed")).toBeUndefined();
+      await flushPromises();
+      expect(api.proposeRevision).toHaveBeenCalledTimes(operation === "proposal" ? 1 : 0);
+      expect(api.decideRevision).toHaveBeenCalledTimes(operation === "decision" ? 1 : 0);
+    },
+  );
+
+  it.each(["it", "en"] as const)(
+    "keeps the retry message for a transient choice proposal failure in %s",
+    async (locale) => {
+      const api = new FakeDesignApi();
+      api.proposeRevision.mockRejectedValueOnce(
+        new DesignApiError("The design request failed", { status: 503, code: null, payload: null }),
+      );
+      api.savedMockups[SECOND_DESIGN_ALTERNATIVE_ID] = {
+        status: "MOCKUP_GENERATED",
+        generation_id: "saved-generation",
+        design_version_id: UNSELECTED_DESIGN_VERSION.id,
+        design_content_hash: UNSELECTED_DESIGN_VERSION.content_hash,
+        package: buildSelectedDesignPackage(BASE_DESIGN_PACKAGE, SECOND_DESIGN_ALTERNATIVE_ID),
+      };
+      const wrapper = mountFlow(api, { locale });
+      await flushPromises();
+      await card(wrapper, "DES-002").get('[data-testid="alternative-choose"]').trigger("click");
+      await flushPromises();
+      expect(wrapper.get('[data-testid="design-error"]').text()).toBe(
+        locale === "it"
+          ? "Non è stato possibile registrare la tua scelta: non è cambiato nulla. Riprova tra poco."
+          : "Your choice could not be recorded, so nothing changed. Try again in a moment.",
+      );
+      expect(api.proposeRevision).toHaveBeenCalledTimes(1);
+      expect(api.decideRevision).not.toHaveBeenCalled();
+      expect(api.submissions).toBe(0);
+    },
+  );
 
   it("does not confuse the provider recommendation with owner selection", async () => {
     const api = new FakeDesignApi();
