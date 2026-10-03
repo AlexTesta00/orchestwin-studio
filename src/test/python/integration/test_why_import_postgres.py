@@ -19,6 +19,7 @@ from orchestwin.artifacts.design_finding_validation_persistence import (
 from orchestwin.artifacts.design_gate import design_artifact_reference
 from orchestwin.knowledge import project_import_service
 from orchestwin.knowledge.folder import build_knowledge_folder, folder_archive
+from orchestwin.knowledge.project_import_persistence import SqlAlchemyProjectImportRepository
 from orchestwin.knowledge.project_import_service import ProjectImportError, ProjectImportService
 from orchestwin.persistence import create_database_runtime
 from orchestwin.workflow.gates import HumanGateType
@@ -112,7 +113,7 @@ def test_post_write_derivation_mismatch_rolls_back_every_imported_row(database, 
     run(scenario())
 
 
-def test_missing_historical_design_context_imports_no_rows(database):
+def test_missing_historical_design_context_is_omitted_and_persisted_without_reanchoring(database):
     sources = current_feedback_sources()
     design = replace(sources.design, id=uuid4())
     sources = replace(
@@ -131,12 +132,27 @@ def test_missing_historical_design_context_imports_no_rows(database):
         owner = uuid4()
         try:
             await seed_users(db, owner)
-            before = await row_counts(db)
-            with pytest.raises(ProjectImportError, match="FOLDER_FEEDBACK_CONTEXT_MISSING"):
-                await ProjectImportService(session_factory=db.session_factory).import_archive(
-                    owner_user_id=owner, content=content
+            result = await ProjectImportService(session_factory=db.session_factory).import_archive(
+                owner_user_id=owner, content=content
+            )
+            assert result.why_verified is True
+            assert result.plan.evaluations == result.plan.finding_decisions == ()
+            assert "FEEDBACK_CONTEXT_NOT_RESTORED" in result.import_limits
+            assert result.omitted_sections[0]["evaluation_run_id"] == str(
+                sources.feedback.runs[0].id
+            )
+            async with db.session_factory() as session:
+                saved = await SqlAlchemyProjectImportRepository(
+                    session, owner_user_id=owner
+                ).for_project(result.project.id)
+                assert saved.omitted_sections == result.omitted_sections
+                assert saved.import_limits == result.import_limits
+                assert (
+                    await SqlAlchemyDesignEvaluationRepository(session, owner_user_id=owner).list(
+                        project_id=result.project.id
+                    )
+                    == ()
                 )
-            assert await row_counts(db) == before
         finally:
             await db.dispose()
 

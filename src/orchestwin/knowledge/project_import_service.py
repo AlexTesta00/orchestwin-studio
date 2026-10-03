@@ -74,6 +74,7 @@ class ProjectImportResult:
     brief_version: ProjectBriefVersion
     why_verified: bool = False
     import_limits: tuple[str, ...] = ()
+    omitted_sections: tuple[dict[str, object], ...] = ()
 
 
 def archive_failure(error: KnowledgeArchiveError) -> ProjectImportError:
@@ -191,6 +192,8 @@ def import_record(
         archive_size=len(content),
         stage_versions=imported_stage_versions(plan),
         imported_at=imported_at,
+        import_limits=plan.import_limits,
+        omitted_sections=plan.omitted_sections,
     )
 
 
@@ -315,6 +318,18 @@ async def _write_import(
         )
 
     stored = await projects.get_owned(project_id=project.id, owner_user_id=owner)
+    if plan.validation_records and (
+        plan.validation_records.get("hypotheses") or plan.validation_records.get("outcomes")
+    ):
+        from orchestwin.artifacts.human_validation_persistence import (
+            SqlAlchemyHumanValidationRepository,
+        )
+
+        validation = SqlAlchemyHumanValidationRepository(session, owner_user_id=owner)
+        await _attempt(
+            "validation",
+            validation.import_records(project_id=project.id, records=plan.validation_records),
+        )
     _require(
         "project",
         stored is not None and stored.current_brief_version == IMPORTED_VERSION_NUMBER,
@@ -392,6 +407,7 @@ class ProjectImportService:
             brief_version=brief_version,
             why_verified="why" in folder.manifest,
             import_limits=plan.import_limits,
+            omitted_sections=plan.omitted_sections,
         )
 
     async def origin(self, *, owner_user_id: UUID, project_id: UUID) -> ProjectImportRecord | None:
@@ -401,7 +417,7 @@ class ProjectImportService:
 
 
 async def verify_imported_why(session, *, folder, plan, owner_user_id, created_at):
-    from orchestwin.knowledge.why import WHY_DOCUMENT, folder_why, normalized_why
+    from orchestwin.knowledge.why import WHY_DOCUMENT, importable_why, normalized_why
     from orchestwin.projects.persistence.research_evidence import (
         SqlAlchemyResearchEvidenceRepository,
     )
@@ -453,10 +469,25 @@ async def verify_imported_why(session, *, folder, plan, owner_user_id, created_a
     decisions = await SqlAlchemyFindingValidationRepository(
         session, owner_user_id=owner_user_id
     ).current(project_id=plan.project_id)
+    from orchestwin.artifacts.human_validation_persistence import (
+        SqlAlchemyHumanValidationRepository,
+    )
+
+    stored_validation = await SqlAlchemyHumanValidationRepository(
+        session,
+        owner_user_id=owner_user_id,
+    ).records(project_id=plan.project_id)
+    expected_validation = plan.validation_records or {}
+    if stored_validation.get("hypotheses", []) != expected_validation.get(
+        "hypotheses", []
+    ) or stored_validation.get("outcomes", []) != expected_validation.get("outcomes", []):
+        raise ProjectImportError("FOLDER_VALIDATION_MISMATCH", "stored validation records")
     expected = build_why_document(
         project_id=str(plan.project_id),
         stages=plan_documents(plan, owner_user_id=owner_user_id, created_at=created_at),
         evidence=plan.research_evidence,
+        hypotheses=expected_validation.get("hypotheses", []),
+        outcomes=expected_validation.get("outcomes", []),
         evaluations=[
             {
                 "runs": [item.to_snapshot() for item in plan.evaluations],
@@ -468,6 +499,8 @@ async def verify_imported_why(session, *, folder, plan, owner_user_id, created_a
         project_id=str(plan.project_id),
         stages=documents,
         evidence=evidence,
+        hypotheses=stored_validation.get("hypotheses", []),
+        outcomes=stored_validation.get("outcomes", []),
         evaluations=[
             {
                 "runs": [item.to_snapshot() for item in evaluations],
@@ -480,9 +513,7 @@ async def verify_imported_why(session, *, folder, plan, owner_user_id, created_a
     ):
         raise ProjectImportError("FOLDER_WHY_MISMATCH", "stored derivation")
     if WHY_DOCUMENT in folder.files:
-        original = folder_why(
-            project_id=folder.project_id, documents=folder.documents, files=folder.files
-        )
+        original = importable_why(folder, plan.omitted_sections)
         if normalized_why(
             original, identities=plan.identities, hashes=plan.hashes
         ) != normalized_why(actual):

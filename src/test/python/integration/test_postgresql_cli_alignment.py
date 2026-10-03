@@ -105,6 +105,8 @@ MCP_TOOLS = (
     "get_tasks",
     "get_evidence",
     "get_why",
+    "get_validation",
+    "get_scenario_walkthrough",
 )
 
 
@@ -495,7 +497,22 @@ def publish_the_state(
 
 
 def serve_the_agents(scene: Scene, development: Development) -> None:
+    from orchestwin.cli.mcp.knowledge import load
+
     newest = development.commits[-1]
+    scenario_code = scene.document("/requirements/current")["specification"]["scenarios"][0]["code"]
+    offline = load(scene.knowledge)
+    overview = offline.validation(project_id=scene.project_id)
+    walkthrough = offline.walkthrough(scenario_code, project_id=scene.project_id)
+    online_command = scene.ut("validation", "--json")
+    assert online_command.status == 0, online_command.transcript()
+    assert json.loads(online_command.output) == scene.document("/validation")
+    offline_command = scene.ut("validation", "--offline", "--json")
+    assert offline_command.status == 0, offline_command.transcript()
+    assert json.loads(offline_command.output) == overview
+    path_command = scene.ut("validation", "walkthrough", scenario_code, "--offline", "--json")
+    assert path_command.status == 0, path_command.transcript()
+    assert json.loads(path_command.output) == walkthrough
     messages = [
         {
             "jsonrpc": "2.0",
@@ -512,12 +529,14 @@ def serve_the_agents(scene: Scene, development: Development) -> None:
         tool_call(3, "project_state"),
         tool_call(4, "get_requirements"),
         tool_call(5, "list_twins"),
+        tool_call(6, "get_validation"),
+        tool_call(7, "get_scenario_walkthrough", {"scenario_key": scenario_code}),
     ]
     run = scene.ut("mcp", answers=[json.dumps(message) for message in messages])
     assert run.status == 0, run.transcript()
     assert run.exchanges == (), run.transcript()
     answers = json_lines(run.output)
-    assert [answer.get("id") for answer in answers] == [1, 2, 3, 4, 5], run.transcript()
+    assert [answer.get("id") for answer in answers] == [1, 2, 3, 4, 5, 6, 7], run.transcript()
     answered = all(answer.get("jsonrpc") == "2.0" and "result" in answer for answer in answers)
     assert answered, run.transcript()
     started = answers[0]["result"]
@@ -539,6 +558,8 @@ def serve_the_agents(scene: Scene, development: Development) -> None:
     check_the_requirements_tool(scene, tool_document(answers[3]))
     versions = scene.document("/user-modeling/snapshots/current")["snapshot"]["twin_versions"]
     twins = tool_document(answers[4])["twins"]
+    assert tool_document(answers[5]) == overview
+    assert tool_document(answers[6]) == walkthrough
     assert [(twin["number"], twin["twin_id"], twin["name"]) for twin in twins] == [
         (number, version["twin_id"], " ".join(version["profile"]["name"].split()))
         for number, version in enumerate(versions, start=1)
@@ -722,12 +743,12 @@ def assert_no_run(scene: Scene, commits: Sequence[str]) -> None:
         assert scene.document(f"/code-changes/{commit}/reviews") == {"items": []}, commit
 
 
-def tool_call(identifier: int, name: str) -> dict[str, object]:
+def tool_call(identifier: int, name: str, arguments=None) -> dict[str, object]:
     return {
         "jsonrpc": "2.0",
         "id": identifier,
         "method": "tools/call",
-        "params": {"name": name, "arguments": {}},
+        "params": {"name": name, "arguments": arguments or {}},
     }
 
 

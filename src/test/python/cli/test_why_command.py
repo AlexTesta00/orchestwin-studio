@@ -162,9 +162,9 @@ def test_get_why_is_the_thirteenth_tool_read_only_without_spending(tmp_path):
 
     result = run(tools, "get_why", code="REQ-001")
 
-    assert len(definitions) == 13
-    assert [item["name"] for item in definitions[-2:]] == ["get_evidence", "get_why"]
-    assert definitions[-1]["annotations"]["readOnlyHint"] is True
+    assert len(definitions) == 15
+    assert [item["name"] for item in definitions[11:13]] == ["get_evidence", "get_why"]
+    assert definitions[12]["annotations"]["readOnlyHint"] is True
     assert result == explain_why(load(project.knowledge).why(), "REQ-001")
     assert bundle.environment.stderr.getvalue() == ""
 

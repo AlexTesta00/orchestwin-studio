@@ -83,6 +83,7 @@ from orchestwin.knowledge.state_documents import (
 )
 from orchestwin.knowledge.tables import knowledge_tables
 from orchestwin.knowledge.twins import PortableTwin, portable_twins
+from orchestwin.knowledge.validation_records import VALIDATION_DOCUMENT, portable_records
 from orchestwin.knowledge.why import WHY_DOCUMENT, folder_why
 from orchestwin.models.output_language import dominant_language
 from orchestwin.workflow.gates import HumanGate
@@ -370,14 +371,29 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
             sources.research_evidence, language=folder_language(sources)
         )
         files.update(schema_files(research_evidence=True, only_evidence=True))
-    files[WHY_DOCUMENT] = json_text(
-        folder_why(
+    document = folder_why(
+        project_id=str(sources.project_id),
+        documents={stage: stage_document_payload(sources, stage) for stage in present},
+        files=files,
+    )
+    from orchestwin.knowledge.validation_records import has_validation_records
+
+    if has_validation_records(sources.validation_records):
+        files[VALIDATION_DOCUMENT] = json_text(
+            portable_records(
+                document=document,
+                records=sources.validation_records,
+                evidence=sources.research_evidence,
+            )
+        )
+        files.update(schema_files(only_validation=True))
+        document = folder_why(
             project_id=str(sources.project_id),
             documents={stage: stage_document_payload(sources, stage) for stage in present},
             files=files,
         )
-    )
-    files.update(schema_files(only_why=True))
+    files[WHY_DOCUMENT] = json_text(document)
+    files.update(schema_files(only_why=True, validation_additions=VALIDATION_DOCUMENT in files))
     return files
 
 
@@ -535,6 +551,15 @@ def folder_manifest(
             "sources": len(sources.research_evidence.get("evidence", ())),
             "citations": len(sources.research_evidence.get("citations", ())),
         }
+    if VALIDATION_DOCUMENT in files:
+        validation = json.loads(files[VALIDATION_DOCUMENT])
+        result["validation"] = {
+            "document": VALIDATION_DOCUMENT,
+            "schema_version": 1,
+            "hypotheses": len(validation["hypotheses"]),
+            "outcomes": len(validation["outcomes"]),
+        }
+        result["schemas"]["validation"] = schema_document("validation")
     return result
 
 

@@ -17,6 +17,7 @@ from orchestwin.projects.persistence.models import ProjectRecord
 SOURCE_NAME_LIMIT: Final = 200
 DEFAULT_IMPORT_LIMIT: Final = 50
 STAGE_VERSION_KEYS: Final = frozenset({"version_id", "version_number", "content_hash"})
+IMPORT_METADATA_KEY: Final = "_import_metadata"
 
 PROJECT_IMPORTS = sa.table(
     "project_imports",
@@ -49,6 +50,8 @@ class ProjectImportRecord:
     archive_size: int
     stage_versions: Mapping[str, Mapping[str, object]]
     imported_at: datetime
+    import_limits: tuple[str, ...] = ()
+    omitted_sections: tuple[Mapping[str, object], ...] = ()
 
     def __post_init__(self) -> None:
         if set(self.stage_versions) != set(STAGES) or any(
@@ -57,6 +60,11 @@ class ProjectImportRecord:
             raise ValueError("project import must name the version of every stage")
         if self.imported_at.tzinfo is None or self.imported_at.utcoffset() is None:
             raise ValueError("project import timestamp must be timezone-aware")
+        if any(not isinstance(item, str) or not item for item in self.import_limits) or any(
+            not isinstance(item, Mapping) or not isinstance(item.get("reason"), str)
+            for item in self.omitted_sections
+        ):
+            raise ValueError("project import metadata is invalid")
 
     @property
     def origin(self) -> FolderOrigin:
@@ -69,7 +77,7 @@ class ProjectImportRecord:
         )
 
     def to_snapshot(self) -> dict[str, object]:
-        return {
+        result = {
             "id": str(self.id),
             "project_id": str(self.project_id),
             "owner_user_id": str(self.owner_user_id),
@@ -83,9 +91,20 @@ class ProjectImportRecord:
             "stage_versions": {stage: dict(self.stage_versions[stage]) for stage in STAGES},
             "imported_at": self.imported_at.isoformat(),
         }
+        if self.import_limits:
+            result["import_limits"] = list(self.import_limits)
+        if self.omitted_sections:
+            result["omitted_sections"] = [dict(item) for item in self.omitted_sections]
+        return result
 
 
 def _record_values(record: ProjectImportRecord) -> dict[str, object]:
+    stages = {stage: dict(record.stage_versions[stage]) for stage in STAGES}
+    if record.import_limits or record.omitted_sections:
+        stages[IMPORT_METADATA_KEY] = {
+            "import_limits": list(record.import_limits),
+            "omitted_sections": [dict(item) for item in record.omitted_sections],
+        }
     return {
         "id": record.id,
         "project_id": record.project_id,
@@ -97,13 +116,20 @@ def _record_values(record: ProjectImportRecord) -> dict[str, object]:
         "schema_version": record.schema_version,
         "archive_hash": record.archive_hash,
         "archive_size": record.archive_size,
-        "stage_versions": {stage: dict(record.stage_versions[stage]) for stage in STAGES},
+        "stage_versions": stages,
         "imported_at": record.imported_at,
     }
 
 
 def _import_record(row: sa.RowMapping) -> ProjectImportRecord:
-    stages: Mapping[str, Mapping[str, object]] = row["stage_versions"]
+    stages = dict(row["stage_versions"])
+    metadata = stages.pop(IMPORT_METADATA_KEY, {})
+    if not isinstance(metadata, Mapping) or set(metadata) - {"import_limits", "omitted_sections"}:
+        raise ValueError("project import metadata is invalid")
+    limits = metadata.get("import_limits", [])
+    omissions = metadata.get("omitted_sections", [])
+    if not isinstance(limits, list) or not isinstance(omissions, list):
+        raise ValueError("project import metadata is invalid")
     return ProjectImportRecord(
         id=row["id"],
         project_id=row["project_id"],
@@ -117,6 +143,8 @@ def _import_record(row: sa.RowMapping) -> ProjectImportRecord:
         archive_size=row["archive_size"],
         stage_versions={stage: dict(entry) for stage, entry in stages.items()},
         imported_at=row["imported_at"],
+        import_limits=tuple(limits),
+        omitted_sections=tuple(omissions),
     )
 
 

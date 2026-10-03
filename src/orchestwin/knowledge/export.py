@@ -41,6 +41,8 @@ class KnowledgeSourceLoader:
         feedback_query_service=None,
         state_query_service=None,
         evidence_query_service=None,
+        validation_query_service=None,
+        import_origin_query_service=None,
     ) -> None:
         self.project_service = project_service
         self.brief_gate_service = brief_gate_service
@@ -54,6 +56,8 @@ class KnowledgeSourceLoader:
         self.feedback_query_service = feedback_query_service
         self.state_query_service = state_query_service
         self.evidence_query_service = evidence_query_service
+        self.validation_query_service = validation_query_service
+        self.import_origin_query_service = import_origin_query_service
 
     def _later_stages(self):
         return (
@@ -145,6 +149,18 @@ class KnowledgeSourceLoader:
             if self.state_query_service is None
             else await self.state_query_service.current(**scope)
         )
+        validation_records = (
+            {}
+            if self.validation_query_service is None
+            else await self.validation_query_service.records(**scope) or {}
+        )
+        if self.import_origin_query_service is not None:
+            from orchestwin.knowledge.validation_records import preserve_import_history
+
+            validation_records = preserve_import_history(
+                validation_records,
+                await self.import_origin_query_service.origin(**scope),
+            )
         sources = KnowledgeSources(
             project_id=project_id,
             project_name=brief_system_name(brief, DEFAULT_DIAGRAM_LOCALE),
@@ -153,6 +169,7 @@ class KnowledgeSourceLoader:
             feedback=feedback,
             state=state,
             research_evidence=evidence,
+            validation_records=validation_records,
             **approved,
         )
         issue = consistency_issue(sources)

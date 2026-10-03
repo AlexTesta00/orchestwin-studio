@@ -81,6 +81,8 @@ class ProjectImportPlan:
     research_evidence: Mapping[str, object] | None = None
     evaluations: tuple = ()
     finding_decisions: tuple = ()
+    validation_records: Mapping[str, object] | None = None
+    omitted_sections: tuple[Mapping[str, object], ...] = ()
     import_limits: tuple[str, ...] = ()
 
     @property
@@ -437,13 +439,27 @@ def _plan(
 
     from orchestwin.knowledge.feedback_import import import_feedback
 
+    omitted_sections = []
     evaluations, decisions, import_limits = import_feedback(
         folder,
         identities=rewriter.identities,
         hashes=rewriter.hashes,
         project_id=project_id,
         owner_user_id=owner_user_id,
+        omitted_sections=omitted_sections,
     )
+    from orchestwin.knowledge.validation_records import import_validation
+
+    validation = import_validation(
+        folder,
+        identities=rewriter.identities,
+        hashes=rewriter.hashes,
+        project_id=project_id,
+        owner_user_id=owner_user_id,
+    )
+    if validation:
+        omitted_sections.extend(validation.get("omitted_sections", ()))
+        import_limits = tuple(dict.fromkeys((*import_limits, *validation.get("limits", ()))))
     if "twins/feedback/learned.json" in folder.files:
         import_limits = (*import_limits, "LEARNED_PROJECTION_NOT_RESTORED")
     return ProjectImportPlan(
@@ -460,6 +476,8 @@ def _plan(
         hashes=dict(rewriter.hashes),
         evaluations=evaluations,
         finding_decisions=decisions,
+        validation_records=validation,
+        omitted_sections=tuple(omitted_sections),
         import_limits=import_limits,
         research_evidence=None
         if evidence is None

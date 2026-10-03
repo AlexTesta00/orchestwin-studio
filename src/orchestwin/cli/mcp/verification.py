@@ -59,8 +59,13 @@ def schema_valid(value, schema, root=None):
         properties = schema.get("properties", {})
         additional = schema.get("additionalProperties", True)
         for key, item in value.items():
-            rule = properties.get(key, additional)
-            if not schema_valid(item, rule, root):
+            rules = [properties[key]] if key in properties else []
+            rules.extend(
+                rule
+                for pattern, rule in schema.get("patternProperties", {}).items()
+                if re.search(pattern, key) is not None
+            )
+            if any(not schema_valid(item, rule, root) for rule in rules or [additional]):
                 return False
         for key, required in schema.get("dependentRequired", {}).items():
             if key in value and any(item not in value for item in required):
@@ -146,6 +151,7 @@ def verify_files(root: Path, manifest: Mapping, *, inside, fail):
             else:
                 name = {
                     "traceability/why.json": "why",
+                    "validation/human-validation.json": "validation",
                     "twins/evidence.json": "evidence",
                     "twins/feedback/reviews.json": "reviews",
                     "twins/feedback/discussions.json": "discussions",
