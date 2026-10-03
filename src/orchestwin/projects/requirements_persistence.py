@@ -369,6 +369,7 @@ class SqlAlchemyRequirementsUnitOfWork:
         """Create owner-scoped repositories over one shared session."""
         self._session = session
         self._completed = False
+        self._owner_user_id = owner_user_id
         self.specifications = SqlAlchemyRequirementsSpecificationRepository(
             session,
             owner_user_id=owner_user_id,
@@ -399,6 +400,19 @@ class SqlAlchemyRequirementsUnitOfWork:
         """Commit the shared SQLAlchemy transaction."""
         await self._session.commit()
         self._completed = True
+
+    async def lock_project(self, *, project_id: UUID) -> bool:
+        return (
+            await self._session.scalar(
+                sa.select(PROJECTS.c.id)
+                .where(
+                    PROJECTS.c.id == project_id,
+                    PROJECTS.c.owner_user_id == self._owner_user_id,
+                )
+                .with_for_update()
+            )
+            is not None
+        )
 
     async def rollback(self) -> None:
         """Rollback the shared SQLAlchemy transaction."""
