@@ -80,6 +80,8 @@ class KnowledgeSources:
     state: ProjectStateSources = field(default_factory=ProjectStateSources)
     research_evidence: Mapping[str, object] = field(default_factory=dict)
     validation_records: Mapping[str, object] = field(default_factory=dict)
+    workflow_inputs: Mapping[str, object] = field(default_factory=dict)
+    provided_design: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         given = [self._given(stage) for stage in STAGES]

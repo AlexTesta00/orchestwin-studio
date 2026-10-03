@@ -57,6 +57,7 @@ from orchestwin.api.twin_learning import create_twin_learning_router
 from orchestwin.api.user_modeling_realignment import create_user_modeling_realignment_router
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
 from orchestwin.api.validation import request_validation_error
+from orchestwin.api.workflow_inputs import create_workflow_inputs_router, protect_provided_consumers
 from orchestwin.config import ApplicationSettings, load_settings
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
@@ -171,6 +172,9 @@ def create_app(
     application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
     application.state.why_query_service = resolved_runtime.why_query_service
     application.state.human_validation_service = resolved_runtime.human_validation_service
+    application.state.workflow_inputs_service = resolved_runtime.workflow_inputs_service
+    application.state.owner_team_inputs = resolved_runtime.owner_team_inputs
+    application.state.owner_requirements = resolved_runtime.owner_requirements
     application.state.project_diagram_service = resolved_runtime.project_diagram_service
     application.state.knowledge_package_service = resolved_runtime.knowledge_package_service
     application.state.twin_import_service = resolved_runtime.twin_import_service
@@ -217,7 +221,9 @@ def create_app(
         create_clarification_router(),
         create_brief_dialogue_router(),
         create_team_router(),
-        create_runtime_user_modeling_router(resolved_runtime.user_modeling_services),
+        create_runtime_user_modeling_router(
+            resolved_runtime.user_modeling_services, resolved_runtime.owner_user_modeling
+        ),
         create_archetypes_router(),
         create_twin_chat_router(),
         create_requirements_router(),
@@ -232,6 +238,7 @@ def create_app(
         create_artifact_graph_router(),
         create_artifact_why_router(),
         create_human_validation_router(),
+        create_workflow_inputs_router(),
         create_diagram_router(),
         create_knowledge_package_router(),
         create_code_change_router(),
@@ -251,7 +258,7 @@ def create_app(
         create_model_usage_router(),
     ):
         application.include_router(
-            router,
+            protect_provided_consumers(router),
             prefix=resolved_settings.api_prefix,
         )
 

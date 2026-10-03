@@ -42,6 +42,7 @@ class KnowledgeSourceLoader:
         state_query_service=None,
         evidence_query_service=None,
         validation_query_service=None,
+        workflow_query_service=None,
         import_origin_query_service=None,
     ) -> None:
         self.project_service = project_service
@@ -57,6 +58,7 @@ class KnowledgeSourceLoader:
         self.state_query_service = state_query_service
         self.evidence_query_service = evidence_query_service
         self.validation_query_service = validation_query_service
+        self.workflow_query_service = workflow_query_service
         self.import_origin_query_service = import_origin_query_service
 
     def _later_stages(self):
@@ -170,6 +172,16 @@ class KnowledgeSourceLoader:
             state=state,
             research_evidence=evidence,
             validation_records=validation_records,
+            workflow_inputs=(
+                {}
+                if self.workflow_query_service is None
+                else await self.workflow_query_service.records(**scope) or {}
+            ),
+            provided_design=(
+                {}
+                if self.workflow_query_service is None
+                else await self.workflow_query_service.state(**scope)
+            ),
             **approved,
         )
         issue = consistency_issue(sources)

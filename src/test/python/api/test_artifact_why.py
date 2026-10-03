@@ -121,6 +121,7 @@ class Session:
     def __init__(self, *, owned=True):
         self.owned = owned
         self.statements = []
+        self.workflow_reads = []
 
     async def __aenter__(self):
         return self
@@ -131,6 +132,16 @@ class Session:
     async def scalar(self, statement):
         self.statements.append(statement)
         return PROJECT_ID if self.owned else None
+
+    async def scalars(self, statement):
+        compiled = statement.compile()
+        assert OWNER_ID in compiled.params.values()
+        assert PROJECT_ID in compiled.params.values()
+        table = statement.get_final_froms()[0].name
+        assert table in {"project_workflow_decisions", "project_provided_prototypes"}
+        self.workflow_reads.append(table)
+        self.statements.append(statement)
+        return SimpleNamespace(all=lambda: [])
 
 
 def test_runtime_rejects_non_owner_before_loading_any_stage(monkeypatch):
@@ -229,6 +240,27 @@ def test_runtime_reads_twins_before_requirements_and_keeps_exact_historical_vers
     assert len([node for node in document["nodes"] if node["kind"] == "USER_TWIN"]) == 1
     assert "requirements" in document["omitted_sections"]
     assert project_sections(aligned()).to_snapshot()["sections"]
+    assert [type(repository) for repository in calls] == [
+        ModelingRepository,
+        ScopedRepository,
+        ScopedRepository,
+    ]
+    assert session.workflow_reads == [
+        "project_workflow_decisions",
+        "project_provided_prototypes",
+    ]
+    assert {
+        (
+            node["reference"]["artifact_id"],
+            node["reference"]["version_number"],
+            node["reference"]["content_hash"],
+        )
+        for node in document["nodes"]
+        if node["kind"] == "USER_MODELING"
+    } == {
+        (str(modeling.id), modeling.version_number, modeling.content_hash),
+        (str(newer.id), newer.version_number, newer.content_hash),
+    }
 
 
 def test_default_runtime_composes_the_why_query_from_shared_sessions(monkeypatch):
