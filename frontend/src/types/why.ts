@@ -1,5 +1,6 @@
 import type { ObservationValuePayload, ReadableClaimStatus } from "./userModeling";
 import type { EvidenceCitationPayload } from "./researchEvidence";
+import type { HumanValidationOutcome, OperationalHypothesis } from "./humanValidation";
 
 export interface WhyReference {
   artifact_id: string;
@@ -39,7 +40,8 @@ export interface WhyNode {
   citations: {
     citation: EvidenceCitationPayload;
     status: "ACTIVE" | "RETIRED";
-    effect: string;
+    effect?: string;
+    session_kind?: "HUMAN_SESSION" | "SYNTHETIC_EXERCISE";
     field?: string;
     twin_version?: number;
     source?: {
@@ -56,6 +58,10 @@ export interface WhyNode {
   gaps: WhyGap[];
   declared_context: {
     perspectives: WhyPerspective[];
+    scenario?: { goal?: string; steps?: string[]; expected_outcome?: string };
+    hypothesis?: OperationalHypothesis;
+    outcome?: HumanValidationOutcome;
+    effective_status?: "ACTIVE" | "RETIRED";
     observation_value?: ObservationValuePayload;
     base_reference?: WhyReference;
     audit_reference?: { generation_id: string; content_hash: string; request_content_hash: string };

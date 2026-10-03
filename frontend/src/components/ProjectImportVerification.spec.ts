@@ -61,4 +61,34 @@ describe("Import chain verification", () => {
     expect(projectImportResult(result.project.id)).toBe(result);
     expect(projectImportResult("other-project")).toBeUndefined();
   });
+
+  it.each(["it", "en"] as const)(
+    "keeps persisted import omissions visible after a reload in %s",
+    (locale) => {
+      const origin = {
+        origin: result.origin,
+        stages: result.stages,
+        imported_at: result.imported_at,
+        archive_hash: "archive",
+        import_limits: ["FEEDBACK_CONTEXT_NOT_RESTORED", "HYPOTHESIS_HISTORY_PARTIAL"],
+        omitted_sections: [
+          {
+            kind: "VALIDATION_HYPOTHESIS",
+            reason: "HYPOTHESIS_HISTORY_PARTIAL",
+            id: "historical-hypothesis",
+          },
+        ],
+      };
+      const wrapper = mount(ProjectImportVerification, { props: { origin, locale } });
+      expect(wrapper.find('[data-testid="project-import-why-verified"]').exists()).toBe(false);
+      expect(wrapper.get('[data-testid="project-import-limits"]').text()).toContain(
+        locale === "it" ? "versioni mancanti" : "Missing versions",
+      );
+      expect(wrapper.get('[data-testid="project-import-omissions"]').text()).toContain(
+        locale === "it" ? "Dati omessi · 1" : "Omitted data · 1",
+      );
+      expect(wrapper.get("details").text()).toContain("historical-hypothesis");
+      expect(wrapper.get("details").attributes("open")).toBeUndefined();
+    },
+  );
 });

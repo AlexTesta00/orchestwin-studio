@@ -184,7 +184,8 @@ describe("generated mockup dialog", () => {
     const html = frame.getAttribute("srcdoc");
     const picker = query<HTMLDetailsElement>('[data-testid="mockup-why-elements"]');
     query('[data-focus-guard="start"]').focus();
-    expect(document.activeElement).toBe(picker.querySelector("summary"));
+    const walkthrough = query<HTMLDetailsElement>('[data-testid="mockup-scenario-walkthrough"]');
+    expect(document.activeElement).toBe(walkthrough.querySelector("summary"));
     picker.open = true;
     picker.dispatchEvent(new Event("toggle"));
     await flushPromises();
@@ -197,7 +198,7 @@ describe("generated mockup dialog", () => {
     expect(wrapper.getComponent(GeneratedMockupFrame).props("html")).toBe(mockup.html);
     expect(api.explain).not.toHaveBeenCalled();
     query('[data-focus-guard="start"]').focus();
-    expect(document.activeElement).toBe(query('[data-testid="mockup-element-why"] summary'));
+    expect(document.activeElement).toBe(walkthrough.querySelector("summary"));
   });
 
   it("closes with Escape, with its button and with a click outside the window", () => {

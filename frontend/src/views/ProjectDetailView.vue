@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, provide, ref, watch } from "vue";
+import { computed, nextTick, onUnmounted, provide, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
@@ -29,6 +29,7 @@ import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
 import ProjectSectionsNotice from "@/components/ProjectSectionsNotice.vue";
 import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
 import ProjectResearchEvidencePanel from "@/components/ProjectResearchEvidencePanel.vue";
+import type { EvidenceFocus } from "@/types/humanValidation";
 import TwinChatPanel from "@/components/TwinChatPanel.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import UiButton from "@/components/UiButton.vue";
@@ -808,7 +809,22 @@ async function onEvidenceChanged(): Promise<void> {
   const id = projectId.value;
   if (!id) return;
   await authorized((token) => modeling.load(id, token)).catch(() => null);
-  if (id === projectId.value) onSectionsChanged();
+  if (id === projectId.value) {
+    validationRefreshKey.value += 1;
+    onSectionsChanged();
+  }
+}
+
+const evidenceFocus = ref<EvidenceFocus | null>(null);
+const validationRefreshKey = ref(0);
+async function openValidationEvidence(source: EvidenceFocus | null): Promise<void> {
+  evidenceFocus.value = source;
+  selectedStage.value = 2;
+  await nextTick();
+  const target = window.document.querySelector<HTMLElement>(
+    '[data-testid="research-evidence-panel"]',
+  );
+  target?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 }
 
 async function alignSections(): Promise<void> {
@@ -978,8 +994,13 @@ onUnmounted(() => {
         </p>
 
         <ProjectImportVerification
-          v-if="importResult"
+          v-if="
+            importResult ||
+            importOrigin?.import_limits?.length ||
+            importOrigin?.omitted_sections?.length
+          "
           :result="importResult"
+          :origin="importOrigin ?? undefined"
           :locale="locale === 'it' ? 'it' : 'en'"
         />
         <ProjectSectionsNotice
@@ -1140,6 +1161,7 @@ onUnmounted(() => {
               "
               :ready="modeling.isCurrentSnapshotApproved"
               :active="activeStage === 2"
+              :focus-source="evidenceFocus"
               :locale="locale === 'it' ? 'it' : 'en'"
               @changed="onEvidenceChanged"
             />
@@ -1165,9 +1187,11 @@ onUnmounted(() => {
               :project-id="projectId"
               :locale="locale === 'it' ? 'it' : 'en'"
               :upstream="requirementsContext"
+              :validation-refresh-key="validationRefreshKey"
               :active="activeStage === 4"
               :sections-mode="sectionsMode"
               @sections-changed="onSectionsChanged"
+              @open-evidence="openValidationEvidence"
             />
           </div>
           <div id="studio-stage-5" v-show="activeStage === 5" data-testid="stage-package">

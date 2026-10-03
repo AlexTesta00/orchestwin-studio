@@ -59,6 +59,7 @@ import { useI18n } from "vue-i18n";
 
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
 import MockupWhyElements from "./MockupWhyElements.vue";
+import MockupScenarioWalkthrough from "./MockupScenarioWalkthrough.vue";
 import { whyContextKey } from "./whyContext";
 import UiSegmented from "./UiSegmented.vue";
 import UiStateBlock from "./UiStateBlock.vue";
@@ -598,6 +599,14 @@ onUnmounted(() => {
               :document-hash="document.content_hash"
               :screen-code="selectedScreen ?? ''"
               :locale="lang"
+            />
+            <MockupScenarioWalkthrough
+              v-if="document !== null"
+              :alternative-id="document.alternative_id"
+              :document-hash="document.content_hash"
+              :screen-codes="screens.map((screen) => screen.code)"
+              :locale="lang"
+              @screen="requestScreen"
             />
             <aside
               v-if="items.length > 0"

@@ -2,12 +2,14 @@
 import { computed } from "vue";
 import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
 import { whyGapLabel, whyMessages, whyNodeTitle } from "./whyCopy";
+import { humanValidationCopy } from "./humanValidationCopy";
 import type { WhyNode } from "../types/why";
 
 const props = withDefaults(defineProps<{ node: WhyNode; locale?: "en" | "it" }>(), {
   locale: "en",
 });
 const copy = computed(() => whyMessages[props.locale]);
+const validationCopy = computed(() => humanValidationCopy[props.locale]);
 const rationaleLabel = computed(() => {
   const origin = props.node.rationale?.origin;
   return origin === "MODEL"
@@ -28,10 +30,54 @@ const rationaleLabel = computed(() => {
   >
     <strong class="font-semibold">{{ whyNodeTitle(node, locale) }}</strong>
     <UserModelingEpistemicBadge
+      v-if="!node.declared_context.hypothesis && !node.declared_context.outcome"
       :status="node.display_status"
       :show-details="false"
       :locale="locale"
     />
+    <section
+      v-if="node.declared_context.hypothesis"
+      class="grid gap-2"
+      data-testid="why-operational-hypothesis"
+    >
+      <strong>{{ validationCopy.operational }}</strong>
+      <p v-if="node.declared_context.hypothesis.task" class="m-0 whitespace-pre-wrap">
+        {{ validationCopy.task }}: {{ node.declared_context.hypothesis.task }}
+      </p>
+      <div class="grid gap-1">
+        <strong>{{ validationCopy.observe }}</strong>
+        <ul class="m-0 list-disc pl-5">
+          <li v-for="(item, index) in node.declared_context.hypothesis.observe" :key="index">
+            {{ item }}
+          </li>
+        </ul>
+      </div>
+      <p class="m-0 whitespace-pre-wrap">
+        {{ validationCopy.limitations }}: {{ node.declared_context.hypothesis.limitations }}
+      </p>
+    </section>
+    <section
+      v-if="node.declared_context.outcome"
+      class="grid gap-2"
+      data-testid="why-validation-outcome"
+    >
+      <strong>{{
+        node.declared_context.outcome.session_kind === "HUMAN_SESSION"
+          ? validationCopy.human
+          : validationCopy.synthetic
+      }}</strong>
+      <p class="m-0">
+        {{ validationCopy.states[node.declared_context.outcome.outcome] }} ·
+        {{ node.declared_context.outcome.session_ref }}
+      </p>
+      <p v-if="node.declared_context.effective_status === 'RETIRED'" class="m-0 font-semibold">
+        {{ validationCopy.retired }}
+      </p>
+      <p v-if="node.declared_context.outcome.coverage === 'PARTIAL'" class="m-0">
+        {{ validationCopy.partial }}
+      </p>
+      <p class="m-0 whitespace-pre-wrap">{{ node.declared_context.outcome.limitations }}</p>
+    </section>
     <section
       v-if="node.declared_context.observation_value"
       class="grid gap-1"
@@ -110,11 +156,15 @@ const rationaleLabel = computed(() => {
       >
       <p class="m-0 text-xs">
         {{
-          item.effect === "CONTRADICTS"
-            ? copy.contradicts
-            : item.effect === "ADDS"
-              ? copy.adds
-              : copy.supports
+          item.session_kind === "HUMAN_SESSION"
+            ? validationCopy.human
+            : item.session_kind === "SYNTHETIC_EXERCISE"
+              ? validationCopy.synthetic
+              : item.effect === "CONTRADICTS"
+                ? copy.contradicts
+                : item.effect === "ADDS"
+                  ? copy.adds
+                  : copy.supports
         }}
       </p>
       <p

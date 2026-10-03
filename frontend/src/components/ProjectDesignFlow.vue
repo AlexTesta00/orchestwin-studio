@@ -243,6 +243,8 @@ import GeneratedMockupDialog, { type MockupObservation } from "./GeneratedMockup
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import ProjectDesignDiscussionPanel from "./ProjectDesignDiscussionPanel.vue";
 import ProjectDesignEvaluationPanel from "./ProjectDesignEvaluationPanel.vue";
+import ProjectHumanValidationPanel from "./ProjectHumanValidationPanel.vue";
+import type { EvidenceFocus } from "../types/humanValidation";
 import ProjectDiagramsView from "./ProjectDiagramsView.vue";
 import UiAgentMessage from "./UiAgentMessage.vue";
 import UiButton from "./UiButton.vue";
@@ -373,6 +375,7 @@ const props = withDefaults(
     upstream?: UpstreamValue;
     active?: boolean;
     sectionsMode?: boolean;
+    validationRefreshKey?: number;
   }>(),
   {
     locale: "en",
@@ -381,10 +384,14 @@ const props = withDefaults(
     upstream: null,
     active: true,
     sectionsMode: false,
+    validationRefreshKey: 0,
   },
 );
 
-const emit = defineEmits<{ "sections-changed": [] }>();
+const emit = defineEmits<{
+  "sections-changed": [];
+  "open-evidence": [source: EvidenceFocus | null];
+}>();
 
 provide(
   surfaceKey,
@@ -415,6 +422,8 @@ const messages = {
     pendingOther:
       "Another change is waiting for your decision above: apply it or discard it first.",
     proposeFailed: "Your choice could not be recorded, so nothing changed. Try again in a moment.",
+    contextChanged:
+      "An earlier step needs updating. Review that step before choosing a design alternative. Your current choice is unchanged.",
     applyFailed:
       "Your choice is recorded but it was not applied yet. Press “Choose this one” again.",
     noChanges: "This design is already the current one.",
@@ -579,6 +588,8 @@ const messages = {
       "Un'altra modifica aspetta la tua decisione qui sopra: applicala o scartala prima.",
     proposeFailed:
       "Non è stato possibile registrare la tua scelta: non è cambiato nulla. Riprova tra poco.",
+    contextChanged:
+      "Un passo precedente è da aggiornare. Rivedi quel passo prima di scegliere un'alternativa di design. La scelta attuale non è cambiata.",
     applyFailed:
       "La tua scelta è registrata ma non è ancora stata applicata. Premi di nuovo «Scegli questa».",
     noChanges: "Questo design è già quello attuale.",
@@ -1432,7 +1443,9 @@ const errorMessage = computed(() => {
   if (error === null || isGenerationInterrupted(error.code)) {
     return null;
   }
-  return modelFeedback(error.code, props.locale) ?? error.message ?? copy.value.loadError;
+  return revisionFailure(
+    modelFeedback(error.code, props.locale) ?? error.message ?? copy.value.loadError,
+  );
 });
 const concernCount = computed(
   () =>
@@ -1826,11 +1839,12 @@ async function run(operation: () => Promise<unknown>): Promise<boolean> {
     await operation();
     return true;
   } catch (error) {
-    localError.value =
+    localError.value = revisionFailure(
       modelFeedback(store.error?.code, props.locale) ??
-      (error instanceof Error
-        ? (modelFeedback(error.message, props.locale) ?? error.message)
-        : copy.value.loadError);
+        (error instanceof Error
+          ? (modelFeedback(error.message, props.locale) ?? error.message)
+          : copy.value.loadError),
+    );
     return false;
   }
 }
@@ -1984,7 +1998,7 @@ async function applyPackage(
   } else {
     const created = await propose(proposed);
     if (created === null) {
-      localError.value = copy.value.proposeFailed;
+      localError.value = revisionFailure(copy.value.proposeFailed);
       return false;
     }
     if (created.diff === null || created.diff.status !== "PROPOSED") {
@@ -1996,7 +2010,7 @@ async function applyPackage(
   }
   const version = await decideRevision(diff.id);
   if (version === null) {
-    localError.value = failedApproval;
+    localError.value = revisionFailure(failedApproval);
     return false;
   }
   if (requestReview && version.package.prototype !== null && reviewAffected(diff)) {
@@ -2004,6 +2018,10 @@ async function applyPackage(
   }
   changed();
   return true;
+}
+
+function revisionFailure(fallback: string): string {
+  return store.error?.code === "DESIGN_CONTEXT_CHANGED" ? copy.value.contextChanged : fallback;
 }
 
 async function choose(alternativeId: string): Promise<void> {
@@ -3229,6 +3247,15 @@ onBeforeUnmount(() => {
         >
           {{ copy.matrixEmpty }}
         </p>
+
+        <ProjectHumanValidationPanel
+          :project-id="projectId"
+          :authorize="authorizedRequest"
+          :locale="locale"
+          :active="active"
+          :refresh-key="`${current.content_hash}:${loopStore.runs.map((run) => run.id).join(':')}:${validationRefreshKey}`"
+          @open-evidence="emit('open-evidence', $event)"
+        />
 
         <ProjectDesignDiscussionPanel
           v-if="current.package.prototype"

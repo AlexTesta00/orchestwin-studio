@@ -84,7 +84,7 @@ const emit = defineEmits<{
 
 const messages = {
   en: {
-    title: "The twins' review of the chosen design",
+    title: "Synthetic pre-validation",
     intro:
       "Each twin reads the mockup and reports simulated findings: they are design hypotheses to weigh, not evidence from real users. Bring a finding into the brief, the requirements or the design, bring the design up to date and evaluate again.",
     history: "All the reviews ({n})",
@@ -163,7 +163,7 @@ const messages = {
     loadError: "The evaluations could not be loaded.",
   },
   it: {
-    title: "La revisione dei twin sul design scelto",
+    title: "Pre-validazione sintetica",
     intro:
       "Ogni twin legge il mockup e riporta osservazioni simulate: sono ipotesi di design da pesare, non evidenze di utenti reali. Porta un'osservazione nel brief, nei requisiti o nel design, aggiorna il design e valuta di nuovo.",
     history: "Tutte le revisioni ({n})",
