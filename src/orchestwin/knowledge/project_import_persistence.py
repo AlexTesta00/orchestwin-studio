@@ -54,7 +54,11 @@ class ProjectImportRecord:
     omitted_sections: tuple[Mapping[str, object], ...] = ()
 
     def __post_init__(self) -> None:
-        if set(self.stage_versions) != set(STAGES) or any(
+        valid_stages = set(self.stage_versions) == set(STAGES) or (
+            set(self.stage_versions) == set(STAGES[:-1])
+            and "OWNER_WORKFLOW_APPROVALS_NOT_RESTORED" in self.import_limits
+        )
+        if not valid_stages or any(
             set(entry) != STAGE_VERSION_KEYS for entry in self.stage_versions.values()
         ):
             raise ValueError("project import must name the version of every stage")
@@ -88,7 +92,7 @@ class ProjectImportRecord:
             "schema_version": self.schema_version,
             "archive_hash": self.archive_hash,
             "archive_size": self.archive_size,
-            "stage_versions": {stage: dict(self.stage_versions[stage]) for stage in STAGES},
+            "stage_versions": {stage: dict(entry) for stage, entry in self.stage_versions.items()},
             "imported_at": self.imported_at.isoformat(),
         }
         if self.import_limits:
@@ -99,7 +103,7 @@ class ProjectImportRecord:
 
 
 def _record_values(record: ProjectImportRecord) -> dict[str, object]:
-    stages = {stage: dict(record.stage_versions[stage]) for stage in STAGES}
+    stages = {stage: dict(entry) for stage, entry in record.stage_versions.items()}
     if record.import_limits or record.omitted_sections:
         stages[IMPORT_METADATA_KEY] = {
             "import_limits": list(record.import_limits),

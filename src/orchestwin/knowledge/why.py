@@ -18,6 +18,8 @@ def folder_why(
 
     reviews = read("twins/feedback/reviews.json")
     validation = read("validation/human-validation.json")
+    from orchestwin.knowledge.workflow_inputs import records_from_files
+
     return build_why_document(
         project_id=project_id,
         stages=documents,
@@ -26,6 +28,7 @@ def folder_why(
         learning=read("twins/feedback/learned.json"),
         hypotheses=validation.get("hypotheses", []),
         outcomes=validation.get("outcomes", []),
+        workflow_inputs=records_from_files(project_id=project_id, files=files),
     )
 
 
@@ -70,6 +73,11 @@ def normalized_why(document, *, identities=None, hashes=None, remap_versions=Tru
         for node in document["nodes"]
         if node["kind"] == "RESEARCH_EVIDENCE"
     }
+    prototype_ids = {
+        node["reference"]["artifact_id"]
+        for node in document["nodes"]
+        if node["kind"] == "PROVIDED_PROTOTYPE"
+    }
 
     def text(value):
         if remap_versions:
@@ -95,6 +103,8 @@ def normalized_why(document, *, identities=None, hashes=None, remap_versions=Tru
             "RESEARCH_EVIDENCE",
             "VALIDATION_HYPOTHESIS",
             "VALIDATION_OUTCOME",
+            "PROVIDED_PROTOTYPE",
+            "WORKFLOW_DECISION",
         }:
             parts[2] = "1" if node["reference"]["version_number"] is not None else ""
         if remap_versions and node["kind"] == "SYNTHETIC_FINDING":
@@ -125,17 +135,25 @@ def normalized_why(document, *, identities=None, hashes=None, remap_versions=Tru
                     preserve_version=(
                         preserve_version
                         or (
-                            value.get("kind") in {"VALIDATION_HYPOTHESIS", "VALIDATION_OUTCOME"}
+                            value.get("kind")
+                            in {
+                                "VALIDATION_HYPOTHESIS",
+                                "VALIDATION_OUTCOME",
+                                "PROVIDED_PROTOTYPE",
+                                "WORKFLOW_DECISION",
+                            }
                             and name == "reference"
                         )
                         or (
-                            str(value.get("code", "")).startswith("HYP-")
+                            str(value.get("code", "")).startswith(("HYP-", "PRT-"))
                             and name == "version_number"
                         )
+                        or (value.get("artifact_id") in prototype_ids and name == "version_number")
                     ),
                 )
                 for name, item in value.items()
-                if name not in {"imported_from", "text_available"}
+                if name
+                not in {"imported_from", "text_available", "origin_reference", "original_reference"}
                 and not (name == "document_hashes" and value.get("visual_derived") is True)
             }
         if isinstance(value, list):
@@ -183,10 +201,13 @@ def normalized_why(document, *, identities=None, hashes=None, remap_versions=Tru
             gap for gap in normalized["gaps"] if gap["code"] != "SOURCE_TEXT_UNAVAILABLE"
         ]
         nodes.append(normalized)
-    return {
+    normalized_document = {
         **document,
         "project_id": text(document["project_id"]),
         "nodes": sorted(nodes, key=lambda item: json.dumps(item, sort_keys=True)),
         "links": visit(document["links"]),
         "omitted_sections": sorted(document["omitted_sections"]),
     }
+    if "workflow_records" in document:
+        normalized_document["workflow_records"] = visit(document["workflow_records"])
+    return normalized_document
