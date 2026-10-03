@@ -5,7 +5,7 @@ import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 from typing import Final
 
 from orchestwin.cli.api import twin_chat
@@ -28,6 +28,8 @@ LEARNING_KIND: Final = "orchestwin.twin-learning"
 EVIDENCE_DOCUMENT: Final = "twins/evidence.json"
 EVIDENCE_KIND: Final = "orchestwin.research-evidence"
 VALIDATION_DOCUMENT: Final = "validation/human-validation.json"
+WORKFLOW_DECISIONS_DOCUMENT: Final = "workflow/decisions.json"
+PROVIDED_PROTOTYPES_DOCUMENT: Final = "design/provided-prototypes.json"
 MARKDOWN_SUFFIX: Final = ".md"
 FOLDER_MISSING: Final = "FOLDER_MISSING"
 FOLDER_UNREADABLE: Final = "FOLDER_UNREADABLE"
@@ -200,6 +202,44 @@ class Knowledge:
         document = self.stage("twins")
         return None if document is None else twins_from(twin_chat.twin_versions(document))
 
+    def workflow_inputs(self):
+        from orchestwin.workflow_inputs import WorkflowInputError, workflow_records
+
+        files = {}
+        for relative in (WORKFLOW_DECISIONS_DOCUMENT, PROVIDED_PROTOTYPES_DOCUMENT):
+            value = self.read(relative)
+            if value is not None:
+                files[relative] = json.dumps(value, ensure_ascii=False)
+        if "workflow_inputs" not in self.manifest and not files:
+            return workflow_records(_mapping(self.manifest.get("project")).get("id"))
+        from orchestwin.knowledge.archive import KnowledgeArchiveError
+        from orchestwin.knowledge.workflow_inputs import read_workflow_inputs
+
+        try:
+            return read_workflow_inputs(SimpleNamespace(manifest=self.manifest, files=files))
+        except (ValueError, WorkflowInputError, KnowledgeArchiveError) as error:
+            raise FolderProblem(FOLDER_UNREADABLE, path=WORKFLOW_DECISIONS_DOCUMENT) from error
+
+    def approved_provided_prototype(self):
+        records = self.workflow_inputs()
+        declared = _mapping(self.manifest.get("workflow_inputs"))
+        reference = _mapping(declared.get("approved_prototype"))
+        if reference.get("gate_status") != "APPROVED":
+            return None
+        return next(
+            (
+                item
+                for item in reversed(records["prototypes"])
+                if (item["id"], item["version_number"], item["content_hash"])
+                == (
+                    reference.get("artifact_id"),
+                    reference.get("version_number"),
+                    reference.get("content_hash"),
+                )
+            ),
+            None,
+        )
+
     def why(
         self, *, project_id: str | None = None, validation_context=False
     ) -> Mapping[str, object]:
@@ -226,6 +266,7 @@ class Knowledge:
         reviews = self.document(REVIEWS_DOCUMENT, required=False) or {}
         learning = self.document(LEARNING_DOCUMENT, required=False) or {}
         records = self.validation_records()
+        workflow = self.workflow_inputs()
         result = build_why_document(
             project_id=identity,
             stages=stages,
@@ -234,6 +275,7 @@ class Knowledge:
             learning=learning,
             hypotheses=records["hypotheses"],
             outcomes=records["outcomes"],
+            workflow_inputs=workflow,
         )
         declared = self.manifest.get("why")
         exported = self.document("traceability/why.json", required=False)
@@ -255,6 +297,7 @@ class Knowledge:
                 learning=learning,
                 hypotheses=records["hypotheses"],
                 outcomes=records["outcomes"],
+                workflow_inputs=workflow,
                 validation_context=True,
             )
         return result
@@ -308,7 +351,11 @@ class Knowledge:
     def walkthrough(
         self, scenario_key, *, project_id=None, alternative_id=None, document_hash=None
     ):
-        from orchestwin.validation import scenario_walkthrough
+        from orchestwin.validation import ValidationError, scenario_walkthrough
+        from orchestwin.workflow_inputs import PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE
+
+        if self.approved_provided_prototype() is not None:
+            raise ValidationError(PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE)
 
         answer = scenario_walkthrough(
             self.why(project_id=project_id, validation_context=True),

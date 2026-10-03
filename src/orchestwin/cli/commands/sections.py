@@ -17,6 +17,7 @@ from orchestwin.cli.errors import (
 )
 from orchestwin.cli.flows.publish import publish_and_pull
 from orchestwin.cli.messages import known
+from orchestwin.cli.views.workflow_inputs import show_records
 
 if TYPE_CHECKING:
     from orchestwin.cli.api.sections import Gesture, Result, Section, Sections
@@ -61,10 +62,15 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     found = current(client, project)
     if arguments.action == UPDATE:
         return update(context, client, project, found)
+    records = found.document.get("workflow_inputs", found.document.get("workflow_records"))
+    has_records = records is not None and (records["decisions"] or records["prototypes"])
     if arguments.json:
-        context.console.write(json.dumps(found.document, indent=2, ensure_ascii=True))
+        document = {**found.document, "workflow_inputs": records} if has_records else found.document
+        context.console.write(json.dumps(document, indent=2, ensure_ascii=True))
         return 0
     show(context, client, project, found)
+    if has_records:
+        show_records(context.console, records)
     return 0
 
 

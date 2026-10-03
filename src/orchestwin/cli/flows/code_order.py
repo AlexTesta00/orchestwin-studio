@@ -161,6 +161,23 @@ class OrderFacts:
 
 
 def approved_folder(project: ProjectFolder) -> FolderSummary:
+    from orchestwin.cli.mcp.knowledge import FolderProblem, load
+    from orchestwin.workflow_inputs import PROVIDED_PROTOTYPE_CODE_UNAVAILABLE
+
+    try:
+        folder = load(project.knowledge)
+        if folder.approved_provided_prototype() is not None:
+            raise CliError(PROVIDED_PROTOTYPE_CODE_UNAVAILABLE)
+    except FolderProblem as error:
+        if error.code != "FOLDER_MISSING":
+            raise CliError(
+                "FOLDER_NOT_VERIFIED",
+                values={
+                    "code": error.code,
+                    "path": error.values.get("path", ""),
+                    "folder": str(project.knowledge),
+                },
+            ) from error
     found = knowledge.summary(project.knowledge)
     if found is None or not design_approved(found):
         raise CliError("CODE_DESIGN_REQUIRED", status=1)

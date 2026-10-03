@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+from orchestwin.cli.views.workflow_inputs import show_limits
+
 
 def show(console, answer, *, details=False):
     target = answer["target"]
@@ -52,6 +54,7 @@ def show(console, answer, *, details=False):
     for limit in answer.get("limits", []):
         if limit in {"LEGACY_DOSSIER", "LEGACY_FEEDBACK_CONTEXT_MISSING"}:
             console.say("why.limit." + limit)
+    show_limits(console, answer.get("limits", []))
     stop_reasons = set(summary["stop_reasons"])
     for key, selected in (
         ("why.interrupted", [gap for gap in gaps if gap["code"] in stop_reasons]),

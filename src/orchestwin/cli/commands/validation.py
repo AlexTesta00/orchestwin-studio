@@ -7,6 +7,7 @@ from orchestwin.cli.api import validation
 from orchestwin.cli.errors import SIGN_IN_STATUS, CliError
 from orchestwin.cli.mcp.knowledge import FolderProblem, load
 from orchestwin.cli.views.validation import show
+from orchestwin.cli.views.workflow_inputs import show_records
 
 NAME = "validation"
 
@@ -87,4 +88,5 @@ def run(context, arguments):
         context.console.write(json.dumps(answer, ensure_ascii=True, indent=2))
     else:
         show(context.console, answer, details=arguments.all)
+        show_records(context.console, answer.get("workflow_inputs"))
     return 0

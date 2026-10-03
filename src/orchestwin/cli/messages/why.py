@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 MESSAGES = {
+    "why.origin.OWNER_INPUT": {"it": "Fornito dal proprietario", "en": "Supplied by the owner"},
+    "why.gap.DECLARED_MISSING": {
+        "it": "Manca, dichiarato da te.",
+        "en": "Missing, declared by you.",
+    },
     "why.help": {
         "it": "Mostra perché esiste un artefatto e che cosa ne dipende.",
         "en": "Show why an artifact exists and what depends on it.",

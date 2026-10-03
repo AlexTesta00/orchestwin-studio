@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import design as design_api
+from orchestwin.cli.api import workflow_inputs
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows import design_generate
 from orchestwin.cli.flows.code_order import project_language
@@ -38,8 +39,11 @@ ENGLISH_LOCALE: Final = "en-US"
 
 
 def run_review(context: CommandContext, client: StudioClient, project: ProjectFolder) -> int:
+    from orchestwin.workflow_inputs import PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE
+
     console = context.console
     link = project.link()
+    workflow_inputs.guard(client, link.project_id, PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE)
     version = design_api.current(client, link.project_id)
     if version is None:
         console.say("design.review_no_design")
