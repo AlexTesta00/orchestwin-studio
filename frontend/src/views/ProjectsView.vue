@@ -7,6 +7,7 @@ import { useI18n } from "vue-i18n";
 import { apiClient } from "@/api/client";
 import { PROJECT_STAGES, type ProjectMode, type ProjectResponse } from "@/api/contracts";
 import ProjectImportDialog from "@/components/ProjectImportDialog.vue";
+import GuidanceModeSelector from "@/components/GuidanceModeSelector.vue";
 import UiButton from "@/components/UiButton.vue";
 import UiStateBlock from "@/components/UiStateBlock.vue";
 import UiSurface from "@/components/UiSurface.vue";
@@ -387,6 +388,7 @@ async function createProject(): Promise<void> {
       </header>
 
       <div class="border-t border-night-line px-[clamp(24px,5vw,64px)] pb-[clamp(32px,4vw,56px)]">
+        <GuidanceModeSelector class="mt-6 mb-6" />
         <UiStateBlock
           v-if="errorDetail && !dialogOpen"
           kind="error"

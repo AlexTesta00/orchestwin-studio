@@ -173,7 +173,7 @@ describe("projects page", () => {
       "Un prodotto esistente",
       "Una cartella di conoscenza",
     ]);
-    expect(wrapper.get("legend").text()).toBe("Da dove vuoi partire?");
+    expect(dialog(wrapper).get("legend").text()).toBe("Da dove vuoi partire?");
 
     await wrapper.get('[data-testid="project-start-folder"] input').setValue(true);
     expect(wrapper.findComponent(ProjectImportDialog).exists()).toBe(true);
