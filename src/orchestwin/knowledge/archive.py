@@ -288,6 +288,13 @@ def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
             raise KnowledgeArchiveError("FOLDER_TAMPERED", EVIDENCE_DOCUMENT)
     elif EVIDENCE_DOCUMENT in files or EVIDENCE_TEXT in files:
         raise KnowledgeArchiveError("FOLDER_TAMPERED", EVIDENCE_DOCUMENT)
+    from orchestwin.knowledge.validation_records import verify_validation
+
+    verify_validation(
+        manifest=manifest,
+        files=files,
+        evidence=_json(files, EVIDENCE_DOCUMENT) if EVIDENCE_DOCUMENT in files else {},
+    )
     if "design" in documents:
         _verify_generated_mockup(documents["design"]["package"])
     from orchestwin.knowledge.why import WHY_DOCUMENT, verify_why

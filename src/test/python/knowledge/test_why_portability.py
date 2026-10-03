@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from orchestwin.agents.perspectives import perspective_views
-from orchestwin.knowledge.archive import KnowledgeArchiveError, verify_folder
+from orchestwin.knowledge.archive import verify_folder
 from orchestwin.knowledge.folder import build_knowledge_folder
 from orchestwin.knowledge.project_import import plan_documents, plan_project_import
 from orchestwin.knowledge.why import WHY_DOCUMENT, normalized_why
@@ -72,14 +72,17 @@ def test_import_declares_a_missing_historical_feedback_context_before_persistenc
     reviews["runs"][0]["design_version_id"] = str(uuid4())
     verified.files["twins/feedback/reviews.json"] = json.dumps(reviews)
 
-    with pytest.raises(KnowledgeArchiveError, match="FOLDER_FEEDBACK_CONTEXT_MISSING"):
-        plan_project_import(
-            verified,
-            project_id=uuid4(),
-            brief_version_id=uuid4(),
-            owner_user_id=uuid4(),
-            created_at=datetime.now(UTC),
-        )
+    imported = plan_project_import(
+        verified,
+        project_id=uuid4(),
+        brief_version_id=uuid4(),
+        owner_user_id=uuid4(),
+        created_at=datetime.now(UTC),
+    )
+    assert imported.evaluations == imported.finding_decisions == ()
+    assert "FEEDBACK_CONTEXT_NOT_RESTORED" in imported.import_limits
+    assert imported.omitted_sections[0]["evaluation_run_id"] == reviews["runs"][0]["id"]
+    assert imported.omitted_sections[0]["references"]
 
 
 def feedback_document(*, runs=None):

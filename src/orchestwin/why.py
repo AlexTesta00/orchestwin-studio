@@ -75,7 +75,10 @@ def _active_citation(node: Mapping) -> bool:
             item.get("status") == "ACTIVE"
             and item.get("applicable", True)
             and source.get("status", "ACTIVE") == "ACTIVE"
-            and item.get("effect") in {"SUPPORTS", "ADDS"}
+            and (
+                item.get("effect") in {"SUPPORTS", "ADDS"}
+                or node.get("kind") == "VALIDATION_OUTCOME"
+            )
             and citation.get("source_id")
             and isinstance(citation.get("source_version"), int)
             and citation.get("content_hash")
@@ -106,12 +109,21 @@ def _completeness(target, nodes, adjacency, twin_context):
         active.add(key)
         node = nodes[key]
         own_twin = node["kind"] in {"USER_TWIN", "USER_TWIN_CLAIM"}
-        own_evidence = node["kind"] == "USER_TWIN_CLAIM" and _active_citation(node)
+        own_evidence = node["kind"] in {
+            "USER_TWIN_CLAIM",
+            "VALIDATION_OUTCOME",
+        } and _active_citation(node)
         children = [visit(child) for child in adjacency.get(key, ())]
         twin = own_twin or key in twin_context or any(child[0] for child in children)
-        evidence = own_evidence or any(child[1] for child in children)
+        evidence = (
+            own_evidence
+            if node["kind"] == "VALIDATION_OUTCOME"
+            else own_evidence or any(child[1] for child in children)
+        )
         broken = any(_breaks_chain(gap) for gap in node.get("gaps", ()))
-        if own_evidence:
+        if node["kind"] == "VALIDATION_OUTCOME":
+            all_complete = own_evidence and not broken
+        elif own_evidence:
             all_complete = not broken
         elif children:
             all_complete = all(child[2] for child in children) and not broken

@@ -185,6 +185,11 @@ def test_runtime_reads_twins_before_requirements_and_keeps_exact_historical_vers
             assert project_id == PROJECT_ID
             return ()
 
+    class HumanValidationRepository(ScopedRepository):
+        async def records(self, *, project_id):
+            assert project_id == PROJECT_ID
+            return {"hypotheses": [], "outcomes": []}
+
     class Sections:
         def __init__(self, _sessions):
             pass
@@ -206,6 +211,9 @@ def test_runtime_reads_twins_before_requirements_and_keeps_exact_historical_vers
     monkeypatch.setattr(why_runtime, "SqlAlchemyResearchEvidenceRepository", EvidenceRepository)
     monkeypatch.setattr(why_runtime, "SqlAlchemyDesignEvaluationRepository", EvaluationRepository)
     monkeypatch.setattr(why_runtime, "SqlAlchemyFindingValidationRepository", ValidationRepository)
+    monkeypatch.setattr(
+        why_runtime, "SqlAlchemyHumanValidationRepository", HumanValidationRepository
+    )
     monkeypatch.setattr(why_runtime, "SqlAlchemySectionReads", Sections)
     monkeypatch.setattr(SqlAlchemyWhyQueryService, "_mockups", mockups)
     document = asyncio.run(

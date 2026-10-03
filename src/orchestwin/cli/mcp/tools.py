@@ -45,6 +45,8 @@ RUN_TESTS: Final = "run_tests"
 GET_TASKS: Final = "get_tasks"
 GET_EVIDENCE: Final = "get_evidence"
 GET_WHY: Final = "get_why"
+GET_VALIDATION: Final = "get_validation"
+GET_SCENARIO_WALKTHROUGH: Final = "get_scenario_walkthrough"
 TEXT: Final = "text"
 TWIN: Final = "twin"
 COUNT: Final = "count"
@@ -722,6 +724,24 @@ def get_requirements(session: Session, values: Mapping[str, object]) -> dict[str
     return {**selected, "unknown_codes": unknown}
 
 
+def get_validation(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    return session.knowledge().validation(project_id=session.link.project_id)
+
+
+def get_scenario_walkthrough(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    from orchestwin.validation import ValidationError
+
+    try:
+        return session.knowledge().walkthrough(
+            values["scenario_key"],
+            project_id=session.link.project_id,
+            alternative_id=values.get("alternative_id"),
+            document_hash=values.get("document_hash"),
+        )
+    except ValidationError as error:
+        raise ToolError(error.code, key="validation.errors." + error.code) from None
+
+
 def get_design(session: Session, values: Mapping[str, object]) -> dict[str, object]:
     document = session.knowledge().stage("design")
     if document is None:
@@ -1122,6 +1142,20 @@ TOOLS: Final = (
         "mcp.describe_get_why",
         get_why,
         (Parameter("code", TEXT, "mcp.parameter_why_code", required=True, maximum=2048),),
+    ),
+    Tool(GET_VALIDATION, "mcp.title_get_validation", "mcp.describe_get_validation", get_validation),
+    Tool(
+        GET_SCENARIO_WALKTHROUGH,
+        "mcp.title_get_scenario_walkthrough",
+        "mcp.describe_get_scenario_walkthrough",
+        get_scenario_walkthrough,
+        (
+            Parameter(
+                "scenario_key", TEXT, "mcp.parameter_scenario_key", required=True, maximum=2048
+            ),
+            Parameter("alternative_id", TEXT, "mcp.parameter_alternative_id", maximum=80),
+            Parameter("document_hash", TEXT, "mcp.parameter_document_hash", maximum=64),
+        ),
     ),
 )
 TOOLS_BY_NAME: Final[Mapping[str, Tool]] = MappingProxyType({tool.name: tool for tool in TOOLS})

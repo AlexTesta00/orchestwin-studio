@@ -17,12 +17,15 @@ def folder_why(
         return json.loads(files[path]) if path in files else {}
 
     reviews = read("twins/feedback/reviews.json")
+    validation = read("validation/human-validation.json")
     return build_why_document(
         project_id=project_id,
         stages=documents,
         evidence=read("twins/evidence.json"),
         evaluations=[reviews] if reviews else [],
         learning=read("twins/feedback/learned.json"),
+        hypotheses=validation.get("hypotheses", []),
+        outcomes=validation.get("outcomes", []),
     )
 
 
@@ -33,6 +36,25 @@ def verify_why(*, project_id: str, documents: Mapping, files: Mapping[str, str])
             from orchestwin.knowledge.archive import KnowledgeArchiveError
 
             raise KnowledgeArchiveError("FOLDER_TAMPERED", WHY_DOCUMENT)
+
+
+def importable_why(folder, omitted_sections=()):
+    omitted = {
+        item["evaluation_run_id"]
+        for item in omitted_sections
+        if item.get("kind") == "SYNTHETIC_EVALUATION"
+        and item.get("reason") == "FEEDBACK_CONTEXT_NOT_RESTORED"
+    }
+    files = dict(folder.files)
+    path = "twins/feedback/reviews.json"
+    if omitted and path in files:
+        reviews = json.loads(files[path])
+        reviews["runs"] = [item for item in reviews["runs"] if item["id"] not in omitted]
+        reviews["decisions"] = [
+            item for item in reviews["decisions"] if item["evaluation_run_id"] not in omitted
+        ]
+        files[path] = json.dumps(reviews)
+    return folder_why(project_id=folder.project_id, documents=folder.documents, files=files)
 
 
 def normalized_why(document, *, identities=None, hashes=None, remap_versions=True):
@@ -69,13 +91,17 @@ def normalized_why(document, *, identities=None, hashes=None, remap_versions=Tru
     keys = {}
     for node in document["nodes"]:
         parts = unquote(node["key"]).split(":")
-        if remap_versions and node["kind"] != "RESEARCH_EVIDENCE":
+        if remap_versions and node["kind"] not in {
+            "RESEARCH_EVIDENCE",
+            "VALIDATION_HYPOTHESIS",
+            "VALIDATION_OUTCOME",
+        }:
             parts[2] = "1" if node["reference"]["version_number"] is not None else ""
         if remap_versions and node["kind"] == "SYNTHETIC_FINDING":
             parts[-1] = "1"
         keys[node["key"]] = text(":".join(parts))
 
-    def visit(value, key=None, source=False):
+    def visit(value, key=None, source=False, preserve_version=False):
         if isinstance(value, Mapping):
             source = (
                 source
@@ -92,20 +118,49 @@ def normalized_why(document, *, identities=None, hashes=None, remap_versions=Tru
             ):
                 value["source_version"] = 1
             return {
-                name: visit(item, name, source)
+                name: visit(
+                    item,
+                    name,
+                    source,
+                    preserve_version=(
+                        preserve_version
+                        or (
+                            value.get("kind") in {"VALIDATION_HYPOTHESIS", "VALIDATION_OUTCOME"}
+                            and name == "reference"
+                        )
+                        or (
+                            str(value.get("code", "")).startswith("HYP-")
+                            and name == "version_number"
+                        )
+                    ),
+                )
                 for name, item in value.items()
                 if name not in {"imported_from", "text_available"}
                 and not (name == "document_hashes" and value.get("visual_derived") is True)
             }
         if isinstance(value, list):
-            values = [visit(item, key, source) for item in value]
+            values = [visit(item, key, source, preserve_version) for item in value]
             return sorted(
                 values, key=lambda item: json.dumps(item, sort_keys=True, ensure_ascii=False)
             )
         if isinstance(value, str):
             if key == "quote" or (source and key == "content_hash"):
                 return value
-            if key in {"key", "node_key", "source", "target"} and value in keys:
+            if (
+                key
+                in {
+                    "key",
+                    "node_key",
+                    "source",
+                    "target",
+                    "origin_key",
+                    "twin_key",
+                    "scenario_key",
+                    "design_key",
+                    "anchor_keys",
+                }
+                and value in keys
+            ):
                 return keys[value]
             value = text(value)
             if remap_versions and key in {"code", "related_code"}:
@@ -115,6 +170,7 @@ def normalized_why(document, *, identities=None, hashes=None, remap_versions=Tru
             remap_versions
             and key in {"version_number", "version"}
             and not source
+            and not preserve_version
             and value is not None
         ):
             return 1

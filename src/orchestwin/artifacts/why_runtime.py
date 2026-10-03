@@ -14,6 +14,7 @@ from orchestwin.artifacts.design_finding_validation_persistence import (
 )
 from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepository
 from orchestwin.artifacts.design_serialization import design_package_from_snapshot
+from orchestwin.artifacts.human_validation_persistence import SqlAlchemyHumanValidationRepository
 from orchestwin.artifacts.why_mockups import mockup_document_hashes
 from orchestwin.models.proposal_evidence_persistence import (
     DESIGN_MOCKUP_PURPOSES,
@@ -165,7 +166,9 @@ class SqlAlchemyWhyQueryService:
                 mockup["current"] = mockup["base_reference"]["artifact_id"] == str(versions[-1].id)
         return mockups
 
-    async def current(self, *, owner_user_id: UUID, project_id: UUID) -> dict | None:
+    async def current(
+        self, *, owner_user_id: UUID, project_id: UUID, validation_context: bool = False
+    ) -> dict | None:
         async with self._session_factory() as session:
             owned = await session.scalar(
                 sa.select(ProjectRecord.id).where(
@@ -176,68 +179,100 @@ class SqlAlchemyWhyQueryService:
             )
             if owned is None:
                 return None
-            brief = await SqlAlchemyProjectBriefRepository(session).list_owned_versions(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-            )
-            team = await SqlAlchemyTeamProposalVersionRepository(session).list_owned_versions(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-            )
-            modeling = await SqlAlchemyUserModelingSnapshotRepository(
-                session,
-                owner_user_id=owner_user_id,
-            ).history(project_id=project_id)
-            requirements = await SqlAlchemyRequirementsSpecificationRepository(
-                session,
-                owner_user_id=owner_user_id,
-            ).history(project_id=project_id)
-            design = await SqlAlchemyDesignPackageRepository(
-                session,
-                owner_user_id=owner_user_id,
-            ).history(project_id=project_id)
-            evidence = await SqlAlchemyResearchEvidenceRepository(
-                session,
-                owner_user_id=owner_user_id,
-            ).dossier(project_id)
-            evaluations = await SqlAlchemyDesignEvaluationRepository(
-                session,
-                owner_user_id=owner_user_id,
-            ).list(project_id=project_id, limit=2_147_483_647)
-            decisions = await SqlAlchemyFindingValidationRepository(
-                session,
-                owner_user_id=owner_user_id,
-            ).current(project_id=project_id)
-            mockups = await self._mockups(
-                session, owner_user_id=owner_user_id, project_id=project_id, versions=design
-            )
-            evaluation_snapshots = [run.to_snapshot() for run in evaluations]
             facts = await SqlAlchemySectionReads(self._session_factory).facts(
                 owner_user_id=owner_user_id,
                 project_id=project_id,
             )
-            return build_why_document(
-                project_id=str(project_id),
-                stages={
-                    stage: [_envelope(version, stage) for version in values]
-                    for stage, values in (
-                        ("brief", brief),
-                        ("team", team),
-                        ("twins", modeling),
-                        ("requirements", requirements),
-                        ("design", design),
-                    )
-                },
-                evidence=evidence,
-                evaluations=[
-                    {
-                        "runs": evaluation_snapshots,
-                        "decisions": [item.to_snapshot() for item in decisions],
-                    }
-                ],
-                mockups=mockups,
+            return await self.in_session(
+                session,
+                owner_user_id=owner_user_id,
+                project_id=project_id,
                 sections=None if facts is None else project_sections(facts).to_snapshot(),
+                validation_context=validation_context,
             )
+
+    async def in_session(
+        self,
+        session: AsyncSession,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        sections=None,
+        validation_context: bool = False,
+    ) -> dict | None:
+        owned = await session.scalar(
+            sa.select(ProjectRecord.id).where(
+                ProjectRecord.id == project_id,
+                ProjectRecord.owner_user_id == owner_user_id,
+                ProjectRecord.archived_at.is_(None),
+            )
+        )
+        if owned is None:
+            return None
+        brief = await SqlAlchemyProjectBriefRepository(session).list_owned_versions(
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+        )
+        team = await SqlAlchemyTeamProposalVersionRepository(session).list_owned_versions(
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+        )
+        modeling = await SqlAlchemyUserModelingSnapshotRepository(
+            session,
+            owner_user_id=owner_user_id,
+        ).history(project_id=project_id)
+        requirements = await SqlAlchemyRequirementsSpecificationRepository(
+            session,
+            owner_user_id=owner_user_id,
+        ).history(project_id=project_id)
+        design = await SqlAlchemyDesignPackageRepository(
+            session,
+            owner_user_id=owner_user_id,
+        ).history(project_id=project_id)
+        evidence = await SqlAlchemyResearchEvidenceRepository(
+            session,
+            owner_user_id=owner_user_id,
+        ).dossier(project_id)
+        evaluations = await SqlAlchemyDesignEvaluationRepository(
+            session,
+            owner_user_id=owner_user_id,
+        ).list(project_id=project_id, limit=2_147_483_647)
+        decisions = await SqlAlchemyFindingValidationRepository(
+            session,
+            owner_user_id=owner_user_id,
+        ).current(project_id=project_id)
+        mockups = await self._mockups(
+            session, owner_user_id=owner_user_id, project_id=project_id, versions=design
+        )
+        evaluation_snapshots = [run.to_snapshot() for run in evaluations]
+        records = await SqlAlchemyHumanValidationRepository(
+            session, owner_user_id=owner_user_id
+        ).records(project_id=project_id)
+        return build_why_document(
+            project_id=str(project_id),
+            stages={
+                stage: [_envelope(version, stage) for version in values]
+                for stage, values in (
+                    ("brief", brief),
+                    ("team", team),
+                    ("twins", modeling),
+                    ("requirements", requirements),
+                    ("design", design),
+                )
+            },
+            evidence=evidence,
+            evaluations=[
+                {
+                    "runs": evaluation_snapshots,
+                    "decisions": [item.to_snapshot() for item in decisions],
+                }
+            ],
+            mockups=mockups,
+            sections=sections,
+            hypotheses=records["hypotheses"],
+            outcomes=records["outcomes"],
+            validation_context=validation_context,
+        )
 
     async def explain(self, *, owner_user_id: UUID, project_id: UUID, code: str) -> dict | None:
         document = await self.current(owner_user_id=owner_user_id, project_id=project_id)

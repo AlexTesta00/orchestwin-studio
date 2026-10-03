@@ -1603,6 +1603,8 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/projects/{project_id}/code-tasks/{code}/status", "task_status"),
     Route("GET", "/projects/{project_id}/twin-learning", "twin_learning"),
     Route("GET", "/projects/{project_id}/artifacts/why", "why"),
+    Route("GET", "/projects/{project_id}/validation", "validation"),
+    Route("GET", "/projects/{project_id}/validation/walkthrough", "validation_walkthrough"),
     Route("GET", "/projects/{project_id}/artifacts/why/document", "why_document"),
     Route("GET", "/projects/{project_id}/evidence", "evidence_list"),
     Route("POST", "/projects/{project_id}/evidence", "evidence_add"),
@@ -2263,6 +2265,8 @@ class FakeProject:
         self.evidence_versions: list[dict[str, object]] = []
         self.evidence_texts: dict[tuple[str, int], str] = {}
         self.evidence_changes: list[dict[str, object]] = []
+        self.validation_hypotheses: list[dict[str, object]] = []
+        self.validation_outcomes: list[dict[str, object]] = []
 
     @property
     def owner(self) -> str:
@@ -6802,7 +6806,7 @@ class FakeStudio:
                     "media_type": "text/html",
                     "sha256_digest": hashlib.sha256(document).hexdigest(),
                     "size_bytes": len(document),
-                    "storage_key": f"design-evaluation/{run_id}",
+                    "storage_key": f"sha256/{hashlib.sha256(document).hexdigest()[:2]}/{hashlib.sha256(document).hexdigest()}",
                     "location": "design/mockup.html",
                 }
             ],
@@ -6810,7 +6814,9 @@ class FakeStudio:
             "is_multimodal": False,
             "created_at": _iso(started),
         }
-        bundle["content_hash"] = _digest(bundle)
+        bundle["content_hash"] = _digest(
+            {key: bundle[key] for key in ("project_id", "workflow_run_id", "scenario", "artifacts")}
+        )
         earlier = len(project.runs)
         anchors = _anchors(package["prototype"])
         responses = []
@@ -6835,8 +6841,8 @@ class FakeStudio:
                 "evidence_gaps": [],
                 "is_simulated_feedback": True,
             }
-            response["completed_at"] = _iso(self._now())
             response["content_hash"] = _digest(response)
+            response["completed_at"] = _iso(self._now())
             response["disclaimer"] = DISCLAIMER
             responses.append(response)
         responses.sort(key=lambda item: str(item["twin_id"]))
@@ -7822,6 +7828,12 @@ class FakeStudio:
             project.mockups = {}
             project.runs = [item.to_snapshot() for item in plan.evaluations]
             project.finding_decisions = [item.to_snapshot() for item in plan.finding_decisions]
+            project.validation_hypotheses = copy.deepcopy(
+                (plan.validation_records or {}).get("hypotheses", [])
+            )
+            project.validation_outcomes = copy.deepcopy(
+                (plan.validation_records or {}).get("outcomes", [])
+            )
             project.evidence_versions = copy.deepcopy(
                 (plan.research_evidence or {}).get("evidence", [])
             )
@@ -7868,11 +7880,9 @@ class FakeStudio:
                     }
                 )
         if plan is not None and "why" in verified.manifest:
-            from orchestwin.knowledge.why import folder_why, normalized_why
+            from orchestwin.knowledge.why import importable_why, normalized_why
 
-            original = folder_why(
-                project_id=verified.project_id, documents=verified.documents, files=verified.files
-            )
+            original = importable_why(verified, plan.omitted_sections)
             if normalized_why(
                 original, identities=plan.identities, hashes=plan.hashes
             ) != normalized_why(self._why_document(project)):
@@ -7901,6 +7911,10 @@ class FakeStudio:
             "imported_at": _stamp(imported_at),
             "archive_hash": hashlib.sha256(content).hexdigest(),
         }
+        if plan is not None and plan.import_limits:
+            project.origin["import_limits"] = list(plan.import_limits)
+        if plan is not None and plan.omitted_sections:
+            project.origin["omitted_sections"] = list(plan.omitted_sections)
         twins = project.snapshot["snapshot"]["twin_versions"] if project.snapshot else []
         return _Answer(
             201,
@@ -7920,6 +7934,11 @@ class FakeStudio:
                 "approval_required": list(STAGES),
                 "why_verified": plan is not None and "why" in verified.manifest,
                 "import_limits": [] if plan is None else list(plan.import_limits),
+                **(
+                    {"omitted_sections": list(plan.omitted_sections)}
+                    if plan is not None and plan.omitted_sections
+                    else {}
+                ),
             },
         )
 
@@ -9380,11 +9399,12 @@ class FakeStudio:
             },
         )
 
-    def _why_document(self, project: FakeProject) -> dict[str, object]:
+    def _why_document(self, project: FakeProject, *, validation_context=False) -> dict[str, object]:
         from orchestwin.why import build_why_document
 
         return build_why_document(
             project_id=project.id,
+            validation_context=validation_context,
             stages={
                 "brief": [
                     {**item.payload, "brief": item.brief.to_snapshot()} for item in project.briefs
@@ -9417,6 +9437,8 @@ class FakeStudio:
                 "citations": self._evidence_citations(project),
             },
             evaluations=[{"runs": project.runs, "decisions": project.finding_decisions}],
+            hypotheses=project.validation_hypotheses,
+            outcomes=project.validation_outcomes,
             learning={"twins": self._learning_entries(project)},
             mockups=[
                 item
@@ -9427,6 +9449,55 @@ class FakeStudio:
 
     def _route_why_document(self, call: _Call) -> _Answer:
         return _Answer(200, self._why_document(self._code_project(call)))
+
+    def seed_validation_records(self, project: FakeProject, *, hypotheses=(), outcomes=()):
+        from orchestwin.artifacts.human_validation import (
+            hypothesis_from_snapshot,
+            outcome_from_snapshot,
+        )
+
+        for restore, items in (
+            (hypothesis_from_snapshot, hypotheses),
+            (outcome_from_snapshot, outcomes),
+        ):
+            for item in items:
+                record = restore(item).to_snapshot()
+                if record["project_id"] != project.id or record["owner_user_id"] != str(
+                    project.account.id
+                ):
+                    raise ValueError("validation fixture must match its project and owner")
+        project.validation_hypotheses = copy.deepcopy(list(hypotheses))
+        project.validation_outcomes = copy.deepcopy(list(outcomes))
+
+    def _route_validation(self, call: _Call) -> _Answer:
+        from orchestwin.validation import validation_overview
+
+        project = self._code_project(call)
+        return _Answer(
+            200,
+            validation_overview(
+                document=self._why_document(project, validation_context=True),
+                hypotheses=project.validation_hypotheses,
+                outcomes=project.validation_outcomes,
+                evidence={"evidence": project.evidence_versions},
+            ),
+        )
+
+    def _route_validation_walkthrough(self, call: _Call) -> _Answer:
+        from orchestwin.validation import ValidationError, scenario_walkthrough
+
+        try:
+            return _Answer(
+                200,
+                scenario_walkthrough(
+                    self._why_document(self._code_project(call), validation_context=True),
+                    call.query.get("scenario_key", [""])[0],
+                    alternative_id=call.query.get("alternative_id", [None])[0],
+                    document_hash=call.query.get("document_hash", [None])[0],
+                ),
+            )
+        except ValidationError as error:
+            raise _Refusal(409, {"code": error.code}) from None
 
     def _route_why(self, call: _Call) -> _Answer:
         from orchestwin.why import WhyError, explain_why
@@ -10470,6 +10541,24 @@ class FakeStudio:
     def _knowledge_folder(
         self, project: FakeProject, present: Sequence[str], number: int, moment: datetime
     ):
+        from types import SimpleNamespace
+
+        from orchestwin.artifacts.design_evaluation import design_evaluation_run_from_snapshot
+        from orchestwin.artifacts.design_finding_validations import finding_validation_from_snapshot
+        from orchestwin.knowledge.sources import knowledge_feedback
+        from orchestwin.knowledge.validation_records import preserve_import_history
+
+        origin = None
+        if project.origin is not None:
+            metadata = project.origin["origin"]
+            origin = SimpleNamespace(
+                source_project_id=metadata["project_id"],
+                package_version=metadata["package_version"],
+                package_content_hash=metadata["package_content_hash"],
+                omitted_sections=project.origin.get("omitted_sections", ()),
+                import_limits=project.origin.get("import_limits", ()),
+            )
+
         documents = {}
         for stage in present:
             version = copy.deepcopy(project.artifact(stage))
@@ -10494,6 +10583,19 @@ class FakeStudio:
             "project_name": project.name,
             "state": self._state_sources(project, present[-1]),
             "research_evidence": self._evidence_dossier(project),
+            "validation_records": preserve_import_history(
+                {
+                    "hypotheses": project.validation_hypotheses,
+                    "outcomes": project.validation_outcomes,
+                },
+                origin,
+            ),
+            "feedback": knowledge_feedback(
+                runs=(design_evaluation_run_from_snapshot(item) for item in project.runs),
+                validations=(
+                    finding_validation_from_snapshot(item) for item in project.finding_decisions
+                ),
+            ),
         }
         for stage, version in versions.items():
             name = "modeling" if stage == "twins" else stage

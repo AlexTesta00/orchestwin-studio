@@ -17,7 +17,7 @@ from fastapi import (
     status,
 )
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_serializer
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.identity.domain import UserAccount
@@ -93,6 +93,14 @@ class ProjectImportPayload(ApiModel):
     approval_required: tuple[str, ...]
     why_verified: bool = False
     import_limits: tuple[str, ...] = ()
+    omitted_sections: tuple[dict[str, Any], ...] = ()
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        payload = handler(self)
+        if not self.omitted_sections:
+            payload.pop("omitted_sections", None)
+        return payload
 
     @classmethod
     def from_result(cls, result: ProjectImportResult) -> ProjectImportPayload:
@@ -114,6 +122,7 @@ class ProjectImportPayload(ApiModel):
             approval_required=STAGES,
             why_verified=result.why_verified,
             import_limits=result.import_limits,
+            omitted_sections=result.omitted_sections,
         )
 
 
@@ -122,6 +131,17 @@ class ProjectImportOriginPayload(ApiModel):
     stages: dict[str, ImportedStagePayload]
     imported_at: datetime
     archive_hash: str
+    import_limits: tuple[str, ...] = ()
+    omitted_sections: tuple[dict[str, Any], ...] = ()
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        payload = handler(self)
+        if not self.import_limits:
+            payload.pop("import_limits", None)
+        if not self.omitted_sections:
+            payload.pop("omitted_sections", None)
+        return payload
 
     @classmethod
     def from_record(cls, record: ProjectImportRecord) -> ProjectImportOriginPayload:
@@ -130,6 +150,8 @@ class ProjectImportOriginPayload(ApiModel):
             stages=_stage_payloads(record),
             imported_at=record.imported_at,
             archive_hash=record.archive_hash,
+            import_limits=record.import_limits,
+            omitted_sections=record.omitted_sections,
         )
 
 

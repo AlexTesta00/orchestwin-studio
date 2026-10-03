@@ -145,6 +145,7 @@ from orchestwin.knowledge.state import (
     TWIN_LEARNING_KIND,
     VERDICTS,
 )
+from orchestwin.knowledge.validation_schema import ValidationRecords
 from orchestwin.models.team_proposals import (
     TEAM_PROPOSAL_SCHEMA_VERSION,
     TeamProposalJustificationKind,
@@ -2734,6 +2735,7 @@ class WhyGap(_Record):
         "SOURCE_TEXT_UNAVAILABLE",
         "OMITTED_SECTION",
         "CONTEXT_OUTDATED",
+        "VALIDATION_REFERENCE_UNAVAILABLE",
     ]
     node_key: str
     related_code: str | None
@@ -2803,9 +2805,14 @@ _MODELS: Final = {
     "learning": TwinLearningDocument,
     "evidence": ResearchEvidenceDocument,
     "why": WhyDocument,
+    "validation": ValidationRecords,
 }
 _WRITTEN_BY: Final = "OrchesTwin Studio writes it when it exports the knowledge folder."
 _SCHEMA_TEXTS: Final = {
+    "validation": (
+        "Operational hypotheses and validation outcomes",
+        "Owner-selected operational hypotheses and exact source citations; candidates remain derived.",
+    ),
     "why": ("Why traceability", "Derived provenance links, gaps and declared context."),
     "evidence": (
         "Research evidence excerpts",
@@ -2914,6 +2921,7 @@ _DOCUMENT_PATHS: Final = {
     FEEDBACK_LEARNING: "learning",
     EVIDENCE_DOCUMENT: "evidence",
     "traceability/why.json": "why",
+    "validation/human-validation.json": "validation",
 }
 
 
@@ -2966,11 +2974,17 @@ def _without_design_additions(schema: dict[str, object]) -> dict[str, object]:
     return stripped
 
 
-def _published_schema(name: str, *, design_additions: bool) -> dict[str, object]:
+def _published_schema(
+    name: str, *, design_additions: bool, validation_additions: bool = False
+) -> dict[str, object]:
     title, description = _SCHEMA_TEXTS[name]
     schema = _MODELS[name].model_json_schema(schema_generator=_KnowledgeJsonSchema)
     if name == "design" and not design_additions:
         schema = _without_design_additions(schema)
+    if name == "why" and not validation_additions:
+        schema["$defs"]["WhyGap"]["properties"]["code"]["enum"].remove(
+            "VALIDATION_REFERENCE_UNAVAILABLE"
+        )
     return {
         **schema,
         "$schema": SCHEMA_DIALECT,
@@ -2986,15 +3000,24 @@ def knowledge_schemas(
     research_evidence: bool = False,
     only_evidence: bool = False,
     only_why: bool = False,
+    only_validation: bool = False,
+    validation_additions: bool = False,
 ) -> dict[str, dict[str, object]]:
     names = (
-        ("why",)
+        ("validation",)
+        if only_validation
+        else ("why",)
         if only_why
         else ("evidence",)
         if only_evidence
         else (*SCHEMA_NAMES, *(("evidence",) if research_evidence else ()))
     )
-    return {name: _published_schema(name, design_additions=design_additions) for name in names}
+    return {
+        name: _published_schema(
+            name, design_additions=design_additions, validation_additions=validation_additions
+        )
+        for name in names
+    }
 
 
 def schema_files(
@@ -3003,6 +3026,8 @@ def schema_files(
     research_evidence: bool = False,
     only_evidence: bool = False,
     only_why: bool = False,
+    only_validation: bool = False,
+    validation_additions: bool = False,
 ) -> dict[str, str]:
     return {
         schema_document(name): json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False)
@@ -3012,6 +3037,8 @@ def schema_files(
             research_evidence=research_evidence,
             only_evidence=only_evidence,
             only_why=only_why,
+            only_validation=only_validation,
+            validation_additions=validation_additions,
         ).items()
     }
 

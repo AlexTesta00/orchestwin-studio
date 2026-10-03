@@ -1,6 +1,28 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "mcp.title_get_validation": {"it": "Ipotesi ed esiti", "en": "Hypotheses and outcomes"},
+    "mcp.describe_get_validation": {
+        "it": "Legge candidate derivate, ipotesi operative ed esiti dal Dossier verificato, senza rete o spesa.",
+        "en": "Read derived candidates, operational hypotheses and outcomes from the verified Dossier without network or spending.",
+    },
+    "mcp.title_get_scenario_walkthrough": {
+        "it": "Percorso dello scenario",
+        "en": "Scenario walkthrough",
+    },
+    "mcp.describe_get_scenario_walkthrough": {
+        "it": "Legge a richiesta il compito, i passi e i collegamenti attestati dello scenario nel Dossier verificato.",
+        "en": "Read the task, steps and attested scenario links in the verified Dossier on request.",
+    },
+    "mcp.parameter_scenario_key": {"it": "Key esatta dello scenario.", "en": "Exact scenario key."},
+    "mcp.parameter_alternative_id": {
+        "it": "Identificatore dell'alternativa.",
+        "en": "Alternative identifier.",
+    },
+    "mcp.parameter_document_hash": {
+        "it": "Hash del documento mockup.",
+        "en": "Mockup document hash.",
+    },
     "mcp.title_get_why": {"it": "Perché?", "en": "Why?"},
     "mcp.describe_get_why": {
         "it": "Legge dal Dossier verificato la catena, le lacune e ciò che resta da verificare con persone vere. Nessuna generazione o spesa.",

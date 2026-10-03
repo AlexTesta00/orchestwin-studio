@@ -21,7 +21,9 @@ from orchestwin.projects.requirements_primitives import snapshot_content_hash
 REVIEWS_DOCUMENT = "twins/feedback/reviews.json"
 
 
-def import_feedback(folder, *, identities, hashes, project_id, owner_user_id):
+def import_feedback(
+    folder, *, identities, hashes, project_id, owner_user_id, omitted_sections=None
+):
     if REVIEWS_DOCUMENT not in folder.files and "why" not in folder.manifest:
         return (), (), ("LEGACY_FEEDBACK_CONTEXT_MISSING",)
     document = (
@@ -53,14 +55,15 @@ def import_feedback(folder, *, identities, hashes, project_id, owner_user_id):
             if twins.get(response["twin_id"]) != response["twin_version"]
         )
         if missing:
-            if "why" in folder.manifest:
-                from orchestwin.knowledge.archive import KnowledgeArchiveError
-
-                raise KnowledgeArchiveError(
-                    "FOLDER_FEEDBACK_CONTEXT_MISSING",
-                    f"{REVIEWS_DOCUMENT}: run={item['id']}: {'; '.join(missing)}",
-                )
-            omissions.append(f"{REVIEWS_DOCUMENT}:{item['id']}:{'; '.join(missing)}")
+            omissions.append(
+                {
+                    "kind": "SYNTHETIC_EVALUATION",
+                    "evaluation_run_id": item["id"],
+                    "document": REVIEWS_DOCUMENT,
+                    "reason": "FEEDBACK_CONTEXT_NOT_RESTORED",
+                    "references": missing,
+                }
+            )
         else:
             supported.append(item)
     uuids = re.findall(
@@ -209,4 +212,13 @@ def import_feedback(folder, *, identities, hashes, project_id, owner_user_id):
         )
         hashes[item["content_hash"]] = mapped.content_hash
         decisions.append(mapped)
-    return tuple(runs), tuple(decisions), ("LEGACY_FEEDBACK_CONTEXT_MISSING",) if omissions else ()
+    if omitted_sections is not None:
+        omitted_sections.extend(omissions)
+    limits = ()
+    if omissions:
+        limits = (
+            "FEEDBACK_CONTEXT_NOT_RESTORED"
+            if "why" in folder.manifest
+            else "LEGACY_FEEDBACK_CONTEXT_MISSING",
+        )
+    return tuple(runs), tuple(decisions), limits

@@ -27,6 +27,7 @@ LEARNING_DOCUMENT: Final = "twins/feedback/learned.json"
 LEARNING_KIND: Final = "orchestwin.twin-learning"
 EVIDENCE_DOCUMENT: Final = "twins/evidence.json"
 EVIDENCE_KIND: Final = "orchestwin.research-evidence"
+VALIDATION_DOCUMENT: Final = "validation/human-validation.json"
 MARKDOWN_SUFFIX: Final = ".md"
 FOLDER_MISSING: Final = "FOLDER_MISSING"
 FOLDER_UNREADABLE: Final = "FOLDER_UNREADABLE"
@@ -199,7 +200,9 @@ class Knowledge:
         document = self.stage("twins")
         return None if document is None else twins_from(twin_chat.twin_versions(document))
 
-    def why(self, *, project_id: str | None = None) -> Mapping[str, object]:
+    def why(
+        self, *, project_id: str | None = None, validation_context=False
+    ) -> Mapping[str, object]:
         from orchestwin.cli.mcp.verification import verify_files
         from orchestwin.why import build_why_document
 
@@ -222,12 +225,15 @@ class Knowledge:
                 raise invalid(f"{stage}/{stage}.json")
         reviews = self.document(REVIEWS_DOCUMENT, required=False) or {}
         learning = self.document(LEARNING_DOCUMENT, required=False) or {}
+        records = self.validation_records()
         result = build_why_document(
             project_id=identity,
             stages=stages,
             evidence=self.evidence(),
             evaluations=[reviews] if reviews else [],
             learning=learning,
+            hypotheses=records["hypotheses"],
+            outcomes=records["outcomes"],
         )
         declared = self.manifest.get("why")
         exported = self.document("traceability/why.json", required=False)
@@ -240,6 +246,17 @@ class Knowledge:
                 raise invalid("traceability/why.json")
         elif exported is not None:
             raise invalid("traceability/why.json")
+        if validation_context:
+            result = build_why_document(
+                project_id=identity,
+                stages=stages,
+                evidence=self.evidence(),
+                evaluations=[reviews] if reviews else [],
+                learning=learning,
+                hypotheses=records["hypotheses"],
+                outcomes=records["outcomes"],
+                validation_context=True,
+            )
         return result
 
     def why_limits(self) -> tuple[str, ...]:
@@ -249,6 +266,58 @@ class Knowledge:
         if self.read(REVIEWS_DOCUMENT) is None:
             limits.append("LEGACY_FEEDBACK_CONTEXT_MISSING")
         return tuple(limits)
+
+    def validation_records(self):
+        declared = self.manifest.get("validation")
+        document = self.document(VALIDATION_DOCUMENT, required=False)
+        if declared is None and document is None:
+            return {"hypotheses": [], "outcomes": [], "omitted_sections": [], "limits": []}
+        if (
+            not isinstance(declared, Mapping)
+            or declared.get("document") != VALIDATION_DOCUMENT
+            or declared.get("schema_version") != 1
+            or document is None
+            or document.get("kind") != "orchestwin.validation-records"
+            or document.get("schema_version") != 1
+            or document.get("project_id") != _mapping(self.manifest.get("project")).get("id")
+            or declared.get("hypotheses") != len(document.get("hypotheses", []))
+            or declared.get("outcomes") != len(document.get("outcomes", []))
+        ):
+            raise FolderProblem(FOLDER_UNREADABLE, path=VALIDATION_DOCUMENT)
+        from orchestwin.cli.mcp.validation import verify_records
+
+        if not verify_records(document, self.evidence() or {}):
+            raise FolderProblem(FOLDER_UNREADABLE, path=VALIDATION_DOCUMENT)
+        return document
+
+    def validation(self, *, project_id=None):
+        from orchestwin.validation import validation_overview
+
+        document = self.why(project_id=project_id, validation_context=True)
+        records = self.validation_records()
+        answer = validation_overview(
+            document=document,
+            hypotheses=records["hypotheses"],
+            outcomes=records["outcomes"],
+            evidence=self.evidence(),
+        )
+        answer["omitted_sections"] = [*answer["omitted_sections"], *records["omitted_sections"]]
+        answer["limits"] = sorted({*answer["limits"], *records["limits"], *self.why_limits()})
+        return answer
+
+    def walkthrough(
+        self, scenario_key, *, project_id=None, alternative_id=None, document_hash=None
+    ):
+        from orchestwin.validation import scenario_walkthrough
+
+        answer = scenario_walkthrough(
+            self.why(project_id=project_id, validation_context=True),
+            scenario_key,
+            alternative_id=alternative_id,
+            document_hash=document_hash,
+        )
+        answer["limits"] = sorted({*answer["limits"], *self.why_limits()})
+        return answer
 
 
 def load(root: Path) -> Knowledge:

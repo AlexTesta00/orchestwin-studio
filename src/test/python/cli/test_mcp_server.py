@@ -45,6 +45,8 @@ TOOL_ORDER = [
     "get_tasks",
     "get_evidence",
     "get_why",
+    "get_validation",
+    "get_scenario_walkthrough",
 ]
 CAPABILITIES = {
     "tools": {"listChanged": False},
@@ -262,6 +264,8 @@ def test_the_twelve_tools_are_listed_with_schemas_that_hold_together(tmp_path: P
         "get_tasks": [],
         "get_evidence": [],
         "get_why": ["code"],
+        "get_validation": [],
+        "get_scenario_walkthrough": ["scenario_key"],
     }
     assert tools[10]["inputSchema"]["properties"]["status"] == {
         "type": "string",

@@ -248,6 +248,8 @@ def test_the_fake_serves_every_area_that_the_commands_need(
         ("GET", project + "/twin-learning"),
         ("GET", project + "/artifacts/why"),
         ("GET", project + "/artifacts/why/document"),
+        ("GET", project + "/validation"),
+        ("GET", project + "/validation/walkthrough"),
         ("POST", project + "/user-twins/{twin_id}/updates"),
         ("GET", project + "/twin-updates/{update_id}"),
         ("POST", project + "/twin-updates/{update_id}/decision"),
@@ -278,7 +280,17 @@ def test_the_fake_serves_every_area_that_the_commands_need(
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 148
+    assert len(ROUTES) == 150
+
+
+def test_validation_routes_are_exactly_the_two_authorized_read_only_routes() -> None:
+    project = PREFIX + "/projects/{project_id}"
+    validation = {route for route in route_table() if route[1].startswith(project + "/validation")}
+
+    assert validation == {
+        ("GET", project + "/validation"),
+        ("GET", project + "/validation/walkthrough"),
+    }
 
 
 class _Client:
@@ -324,8 +336,18 @@ def fits(model: type[BaseModel], reply: tuple[int, object], status: int = 200) -
     code, payload = reply
     assert code == status, payload
     assert isinstance(payload, dict)
-    assert set(payload) == set(model.model_fields), model.__name__
-    model.model_validate(payload)
+    expected = set(model.model_fields)
+    if (
+        model in {ProjectImportPayload, ProjectImportOriginPayload}
+        and "omitted_sections" not in payload
+    ):
+        field = model.model_fields["omitted_sections"]
+        assert not field.is_required() and field.default in (None, [], ())
+        expected.remove("omitted_sections")
+    assert set(payload) == expected, model.__name__
+    validated = model.model_validate(payload)
+    if "omitted_sections" in model.model_fields and "omitted_sections" not in payload:
+        assert validated.omitted_sections in (None, [], ())
     return payload
 
 

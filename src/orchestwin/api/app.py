@@ -33,6 +33,7 @@ from orchestwin.api.generation_requests import (
     create_generation_request_router,
 )
 from orchestwin.api.health import create_health_router
+from orchestwin.api.human_validation import create_human_validation_router
 from orchestwin.api.insight_applications import create_insight_application_router
 from orchestwin.api.knowledge_packages import create_knowledge_package_router
 from orchestwin.api.model_runtime import create_model_runtime_router
@@ -169,6 +170,7 @@ def create_app(
     application.state.design_gate_service = resolved_runtime.design_gate_service
     application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
     application.state.why_query_service = resolved_runtime.why_query_service
+    application.state.human_validation_service = resolved_runtime.human_validation_service
     application.state.project_diagram_service = resolved_runtime.project_diagram_service
     application.state.knowledge_package_service = resolved_runtime.knowledge_package_service
     application.state.twin_import_service = resolved_runtime.twin_import_service
@@ -229,6 +231,7 @@ def create_app(
         create_insight_application_router(),
         create_artifact_graph_router(),
         create_artifact_why_router(),
+        create_human_validation_router(),
         create_diagram_router(),
         create_knowledge_package_router(),
         create_code_change_router(),

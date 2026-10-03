@@ -79,6 +79,7 @@ class KnowledgeSources:
     feedback: KnowledgeFeedback = field(default_factory=KnowledgeFeedback)
     state: ProjectStateSources = field(default_factory=ProjectStateSources)
     research_evidence: Mapping[str, object] = field(default_factory=dict)
+    validation_records: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         given = [self._given(stage) for stage in STAGES]

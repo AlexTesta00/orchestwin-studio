@@ -34,9 +34,11 @@ from orchestwin.api.design import (
     DesignQueryService,
     DesignRevisionService,
 )
+from orchestwin.api.human_validation import HumanValidationService
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.sections import build_sections_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
+from orchestwin.artifacts.human_validation_runtime import SqlAlchemyHumanValidationService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.artifacts.why_runtime import SqlAlchemyWhyQueryService
 from orchestwin.config import (
@@ -214,6 +216,7 @@ class ApplicationRuntime:
     design_gate_service: DesignGateService | None = None
     artifact_graph_query_service: ArtifactGraphQueryService | None = None
     why_query_service: WhyQueryService | None = None
+    human_validation_service: HumanValidationService | None = None
     project_diagram_service: ProjectDiagramService | None = None
     knowledge_package_service: KnowledgePackageService | None = None
     twin_import_service: TwinImportService | None = None
@@ -314,11 +317,15 @@ def create_default_runtime(
         database_runtime.session_factory
     )
     why_query_service = SqlAlchemyWhyQueryService(database_runtime.session_factory)
+    human_validation_service = SqlAlchemyHumanValidationService(
+        database_runtime.session_factory, why_query_service=why_query_service
+    )
     project_diagram_service = ProjectDiagramService(
         project_service=project_service,
         requirements_query_service=requirements.queries,
         design_query_service=design.queries,
     )
+    project_import_service = ProjectImportService(session_factory=database_runtime.session_factory)
     knowledge_package_service = KnowledgePackageService(
         source_loader=KnowledgeSourceLoader(
             project_service=project_service,
@@ -339,6 +346,8 @@ def create_default_runtime(
             evidence_query_service=SqlAlchemyKnowledgeEvidenceQueryService(
                 database_runtime.session_factory
             ),
+            validation_query_service=human_validation_service,
+            import_origin_query_service=project_import_service,
         ),
         store=SqlAlchemyKnowledgePackageStore(database_runtime.session_factory),
     )
@@ -380,7 +389,6 @@ def create_default_runtime(
         real_model_runtime=real_models,
         proposal_evidence_store=proposal_evidence_store,
     )
-    project_import_service = ProjectImportService(session_factory=database_runtime.session_factory)
 
     return ApplicationRuntime(
         real_model_runtime=real_models,
@@ -406,6 +414,7 @@ def create_default_runtime(
         design_gate_service=design.gate,
         artifact_graph_query_service=artifact_graph_query_service,
         why_query_service=why_query_service,
+        human_validation_service=human_validation_service,
         project_diagram_service=project_diagram_service,
         knowledge_package_service=knowledge_package_service,
         twin_import_service=twin_import_service,

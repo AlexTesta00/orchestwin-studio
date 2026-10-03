@@ -24,11 +24,11 @@ from src.test.python.artifacts.test_design_evaluation import CONFIGURATION, temp
 from src.test.python.knowledge.knowledge_fixtures import PUBLISHED_AT, real_sources
 
 
-def current_feedback_sources(*, claim_reference=False):
-    sources = real_sources()
+def current_feedback_sources(*, claim_reference=False, sources=None, run_id=None):
+    sources = sources or real_sources()
     twin = sources.modeling.snapshot.twin_versions[0]
     version = sources.design
-    run_id = UUID("10000000-0000-4000-8000-000000000901")
+    run_id = run_id or UUID("10000000-0000-4000-8000-000000000901")
     document = evaluation_document(version)
     bundle = evaluation_bundle(version, document, locale="it-IT", created_at=PUBLISHED_AT)
     evaluator = FakeUserTwinEvaluator(

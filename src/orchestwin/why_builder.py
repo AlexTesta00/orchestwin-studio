@@ -163,11 +163,12 @@ def _valid_citation(citation):
 
 
 class _Builder:
-    def __init__(self, project_id, stages, evidence, sections):
+    def __init__(self, project_id, stages, evidence, sections, validation_context):
         self.project_id = str(project_id)
         self.stages = {stage: _envelopes(stage, stages.get(stage)) for stage in _STAGES}
         self.evidence = _mapping(evidence)
         self.sections = _mapping(sections)
+        self.validation_context = validation_context
         section_keys = {
             "BRIEF": "brief",
             "TEAM": "team",
@@ -642,6 +643,8 @@ class _Builder:
                                 "requirements",
                             )
                     if kind == "SCENARIO":
+                        if self.validation_context:
+                            node["declared_context"]["scenario"] = deepcopy(dict(item))
                         self.twin_link(node, item.get("actor"))
                         if not any(
                             source.get("kind") == "USER_TWIN" and source.get("locator")
@@ -1012,6 +1015,85 @@ class _Builder:
             "omitted_sections": sorted(set(omitted)),
         }
 
+    def human_validation(self, hypotheses, outcomes):
+        latest = {}
+        for item in _items(hypotheses):
+            latest[str(item.get("id"))] = max(
+                latest.get(str(item.get("id")), 0), item.get("version_number", 0)
+            )
+        identities = {}
+        for item in _items(hypotheses):
+            node = self.node(
+                "VALIDATION_HYPOTHESIS",
+                item.get("code"),
+                item.get("question") or item.get("task"),
+                _reference(item),
+                current=item.get("version_number") == latest[str(item.get("id"))],
+            )
+            node["declared_context"]["hypothesis"] = deepcopy(dict(item))
+            identities[
+                (str(item.get("id")), item.get("version_number"), item.get("content_hash"))
+            ] = node
+            for field, relation in (
+                ("origin_key", "ORIGINATES_FROM"),
+                ("twin_key", "ACTOR"),
+                ("scenario_key", "VERIFIES_SCENARIO"),
+                ("design_key", "VERIFIES_DESIGN"),
+            ):
+                origin = self.nodes.get(item.get(field))
+                if origin:
+                    self.link(node, origin, relation)
+                    if not origin["current"]:
+                        self.gap(node, "CONTEXT_OUTDATED", origin["code"])
+                else:
+                    self.gap(node, "VALIDATION_REFERENCE_UNAVAILABLE", field)
+        for item in _items(outcomes):
+            reference = {
+                "artifact_id": str(item.get("id")),
+                "version_number": 1,
+                "content_hash": item.get("content_hash"),
+            }
+            node = self.node("VALIDATION_OUTCOME", item.get("code"), item.get("outcome"), reference)
+            node["declared_context"]["outcome"] = deepcopy(dict(item))
+            hypothesis = identities.get(
+                (
+                    str(item.get("hypothesis_id")),
+                    item.get("hypothesis_version_number"),
+                    item.get("hypothesis_content_hash"),
+                )
+            )
+            if hypothesis:
+                self.link(node, hypothesis, "TESTS_HYPOTHESIS")
+            else:
+                self.gap(node, "VALIDATION_REFERENCE_UNAVAILABLE", str(item.get("hypothesis_id")))
+            source = self.source_index.get(
+                (
+                    str(item.get("evidence_id")),
+                    item.get("evidence_version"),
+                    item.get("evidence_content_hash"),
+                )
+            )
+            if source:
+                self.link(node, source, "RECORDED_IN")
+                source_metadata = source["declared_context"]["source"]
+                retired = source_metadata.get("status") == "RETIRED"
+                node["current"] = not retired
+                node["declared_context"]["effective_status"] = "RETIRED" if retired else "ACTIVE"
+                if retired:
+                    self.gap(node, "SOURCE_RETIRED", source["code"], "evidence")
+                if source_metadata.get("text_available") is False:
+                    self.gap(node, "SOURCE_TEXT_UNAVAILABLE", source["code"], "evidence")
+                node["citations"].append(
+                    {
+                        "citation": deepcopy(item.get("citation", {})),
+                        "source": deepcopy(source_metadata),
+                        "status": "RETIRED" if retired else "ACTIVE",
+                        "session_kind": item.get("session_kind"),
+                    }
+                )
+            else:
+                self.gap(node, "MISSING_SOURCE_VERSION", str(item.get("evidence_id")), "evidence")
+
 
 def build_why_document(
     *,
@@ -1022,8 +1104,11 @@ def build_why_document(
     learning: Mapping | None = None,
     mockups: Sequence = (),
     sections: Mapping | None = None,
+    hypotheses: Sequence = (),
+    outcomes: Sequence = (),
+    validation_context: bool = False,
 ) -> dict:
-    builder = _Builder(project_id, stages, evidence, sections)
+    builder = _Builder(project_id, stages, evidence, sections, validation_context)
     builder.stage_roots()
     builder.sources()
     builder.twins()
@@ -1050,4 +1135,5 @@ def build_why_document(
             builder.requirements_context(package),
         )
     builder.evaluations(evaluations)
+    builder.human_validation(hypotheses, outcomes)
     return builder.finish()
