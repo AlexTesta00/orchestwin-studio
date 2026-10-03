@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { agentsState } = require("./agents");
 const { readWhyCatalog } = require("./why");
+const { readWorkflowInputs } = require("./workflow-inputs");
 
 const LOCAL_FOLDER = ".orchestwin";
 const KNOWLEDGE_FOLDER = "orchestwin";
@@ -736,6 +737,8 @@ function readLinkedProject(root) {
   const manifest = reader.read(inFolder(FOLDER_FILES.manifest));
   state.folder = folderOf(manifest, knowledge);
   if (state.folder.available) {
+    const workflowInputs = readWorkflowInputs(root, knowledge, manifest.value, state.project.id);
+    if (workflowInputs !== null) state.workflowInputs = workflowInputs;
     state.why = readWhyCatalog(
       root,
       knowledge,

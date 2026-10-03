@@ -3,6 +3,7 @@
 const { commandLine, costOf } = require("./commands");
 const { whySection } = require("./why-view");
 const { validationSection } = require("./validation-view");
+const { workflowSection } = require("./workflow-inputs");
 const {
   formatDate,
   formatDay,
@@ -427,6 +428,13 @@ const SCRIPT = `(() => {
     }
   });
   document.addEventListener("change", (event) => {
+    if (event.target instanceof HTMLSelectElement && event.target.id === "workflow-filter") {
+      const mode = event.target.value;
+      for (const item of document.querySelectorAll("#workflow-inputs [data-workflow-kind]")) {
+        const kind = item.getAttribute("data-workflow-kind");
+        item.hidden = mode === "gaps" ? kind !== "gap" : mode === "owner" ? kind !== "owner" : false;
+      }
+    }
     if (event.target instanceof HTMLSelectElement && event.target.id === "validation-scenario-selector") {
       const input = document.getElementById("validation-scenario");
       if (input instanceof HTMLInputElement) input.value = event.target.value;
@@ -1216,6 +1224,7 @@ function linkedBody(state, context) {
     parts.push(twinsSection(state, context));
   }
   parts.push(whySection(state, context, context.why));
+  parts.push(workflowSection(state, context));
   parts.push(validationSection(state, context, context.validation, context.walkthrough));
   parts.push(agentsSection(state, context));
   parts.push(footerOf(state, context));
