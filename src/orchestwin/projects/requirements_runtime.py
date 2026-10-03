@@ -116,6 +116,14 @@ class ManagedRequirementsUnitOfWork:
         """Rollback delegated requirements persistence."""
         await self._inner.rollback()
 
+    async def lock_project(self, *, project_id: UUID) -> bool:
+        return await self._inner.lock_project(project_id=project_id)
+
+    async def load_current_context(self, *, owner_user_id, project_id):
+        return await SqlAlchemyRequirementsGovernanceAdapter._load_current(
+            self._session, owner_user_id=owner_user_id, project_id=project_id
+        )
+
 
 class ManagedRequirementsUnitOfWorkFactory:
     """Create requirements command Units of Work with owned sessions."""
@@ -284,99 +292,102 @@ class SqlAlchemyRequirementsGovernanceAdapter:
     ) -> GovernedRequirementsContext | None:
         """Load current Brief, Team, User Modeling, and approval gates."""
         async with self._session_factory() as session:
-            project = await SqlAlchemyProjectRepository(session).get_owned(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+            return await self._load_current(
+                session, owner_user_id=owner_user_id, project_id=project_id
             )
 
-            if project is None:
-                return None
+    @staticmethod
+    async def _load_current(session, *, owner_user_id, project_id):
+        project = await SqlAlchemyProjectRepository(session).get_owned(
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+        )
 
-            brief_version = await SqlAlchemyProjectBriefRepository(session).get_current_owned(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-            )
-            team_version = await SqlAlchemyTeamProposalVersionRepository(session).get_current_owned(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-            )
-            user_modeling_version = await SqlAlchemyUserModelingSnapshotRepository(
-                session,
-                owner_user_id=owner_user_id,
-            ).current(project_id=project_id)
+        if project is None:
+            return None
 
-            gate_repository = SqlAlchemyHumanGateRepository(session)
-            brief_gate = await gate_repository.get_latest_owned_for_update(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                gate_type=HumanGateType.PROJECT_BRIEF,
-            )
-            team_gate = await gate_repository.get_latest_owned_for_update(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                gate_type=HumanGateType.AGENT_TEAM,
-            )
-            user_modeling_gate = await gate_repository.get_latest_owned_for_update(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                gate_type=HumanGateType.USER_MODELING,
-            )
-            if user_modeling_version is not None:
-                personas = await SqlAlchemyPersonaVersionRepository(
-                    session, owner_user_id=owner_user_id
-                ).list_current(project_id=project_id)
-                snapshot = user_modeling_version.snapshot
-                current = (
-                    brief_version is not None
-                    and team_version is not None
-                    and snapshot.project_brief_reference.artifact_id == brief_version.id
-                    and snapshot.project_brief_reference.version_number
-                    == brief_version.version_number
-                    and snapshot.project_brief_reference.content_hash == brief_version.content_hash
-                    and snapshot.agent_team_reference.artifact_id == team_version.id
-                    and snapshot.agent_team_reference.version_number == team_version.version_number
-                    and snapshot.agent_team_reference.content_hash == team_version.content_hash
-                    and snapshot_matches_archetypes(user_modeling_version, personas)
-                )
-                if not current:
-                    user_modeling_gate = None
+        brief_version = await SqlAlchemyProjectBriefRepository(session).get_current_owned(
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+        )
+        team_version = await SqlAlchemyTeamProposalVersionRepository(session).get_current_owned(
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+        )
+        user_modeling_version = await SqlAlchemyUserModelingSnapshotRepository(
+            session,
+            owner_user_id=owner_user_id,
+        ).current(project_id=project_id)
 
-            brief = None if brief_version is None else _brief_input(brief_version)
-            team = (
-                None
-                if team_version is None
-                else RequirementsTeamInput(
-                    reference=RequirementsContextReference(
-                        kind=RequirementsContextKind.AGENT_TEAM,
-                        artifact_id=team_version.id,
-                        version_number=team_version.version_number,
-                        content_hash=team_version.content_hash,
-                    ),
-                    selected_agent_ids=team_version.proposal.selected_agent_ids,
-                )
+        gate_repository = SqlAlchemyHumanGateRepository(session)
+        brief_gate = await gate_repository.get_latest_owned_for_update(
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            gate_type=HumanGateType.PROJECT_BRIEF,
+        )
+        team_gate = await gate_repository.get_latest_owned_for_update(
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            gate_type=HumanGateType.AGENT_TEAM,
+        )
+        user_modeling_gate = await gate_repository.get_latest_owned_for_update(
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            gate_type=HumanGateType.USER_MODELING,
+        )
+        if user_modeling_version is not None:
+            personas = await SqlAlchemyPersonaVersionRepository(
+                session, owner_user_id=owner_user_id
+            ).list_current(project_id=project_id)
+            snapshot = user_modeling_version.snapshot
+            current = (
+                brief_version is not None
+                and team_version is not None
+                and snapshot.project_brief_reference.artifact_id == brief_version.id
+                and snapshot.project_brief_reference.version_number == brief_version.version_number
+                and snapshot.project_brief_reference.content_hash == brief_version.content_hash
+                and snapshot.agent_team_reference.artifact_id == team_version.id
+                and snapshot.agent_team_reference.version_number == team_version.version_number
+                and snapshot.agent_team_reference.content_hash == team_version.content_hash
+                and snapshot_matches_archetypes(user_modeling_version, personas)
             )
-            user_modeling = (
-                None
-                if user_modeling_version is None
-                else _user_modeling_input(user_modeling_version)
-            )
+            if not current:
+                user_modeling_gate = None
 
-            return GovernedRequirementsContext(
-                project_id=project_id,
-                project_mode=project.mode,
-                brief=brief,
-                team=team,
-                user_modeling=user_modeling,
-                catalog_version=(
-                    None if team_version is None else team_version.proposal.catalog_version
+        brief = None if brief_version is None else _brief_input(brief_version)
+        team = (
+            None
+            if team_version is None
+            else RequirementsTeamInput(
+                reference=RequirementsContextReference(
+                    kind=RequirementsContextKind.AGENT_TEAM,
+                    artifact_id=team_version.id,
+                    version_number=team_version.version_number,
+                    content_hash=team_version.content_hash,
                 ),
-                catalog_content_hash=(
-                    None if team_version is None else team_version.proposal.catalog_content_hash
-                ),
-                brief_gate=brief_gate,
-                team_gate=team_gate,
-                user_modeling_gate=user_modeling_gate,
+                selected_agent_ids=team_version.proposal.selected_agent_ids,
             )
+        )
+        user_modeling = (
+            None if user_modeling_version is None else _user_modeling_input(user_modeling_version)
+        )
+
+        return GovernedRequirementsContext(
+            project_id=project_id,
+            project_mode=project.mode,
+            brief=brief,
+            team=team,
+            user_modeling=user_modeling,
+            catalog_version=(
+                None if team_version is None else team_version.proposal.catalog_version
+            ),
+            catalog_content_hash=(
+                None if team_version is None else team_version.proposal.catalog_content_hash
+            ),
+            brief_gate=brief_gate,
+            team_gate=team_gate,
+            user_modeling_gate=user_modeling_gate,
+        )
 
 
 def _brief_input(brief_version) -> RequirementsBriefInput:
