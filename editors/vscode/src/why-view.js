@@ -19,6 +19,7 @@ const STATES = [
 const ORIGINS = {
   MODEL: "why.model",
   OWNER: "why.owner",
+  OWNER_INPUT: "workflow.owner",
   SYSTEM: "why.system",
   UNKNOWN: "why.unknownOrigin",
 };
@@ -41,6 +42,7 @@ const GAPS = [
   "SOURCE_TEXT_UNAVAILABLE",
   "OMITTED_SECTION",
   "CONTEXT_OUTDATED",
+  "DECLARED_MISSING",
 ];
 
 function escapeHtml(value) {
@@ -277,7 +279,7 @@ function answerOf(answer, context) {
     validationOf(answer.human_validation, context),
     listOf(answer.limits).length === 0
       ? ""
-      : `<details><summary>${escapeHtml(context.t("why.limits"))}</summary><ul>${answer.limits.map((limit) => `<li><code>${escapeHtml(limit)}</code></li>`).join("")}</ul></details>`,
+      : `<details><summary>${escapeHtml(context.t("why.limits"))}</summary><ul>${answer.limits.map((limit) => `<li>${limit.startsWith("PROVIDED_PROTOTYPE_") ? escapeHtml(context.t(`workflow.limit.${limit}`)) : ""} <code>${escapeHtml(limit)}</code></li>`).join("")}</ul></details>`,
   ].join("\n");
 }
 
