@@ -781,6 +781,35 @@ class SqlAlchemyTeamProposalVersionRepository:
         proposal: AgentTeamProposal,
     ) -> TeamProposalVersionCreationResult:
         """Create or reuse a generated proposal version."""
+        return await self._create_owned(
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            proposal=proposal,
+            revision_kind=TeamProposalRevisionKind.PROPOSER_GENERATED,
+        )
+
+    async def create_owner_provided_owned(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        proposal: AgentTeamProposal,
+    ) -> TeamProposalVersionCreationResult:
+        return await self._create_owned(
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            proposal=proposal,
+            revision_kind=TeamProposalRevisionKind.OWNER_PROVIDED,
+        )
+
+    async def _create_owned(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        proposal: AgentTeamProposal,
+        revision_kind: TeamProposalRevisionKind,
+    ) -> TeamProposalVersionCreationResult:
         project = await self._session.scalar(
             owned_team_selection_project_statement(
                 project_id=project_id,
@@ -810,6 +839,9 @@ class SqlAlchemyTeamProposalVersionRepository:
             )
         )
 
+        if latest_record is not None and revision_kind is TeamProposalRevisionKind.OWNER_PROVIDED:
+            raise ValueError("owner-provided teams require an empty proposal history")
+
         if latest_record is not None and latest_record.content_hash == proposal.content_hash:
             return TeamProposalVersionCreationResult(
                 status=(TeamProposalVersionCreationStatus.UNCHANGED),
@@ -827,7 +859,7 @@ class SqlAlchemyTeamProposalVersionRepository:
             project_id=project.id,
             version_number=version_number,
             schema_version=(proposal.schema_version),
-            revision_kind=(TeamProposalRevisionKind.PROPOSER_GENERATED.value),
+            revision_kind=revision_kind.value,
             based_on_version_number=None,
             brief_version_id=(proposal.brief_version_id),
             brief_version_number=(proposal.brief_version_number),

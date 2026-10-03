@@ -47,6 +47,7 @@ from orchestwin.twins.lifecycle import (
     UserTwinOwnerApprovalStatus,
     effective_user_twin_lifecycle,
 )
+from orchestwin.twins.owner_inputs import OwnerTwinInput, OwnerUserModelingService
 from orchestwin.twins.personas import (
     PersonaProfileVersion,
 )
@@ -705,6 +706,37 @@ class ProfileReplacementRequest(ApiModel):
         )
 
 
+class OwnerTwinProfileRequest(ApiModel):
+    persona_id: UUID
+    name: str = Field(min_length=1, max_length=200)
+    observations: tuple[ProfileReplacementRequest, ...] = Field(min_length=1, max_length=22)
+
+    @model_validator(mode="after")
+    def unique_fields(self) -> Self:
+        fields = tuple(value.field for value in self.observations)
+        if len(fields) != len(set(fields)):
+            raise ValueError("OWNER_TWIN_DUPLICATE_FIELD")
+        return self
+
+    def to_domain(self) -> OwnerTwinInput:
+        return OwnerTwinInput(
+            persona_id=self.persona_id,
+            name=self.name,
+            observations=tuple(value.to_domain() for value in self.observations),
+        )
+
+
+class OwnerUserProfilesRequest(ApiModel):
+    profiles: tuple[OwnerTwinProfileRequest, ...] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode="after")
+    def unique_personas(self) -> Self:
+        personas = tuple(value.persona_id for value in self.profiles)
+        if len(personas) != len(set(personas)):
+            raise ValueError("OWNER_TWIN_DUPLICATE_PERSONA")
+        return self
+
+
 class ProfileRevisionProposalRequest(ApiModel):
     """Request an owner-reviewable User Twin diff."""
 
@@ -1038,6 +1070,7 @@ class UserModelingApiDependencies:
     queries: UserModelingQueryPort
     owner_user_id_dependency: OwnerUserIdDependency
     context_check: Callable | None = None
+    owner_inputs: OwnerUserModelingService | None = None
 
 
 def create_user_modeling_router(
@@ -1050,6 +1083,35 @@ def create_user_modeling_router(
     )
 
     owner_user_id_dependency = Depends(dependencies.owner_user_id_dependency)
+
+    @router.post(
+        "/owner-profiles",
+        response_model=SnapshotGenerationCommandPayload,
+        status_code=status.HTTP_201_CREATED,
+        operation_id="createOwnerProvidedUserProfiles",
+    )
+    async def create_owner_profiles(
+        project_id: UUID,
+        payload: OwnerUserProfilesRequest,
+        owner_user_id: UUID = owner_user_id_dependency,
+    ) -> SnapshotGenerationCommandPayload:
+        if dependencies.owner_inputs is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "OWNER_USER_MODELING_UNAVAILABLE"},
+            )
+        try:
+            profiles = tuple(profile.to_domain() for profile in payload.profiles)
+        except (TypeError, ValueError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={"code": "INVALID_OWNER_USER_PROFILES"},
+            ) from error
+        result = await dependencies.owner_inputs.create(
+            owner_user_id=owner_user_id, project_id=project_id, profiles=profiles
+        )
+        _raise_for_user_modeling_issue(result.issue)
+        return _snapshot_generation_payload(result)
 
     @router.get("/personas", response_model=tuple[PersonaVersionPayload, ...])
     async def current_personas(project_id: UUID, owner_user_id: UUID = owner_user_id_dependency):
