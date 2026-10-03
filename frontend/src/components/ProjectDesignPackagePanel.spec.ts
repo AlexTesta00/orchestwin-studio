@@ -9,6 +9,8 @@ import ProjectDesignPackagePanel from "./ProjectDesignPackagePanel.vue";
 import { createAppI18n } from "@/i18n";
 import { expectAccessible } from "@/test/axe";
 import { SELECTED_DESIGN_VERSION, UNSELECTED_DESIGN_VERSION } from "@/test/designFixtures";
+import { suppliedPrototype } from "@/test/workflowInputsFixtures";
+import type { ProvidedPrototype } from "@/types/workflowInputs";
 
 import { KnowledgePackagesApiError, type KnowledgePackagesApi } from "../api/knowledgePackages";
 import { useDesignStore } from "../stores/design";
@@ -149,6 +151,8 @@ interface MountOptions {
   preview?: (slot: PreviewSlot) => VNode;
   studioAddress?: string;
   sectionsMode?: boolean;
+  providedPrototype?: ProvidedPrototype;
+  providedDesignApproved?: boolean;
 }
 
 function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
@@ -167,6 +171,12 @@ function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
       saveExport,
       ...(options.studioAddress === undefined ? {} : { studioAddress: options.studioAddress }),
       ...(options.sectionsMode === undefined ? {} : { sectionsMode: options.sectionsMode }),
+      ...(options.providedPrototype === undefined
+        ? {}
+        : { providedPrototype: options.providedPrototype }),
+      ...(options.providedDesignApproved === undefined
+        ? {}
+        : { providedDesignApproved: options.providedDesignApproved }),
     },
     slots: options.preview === undefined ? {} : { preview: options.preview },
     attachTo: document.body,
@@ -211,6 +221,38 @@ describe("ProjectDesignPackagePanel", () => {
     expect(wrapper.findAll('[data-testid="package-step"]')).toHaveLength(4);
     wrapper.unmount();
   });
+
+  it.each(["it", "en"] as const)(
+    "exports the supplied Design with declared origin and %s limits without suggesting code generation",
+    async (locale) => {
+      const api = knowledgeApi();
+      const { wrapper } = mountPanel(api, {
+        locale,
+        providedPrototype: suppliedPrototype({ project_id: PROJECT_ID }),
+        providedDesignApproved: true,
+      });
+      await flushPromises();
+      const supplied = wrapper.get('[data-testid="package-provided-design"]');
+      expect(supplied.text()).toContain("Penpot");
+      expect(supplied.text()).toContain(
+        locale === "it"
+          ? "La valutazione dei twin sul prototipo fornito non è disponibile nello sprint 36."
+          : "Twin evaluation of the supplied prototype is unavailable in sprint 36.",
+      );
+      expect(wrapper.find('[data-testid="package-no-design"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="package-development-steps"]').exists()).toBe(false);
+      expect(wrapper.findComponent({ name: "ProjectDevelopmentPanel" }).exists()).toBe(false);
+      expect(commands(wrapper, "package-cli-step")).toContain(
+        `ut init --project ${PROJECT_ID} --mode design`,
+      );
+      const limits = wrapper.get('[data-testid="package-provided-limits"]');
+      expect(
+        limits.findAll('[data-testid="command-text"]').map((command) => command.text()),
+      ).toEqual(["ut design show", "ut design open"]);
+      expect(api.publish).not.toHaveBeenCalled();
+      wrapper.unmount();
+    },
+  );
 
   it("puts the main action in the panel of the ready project, not in a decision bar", async () => {
     const { wrapper } = mountPanel(knowledgeApi(), { locale: "it" });

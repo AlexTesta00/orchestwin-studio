@@ -21,6 +21,7 @@ import {
 } from "../api/generationJobs";
 import type { ModelUsageApi } from "../api/modelUsage";
 import { useInsightTrayStore } from "../stores/insightTray";
+import { useGuidanceStore } from "../stores/guidance";
 import { expectAccessible } from "../test/axe";
 import {
   BASE_DESIGN_PACKAGE,
@@ -1639,6 +1640,29 @@ describe("ProjectDesignFlow", () => {
       });
     }
     expect(wrapper.findAll('[data-testid="alternative-drawing"]')).toHaveLength(2);
+  });
+
+  it("requires an expert gesture for each mockup and never draws skipped mockups on a mode change", async () => {
+    const guidance = useGuidanceStore();
+    guidance.mode = "EXPERT";
+    const api = designToPrepare(GENERATED_UNSELECTED);
+    const mockupsApi = fakeMockupsApi({ capabilities: GENERATED });
+    const wrapper = mountFlow(api, { mockupsApi });
+    await flushPromises();
+    await wrapper.get('[data-testid="generate-design"]').trigger("click");
+    await flushPromises();
+    expect(api.generate).toHaveBeenCalledTimes(1);
+    expect(mockupsApi.startJob).not.toHaveBeenCalled();
+    guidance.mode = "GUIDED";
+    await flushPromises();
+    expect(mockupsApi.startJob).not.toHaveBeenCalled();
+    guidance.mode = "EXPERT";
+    await flushPromises();
+    await wrapper.get('[data-testid="generate-mockup-DES-001"]').trigger("click");
+    await flushPromises();
+    expect(mockupsApi.startJob).toHaveBeenCalledTimes(1);
+    expect(mockupsApi.startJob.mock.calls[0]?.[1].alternative_id).toBe(DESIGN_ALTERNATIVE_ID);
+    expect(wrapper.find('[data-testid="generate-mockup-DES-002"]').exists()).toBe(true);
   });
 
   it("resumes the drawings after a reload in the middle and starts nothing", async () => {

@@ -12,11 +12,14 @@ import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import { apiClient } from "../api/client";
 import type { KnowledgePackagesApi } from "../api/knowledgePackages";
 import { useAuthStore } from "../stores/auth";
+import { useGuidanceStore } from "../stores/guidance";
 import { useDesignStore } from "../stores/design";
 import { useKnowledgePackagesStore, type AuthorizedRequest } from "../stores/knowledgePackages";
 import { useUserModelingStore } from "../stores/userModeling";
 import type { DeclarativePrototypePayload, DesignAlternativePayload } from "../types/design";
 import type { KnowledgePackageVersionPayload, KnowledgeStage } from "../types/knowledgePackages";
+import type { ProvidedPrototype } from "../types/workflowInputs";
+import { whyMessages } from "./whyCopy";
 
 type Locale = "en" | "it";
 type HeroState = "complete" | "partial" | "waiting";
@@ -52,11 +55,15 @@ const props = withDefaults(
     saveExport?: (blob: Blob, fileName: string) => void;
     studioAddress?: string;
     sectionsMode?: boolean;
+    providedPrototype?: ProvidedPrototype | null;
+    providedDesignApproved?: boolean;
   }>(),
   {
     locale: "en",
     studioAddress: () => window.location.origin,
     sectionsMode: false,
+    providedPrototype: null,
+    providedDesignApproved: false,
   },
 );
 
@@ -383,6 +390,8 @@ const earlier = computed(() => versions.value.slice(1));
 const folderName = computed(
   () => folderSlug(latest.value?.project_name ?? "") || copy.value.folder,
 );
+const guidance = useGuidanceStore();
+const suppliedCopy = computed(() => whyMessages[props.locale]);
 const terminalSteps = computed(() => {
   const values = {
     address: props.studioAddress,
@@ -392,7 +401,12 @@ const terminalSteps = computed(() => {
   return TERMINAL_STEPS.map((step) => ({
     key: step.key,
     text: copy.value.terminalSteps[step.key],
-    command: fill(step.command, values),
+    command: fill(
+      props.providedDesignApproved && step.key === "link"
+        ? step.command.replace("--mode design-code", "--mode design")
+        : step.command,
+      values,
+    ),
   }));
 });
 const developmentSteps = computed(() =>
@@ -406,7 +420,9 @@ const loadingHistory = computed(
   () => packages.projectId === props.projectId && packages.pending.load,
 );
 const selectedAlternative = computed(() =>
-  design.projectId === props.projectId && designApproved.value ? design.selectedAlternative : null,
+  !props.providedDesignApproved && design.projectId === props.projectId && designApproved.value
+    ? design.selectedAlternative
+    : null,
 );
 const prototype = computed(() => {
   const candidate = design.current?.package.prototype ?? null;
@@ -584,7 +600,12 @@ watch(() => props.projectId, loadHistory, { immediate: true });
 
 <template>
   <div class="grid gap-4 text-on-night" data-surface="night" data-testid="design-package">
-    <UiAgentMessage :role-label="copy.agentRole" :avatar="AGENT_AVATAR" class="mb-1">
+    <UiAgentMessage
+      v-if="!guidance.expert"
+      :role-label="copy.agentRole"
+      :avatar="AGENT_AVATAR"
+      class="mb-1"
+    >
       {{ hero.agent }}
     </UiAgentMessage>
 
@@ -620,6 +641,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
             {{ hero.title }}
           </h2>
           <p
+            v-if="!guidance.expert"
             class="m-0 mb-6 text-[15px] leading-[1.55] text-on-night-2 @3xl:max-w-[calc(52cqw-2rem)]"
           >
             {{ hero.intro }}
@@ -786,6 +808,18 @@ watch(() => props.projectId, loadHistory, { immediate: true });
           </div>
         </div>
         <p
+          v-else-if="providedPrototype && providedDesignApproved"
+          class="m-0 mt-4 rounded-field border border-night-line p-3 text-sm leading-normal"
+          data-testid="package-provided-design"
+        >
+          {{ suppliedCopy.supplied }} · {{ providedPrototype.code }} · {{ providedPrototype.title
+          }}<span v-if="providedPrototype.declared_origin" class="mt-1 block"
+            >{{ suppliedCopy.declaredOrigin }}: {{ providedPrototype.declared_origin }}</span
+          ><span class="mt-2 block text-warn-on-night">{{
+            suppliedCopy.prototypeEvaluationLimit
+          }}</span>
+        </p>
+        <p
           v-else
           class="m-0 mt-4 rounded-field border border-night-line p-3 text-sm leading-normal text-on-night-3"
           data-testid="package-no-design"
@@ -888,7 +922,27 @@ watch(() => props.projectId, loadHistory, { immediate: true });
             </div>
           </li>
         </ol>
-        <template v-if="designApproved">
+        <div
+          v-if="providedDesignApproved"
+          class="mt-6 grid gap-3"
+          data-testid="package-provided-limits"
+        >
+          <p class="text-sm">{{ suppliedCopy.prototypeEvaluationLimit }}</p>
+          <p class="text-sm">{{ suppliedCopy.gaps.PROVIDED_PROTOTYPE_CODE_UNAVAILABLE }}</p>
+          <UiCommandLine
+            command="ut design show"
+            :copy-label="copy.copyCommand"
+            :copied-label="copy.commandCopied"
+            :failed-label="copy.commandNotCopied"
+          />
+          <UiCommandLine
+            command="ut design open"
+            :copy-label="copy.copyCommand"
+            :copied-label="copy.commandCopied"
+            :failed-label="copy.commandNotCopied"
+          />
+        </div>
+        <template v-if="designApproved && !providedDesignApproved">
           <h3
             class="m-0 mt-6 mb-3 text-[15px] leading-snug font-semibold"
             data-testid="package-development-title"
@@ -1044,7 +1098,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
         </ol>
       </details>
       <p
-        v-if="designApproved"
+        v-if="designApproved && !providedDesignApproved"
         class="m-0 mt-3 border-t border-on-night/10 pt-3 text-sm leading-normal text-on-night-2"
         data-testid="package-terminal"
       >
@@ -1060,14 +1114,14 @@ watch(() => props.projectId, loadHistory, { immediate: true });
     </section>
 
     <ProjectDevelopmentPanel
-      v-if="designApproved"
+      v-if="designApproved && !providedDesignApproved"
       :project-id="projectId"
       :locale="locale"
       :authorize="authorizedRequest"
     />
 
     <ProjectAcceptanceTestsPanel
-      v-if="designApproved"
+      v-if="designApproved && !providedDesignApproved"
       :project-id="projectId"
       :locale="locale"
       :authorize="authorizedRequest"

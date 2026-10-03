@@ -267,6 +267,7 @@ import { isGenerationInterrupted } from "../api/generationJobs";
 import { modelUsageApi, type ModelUsageApi } from "../api/modelUsage";
 import type { RequirementsApi } from "../api/requirements";
 import { useAuthStore } from "../stores/auth";
+import { useGuidanceStore } from "../stores/guidance";
 import { type AuthorizedRequest, useDesignStore } from "../stores/design";
 import { ITERATION_ASSERTION_LIMIT, useDesignIterationsStore } from "../stores/designIterations";
 import { findingKey, runMode, useDesignLoopStore } from "../stores/designLoop";
@@ -730,6 +731,7 @@ const messages = {
 } as const;
 
 const auth = useAuthStore();
+const guidance = useGuidanceStore();
 const store = useDesignStore();
 const loopStore = useDesignLoopStore();
 const mockups = useDesignMockupsStore();
@@ -2013,7 +2015,12 @@ async function applyPackage(
     localError.value = revisionFailure(failedApproval);
     return false;
   }
-  if (requestReview && version.package.prototype !== null && reviewAffected(diff)) {
+  if (
+    !guidance.expert &&
+    requestReview &&
+    version.package.prototype !== null &&
+    reviewAffected(diff)
+  ) {
     reviewRequestedFor.value = version.id;
   }
   changed();
@@ -2064,7 +2071,7 @@ async function decideDiff(diff: DesignPackageDiffPayload, approve: boolean): Pro
     try {
       const version = await decideRevision(diff.id);
       if (version !== null) {
-        if (version.package.prototype !== null && reviewAffected(diff)) {
+        if (!guidance.expert && version.package.prototype !== null && reviewAffected(diff)) {
           reviewRequestedFor.value = version.id;
         }
         changed();
@@ -2482,6 +2489,20 @@ async function retryMockup(alternativeId: string): Promise<void> {
   });
 }
 
+async function generateSingleMockup(alternativeId: string): Promise<void> {
+  if (store.isBusy || mockups.entry(alternativeId).state !== "idle") return;
+  localError.value = null;
+  try {
+    await mockups.ensure(alternativeId, authorizedRequest, {
+      api: mockupsApi.value,
+      signal: lifetime.signal,
+      draw: true,
+    });
+  } catch {
+    localError.value = copy.value.loadError;
+  }
+}
+
 function loadThumbnail(want: ThumbnailWant): void {
   if (thumbnails[want.key] !== undefined) {
     return;
@@ -2563,7 +2584,9 @@ async function prepareMockups(): Promise<void> {
     return;
   }
   if (loaded?.generated_mockups === true) {
-    const draw = mockups.wasPrepared(props.projectId, version.id, version.content_hash);
+    const draw =
+      guidance.automaticAllowed(`${props.projectId}:mockups:${versionKey(version)}`) &&
+      mockups.wasPrepared(props.projectId, version.id, version.content_hash);
     for (const alternative of version.package.alternatives) {
       void mockups
         .ensure(alternative.id, authorizedRequest, {
@@ -2731,6 +2754,17 @@ watch(
   { immediate: true },
 );
 
+watch(
+  () => [props.projectId, guidance.expert, versionKey(current.value)] as const,
+  ([projectId, expert, key]) => {
+    if (expert) {
+      guidance.suppressAutomatic(`${projectId}:mockups:${key}`);
+      reviewRequestedFor.value = null;
+    }
+  },
+  { immediate: true, flush: "sync" },
+);
+
 watchUpstream(
   () => props.upstream,
   (changed) => {
@@ -2748,7 +2782,12 @@ watch(
   () => [props.projectId, current.value?.id, current.value?.content_hash] as const,
   () => {
     const version = current.value;
-    if (version !== null && preparation !== null && versionKey(version) !== preparation.from) {
+    if (
+      !guidance.expert &&
+      version !== null &&
+      preparation !== null &&
+      versionKey(version) !== preparation.from
+    ) {
       mockups.markPrepared(props.projectId, version.id, version.content_hash);
       preparation = null;
     }
@@ -2898,7 +2937,7 @@ onBeforeUnmount(() => {
       class="grid gap-5 rounded-tile border border-night-line bg-night-raised p-5 sm:p-7"
       data-testid="design-empty"
     >
-      <UiAgentMessage :role-label="copy.designer" :avatar="DESIGNER_AVATAR">
+      <UiAgentMessage v-if="!guidance.expert" :role-label="copy.designer" :avatar="DESIGNER_AVATAR">
         {{ copy.noPackage }}
       </UiAgentMessage>
       <p v-if="!prerequisiteReady" class="m-0 text-sm text-on-night-3" role="status">
@@ -2930,7 +2969,7 @@ onBeforeUnmount(() => {
     </section>
 
     <template v-else>
-      <UiAgentMessage :role-label="copy.designer" :avatar="DESIGNER_AVATAR">
+      <UiAgentMessage v-if="!guidance.expert" :role-label="copy.designer" :avatar="DESIGNER_AVATAR">
         {{ agentText }}
       </UiAgentMessage>
 
@@ -3078,6 +3117,27 @@ onBeforeUnmount(() => {
           @open="openMockup"
           @retry="retryMockup"
         />
+
+        <div
+          v-if="guidance.expert && generatedPath"
+          class="flex flex-wrap gap-3"
+          data-testid="explicit-mockup-actions"
+        >
+          <template v-for="alternative in current.package.alternatives" :key="alternative.id">
+            <UiButton
+              v-if="
+                mockups.entry(alternative.id).state === 'idle' &&
+                alternative.id !== chosenAlternativeId
+              "
+              variant="outline"
+              :disabled="store.isBusy || deciding"
+              :data-testid="`generate-mockup-${alternative.code}`"
+              @click="generateSingleMockup(alternative.id)"
+              >{{ locale === "it" ? "Genera il mockup" : "Generate the mockup" }} ·
+              {{ alternative.code }}</UiButton
+            >
+          </template>
+        </div>
 
         <section
           v-if="!generatedPath && previewAlternative !== null"
@@ -3230,7 +3290,7 @@ onBeforeUnmount(() => {
                 :locale="locale"
                 :authorize="authorizedRequest"
                 :api="props.loopApi"
-                :auto-evaluate-version-id="reviewRequestedFor"
+                :auto-evaluate-version-id="guidance.expert ? null : reviewRequestedFor"
                 :static-check-available="staticCheckAvailable"
                 :screens="appliedScreens"
                 :elements="reviewElements"

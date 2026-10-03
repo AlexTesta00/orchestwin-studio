@@ -41,6 +41,7 @@ import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 import { isGenerationInterrupted } from "../api/generationJobs";
 import { useGenerationResume } from "../stores/generationJobs";
 import { useTeamStore } from "../stores/team";
+import { useGuidanceStore } from "../stores/guidance";
 import { useUserModelingStore } from "../stores/userModeling";
 
 import type {
@@ -85,6 +86,7 @@ const props = withDefaults(
 );
 
 const store = useUserModelingStore();
+const guidance = useGuidanceStore();
 
 const team = useTeamStore();
 
@@ -1429,6 +1431,7 @@ const teamApproved = computed(
 
 const shouldProposeAutomatically = computed(
   () =>
+    guidance.automaticAllowed(`${props.projectId}:personas`) &&
     props.autoLoad &&
     proposalFollowsApproval.value &&
     teamApproved.value &&
@@ -1440,6 +1443,14 @@ const shouldProposeAutomatically = computed(
     store.currentSnapshot === null &&
     !store.isBusy &&
     localError.value === null,
+);
+
+watch(
+  () => [props.projectId, guidance.expert] as const,
+  ([projectId, expert]) => {
+    if (expert) guidance.suppressAutomatic(`${projectId}:personas`);
+  },
+  { immediate: true, flush: "sync" },
 );
 
 watch(
