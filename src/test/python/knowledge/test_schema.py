@@ -897,7 +897,7 @@ def test_published_enumerations_are_the_domain_enumerations(
 def test_every_published_enumeration_is_a_domain_enumeration() -> None:
     published = {
         name: definition
-        for schema in knowledge_schemas().values()
+        for schema in knowledge_schemas(workflow_additions=True).values()
         for name, definition in schema["$defs"].items()
         if "enum" in definition
     }

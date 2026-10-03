@@ -2602,6 +2602,7 @@ class KnowledgeManifest(_Record):
         description="SHA-256 digest of every file, except orchestwin.json and the index."
     )
     why: Annotated[WhyEntry | None, _OPTIONAL] = None
+    workflow_inputs: Annotated[dict[str, object] | None, _OPTIONAL] = None
 
     @model_validator(mode="after")
     def _fits_its_version(self) -> KnowledgeManifest:
@@ -2736,6 +2737,13 @@ class WhyGap(_Record):
         "OMITTED_SECTION",
         "CONTEXT_OUTDATED",
         "VALIDATION_REFERENCE_UNAVAILABLE",
+        "DECLARED_MISSING",
+        "MISSING_REQUIREMENT_ANCHOR",
+        "PROVIDED_PROTOTYPE_CODE_UNAVAILABLE",
+        "PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE",
+        "PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE",
+        "PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE",
+        "PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE",
     ]
     node_key: str
     related_code: str | None
@@ -2775,6 +2783,7 @@ class WhyDocument(_Record):
     nodes: list[WhyNode]
     links: list[WhyLink]
     omitted_sections: list[str]
+    workflow_records: Annotated[dict[str, object] | None, _OPTIONAL] = None
 
     @model_validator(mode="after")
     def _references(self):
@@ -2975,10 +2984,28 @@ def _without_design_additions(schema: dict[str, object]) -> dict[str, object]:
 
 
 def _published_schema(
-    name: str, *, design_additions: bool, validation_additions: bool = False
+    name: str,
+    *,
+    design_additions: bool,
+    validation_additions: bool = False,
+    workflow_additions: bool = False,
 ) -> dict[str, object]:
     title, description = _SCHEMA_TEXTS[name]
     schema = _MODELS[name].model_json_schema(schema_generator=_KnowledgeJsonSchema)
+    if not workflow_additions:
+        if name == "manifest":
+            schema["properties"].pop("workflow_inputs", None)
+        if name == "why":
+            schema["properties"].pop("workflow_records", None)
+            schema["$defs"]["WhyGap"]["properties"]["code"]["enum"] = [
+                item
+                for item in schema["$defs"]["WhyGap"]["properties"]["code"]["enum"]
+                if item not in {"DECLARED_MISSING", "MISSING_REQUIREMENT_ANCHOR"}
+                and not item.startswith("PROVIDED_PROTOTYPE_")
+            ]
+        revision = schema.get("$defs", {}).get("TeamProposalRevisionKind")
+        if isinstance(revision, dict) and "OWNER_PROVIDED" in revision.get("enum", []):
+            revision["enum"].remove("OWNER_PROVIDED")
     if name == "design" and not design_additions:
         schema = _without_design_additions(schema)
     if name == "why" and not validation_additions:
@@ -3002,6 +3029,7 @@ def knowledge_schemas(
     only_why: bool = False,
     only_validation: bool = False,
     validation_additions: bool = False,
+    workflow_additions: bool = False,
 ) -> dict[str, dict[str, object]]:
     names = (
         ("validation",)
@@ -3014,7 +3042,10 @@ def knowledge_schemas(
     )
     return {
         name: _published_schema(
-            name, design_additions=design_additions, validation_additions=validation_additions
+            name,
+            design_additions=design_additions,
+            validation_additions=validation_additions,
+            workflow_additions=workflow_additions,
         )
         for name in names
     }
@@ -3028,6 +3059,7 @@ def schema_files(
     only_why: bool = False,
     only_validation: bool = False,
     validation_additions: bool = False,
+    workflow_additions: bool = False,
 ) -> dict[str, str]:
     return {
         schema_document(name): json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False)
@@ -3039,6 +3071,7 @@ def schema_files(
             only_why=only_why,
             only_validation=only_validation,
             validation_additions=validation_additions,
+            workflow_additions=workflow_additions,
         ).items()
     }
 
