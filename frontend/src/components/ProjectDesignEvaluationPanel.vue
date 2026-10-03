@@ -18,6 +18,7 @@ import { apiClient } from "@/api/client";
 import { designLoopApi, type DesignLoopApi } from "@/api/designLoop";
 import { isGenerationInterrupted } from "@/api/generationJobs";
 import { useAuthStore } from "@/stores/auth";
+import { useGuidanceStore } from "@/stores/guidance";
 import {
   type AuthorizedDesignLoopRequest,
   EVALUATOR_NOT_CONFIGURED,
@@ -261,6 +262,15 @@ const decisionFailure = ref<{ key: string; code: string } | null>(null);
 const notes = reactive<Record<string, string>>({});
 const runsLoaded = ref(false);
 const autoStarted = new Set<string>();
+const guidance = useGuidanceStore();
+
+watch(
+  () => [props.projectId, props.designVersionId, guidance.expert] as const,
+  ([projectId, versionId, expert]) => {
+    if (expert) guidance.suppressAutomatic(`${projectId}:review:${versionId}`);
+  },
+  { immediate: true, flush: "sync" },
+);
 
 const {
   job: reviewJob,
@@ -286,6 +296,7 @@ watch(reviewJob, (running) => {
 
 const autoReviewDue = computed(
   () =>
+    guidance.automaticAllowed(`${props.projectId}:review:${props.designVersionId}`) &&
     props.autoEvaluateVersionId !== null &&
     props.autoEvaluateVersionId === props.designVersionId &&
     runsLoaded.value &&
@@ -529,7 +540,11 @@ watch(autoReviewDue, (due) => {
     <header class="flex flex-wrap items-center gap-x-4 gap-y-3">
       <div class="grid min-w-[min(100%,16rem)] flex-1 gap-1">
         <h3 :id="titleId" class="m-0 text-base font-semibold">{{ copy.title }}</h3>
-        <p class="m-0 text-sm text-on-night-3" data-testid="design-evaluate-auto">
+        <p
+          v-if="!guidance.expert"
+          class="m-0 text-sm text-on-night-3"
+          data-testid="design-evaluate-auto"
+        >
           {{ copy.autoEvaluate }}
         </p>
       </div>

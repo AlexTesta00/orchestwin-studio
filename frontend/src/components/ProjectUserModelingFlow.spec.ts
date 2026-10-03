@@ -19,6 +19,7 @@ import {
 import { UserModelingApiError, userModelingApi } from "../api/userModeling";
 
 import { useTeamStore } from "../stores/team";
+import { useGuidanceStore } from "../stores/guidance";
 import { useUserModelingStore } from "../stores/userModeling";
 
 import type {
@@ -1584,6 +1585,41 @@ describe("ProjectUserModelingFlow", () => {
     await wrapper.get('[data-testid="propose-personas"]').trigger("click");
     await flushPromises();
 
+    expect(propose).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("keeps profile proposal explicit in expert mode and after returning to guided", async () => {
+    const guidance = useGuidanceStore();
+    guidance.mode = "EXPERT";
+    const team = useTeamStore();
+    team.projectId = PROJECT_ID;
+    team.readiness = { status: "TEAM_APPROVAL_REQUIRED" };
+    const store = useUserModelingStore();
+    vi.spyOn(store, "load").mockResolvedValue(undefined);
+    const propose = vi
+      .spyOn(store, "proposePersonas")
+      .mockResolvedValue({} as PersonaProposalCommandPayload);
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("en")] },
+      props: {
+        projectId: PROJECT_ID,
+        accessToken: ACCESS_TOKEN,
+        locale: "en",
+        autoLoad: true,
+        upstream: "team-1:PENDING_APPROVAL",
+      },
+    });
+    await flushPromises();
+    team.readiness = { status: "READY_FOR_MAIN_WORKFLOW" };
+    await wrapper.setProps({ upstream: "team-1:APPROVED" });
+    await flushPromises();
+    expect(propose).not.toHaveBeenCalled();
+    guidance.mode = "GUIDED";
+    await flushPromises();
+    expect(propose).not.toHaveBeenCalled();
+    await wrapper.get('[data-testid="propose-personas"]').trigger("click");
+    await flushPromises();
     expect(propose).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });

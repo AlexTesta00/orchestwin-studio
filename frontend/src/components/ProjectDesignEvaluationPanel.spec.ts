@@ -11,6 +11,7 @@ import {
   type GenerationRequestJob,
 } from "@/api/generationJobs";
 import { useDesignLoopStore } from "@/stores/designLoop";
+import { useGuidanceStore } from "@/stores/guidance";
 import { expectAccessible } from "@/test/axe";
 import type {
   DesignEvaluationComparisonPayload,
@@ -558,6 +559,28 @@ describe("ProjectDesignEvaluationPanel", () => {
       "The review starts on its own when you apply a design.",
     );
     await expectAccessible(wrapper.element);
+  });
+
+  it("starts no expert review on mount or mode change and requires the review button", async () => {
+    const guidance = useGuidanceStore();
+    guidance.mode = "EXPERT";
+    const api = fakeApi([]);
+    const wrapper = mountPanel(api, "en", "version-1");
+    await flushPromises();
+    expect(api.evaluate).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="design-evaluate-auto"]').exists()).toBe(false);
+    guidance.mode = "GUIDED";
+    await flushPromises();
+    expect(api.evaluate).not.toHaveBeenCalled();
+    await wrapper.get('[data-testid="design-evaluate"]').trigger("click");
+    await flushPromises();
+    expect(api.evaluate).toHaveBeenCalledTimes(1);
+    expect(api.evaluate).toHaveBeenCalledWith(
+      "project-1",
+      { ...AUTOMATIC_REVIEW, locale: "en-US" },
+      "token",
+    );
+    wrapper.unmount();
   });
 
   it("never repeats a failed automatic review but keeps the manual button working", async () => {

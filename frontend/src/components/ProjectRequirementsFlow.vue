@@ -39,6 +39,7 @@ import {
 } from "../api/generationJobs";
 import { RequirementsApiError, requirementsApi, type RequirementsApi } from "../api/requirements";
 import { useAuthStore } from "../stores/auth";
+import { useGuidanceStore } from "../stores/guidance";
 import { type GenerationResumeFailure, useGenerationResume } from "../stores/generationJobs";
 import { type AuthorizedRequest, useRequirementsStore } from "../stores/requirements";
 import type {
@@ -107,6 +108,7 @@ provide(
 );
 
 const auth = useAuthStore();
+const guidance = useGuidanceStore();
 const store = useRequirementsStore();
 const root = ref<HTMLElement | null>(null);
 const viewSwitch = ref<InstanceType<typeof ArtifactViewSwitch> | null>(null);
@@ -1631,7 +1633,7 @@ onBeforeUnmount(() => {
       class="grid gap-5 rounded-tile border border-night-line bg-night-raised p-5 sm:p-7"
       data-testid="requirements-empty"
     >
-      <UiAgentMessage :role-label="copy.analyst" :avatar="ANALYST_AVATAR">
+      <UiAgentMessage v-if="!guidance.expert" :role-label="copy.analyst" :avatar="ANALYST_AVATAR">
         {{ copy.noSpecification }}
       </UiAgentMessage>
       <p v-if="!prerequisiteReady" class="m-0 text-sm text-on-night-3" role="status">
