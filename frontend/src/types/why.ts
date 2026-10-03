@@ -1,6 +1,7 @@
 import type { ObservationValuePayload, ReadableClaimStatus } from "./userModeling";
 import type { EvidenceCitationPayload } from "./researchEvidence";
 import type { HumanValidationOutcome, OperationalHypothesis } from "./humanValidation";
+import type { ProvidedPrototype, WorkflowDecision, WorkflowInputsPayload } from "./workflowInputs";
 
 export interface WhyReference {
   artifact_id: string;
@@ -61,6 +62,10 @@ export interface WhyNode {
     scenario?: { goal?: string; steps?: string[]; expected_outcome?: string };
     hypothesis?: OperationalHypothesis;
     outcome?: HumanValidationOutcome;
+    workflow_decision?: WorkflowDecision;
+    provided_prototype?: ProvidedPrototype;
+    origin?: "OWNER_INPUT";
+    limits?: string[];
     effective_status?: "ACTIVE" | "RETIRED";
     observation_value?: ObservationValuePayload;
     base_reference?: WhyReference;
@@ -88,6 +93,7 @@ export interface WhyDocument {
   nodes: WhyNode[];
   links: WhyLink[];
   omitted_sections: unknown[];
+  workflow_records?: WorkflowInputsPayload;
 }
 
 export interface WhyAnswer {
