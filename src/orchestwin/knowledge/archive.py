@@ -297,6 +297,10 @@ def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
     )
     if "design" in documents:
         _verify_generated_mockup(documents["design"]["package"])
+    verified = VerifiedFolder(manifest=manifest, documents=documents, files=dict(files))
+    from orchestwin.knowledge.workflow_inputs import read_workflow_inputs
+
+    read_workflow_inputs(verified)
     from orchestwin.knowledge.why import WHY_DOCUMENT, verify_why
 
     declared_why = manifest.get("why")
@@ -310,7 +314,7 @@ def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
         verify_why(project_id=str(manifest["project"]["id"]), documents=documents, files=files)
     elif WHY_DOCUMENT in files:
         raise KnowledgeArchiveError("FOLDER_TAMPERED", WHY_DOCUMENT)
-    return VerifiedFolder(manifest=manifest, documents=documents, files=dict(files))
+    return verified
 
 
 def read_verified_folder(content: bytes) -> VerifiedFolder:

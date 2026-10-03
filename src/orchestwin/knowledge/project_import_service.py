@@ -158,7 +158,11 @@ def imported_stage_versions(plan: ProjectImportPlan) -> dict[str, dict[str, obje
         "team": (plan.team.id, plan.team.content_hash),
         "twins": (plan.modeling.id, plan.modeling.content_hash),
         "requirements": (plan.requirements.id, plan.requirements.content_hash),
-        "design": (plan.design.id, plan.design.content_hash),
+        **(
+            {"design": (plan.design.id, plan.design.content_hash)}
+            if plan.design is not None
+            else {}
+        ),
     }
     return {
         stage: {
@@ -247,9 +251,11 @@ async def _write_import(
     )
     team = await _attempt(
         "team",
-        teams.create_generated_owned(
-            project_id=project.id, owner_user_id=owner, proposal=plan.team.proposal
-        ),
+        (
+            teams.create_owner_provided_owned
+            if plan.team.revision_kind.value == "OWNER_PROVIDED"
+            else teams.create_generated_owned
+        )(project_id=project.id, owner_user_id=owner, proposal=plan.team.proposal),
     )
     _require(
         "team",
@@ -276,9 +282,10 @@ async def _write_import(
     appended = await _attempt("requirements", requirements.append(plan.requirements))
     _require("requirements", appended is RequirementsVersionAppendStatus.APPENDED)
 
-    designs = SqlAlchemyDesignPackageRepository(session, owner_user_id=owner)
-    designed = await _attempt("design", designs.append(plan.design))
-    _require("design", designed is DesignVersionAppendStatus.APPENDED)
+    if plan.design is not None:
+        designs = SqlAlchemyDesignPackageRepository(session, owner_user_id=owner)
+        designed = await _attempt("design", designs.append(plan.design))
+        _require("design", designed is DesignVersionAppendStatus.APPENDED)
 
     imports = SqlAlchemyProjectImportRepository(session, owner_user_id=owner)
     await _attempt("import", imports.add(record))
@@ -318,6 +325,15 @@ async def _write_import(
         )
 
     stored = await projects.get_owned(project_id=project.id, owner_user_id=owner)
+    if plan.workflow_inputs:
+        from orchestwin.artifacts.workflow_inputs_persistence import (
+            SqlAlchemyWorkflowInputsRepository,
+        )
+
+        workflow = SqlAlchemyWorkflowInputsRepository(session, owner_user_id=owner)
+        await _attempt(
+            "workflow", workflow.import_records(project_id=project.id, records=plan.workflow_inputs)
+        )
     if plan.validation_records and (
         plan.validation_records.get("hypotheses") or plan.validation_records.get("outcomes")
     ):
@@ -441,6 +457,8 @@ async def verify_imported_why(session, *, folder, plan, owner_user_id, created_a
             session, owner_user_id=owner_user_id
         ).current(**scope),
     }
+    if plan.design is None:
+        versions.pop("design")
     if any(value is None for value in versions.values()):
         raise ProjectImportError("FOLDER_WHY_MISMATCH", "stored stage missing")
     wrappers = {
@@ -478,6 +496,17 @@ async def verify_imported_why(session, *, folder, plan, owner_user_id, created_a
         owner_user_id=owner_user_id,
     ).records(project_id=plan.project_id)
     expected_validation = plan.validation_records or {}
+    stored_workflow = None
+    if plan.workflow_inputs:
+        from orchestwin.artifacts.workflow_inputs_persistence import (
+            SqlAlchemyWorkflowInputsRepository,
+        )
+
+        stored_workflow = await SqlAlchemyWorkflowInputsRepository(
+            session, owner_user_id=owner_user_id
+        ).records(plan.project_id)
+        if stored_workflow != plan.workflow_inputs:
+            raise ProjectImportError("FOLDER_WORKFLOW_MISMATCH", "stored workflow inputs")
     if stored_validation.get("hypotheses", []) != expected_validation.get(
         "hypotheses", []
     ) or stored_validation.get("outcomes", []) != expected_validation.get("outcomes", []):
@@ -488,6 +517,7 @@ async def verify_imported_why(session, *, folder, plan, owner_user_id, created_a
         evidence=plan.research_evidence,
         hypotheses=expected_validation.get("hypotheses", []),
         outcomes=expected_validation.get("outcomes", []),
+        workflow_inputs=plan.workflow_inputs,
         evaluations=[
             {
                 "runs": [item.to_snapshot() for item in plan.evaluations],
@@ -501,6 +531,7 @@ async def verify_imported_why(session, *, folder, plan, owner_user_id, created_a
         evidence=evidence,
         hypotheses=stored_validation.get("hypotheses", []),
         outcomes=stored_validation.get("outcomes", []),
+        workflow_inputs=stored_workflow,
         evaluations=[
             {
                 "runs": [item.to_snapshot() for item in evaluations],
