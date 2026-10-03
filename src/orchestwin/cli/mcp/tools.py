@@ -521,6 +521,8 @@ def project_state(session: Session, values: Mapping[str, object]) -> dict[str, o
             raise
         return {**document, "next": text("mcp.next_no_folder", session.language)}
     state = found.state()
+    workflow = found.workflow_inputs()
+    extra = {"workflow_inputs": workflow} if workflow["decisions"] or workflow["prototypes"] else {}
     changes = [] if state is None else knowledge.mappings(state.get("changes"))
     aligned = None if state is None else _mapping_or_none(state.get("aligned"))
     pending = pending_changes(changes, aligned)
@@ -535,6 +537,7 @@ def project_state(session: Session, values: Mapping[str, object]) -> dict[str, o
     )
     return {
         **document,
+        **extra,
         "folder": {
             "schema_version": found.schema_version,
             "version_number": found.version_number,
@@ -739,11 +742,38 @@ def get_scenario_walkthrough(session: Session, values: Mapping[str, object]) -> 
             document_hash=values.get("document_hash"),
         )
     except ValidationError as error:
-        raise ToolError(error.code, key="validation.errors." + error.code) from None
+        key = (
+            "errors." + error.code
+            if error.code.startswith("PROVIDED_PROTOTYPE_")
+            else "validation.errors." + error.code
+        )
+        raise ToolError(error.code, key=key) from None
 
 
 def get_design(session: Session, values: Mapping[str, object]) -> dict[str, object]:
-    document = session.knowledge().stage("design")
+    folder = session.knowledge()
+    prototype = folder.approved_provided_prototype()
+    if prototype is not None:
+        screens = prototype["mockup"]["mockup"]["screens"]
+        wanted = values.get("screen")
+        if isinstance(wanted, str):
+            screens = [item for item in screens if item["code"].upper() == wanted.upper()]
+            if not screens:
+                raise ToolError(
+                    SCREEN_NOT_FOUND,
+                    screen=wanted,
+                    screens=", ".join(
+                        item["code"] for item in prototype["mockup"]["mockup"]["screens"]
+                    ),
+                )
+        return {
+            "source": "PROVIDED_PROTOTYPE",
+            "version_number": prototype["version_number"],
+            "prototype": prototype,
+            "screens": [{key: item[key] for key in ("code", "title", "state")} for item in screens],
+            "limits": folder.workflow_inputs()["limits"],
+        }
+    document = folder.stage("design")
     if document is None:
         raise stage_missing(session, "design")
     view = knowledge.design_view(document)
