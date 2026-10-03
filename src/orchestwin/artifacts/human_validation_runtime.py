@@ -50,7 +50,10 @@ class SqlAlchemyHumanValidationService:
                 if node["kind"] == "VALIDATION_OUTCOME"
             ],
         }
-        return validation_overview(document=document, **records)
+        result = validation_overview(document=document, **records)
+        if document.get("workflow_records"):
+            result["workflow_inputs"] = document["workflow_records"]
+        return result
 
     async def walkthrough(
         self,

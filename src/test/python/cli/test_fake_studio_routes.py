@@ -280,7 +280,7 @@ def test_the_fake_serves_every_area_that_the_commands_need(
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 150
+    assert len(ROUTES) == 155
 
 
 def test_validation_routes_are_exactly_the_two_authorized_read_only_routes() -> None:
@@ -344,6 +344,10 @@ def fits(model: type[BaseModel], reply: tuple[int, object], status: int = 200) -
         field = model.model_fields["omitted_sections"]
         assert not field.is_required() and field.default in (None, [], ())
         expected.remove("omitted_sections")
+    if model is ProjectSectionsPayload and "workflow_inputs" not in payload:
+        field = model.model_fields["workflow_inputs"]
+        assert not field.is_required() and field.default is None
+        expected.remove("workflow_inputs")
     assert set(payload) == expected, model.__name__
     validated = model.model_validate(payload)
     if "omitted_sections" in model.model_fields and "omitted_sections" not in payload:

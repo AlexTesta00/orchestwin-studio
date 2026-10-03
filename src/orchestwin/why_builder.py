@@ -609,7 +609,13 @@ class _Builder:
                         context=context,
                         current=current,
                         data=item,
-                        rationale_origin="MODEL",
+                        rationale_origin="OWNER"
+                        if any(
+                            source.get("kind") == "OWNER_INPUT"
+                            and source.get("source_id") == "owner-provided-definition"
+                            for source in _items(item.get("sources"))
+                        )
+                        else "MODEL",
                     )
                     self.note_stage(node, envelope)
                     self.index[(kind, str(item.get("id")), context)] = node
@@ -1107,6 +1113,7 @@ def build_why_document(
     hypotheses: Sequence = (),
     outcomes: Sequence = (),
     validation_context: bool = False,
+    workflow_inputs: Mapping | None = None,
 ) -> dict:
     builder = _Builder(project_id, stages, evidence, sections, validation_context)
     builder.stage_roots()
@@ -1136,4 +1143,10 @@ def build_why_document(
         )
     builder.evaluations(evaluations)
     builder.human_validation(hypotheses, outcomes)
-    return builder.finish()
+    from orchestwin.artifacts.workflow_why import add_workflow_why
+
+    records = add_workflow_why(builder, workflow_inputs)
+    result = builder.finish()
+    if records is not None:
+        result["workflow_records"] = records
+    return result

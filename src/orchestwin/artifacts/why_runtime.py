@@ -16,6 +16,7 @@ from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepos
 from orchestwin.artifacts.design_serialization import design_package_from_snapshot
 from orchestwin.artifacts.human_validation_persistence import SqlAlchemyHumanValidationRepository
 from orchestwin.artifacts.why_mockups import mockup_document_hashes
+from orchestwin.artifacts.workflow_inputs_persistence import SqlAlchemyWorkflowInputsRepository
 from orchestwin.models.proposal_evidence_persistence import (
     DESIGN_MOCKUP_PURPOSES,
     EVENTS,
@@ -272,6 +273,9 @@ class SqlAlchemyWhyQueryService:
             hypotheses=records["hypotheses"],
             outcomes=records["outcomes"],
             validation_context=validation_context,
+            workflow_inputs=await SqlAlchemyWorkflowInputsRepository(
+                session, owner_user_id=owner_user_id
+            ).records(project_id),
         )
 
     async def explain(self, *, owner_user_id: UUID, project_id: UUID, code: str) -> dict | None:

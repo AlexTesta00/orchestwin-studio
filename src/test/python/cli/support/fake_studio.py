@@ -1443,6 +1443,15 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}", "get_project"),
     Route("PATCH", "/projects/{project_id}", "rename_project"),
     Route("GET", "/projects/{project_id}/sections", "sections"),
+    Route("GET", "/projects/{project_id}/workflow-inputs", "workflow_inputs"),
+    Route("GET", "/projects/{project_id}/provided-prototypes/state", "provided_state"),
+    Route("GET", "/projects/{project_id}/provided-prototypes/current", "provided_current"),
+    Route("GET", "/projects/{project_id}/provided-prototypes/gate/current", "provided_gate"),
+    Route(
+        "GET",
+        "/projects/{project_id}/provided-prototypes/{prototype_id}/document",
+        "provided_document",
+    ),
     Route("POST", "/projects/{project_id}/sections/alignment", "align_sections"),
     Route("GET", "/projects/{project_id}/brief-versions", "brief_history"),
     Route("POST", "/projects/{project_id}/brief-versions", "create_brief"),
@@ -2267,6 +2276,10 @@ class FakeProject:
         self.evidence_changes: list[dict[str, object]] = []
         self.validation_hypotheses: list[dict[str, object]] = []
         self.validation_outcomes: list[dict[str, object]] = []
+        self.workflow_decisions: list[dict[str, object]] = []
+        self.provided_prototypes: list[dict[str, object]] = []
+        self.provided_gate: dict[str, object] | None = None
+        self.provided_context_current = True
 
     @property
     def owner(self) -> str:
@@ -2796,6 +2809,7 @@ class FakeStudio:
         )
         try:
             call.params = _path_parameters(parameters)
+            self._provided_guard(call, route.action)
             return getattr(self, f"_route_{route.action}")(call)
         except _Invalid as invalid:
             detail = "invalid_authentication" if relative == "/auth/login" else "invalid_request"
@@ -3525,6 +3539,116 @@ class FakeStudio:
         if project is None:
             raise _Refusal(404, "project_not_found")
         return _Answer(200, self._project_payload(project))
+
+    def seed_workflow_inputs(
+        self, project, *, decisions=(), prototypes=(), gate=None, context_current=True
+    ):
+        from orchestwin.artifacts.provided_prototypes import provided_prototype_from_snapshot
+        from orchestwin.workflow_inputs import workflow_records
+
+        envelope = workflow_records(project.id, decisions=decisions, prototypes=prototypes)
+        for item in envelope["prototypes"]:
+            provided_prototype_from_snapshot(item)
+        project.workflow_decisions = copy.deepcopy(envelope["decisions"])
+        project.provided_prototypes = copy.deepcopy(envelope["prototypes"])
+        project.provided_gate = copy.deepcopy(gate)
+        project.provided_context_current = context_current
+
+    def _workflow_inputs(self, project):
+        from orchestwin.workflow_inputs import workflow_records
+
+        return workflow_records(project.id, project.workflow_decisions, project.provided_prototypes)
+
+    def _provided_guard(self, call, action):
+        from orchestwin.workflow_inputs import (
+            PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE,
+            PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE,
+            PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE,
+            PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE,
+        )
+
+        if "project_id" not in call.params:
+            return
+        project = self._owned(call)
+        if project is None or not project.provided_prototypes:
+            return
+        code = None
+        if action == "validation_walkthrough":
+            code = PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE
+        elif call.method != "GET" and "/design/" in call.path:
+            if action == "evaluation":
+                code = PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE
+            elif action.startswith("design_revision"):
+                code = PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE
+            else:
+                code = PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE
+        if code is not None:
+            raise _Refusal(409, {"code": code})
+
+    def _route_workflow_inputs(self, call):
+        return _Answer(200, self._workflow_inputs(self._code_project(call)))
+
+    def _route_provided_state(self, call):
+        project = self._code_project(call)
+        if not project.provided_prototypes:
+            return _Answer(
+                200,
+                {
+                    "source": "EXPLORATION" if project.design else "NONE",
+                    "approved": False,
+                    "context_current": True,
+                    "limits": [],
+                },
+            )
+        return _Answer(
+            200,
+            {
+                "source": "PROVIDED_PROTOTYPE",
+                "prototype": copy.deepcopy(project.provided_prototypes[-1]),
+                "gate": copy.deepcopy(project.provided_gate),
+                "approved": bool(
+                    project.provided_gate and project.provided_gate.get("status") == "APPROVED"
+                ),
+                "context_current": project.provided_context_current,
+                "limits": self._workflow_inputs(project)["limits"],
+            },
+        )
+
+    def _route_provided_current(self, call):
+        project = self._code_project(call)
+        if not project.provided_prototypes:
+            raise _Refusal(404, {"code": "PROVIDED_PROTOTYPE_NOT_FOUND"})
+        return _Answer(200, copy.deepcopy(project.provided_prototypes[-1]))
+
+    def _route_provided_gate(self, call):
+        project = self._code_project(call)
+        if project.provided_gate is None:
+            raise _Refusal(404, {"code": "PROVIDED_PROTOTYPE_GATE_NOT_FOUND"})
+        return _Answer(200, copy.deepcopy(project.provided_gate))
+
+    def _route_provided_document(self, call):
+        from orchestwin.artifacts.provided_prototypes import provided_prototype_from_snapshot
+        from orchestwin.artifacts.visual_catalog import resolve_visual_tokens
+
+        project = self._code_project(call)
+        snapshot = next(
+            (
+                item
+                for item in reversed(project.provided_prototypes)
+                if item["id"] == call.params["prototype_id"]
+            ),
+            None,
+        )
+        if snapshot is None:
+            raise _Refusal(404, {"code": "PROVIDED_PROTOTYPE_NOT_FOUND"})
+        prototype = provided_prototype_from_snapshot(snapshot)
+        document = mockup_document(
+            prototype.mockup.mockup,
+            tokens=resolve_visual_tokens(VisualChoices.from_snapshot(prototype.visual_choices)),
+            language="en",
+            entry_screen=call.query.get("entry_screen", ["SCR-001"])[0],
+        )
+        return _Answer(200, {"html": document, "title": prototype.title})
 
     def _route_rename_project(self, call: _Call) -> _Answer:
         fields = _Fields(call.json(), ("display_name",))
@@ -7208,7 +7332,10 @@ class FakeStudio:
         project = self._owned(call)
         if project is None:
             raise _Refusal(404, {"code": "PROJECT_NOT_FOUND"})
-        return _Answer(200, self._sections(project))
+        document = self._sections(project)
+        if project.workflow_decisions or project.provided_prototypes:
+            document = {**document, "workflow_inputs": self._workflow_inputs(project)}
+        return _Answer(200, document)
 
     def _route_align_sections(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -9440,6 +9567,7 @@ class FakeStudio:
             hypotheses=project.validation_hypotheses,
             outcomes=project.validation_outcomes,
             learning={"twins": self._learning_entries(project)},
+            workflow_inputs=self._workflow_inputs(project),
             mockups=[
                 item
                 for item in project.mockups.values()
@@ -9473,15 +9601,15 @@ class FakeStudio:
         from orchestwin.validation import validation_overview
 
         project = self._code_project(call)
-        return _Answer(
-            200,
-            validation_overview(
-                document=self._why_document(project, validation_context=True),
-                hypotheses=project.validation_hypotheses,
-                outcomes=project.validation_outcomes,
-                evidence={"evidence": project.evidence_versions},
-            ),
+        document = validation_overview(
+            document=self._why_document(project, validation_context=True),
+            hypotheses=project.validation_hypotheses,
+            outcomes=project.validation_outcomes,
+            evidence={"evidence": project.evidence_versions},
         )
+        if project.workflow_decisions or project.provided_prototypes:
+            document = {**document, "workflow_inputs": self._workflow_inputs(project)}
+        return _Answer(200, document)
 
     def _route_validation_walkthrough(self, call: _Call) -> _Answer:
         from orchestwin.validation import ValidationError, scenario_walkthrough

@@ -101,6 +101,7 @@ class ProjectSectionsPayload(ApiModel):
     first_pass_complete: bool
     sections: tuple[SectionPayload, ...]
     alignment: SectionAlignmentPayload
+    workflow_inputs: dict | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @classmethod
     def from_domain(cls, sections: ProjectSections) -> ProjectSectionsPayload:
@@ -275,6 +276,7 @@ def create_sections_router() -> APIRouter:
     )
     async def sections_endpoint(
         project_id: UUID,
+        request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[SectionsService, Depends(sections_service_dependency)],
     ) -> ProjectSectionsPayload:
@@ -283,7 +285,13 @@ def create_sections_router() -> APIRouter:
         except SectionsFailure as error:
             raise sections_failure(error) from error
 
-        return ProjectSectionsPayload.from_domain(sections)
+        result = ProjectSectionsPayload.from_domain(sections)
+        inputs_service = getattr(request.app.state, "workflow_inputs_service", None)
+        if inputs_service is not None:
+            records = await inputs_service.records(owner_user_id=user.id, project_id=project_id)
+            if records and (records["decisions"] or records["prototypes"]):
+                result.workflow_inputs = records
+        return result
 
     @router.post(
         "/alignment",
