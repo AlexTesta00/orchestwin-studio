@@ -2573,6 +2573,17 @@ function fakeStudio(served: Served) {
       [base]: () => ok(OPEN_PROJECT),
       [`${base}/brief-versions`]: () => ok(served.briefs),
       [`${base}/import`]: () => missing("PROJECT_IMPORT_NOT_FOUND"),
+      [`${base}/workflow-inputs`]: () =>
+        ok({
+          kind: "orchestwin.workflow-inputs",
+          schema_version: 1,
+          project_id: OPEN,
+          decisions: [],
+          prototypes: [],
+          limits: [],
+        }),
+      [`${base}/provided-prototypes/current`]: () => missing("PROVIDED_PROTOTYPE_NOT_FOUND"),
+      [`${base}/provided-prototypes/gate/current`]: () => missing("HUMAN_GATE_NOT_FOUND"),
       [`${base}/brief-dialogue`]: () => missing("BRIEF_DIALOGUE_NOT_FOUND"),
       [`${base}/brief-assumptions`]: () => ok([]),
       [`${base}/gates/project-brief/current`]: () => ok(BRIEF_GATE),
@@ -2893,6 +2904,9 @@ async function openInOrder(studio: Studio, order: readonly StoreGroup[], pinia =
 }
 
 const OPENING_READINGS: Record<string, number> = {
+  "…/workflow-inputs": 1,
+  "…/provided-prototypes/current": 1,
+  "…/provided-prototypes/gate/current": 1,
   "…": 1,
   "…/brief-versions": 1,
   "…/import": 1,
