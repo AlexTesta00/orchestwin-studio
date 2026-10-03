@@ -115,6 +115,7 @@ class DesignFacts:
     uncovered_codes: tuple[str, ...] = ()
     has_mockup: bool = False
     reviewed: bool = False
+    provided: bool = False
 
     @property
     def twin_ids(self) -> frozenset[UUID]:
@@ -457,7 +458,15 @@ def _alignment(sections: tuple[Section, ...], facts: SectionFacts) -> SectionAli
         for section in sections
         if section.key in ALIGNABLE_SECTIONS and section.state is SectionState.TO_UPDATE
     )
-    available = bool(behind) and behind[0].blocked is None
+    available = (
+        bool(behind)
+        and behind[0].blocked is None
+        and not (
+            facts.design is not None
+            and facts.design.provided
+            and any(section.key is ProjectStage.DESIGN for section in behind)
+        )
+    )
     design = next((section for section in behind if section.key is ProjectStage.DESIGN), None)
     uncovered = (
         facts.design.uncovered_codes
