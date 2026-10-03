@@ -19,6 +19,8 @@ const COMMANDS = [
   "orchestwin.openReport",
   "orchestwin.connectAgents",
   "orchestwin.why",
+  "orchestwin.validation",
+  "orchestwin.scenarioWalkthrough",
 ];
 
 function readJson(...parts) {

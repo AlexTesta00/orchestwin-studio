@@ -104,6 +104,7 @@ describe("renderPanel", () => {
       "tests.title",
       "twins.title",
       "why.title",
+      "validation.title",
       "agents.title",
     ];
     for (const language of LANGUAGES) {
@@ -120,6 +121,7 @@ describe("renderPanel", () => {
           "development.title",
           "twins.title",
           "why.title",
+          "validation.title",
           "agents.title",
         ]),
       );
@@ -396,7 +398,7 @@ describe("renderPanel", () => {
         );
         assert.equal(
           html.match(/<button/g)?.length ?? 0,
-          commands.length + (states[name].linked ? 1 : 0),
+          commands.length + (states[name].linked ? 4 : 0),
         );
       }
     }
@@ -499,7 +501,7 @@ describe("renderPanel", () => {
     assert.ok(script.includes('closest("button[data-command]")'));
     assert.ok(script.includes('const code = target.getAttribute("data-code")'));
     assert.ok(
-      script.includes('{ command: target.getAttribute("data-command"), code }'),
+      script.includes('if (code !== null) message.code = code'),
     );
     assert.ok(script.includes('event.target.id === "why-form"'));
     assert.ok(

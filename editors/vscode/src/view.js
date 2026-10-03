@@ -2,6 +2,7 @@
 
 const { commandLine, costOf } = require("./commands");
 const { whySection } = require("./why-view");
+const { validationSection } = require("./validation-view");
 const {
   formatDate,
   formatDay,
@@ -371,6 +372,16 @@ h3 { margin: 16px 0 6px; color: var(--ot-muted); font-size: 12px; font-weight: 6
   font: inherit;
 }
 #why-code:focus, #why-selector:focus { outline: 1px solid var(--ot-focus); }
+#validation-walkthrough-form { display: grid; gap: 7px; margin-top: 12px; }
+#validation-walkthrough-form input, #validation-walkthrough-form select {
+  box-sizing: border-box; width: 100%; min-width: 0; padding: 6px;
+  color: var(--vscode-input-foreground, var(--ot-fg));
+  background: var(--vscode-input-background, var(--ot-bg));
+  border: 1px solid var(--vscode-input-border, var(--ot-line));
+}
+#validation-walkthrough-form input:focus, #validation-walkthrough-form select:focus { outline: 1px solid var(--ot-focus); }
+.validation-technical { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9em; }
+.validation-steps { padding-left: 22px; }
 `;
 
 const SCRIPT = `(() => {
@@ -394,10 +405,19 @@ const SCRIPT = `(() => {
     const target = event.target instanceof Element ? event.target.closest("button[data-command]") : null;
     if (target && api) {
       const code = target.getAttribute("data-code");
-      api.postMessage(code === null ? { command: target.getAttribute("data-command") } : { command: target.getAttribute("data-command"), code });
+      const message = { command: target.getAttribute("data-command") };
+      if (code !== null) message.code = code;
+      const mode = target.getAttribute("data-mode");
+      if (mode !== null) message.mode = mode;
+      api.postMessage(message);
     }
   });
   document.addEventListener("submit", (event) => {
+    if (event.target instanceof HTMLFormElement && event.target.id === "validation-walkthrough-form") {
+      event.preventDefault();
+      const value = (id) => document.getElementById(id).value;
+      if (api) api.postMessage({ command: "validationWalkthrough", code: value("validation-scenario"), alternative: value("validation-alternative"), documentHash: value("validation-document-hash"), mode: value("validation-mode") });
+    }
     if (event.target instanceof HTMLFormElement && event.target.id === "why-form") {
       event.preventDefault();
       const input = document.getElementById("why-code");
@@ -407,6 +427,10 @@ const SCRIPT = `(() => {
     }
   });
   document.addEventListener("change", (event) => {
+    if (event.target instanceof HTMLSelectElement && event.target.id === "validation-scenario-selector") {
+      const input = document.getElementById("validation-scenario");
+      if (input instanceof HTMLInputElement) input.value = event.target.value;
+    }
     if (api && event.target instanceof HTMLSelectElement && event.target.id === "why-selector" && event.target.value) {
       api.postMessage({ command: "why", code: event.target.value });
     }
@@ -463,6 +487,8 @@ function contextOf(options) {
   return {
     language,
     why: options.why,
+    validation: options.validation,
+    walkthrough: options.walkthrough,
     t: (key, values) => text(language, key, values),
     n: (key, count, values) => plural(language, key, count, values),
     date: (value) => formatDate(language, value, { timeZone }),
@@ -1190,6 +1216,7 @@ function linkedBody(state, context) {
     parts.push(twinsSection(state, context));
   }
   parts.push(whySection(state, context, context.why));
+  parts.push(validationSection(state, context, context.validation, context.walkthrough));
   parts.push(agentsSection(state, context));
   parts.push(footerOf(state, context));
   return parts.filter((part) => part !== "").join("\n");
