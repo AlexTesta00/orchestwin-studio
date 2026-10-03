@@ -36,6 +36,36 @@ const rationaleLabel = computed(() => {
       :locale="locale"
     />
     <section
+      v-if="node.declared_context.provided_prototype"
+      class="grid gap-2"
+      data-testid="why-provided-prototype"
+    >
+      <strong>{{ copy.supplied }}</strong>
+      <p v-if="node.declared_context.provided_prototype.declared_origin" class="m-0">
+        {{ copy.declaredOrigin }}: {{ node.declared_context.provided_prototype.declared_origin }}
+      </p>
+      <p class="m-0" data-testid="why-provided-evaluation-limit">
+        {{ copy.prototypeEvaluationLimit }}
+      </p>
+      <ul v-if="node.declared_context.limits?.length" class="m-0 grid list-disc gap-1 pl-5 text-xs">
+        <li v-for="limit in node.declared_context.limits" :key="limit">
+          {{ whyGapLabel(limit, locale) }}
+        </li>
+      </ul>
+    </section>
+    <section
+      v-if="node.declared_context.workflow_decision"
+      class="grid gap-2"
+      data-testid="why-declared-decision"
+    >
+      <strong>{{
+        node.declared_context.workflow_decision.action === "RESOLVE_MISSING"
+          ? copy.resolvedGap
+          : copy.declaredGap
+      }}</strong>
+      <p class="m-0 whitespace-pre-wrap">{{ node.declared_context.workflow_decision.reason }}</p>
+    </section>
+    <section
       v-if="node.declared_context.hypothesis"
       class="grid gap-2"
       data-testid="why-operational-hypothesis"

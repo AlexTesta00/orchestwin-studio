@@ -45,9 +45,27 @@ export const whyMessages = {
     no: "No",
     noValidation: "Nessuna verifica con persone registrata in questa catena.",
     declared: "Le prospettive erano attive alla generazione. Sono contesto dichiarato.",
+    providedPrototype: "Prototipo fornito dal proprietario",
+    declaredGap: "Lacuna dichiarata",
+    resolvedGap: "Lacuna risolta",
+    declaredOrigin: "Origine dichiarata",
+    supplied: "Fornito dal proprietario",
+    prototypeEvaluationLimit:
+      "La valutazione dei twin sul prototipo fornito non è disponibile nello sprint 36.",
     sourceUnavailable:
       "Il testo originale non è disponibile. La citazione conservata resta leggibile.",
     gaps: {
+      DECLARED_MISSING: "Lacuna dichiarata dal proprietario",
+      MISSING_REQUIREMENT_ANCHOR: "Il prototipo non contiene l'ancoraggio a questo requisito",
+      PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE:
+        "La valutazione dei twin sul prototipo fornito non è disponibile nello sprint 36.",
+      PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE:
+        "La revisione del prototipo fornito non è disponibile nello sprint 36",
+      PROVIDED_PROTOTYPE_CODE_UNAVAILABLE:
+        "ut code non è disponibile per il Design fornito nello sprint 36",
+      PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE:
+        "Il percorso sugli scenari del 35 non è disponibile per il Design fornito",
+      PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE: "Questa operazione richiede alternative generate",
       MISSING_NEED: "Manca il bisogno collegato",
       MISSING_SCENARIO: "Manca lo scenario collegato",
       MISSING_TWIN: "Manca il twin collegato",
@@ -113,8 +131,26 @@ export const whyMessages = {
     no: "No",
     noValidation: "No verification with people recorded in this chain.",
     declared: "These perspectives were active at generation. They are declared context.",
+    providedPrototype: "Owner-supplied prototype",
+    declaredGap: "Declared gap",
+    resolvedGap: "Resolved gap",
+    declaredOrigin: "Declared origin",
+    supplied: "Owner supplied",
+    prototypeEvaluationLimit:
+      "Twin evaluation of the supplied prototype is unavailable in sprint 36.",
     sourceUnavailable: "The original text is unavailable. The preserved quote can still be read.",
     gaps: {
+      DECLARED_MISSING: "Gap declared by the owner",
+      MISSING_REQUIREMENT_ANCHOR: "The prototype has no anchor for this requirement",
+      PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE:
+        "Twin evaluation of the supplied prototype is unavailable in sprint 36.",
+      PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE:
+        "Review of the supplied prototype is unavailable in sprint 36",
+      PROVIDED_PROTOTYPE_CODE_UNAVAILABLE:
+        "ut code is unavailable for the supplied Design in sprint 36",
+      PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE:
+        "The sprint 35 scenario walkthrough is unavailable for the supplied Design",
+      PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE: "This operation requires generated alternatives",
       MISSING_NEED: "The linked need is missing",
       MISSING_SCENARIO: "The linked scenario is missing",
       MISSING_TWIN: "The linked twin is missing",
@@ -173,9 +209,15 @@ const containerLabels = {
   USER_MODELING: ["User twin", "User twins"],
   REQUIREMENTS_SPECIFICATION: ["Definizione", "Definition"],
   DESIGN_PACKAGE: ["Design e valutazione", "Design and evaluation"],
+  PROVIDED_PROTOTYPE: ["Prototipo fornito dal proprietario", "Owner-supplied prototype"],
+  WORKFLOW_DECISION: ["Decisione del proprietario", "Owner decision"],
 } as const;
 
 export function whyNodeTitle(node: WhyNode, locale: "en" | "it"): string {
+  if (node.kind === "PROVIDED_PROTOTYPE")
+    return `${whyMessages[locale].providedPrototype} · ${node.title}`;
+  if (node.kind === "WORKFLOW_DECISION")
+    return `${node.declared_context.workflow_decision?.action === "RESOLVE_MISSING" ? whyMessages[locale].resolvedGap : whyMessages[locale].declaredGap} · ${node.title}`;
   if (node.kind === "VALIDATION_OUTCOME") {
     const labels = {
       CONFIRMED: ["Confermata", "Confirmed"],

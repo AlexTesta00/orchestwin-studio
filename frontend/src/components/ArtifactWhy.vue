@@ -248,6 +248,23 @@ watch(
             {{ whyGapLabel(code, locale) }}
           </p>
         </section>
+        <section
+          v-if="answer.target.declared_context.provided_prototype"
+          class="grid gap-2"
+          data-testid="why-provided-prototype-summary"
+        >
+          <strong>{{ copy.supplied }}</strong>
+          <p
+            v-if="answer.target.declared_context.provided_prototype.declared_origin"
+            class="m-0 text-sm"
+          >
+            {{ copy.declaredOrigin }}:
+            {{ answer.target.declared_context.provided_prototype.declared_origin }}
+          </p>
+          <p class="m-0 text-sm" data-testid="why-provided-evaluation-limit">
+            {{ copy.prototypeEvaluationLimit }}
+          </p>
+        </section>
         <dl
           class="m-0 grid gap-1 text-xs"
           data-testid="why-summary"
