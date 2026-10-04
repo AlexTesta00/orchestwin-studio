@@ -548,7 +548,6 @@ class SqlAlchemySectionReads:
                     team=_reference(specification.agent_team_reference),
                     user_modeling=_reference(specification.user_modeling_reference),
                     twins=_twins(specification.user_twin_references),
-                    has_mockup=True,
                     uncovered_codes=tuple(
                         item.code for item in specification.requirements if item.code not in present
                     ),
