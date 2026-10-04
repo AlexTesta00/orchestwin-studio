@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from orchestwin.cli.commands import (
+    activity,
     align,
     archetypes,
     code,
@@ -42,4 +43,5 @@ COMMANDS = (
     code,
     why,
     validation,
+    activity,
 )
