@@ -873,6 +873,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Revisione dei twin, versione {version}",
         "en": "Review of the twins, version {version}",
     },
+    "design.review_simulated": {
+        "it": "I rilievi dei twin sono simulati dal modello: ipotesi da verificare con persone "
+        "reali, non prove.",
+        "en": "The twins' findings are simulated by the model: hypotheses to verify with real "
+        "people, not evidence.",
+    },
     "design.review_empty": {
         "it": "La revisione non contiene osservazioni.",
         "en": "The review contains no observations.",
