@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from orchestwin import __version__
 from orchestwin.api.acceptance_tests import create_acceptance_test_router
+from orchestwin.api.activity import create_activity_router
 from orchestwin.api.archetypes import create_archetypes_router
 from orchestwin.api.artifact_why import create_artifact_why_router
 from orchestwin.api.artifacts import create_artifact_graph_router
@@ -173,6 +174,7 @@ def create_app(
     application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
     application.state.why_query_service = resolved_runtime.why_query_service
     application.state.human_validation_service = resolved_runtime.human_validation_service
+    application.state.activity_service = resolved_runtime.activity_service
     application.state.workflow_inputs_service = resolved_runtime.workflow_inputs_service
     application.state.owner_team_inputs = resolved_runtime.owner_team_inputs
     application.state.owner_requirements = resolved_runtime.owner_requirements
@@ -240,6 +242,7 @@ def create_app(
         create_artifact_graph_router(),
         create_artifact_why_router(),
         create_human_validation_router(),
+        create_activity_router(),
         create_workflow_inputs_router(),
         create_diagram_router(),
         create_knowledge_package_router(),

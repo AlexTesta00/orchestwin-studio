@@ -27,6 +27,7 @@ from orchestwin.agents.team_gate import (
     ProjectWorkflowReadiness,
     TeamEditResult,
 )
+from orchestwin.api.activity import ProjectActivityService
 from orchestwin.api.artifact_why import WhyQueryService
 from orchestwin.api.artifacts import ArtifactGraphQueryService
 from orchestwin.api.design import (
@@ -81,6 +82,7 @@ from orchestwin.models.runtime import (
 )
 from orchestwin.persistence import DatabaseRuntime, create_database_runtime
 from orchestwin.projects import design_runtime
+from orchestwin.projects.activity_runtime import SqlAlchemyProjectActivityService
 from orchestwin.projects.application import (
     LocalProjectApplicationService,
     ProjectApplicationService,
@@ -222,6 +224,7 @@ class ApplicationRuntime:
     artifact_graph_query_service: ArtifactGraphQueryService | None = None
     why_query_service: WhyQueryService | None = None
     human_validation_service: HumanValidationService | None = None
+    activity_service: ProjectActivityService | None = None
     workflow_inputs_service: SqlAlchemyWorkflowInputsService | None = None
     owner_team_inputs: OwnerTeamInputService | None = None
     owner_user_modeling: OwnerUserModelingService | None = None
@@ -329,6 +332,7 @@ def create_default_runtime(
     human_validation_service = SqlAlchemyHumanValidationService(
         database_runtime.session_factory, why_query_service=why_query_service
     )
+    activity_service = SqlAlchemyProjectActivityService(database_runtime.session_factory)
     workflow_inputs_service = SqlAlchemyWorkflowInputsService(database_runtime.session_factory)
     owner_team_inputs = OwnerTeamInputService(
         unit_of_work_factory=SqlAlchemyTeamProposalUnitOfWorkFactory(
@@ -439,6 +443,7 @@ def create_default_runtime(
         artifact_graph_query_service=artifact_graph_query_service,
         why_query_service=why_query_service,
         human_validation_service=human_validation_service,
+        activity_service=activity_service,
         workflow_inputs_service=workflow_inputs_service,
         owner_team_inputs=owner_team_inputs,
         owner_user_modeling=owner_user_modeling,
