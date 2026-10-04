@@ -809,6 +809,12 @@ function developmentSection(state, context) {
           : `${value} (${reference.alternative})`,
       ),
     ]);
+    if (typeof reference.direction === "string") {
+      rows.push([
+        context.t("development.direction"),
+        escapeHtml(reference.direction),
+      ]);
+    }
   }
   const content = [facts(rows)];
   if (development.latest === null) {

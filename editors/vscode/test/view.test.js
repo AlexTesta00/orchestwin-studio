@@ -184,6 +184,28 @@ describe("renderPanel", () => {
     }
   });
 
+  it("names the visual direction of the chosen alternative only when it has one", () => {
+    const state = structuredClone(states.complete);
+    state.reference.direction = "Printed <register>";
+    assert.equal(text("en", "development.direction"), "Visual direction");
+    assert.equal(text("it", "development.direction"), "Direzione visiva");
+    for (const language of LANGUAGES) {
+      const html = render(state, language);
+      const reference = [
+        text(language, "development.reference"),
+        text(language, "development.referenceValue", { requirements: 1, design: 5 }),
+        "(DES-002)",
+      ].join(" ");
+      assert.ok(
+        plain(html).includes(`${reference} ${text(language, "development.direction")} Printed <register>`),
+      );
+      assert.ok(html.includes("<dd>Printed &lt;register&gt;</dd>"));
+      const without = plain(render(states.complete, language));
+      assert.ok(without.includes(reference));
+      assert.ok(!without.includes(text(language, "development.direction")));
+    }
+  });
+
   it("writes dates in the words of each language", () => {
     const english = plain(render(states.complete, "en"));
     const italian = plain(render(states.complete, "it"));
