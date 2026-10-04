@@ -275,6 +275,7 @@ const MESSAGES = Object.freeze({
     "development.reference": "Reference",
     "development.referenceValue":
       "requirements v{requirements} · design v{design}",
+    "development.direction": "Visual direction",
     "development.latest": "Latest commit",
     "development.noCommits":
       "No commit recorded yet: after your first commit, have it reviewed by the twins (`ut align`).",
@@ -636,6 +637,7 @@ const MESSAGES = Object.freeze({
     "development.reference": "Riferimento",
     "development.referenceValue":
       "requisiti v{requirements} · design v{design}",
+    "development.direction": "Direzione visiva",
     "development.latest": "Ultimo commit",
     "development.noCommits":
       "Nessun commit registrato: dopo il primo commit, fallo esaminare ai twin (`ut align`).",

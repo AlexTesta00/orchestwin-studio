@@ -419,6 +419,103 @@ describe("readProject", () => {
     });
   });
 
+  describe("the visual direction of the chosen alternative", () => {
+    const DESIGN_FILE = "orchestwin/design/design.json";
+
+    function designDocument(versionNumber, names) {
+      return {
+        id: "8f0c1d2e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        project_id: fixtures.PROJECT_ID,
+        version_number: versionNumber,
+        package: {
+          owner_selected_alternative_id: "alternative-2",
+          alternatives: names.map((name, index) => {
+            const visual = { product_name: "Tip calculator" };
+            if (name !== null) {
+              visual.direction = {
+                name,
+                concept: "A printed bill, with the total in large figures and ruled groups.",
+                rules: [
+                  "The total is the largest figure of every screen.",
+                  "Thin rules separate the groups.",
+                  "Colour marks the main action only.",
+                ],
+                axes: {
+                  layout: "EDITORIAL",
+                  shape: "SQUARE_RULES",
+                  type: "DISPLAY",
+                  colour: "INK",
+                  density: "SPACIOUS",
+                },
+                typicality: 12,
+                candidates: 5,
+                vocabulary_version: 1,
+              };
+            }
+            return {
+              id: `alternative-${index + 1}`,
+              code: `DES-00${index + 1}`,
+              title: `Alternative ${index + 1}`,
+              visual_language: visual,
+            };
+          }),
+        },
+      };
+    }
+
+    function projectWith(name, document) {
+      const root = fixtures.writeCompleteProject(path.join(base, name), "new");
+      if (typeof document === "string") {
+        fixtures.writeText(root, DESIGN_FILE, document);
+      } else if (document !== undefined) {
+        fixtures.writeJson(root, DESIGN_FILE, document);
+      }
+      return readProject(root);
+    }
+
+    it("names the direction of the alternative that the reference names", () => {
+      const state = projectWith("directed", designDocument(5, ["Soft bands", "Printed register"]));
+      assert.deepEqual(state.reference, {
+        requirements: 1,
+        design: 5,
+        alternative: "DES-002",
+        direction: "Printed register",
+      });
+      assert.deepEqual(state.notices, []);
+      assert.deepEqual(JSON.parse(JSON.stringify(state)), state);
+    });
+
+    it("adds nothing when the chosen alternative or its design version has no direction", () => {
+      for (const [name, document] of [
+        ["other-alternative", designDocument(5, ["Soft bands", null])],
+        ["no-direction", designDocument(5, [null, null])],
+        ["older-version", designDocument(4, ["Soft bands", "Printed register"])],
+        ["no-design", undefined],
+      ]) {
+        const state = projectWith(name, document);
+        assert.deepEqual(state.reference, { requirements: 1, design: 5, alternative: "DES-002" }, name);
+        assert.ok(!Object.hasOwn(state.reference, "direction"), name);
+        assert.deepEqual(state.notices, [], name);
+      }
+    });
+
+    it("names a design document that is not valid JSON and reads the other parts", () => {
+      const state = projectWith("broken-design", '{ "package": ');
+      assert.deepEqual(state.notices, [{ file: DESIGN_FILE, problem: "INVALID_JSON" }]);
+      assert.deepEqual(state.reference, { requirements: 1, design: 5, alternative: "DES-002" });
+      assert.equal(state.development.available, true);
+      assert.equal(state.tasks.open.length, 3);
+    });
+
+    it("reads no design document while no design is approved", () => {
+      const root = fixtures.writePartialProject(path.join(base, "partial-design"));
+      fixtures.writeText(root, DESIGN_FILE, '{ "package": ');
+      const state = readProject(root);
+      assert.deepEqual(state.reference, { requirements: null, design: null, alternative: null });
+      assert.deepEqual(state.notices, []);
+    });
+  });
+
   describe("isStale", () => {
     const current = {
       requirements_version_number: 1,
