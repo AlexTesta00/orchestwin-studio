@@ -12,6 +12,14 @@ from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.artifacts.visual_catalog import SCRIPT_TONES, DesignTone
 from orchestwin.models import design_drafts
 from orchestwin.models.anthropic_hosted import build_anthropic_adapter
+from orchestwin.models.design_directions import (
+    DESIGN_DIRECTIONS_OUTPUT_TOKENS,
+    DESIGN_DIRECTIONS_PURPOSE,
+    DirectionCandidatesDraft,
+    directed_design_context,
+    directions_context,
+    directions_instruction,
+)
 from orchestwin.models.design_drafts import (
     HOSTED_DESIGN_CONTRACT_VERSION,
     HOSTED_DESIGN_PURPOSE,
@@ -44,6 +52,7 @@ from orchestwin.projects.requirements_primitives import canonical_json
 from . import test_fake_requirements as requirements_fixtures
 from . import test_fake_team_proposal_adapter as team_fixtures
 from .draft_fixtures import proposal_draft
+from .test_design_directions import DIRECTIONS_ANSWER, selected_directions
 from .test_design_drafts import NAMES, bind, draft
 from .test_fake_design import proposal_request
 from .test_hosted_schema import CapturePort
@@ -148,6 +157,8 @@ class RouteGenerator:
 
     async def generate(self, **kwargs):
         self.calls.append(kwargs)
+        if kwargs["output_type"] is DirectionCandidatesDraft:
+            return DirectionCandidatesDraft.model_validate(DIRECTIONS_ANSWER)
         if isinstance(self.output, BaseModel):
             return self.output
         return kwargs["output_type"].model_validate(self.output)
@@ -189,7 +200,7 @@ def test_the_hosted_contract_has_its_own_version_and_purpose():
     context, _ = design_context(request)
     team = request.team.selected_agent_ids
     marked = hosted_design_context(context, team)
-    assert HOSTED_DESIGN_CONTRACT_VERSION == 104
+    assert HOSTED_DESIGN_CONTRACT_VERSION == 107
     assert HOSTED_DESIGN_PURPOSE == "DESIGN_ALTERNATIVES_HOSTED"
     assert marked == {
         **context,
@@ -357,15 +368,26 @@ def test_the_design_adapter_asks_the_design_route_for_the_hosted_draft(unrestric
         {"default": "local", "tasks": {"design": "hosted"}}, local=local, hosted=hosted
     )
     result = asyncio.run(ModelDesignAdapter(router).propose(request))
-    [call] = hosted.calls
+    marked = hosted_design_context(context, request.team.selected_agent_ids)
+    chosen = selected_directions(request)
+    directions, call = hosted.calls
     assert local.calls == []
+    assert directions["task"] == "design"
+    assert directions["output_type"] is DirectionCandidatesDraft
+    assert directions["context"] == directions_context(marked)
+    assert directions["max_output_tokens"] == DESIGN_DIRECTIONS_OUTPUT_TOKENS
+    assert directions["instruction"] == directions_instruction(directions["context"])
     assert call["task"] == "design"
     assert call["output_type"] is HostedDesignDraft
-    assert call["context"] == hosted_design_context(context, request.team.selected_agent_ids)
+    assert call["context"] == directed_design_context(marked, chosen)
     assert call["max_output_tokens"] == HOSTED_DESIGN_OUTPUT_TOKENS
     assert call["instruction"] == hosted_design_instruction(call["context"])
     assert result.provider_id == hosted.provider_id
+    assert result.provider_version == 7
     assert [(item.verdict, item.quote) for item in result.package.critiques] == list(VERDICTS)
+    assert [item.visual_language.direction for item in result.package.alternatives] == list(
+        chosen.values()
+    )
     assert all(
         any(ref.source_id == hosted.provider_id for ref in item.provenance.references)
         for item in result.package.critiques
@@ -376,7 +398,10 @@ def test_the_design_adapter_asks_the_design_route_for_the_hosted_draft(unrestric
             routing({"default": "local", "tasks": {"design": "hosted"}}, local=local, hosted=capped)
         ).propose(request)
     )
-    assert capped.calls[0]["max_output_tokens"] == 16000
+    assert [item["max_output_tokens"] for item in capped.calls] == [
+        DESIGN_DIRECTIONS_OUTPUT_TOKENS,
+        16000,
+    ]
 
 
 def test_the_route_of_the_hosted_purpose_serves_the_design_when_it_is_configured(unrestricted):
@@ -396,8 +421,13 @@ def test_the_route_of_the_hosted_purpose_serves_the_design_when_it_is_configured
         special=special,
     )
     result = asyncio.run(ModelDesignAdapter(router).propose(request))
-    assert hosted.calls == [] and local.calls == []
-    assert special.calls[0]["max_output_tokens"] == 20000
+    assert local.calls == []
+    [directions] = hosted.calls
+    [call] = special.calls
+    assert directions["context"]["purpose"] == DESIGN_DIRECTIONS_PURPOSE
+    assert directions["max_output_tokens"] == DESIGN_DIRECTIONS_OUTPUT_TOKENS
+    assert call["context"]["purpose"] == HOSTED_DESIGN_PURPOSE
+    assert call["max_output_tokens"] == 20000
     assert result.provider_id == special.provider_id
 
 
@@ -414,10 +444,13 @@ def test_a_local_design_route_keeps_the_local_draft_when_the_default_is_hosted(u
     assert hosted.calls == []
     assert call["output_type"] is DesignDraft
     assert "purpose" not in call["context"]
+    assert "directions" not in call["context"]
     assert call["max_output_tokens"] == design_output_tokens(len(twins))
     assert call["instruction"] == design_instruction("/".join(twins), context["language"])
     assert result.provider_id == local.provider_id
+    assert result.provider_version == 6
     assert all(item.verdict is None for item in result.package.critiques)
+    assert all(item.visual_language.direction is None for item in result.package.alternatives)
 
 
 def test_an_empty_verdict_from_a_hosted_model_is_invalid_output(unrestricted):
@@ -428,6 +461,10 @@ def test_an_empty_verdict_from_a_hosted_model_is_invalid_output(unrestricted):
     with pytest.raises(ProposalGenerationError) as failure:
         asyncio.run(ModelDesignAdapter(hosted).propose(request))
     assert failure.value.code == "INVALID_PROVIDER_OUTPUT"
+    assert [call["output_type"] for call in hosted.calls] == [
+        DirectionCandidatesDraft,
+        HostedDesignDraft,
+    ]
 
 
 def test_every_adapter_names_the_provider_of_the_route_that_serves_it():
@@ -486,14 +523,17 @@ def test_a_hosted_design_answer_out_of_position_fails_the_full_schema(unrestrict
     critiques = answer["critiques"]
     swapped = {**answer, "critiques": [critiques[1], critiques[0], *critiques[2:]]}
     configuration = providers().hosted_model("design")
-    client = FakeAnthropicClient(message(swapped), message(answer))
+    client = FakeAnthropicClient(message(DIRECTIONS_ANSWER), message(swapped), message(answer))
     generator = ProposalGenerator(
         configuration, build_anthropic_adapter(configuration, client=client, api_key=TEST_KEY)
     )
     result = asyncio.run(ModelDesignAdapter(generator).propose(request))
     assert [(item.verdict, item.quote) for item in result.package.critiques] == list(VERDICTS)
-    first, second = client.messages.calls
+    directions, first, second = client.messages.calls
     allowance = configuration.reasoning_allowance_tokens
+    assert directions["max_tokens"] == DESIGN_DIRECTIONS_OUTPUT_TOKENS + allowance
+    assert "propose five art directions" in directions["system"]
+    assert "axis_layout" in json.dumps(directions["output_config"]["format"]["schema"])
     assert first["max_tokens"] == HOSTED_DESIGN_OUTPUT_TOKENS + allowance
     sent = json.dumps(first["output_config"]["format"]["schema"])
     assert "verdict" in sent and "quote" in sent and "CRQ-001" not in sent
@@ -502,4 +542,5 @@ def test_a_hosted_design_answer_out_of_position_fails_the_full_schema(unrestrict
         first["messages"][0]["content"].removeprefix("<input>\n").split("\n</input>")[0]
     )
     assert content["context"]["purpose"] == HOSTED_DESIGN_PURPOSE
+    assert list(content["context"]["directions"]) == ["DES-001", "DES-002"]
     assert "did not follow output_schema at $.critiques[0]" in second["messages"][0]["content"]

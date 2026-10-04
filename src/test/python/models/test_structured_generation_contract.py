@@ -35,7 +35,9 @@ def _identity(*, adapter: bool = False) -> ModelRuntimeIdentity:
     )
 
 
-def _request():
+def _request(
+    *, system_instruction: str = "Return only the required structured evaluator response."
+):
     schema = create_structured_json_schema(
         schema_id="synthetic-finding-envelope",
         version_number=1,
@@ -53,7 +55,7 @@ def _request():
         task_id="benchmark-en-001",
         expected_identity=_identity(adapter=True),
         output_schema=schema,
-        system_instruction="Return only the required structured evaluator response.",
+        system_instruction=system_instruction,
         input_payload={"scenario": "Recover from an invalid value."},
         allowed_evidence_refs=("REQ-002", "REQ-001"),
         prompt_version_ref="ut-eval-v5",
@@ -110,6 +112,14 @@ def test_request_hash_and_adapter_identity_reject_silent_changes() -> None:
 
     with pytest.raises(ValueError, match="both be present"):
         replace(_identity(), adapter_id="ut-evaluator-v1")
+
+
+def test_the_system_instruction_may_reach_twenty_thousand_characters() -> None:
+    longest = "x" * 20_000
+
+    assert _request(system_instruction=longest).system_instruction == longest
+    with pytest.raises(ValueError, match="system instruction exceeds maximum length"):
+        _request(system_instruction=longest + "x")
 
 
 def test_schema_and_payload_must_be_canonical_json_objects() -> None:

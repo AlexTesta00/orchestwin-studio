@@ -42,6 +42,7 @@ from orchestwin.projects.requirements_primitives import canonical_json
 
 from . import test_fake_design as design_fixtures
 from . import test_fake_requirements as requirements_fixtures
+from .test_design_directions import DIRECTIONS_ANSWER, answered
 from .test_hosted_schema import CapturePort
 from .test_hosted_support import providers
 from .test_model_proposals import make_generator
@@ -118,6 +119,8 @@ class HostedCapturePort:
 
     async def generate(self, request, **options):
         self.requests.append(request)
+        if request.output_schema.schema_id == "proposal-design-v110":
+            return answered(request, DIRECTIONS_ANSWER)
         return failed_structured_generation_result(
             provider_kind=StructuredGenerationProviderKind.ANTHROPIC_HOSTED,
             code=StructuredGenerationFailureCode.PROVIDER_ERROR,
@@ -257,23 +260,26 @@ def test_the_model_receives_the_perspectives_in_contract_seven_with_the_same_sch
     assert every.system_instruction.count(DEFINITION_SENTENCES) == 1
 
 
-def test_the_hosted_design_receives_the_design_guidance_in_contract_one_hundred_four():
-    sent, context = captured(
-        ModelDesignAdapter,
-        design_request(EVERY_AGENT),
-        providers().hosted_model("design"),
-        HostedCapturePort(),
-    )
+def test_the_hosted_design_receives_the_design_guidance_in_contract_one_hundred_seven():
+    port = HostedCapturePort()
+    generator = ProposalGenerator(providers().hosted_model("design"), port)
+    with pytest.raises(ProposalGenerationError, match="PROVIDER_ERROR"):
+        asyncio.run(ModelDesignAdapter(generator).propose(design_request(EVERY_AGENT)))
+    directions, sent = port.requests
+    guidance = json.loads(directions.input_payload_json)["context"]["perspectives"]
+    context = json.loads(sent.input_payload_json)["context"]
 
+    assert directions.output_schema.schema_id == "proposal-design-v110"
+    assert guidance == perspective_guidance(EVERY_AGENT, GuidanceStage.DESIGN)
     assert context["purpose"] == "DESIGN_ALTERNATIVES_HOSTED"
     assert context["perspectives"] == perspective_guidance(EVERY_AGENT, GuidanceStage.DESIGN)
     assert counted(context["perspectives"]) == FIVE_PERSPECTIVES
     assert context["perspectives"][0]["considerations"] == UX_DESIGN
-    assert DESIGN_CONTRACT_VERSIONS["DESIGN_ALTERNATIVES_HOSTED"] == 104
-    assert HOSTED_DESIGN_CONTRACT_VERSION == 104
-    assert sent.output_schema.schema_id == "proposal-design-v104"
-    assert sent.output_schema.version_number == 104
-    assert sent.prompt_version_ref == "proposal-design-v104"
+    assert DESIGN_CONTRACT_VERSIONS["DESIGN_ALTERNATIVES_HOSTED"] == 107
+    assert HOSTED_DESIGN_CONTRACT_VERSION == 107
+    assert sent.output_schema.schema_id == "proposal-design-v107"
+    assert sent.output_schema.version_number == 107
+    assert sent.prompt_version_ref == "proposal-design-v107"
     assert sent.task_id == "proposal-design-v1"
     assert sent.system_instruction.count(DESIGN_SENTENCE) == 1
 
