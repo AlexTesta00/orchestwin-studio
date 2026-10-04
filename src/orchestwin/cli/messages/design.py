@@ -77,6 +77,47 @@ VISUAL_WORDS: Final[dict[str, dict[str, tuple[str, str]]]] = {
         "SCRIPT": ("calligrafico", "script"),
     },
 }
+AXIS_WORDS: Final[dict[str, tuple[str, str]]] = {
+    "layout": ("Impianto", "Layout"),
+    "shape": ("Forme", "Shapes"),
+    "type": ("Tipografia", "Type"),
+    "colour": ("Colore", "Colour"),
+    "density": ("Densità", "Density"),
+}
+DIRECTION_WORDS: Final[dict[str, dict[str, tuple[str, str]]]] = {
+    "layout": {
+        "PANELS": ("Pannelli", "Panels"),
+        "BANDS": ("Fasce", "Bands"),
+        "EDITORIAL": ("Pagina editoriale", "Editorial page"),
+        "STAGE": ("Palcoscenico", "Stage"),
+        "WORKBENCH": ("Banco di lavoro", "Workbench"),
+        "MOSAIC": ("Mosaico", "Mosaic"),
+    },
+    "shape": {
+        "ROUNDED_OUTLINE": ("Contorni arrotondati", "Rounded outlines"),
+        "SQUARE_RULES": ("Angoli vivi e filetti", "Square corners and rules"),
+        "HEAVY_FRAME": ("Cornici spesse", "Heavy frames"),
+        "SOFT_FILL": ("Superfici piene", "Filled surfaces"),
+        "PILL": ("Pillole", "Pills"),
+    },
+    "type": {
+        "EVEN": ("Scala contenuta", "Restrained scale"),
+        "DISPLAY": ("Titoli molto grandi", "Very large titles"),
+        "CAPS_LABELS": ("Etichette maiuscole", "Upper-case labels"),
+        "READING": ("Da lettura", "Reading"),
+    },
+    "colour": {
+        "ACCENT_ONLY": ("Colore solo sull'azione", "Colour on the action only"),
+        "FIELDS": ("Campiture di colore", "Fields of colour"),
+        "INK": ("Quasi monocromo", "Almost monochrome"),
+        "TINTED": ("Superfici tinte", "Tinted surfaces"),
+    },
+    "density": {
+        "COMPACT": ("Compatta", "Compact"),
+        "COMFORTABLE": ("Comoda", "Comfortable"),
+        "SPACIOUS": ("Ariosa", "Spacious"),
+    },
+}
 
 MESSAGES: dict[str, dict[str, str]] = {
     "design.help": {
@@ -272,6 +313,49 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Aspetto: impaginazione {layout}, tinta {hue}, modalità {mode}, tono {tone}, "
         "titoli con carattere {font}.",
         "en": "Look: {layout} layout, {hue} colour, {mode} mode, {tone} tone, {font} headings.",
+    },
+    "design.alternative_direction": {
+        "it": "Direzione visiva: {name} ({axes})",
+        "en": "Visual direction: {name} ({axes})",
+    },
+    "design.distance_heading": {
+        "it": "Distanza fra le alternative",
+        "en": "Distance between the alternatives",
+    },
+    "design.distance_FAR": {"it": "Si distinguono", "en": "They differ"},
+    "design.distance_CLOSE": {"it": "Troppo vicine", "en": "Too close"},
+    "design.distance_UNKNOWN": {
+        "it": "Misura completa quando i due mockup sono pronti",
+        "en": "Complete measure when both mockups are ready",
+    },
+    "design.distance_pair": {
+        "it": "{first} · {second}: {verdict}",
+        "en": "{first} · {second}: {verdict}",
+    },
+    "design.distance_axes": {"it": "{count} assi diversi su 5", "en": "{count} of 5 axes differ"},
+    "design.distance_declared": {
+        "it": "Scelte dichiarate {score}/100",
+        "en": "Declared choices {score}/100",
+    },
+    "design.distance_styles": {
+        "it": "Stile disegnato {score}/100",
+        "en": "Drawn style {score}/100",
+    },
+    "design.distance_structure": {
+        "it": "Struttura delle schermate {score}/100",
+        "en": "Structure of the screens {score}/100",
+    },
+    "design.distance_close": {
+        "it": "Le due alternative si somigliano nello stile disegnato. Puoi rigenerarle.",
+        "en": "The two alternatives look alike in drawn style. You can regenerate them.",
+    },
+    "design.distance_adherence": {
+        "it": "{code} · Il mockup non segue la direzione su: {axes}",
+        "en": "{code} · The mockup does not follow the direction on: {axes}",
+    },
+    "design.distance_caveat": {
+        "it": "Misura calcolata dallo Studio: non sostituisce il tuo giudizio.",
+        "en": "Measure computed by the Studio: it does not replace your judgement.",
     },
     "design.verdicts_heading": {"it": "Cosa pensano i twin", "en": "What the twins think"},
     "design.column_twin": {"it": "Twin", "en": "Twin"},
@@ -856,6 +940,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "design.page_recommended": {"it": "Consigliata dal modello", "en": "Recommended by the model"},
     "design.page_chosen": {"it": "Scelta", "en": "Chosen"},
     "design.page_product": {"it": "Prodotto: {name}", "en": "Product: {name}"},
+    "design.page_direction": {"it": "Direzione visiva: {name}", "en": "Visual direction: {name}"},
     "design.page_twins": {"it": "Cosa pensano i twin", "en": "What the twins think"},
     "design.page_quote": {"it": "“{quote}”", "en": "“{quote}”"},
     "design.page_open": {"it": "Apri il mockup di {code}", "en": "Open the mockup of {code}"},
@@ -1129,6 +1214,15 @@ MESSAGES: dict[str, dict[str, str]] = {
     **{
         f"design.visual_{dimension}_{value}": {"it": italian, "en": english}
         for dimension, words in VISUAL_WORDS.items()
+        for value, (italian, english) in words.items()
+    },
+    **{
+        f"design.axis_{axis}": {"it": italian, "en": english}
+        for axis, (italian, english) in AXIS_WORDS.items()
+    },
+    **{
+        f"design.direction_{axis}_{value}": {"it": italian, "en": english}
+        for axis, words in DIRECTION_WORDS.items()
         for value, (italian, english) in words.items()
     },
 }

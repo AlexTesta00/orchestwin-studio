@@ -42,6 +42,7 @@ from orchestwin.api.design import (
     DesignReadinessPayload,
     DesignRevisionPayload,
 )
+from orchestwin.api.design_distance import DesignDistancePayload
 from orchestwin.api.design_mockups import MockupCapabilities
 from orchestwin.api.design_realignment import DesignAlignmentPayload, DesignRealignmentPayload
 from orchestwin.api.design_review_pins import ReviewDocumentPayload, ReviewPinsPayload
@@ -93,9 +94,18 @@ from orchestwin.api.user_modeling_realignment import (
     UserModelingRealignmentPayload,
 )
 from orchestwin.artifacts.bound_mockups import bound_mockup_from_snapshot
+from orchestwin.artifacts.design_distance import design_distance_report
 from orchestwin.artifacts.design_evaluation import synthetic_finding_from_snapshot
+from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.generated_mockup_review import review_generated_mockup
 from orchestwin.artifacts.visual_catalog import MODES, VisualChoices
+from orchestwin.artifacts.visual_directions import (
+    AXIS_BINDINGS,
+    DIRECTION_AXES,
+    direction_distance,
+    visual_direction_from_snapshot,
+)
+from orchestwin.artifacts.visual_language import visual_language_from_snapshot
 from orchestwin.config import ApplicationSettings, LogLevel, RuntimeEnvironment
 from orchestwin.identity.application import IdentityUnitOfWork, LocalIdentityApplicationService
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
@@ -280,7 +290,7 @@ def test_the_fake_serves_every_area_that_the_commands_need(
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 155
+    assert len(ROUTES) == 156
 
 
 def test_validation_routes_are_exactly_the_two_authorized_read_only_routes() -> None:
@@ -5181,3 +5191,146 @@ def test_the_tasks_and_the_learning_of_the_fake_pass_the_real_domain_rules(langu
             assert learning_domain.twin_learning_from_snapshot(entry).to_snapshot() == entry
         assert entries[0]["label"] == "1.3"
         assert studio.errors == []
+
+
+def domain_version(version: dict) -> DesignPackageVersion:
+    return DesignPackageVersion(
+        id=UUID(version["id"]),
+        project_id=UUID(version["project_id"]),
+        version_number=version["version_number"],
+        package=DesignPackagePayload.model_validate(version["package"]).to_domain(),
+        content_hash=version["content_hash"],
+        created_by_user_id=UUID(version["created_by_user_id"]),
+        created_at=datetime.fromisoformat(version["created_at"]),
+        based_on_version_number=version["based_on_version_number"],
+    )
+
+
+def distance_answer(version: dict, mockups: dict) -> dict:
+    report = design_distance_report(domain_version(version), mockups)
+    return json.loads(
+        json.dumps(DesignDistancePayload.model_validate(report).model_dump(mode="json"))
+    )
+
+
+def test_the_distance_route_measures_the_current_design_and_its_kept_mockups() -> None:
+    with FakeStudio(language="en", job_polls=0, directions=True) as studio:
+        client = signed(studio)
+        other = stranger(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="requirements")
+        base = f"/projects/{project.id}"
+        missing = client.call("GET", base + "/design/distance")
+        assert client.call("POST", base + "/design/proposals")[0] == 201
+        current = project.current("design")
+        early = fits(DesignDistancePayload, client.call("GET", base + "/design/distance"))
+        mockups = {}
+        for alternative in current["package"]["alternatives"]:
+            _, job = client.call(
+                "POST",
+                base + "/design/mockups/jobs",
+                {
+                    "design_version_id": current["id"],
+                    "design_content_hash": current["content_hash"],
+                    "alternative_id": alternative["id"],
+                },
+            )
+            _, finished = client.call("GET", f"{base}/design/mockups/jobs/{job['job_id']}")
+            bound = finished["result"]["package"]["generated_mockup"]
+            tokens = alternative["visual_language"]["tokens"]
+            mockups[UUID(alternative["id"])] = bound_mockup_from_snapshot(
+                bound, token_names=tokens
+            ).mockup
+        late = fits(DesignDistancePayload, client.call("GET", base + "/design/distance"))
+        foreign = other.call("GET", base + "/design/distance")
+        assert studio.errors == []
+
+    assert missing == foreign == (404, refused("DESIGN_PACKAGE_NOT_FOUND"))
+    assert early == distance_answer(current, {})
+    assert late == distance_answer(current, mockups)
+    assert early["pairs"][0]["verdict"] == "UNKNOWN"
+    assert early["pairs"][0]["declared"]["axes_different"] == 5
+    assert late["pairs"][0]["styles"]["available"] is True
+    assert [item["direction"] for item in late["alternatives"]] == ["Reading sheet", "Till receipt"]
+
+
+def test_the_distance_of_a_design_without_directions_keeps_the_applied_mockup() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        answer = fits(
+            DesignDistancePayload, client.call("GET", f"/projects/{project.id}/design/distance")
+        )
+        current = project.current("design")
+        assert studio.errors == []
+
+    package = current["package"]
+    chosen = next(
+        item
+        for item in package["alternatives"]
+        if item["id"] == package["owner_selected_alternative_id"]
+    )
+    mockup = bound_mockup_from_snapshot(
+        package["generated_mockup"], token_names=chosen["visual_language"]["tokens"]
+    ).mockup
+    assert answer == distance_answer(current, {UUID(chosen["id"]): mockup})
+    assert answer["pairs"][0]["declared"]["axes_different"] is None
+    assert answer["pairs"][0]["verdict"] == "UNKNOWN"
+    assert [item["direction"] for item in answer["alternatives"]] == [None, None]
+
+
+@pytest.mark.parametrize(
+    ("directions", "purposes"),
+    [
+        (False, ["DESIGN_ALTERNATIVES_HOSTED"] * 2),
+        (True, ["DESIGN_DIRECTIONS", "DESIGN_ALTERNATIVES_HOSTED"] * 2),
+    ],
+)
+def test_a_directed_proposal_records_the_directions_before_the_alternatives(
+    directions: bool, purposes: list[str]
+) -> None:
+    with FakeStudio(job_polls=0, directions=directions) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="requirements")
+        base = f"/projects/{project.id}"
+        assert client.call("POST", base + "/design/proposals")[0] == 201
+        assert client.call("POST", base + "/design/regenerations")[0] == 201
+        _, usage = client.call("GET", base + "/model-usage")
+        assert studio.errors == []
+
+    assert [item["purpose"] for item in reversed(usage["items"])] == purposes
+    assert {item["task"] for item in usage["items"]} == {"design"}
+
+
+@pytest.mark.parametrize("language", ["it", "en"])
+def test_a_directed_fake_binds_the_choices_of_each_alternative_to_its_direction(
+    language: str,
+) -> None:
+    packages = []
+    for directions in (False, True):
+        studio = FakeStudio(language=language, directions=directions)
+        studio.add_account(EMAIL, PASSWORD)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        packages.append([version["package"] for version in project.designs])
+    plain, directed = packages
+    codes = [
+        item["code"] for item in project.current("requirements")["specification"]["requirements"]
+    ]
+    languages = [item["visual_language"] for item in directed[-1]["alternatives"]]
+    found = [visual_direction_from_snapshot(item["direction"]) for item in languages]
+
+    assert all(
+        "direction" not in item["visual_language"]
+        for package in plain
+        for item in package["alternatives"]
+    )
+    for snapshot, direction in zip(languages, found, strict=True):
+        assert visual_language_from_snapshot(snapshot).to_snapshot() == snapshot
+        for axis in DIRECTION_AXES:
+            for dimension, allowed in AXIS_BINDINGS[axis][getattr(direction.axes, axis)].items():
+                assert snapshot["choices"][dimension] in {item.value for item in allowed}
+    assert direction_distance(found[0].axes, found[1].axes) == 5
+    assert [item.candidates for item in found] == [5, 5]
+    for package in directed:
+        canonical_design(package, codes)
+    with pytest.raises(ValueError, match="hosted"):
+        FakeStudio(hosted=False, directions=True)

@@ -57,6 +57,14 @@ MESSAGES = {
         "en": "To verify with real people ({count})",
     },
     "why.context": {"it": "Contesto dichiarato", "en": "Declared context"},
+    "why.direction": {"it": "Direzione visiva: {name}", "en": "Visual direction: {name}"},
+    "why.direction_axis": {"it": "{axis}: {value}", "en": "{axis}: {value}"},
+    "why.direction_origin": {
+        "it": "Proposta dal modello fra {count} candidate; scelta dallo Studio perché lontana "
+        "dall'altra.",
+        "en": "Proposed by the model among {count} candidates; chosen by the Studio because it "
+        "is far from the other.",
+    },
     "why.limit.LEGACY_DOSSIER": {
         "it": "Dossier precedente: catena ricalcolata dai soli dati disponibili.",
         "en": "Legacy Dossier: chain rebuilt from the available data.",
