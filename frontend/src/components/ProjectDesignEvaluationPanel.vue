@@ -537,9 +537,12 @@ watch(autoReviewDue, (due) => {
     :aria-labelledby="titleId"
     data-testid="design-evaluation-panel"
   >
-    <header class="flex flex-wrap items-center gap-x-4 gap-y-3">
+    <header class="flex flex-wrap items-start gap-x-4 gap-y-3">
       <div class="grid min-w-[min(100%,16rem)] flex-1 gap-1">
         <h3 :id="titleId" class="m-0 text-base font-semibold">{{ copy.title }}</h3>
+        <p class="m-0 text-sm leading-normal text-on-night-2" data-testid="design-evaluation-intro">
+          {{ copy.intro }}
+        </p>
         <p
           v-if="!guidance.expert"
           class="m-0 text-sm text-on-night-3"
@@ -684,7 +687,6 @@ watch(autoReviewDue, (due) => {
         {{ fill(copy.history, { n: runViews.length }) }}
       </summary>
       <div class="grid gap-3 border-t border-night-line p-3 sm:p-4">
-        <p class="m-0 text-[13px] leading-normal text-on-night-3">{{ copy.intro }}</p>
         <article
           v-for="view in runViews"
           :key="view.run.id"
