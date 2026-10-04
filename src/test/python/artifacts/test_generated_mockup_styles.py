@@ -398,6 +398,36 @@ def test_font_families_come_only_from_the_tokens_or_generic_names(
 
 
 @pytest.mark.parametrize(
+    ("declaration", "code"),
+    [
+        ("font-family:var(--vl-font-mono)", None),
+        ("font-family:var(--vl-font-mono), monospace", None),
+        ("font:600 14px/1.2 var(--vl-font-mono)", None),
+        ("font-family:var(--vl-font-other)", "STYLES_FONT"),
+        ("font-family:var(--vl-font-mono, monospace)", "STYLES_FONT"),
+        ("font-family:'Geist Mono'", "STYLES_FONT"),
+        ('font-family:"IBM Plex Mono", monospace', "STYLES_FONT"),
+        ("font-family:Geist", "STYLES_FONT"),
+    ],
+)
+def test_the_monospace_token_is_the_only_new_font_of_a_design(
+    declaration: str, code: str | None
+) -> None:
+    styles = "td{" + declaration + "}"
+    names = TOKEN_NAMES | {"--vl-font-mono", "--vl-font-other"}
+    if code is None:
+        assert build(styles=styles, token_names=names).styles == styles
+    else:
+        with pytest.raises(GeneratedMockupError) as error:
+            build(styles=styles, token_names=names)
+        assert error.value.code == code, error.value.detail
+
+
+def test_the_monospace_token_is_unknown_to_a_design_that_does_not_carry_it() -> None:
+    rejects("td{font-family:var(--vl-font-mono)}", "STYLES_CUSTOM_PROPERTY")
+
+
+@pytest.mark.parametrize(
     ("value", "valid"),
     [
         ("999", True),
