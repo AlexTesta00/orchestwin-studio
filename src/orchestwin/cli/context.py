@@ -10,6 +10,8 @@ from orchestwin.cli.project import ProjectFolder
 from orchestwin.cli.session import DEFAULT_STUDIO, SessionStore, StudioAddress
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from orchestwin.cli.console import Console
     from orchestwin.cli.environment import Environment
 
@@ -33,6 +35,7 @@ class CommandContext:
         self.debug = debug
         self.directory = environment.working_directory if directory is None else directory
         self.sessions = SessionStore(environment) if sessions is None else sessions
+        self.generation_waits: list[tuple[datetime, float, int | None]] = []
 
     def project(self, *, required: bool = True) -> ProjectFolder | None:
         found = ProjectFolder.find(self.directory)

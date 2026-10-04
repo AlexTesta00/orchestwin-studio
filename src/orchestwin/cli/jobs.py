@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -45,8 +46,46 @@ def generate(
     job_path: Callable[[str], str] | None = None,
     limit_seconds: float = 1800.0,
 ) -> JobResult:
+    started = context.environment.monotonic()
+    result: JobResult | None = None
+    try:
+        result = _generate(
+            context,
+            client,
+            project_id,
+            path,
+            body,
+            label=label,
+            job_path=job_path,
+            limit_seconds=limit_seconds,
+            started=started,
+        )
+        return result
+    finally:
+        _waited(context, started, result)
+
+
+def _waited(context: CommandContext, started: float, result: JobResult | None) -> None:
+    with contextlib.suppress(Exception):
+        environment = context.environment
+        seconds = environment.monotonic() - started if result is None else result.seconds
+        status = None if result is None else result.status_code
+        context.generation_waits.append((environment.now(), seconds, status))
+
+
+def _generate(
+    context: CommandContext,
+    client: StudioClient,
+    project_id: str,
+    path: str,
+    body: object | None,
+    *,
+    label: str,
+    job_path: Callable[[str], str] | None,
+    limit_seconds: float,
+    started: float,
+) -> JobResult:
     environment = context.environment
-    started = environment.monotonic()
     reply = client.request("POST", path, body=body, prefer_async=True)
     if reply.status != ACCEPTED:
         return JobResult(reply.status, reply_body(reply), environment.monotonic() - started, None)
