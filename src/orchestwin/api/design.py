@@ -74,6 +74,13 @@ from orchestwin.artifacts.visual_catalog import (
     SurfaceTone,
     TypeScale,
 )
+from orchestwin.artifacts.visual_directions import (
+    DirectionColour,
+    DirectionDensity,
+    DirectionLayout,
+    DirectionShape,
+    DirectionType,
+)
 from orchestwin.identity.domain import UserAccount
 from orchestwin.models.design import DesignProposalIssueCode
 from orchestwin.projects.design_application import (
@@ -184,6 +191,24 @@ class TwinFitPayload(ApiModel):
     statement: str
 
 
+class DirectionAxesPayload(ApiModel):
+    layout: DirectionLayout
+    shape: DirectionShape
+    type: DirectionType
+    colour: DirectionColour
+    density: DirectionDensity
+
+
+class VisualDirectionPayload(ApiModel):
+    name: str
+    concept: str
+    rules: tuple[str, ...]
+    axes: DirectionAxesPayload
+    typicality: int
+    candidates: int
+    vocabulary_version: int
+
+
 class VisualLanguagePayload(ApiModel):
     catalog_version: int
     catalog_content_hash: str
@@ -193,6 +218,7 @@ class VisualLanguagePayload(ApiModel):
     palette: dict[str, str]
     tokens: dict[str, str]
     twin_fit: tuple[TwinFitPayload, ...]
+    direction: VisualDirectionPayload | None = None
 
 
 class DesignAlternativePayload(ApiModel):
@@ -370,6 +396,8 @@ class DesignPackagePayload(ApiModel):
                 del alternative["approach"]
             if alternative["visual_language"] is None:
                 del alternative["visual_language"]
+            elif alternative["visual_language"]["direction"] is None:
+                del alternative["visual_language"]["direction"]
         for critique in payload["critiques"]:
             for key in ("verdict", "quote"):
                 if critique[key] is None:
