@@ -99,7 +99,7 @@ const copy = computed(() =>
         evaluation:
           "La valutazione dei twin sul prototipo fornito non è disponibile nello sprint 36.",
         future:
-          "La struttura è la stessa dei mockup generati, per collegare la valutazione nello sprint 38. Sono indisponibili anche ut code e il percorso sugli scenari del 35 per questo Design.",
+          "La struttura è la stessa dei mockup generati. Per questo Design non sono disponibili nemmeno ut code e il percorso sugli scenari.",
         submit: "Invia il prototipo all'approvazione",
         approve: "Approva questo prototipo",
         reject: "Rifiuta",
@@ -145,7 +145,7 @@ const copy = computed(() =>
         originHint: "Optional, for example the tool used to create it.",
         evaluation: "Twin evaluation of the supplied prototype is unavailable in sprint 36.",
         future:
-          "Its structure matches generated mockups so evaluation can be connected in sprint 38. ut code and the sprint 35 scenario walkthrough are also unavailable for this Design.",
+          "Its structure matches generated mockups. ut code and the scenario walkthrough are also unavailable for this Design.",
         submit: "Submit the prototype for approval",
         approve: "Approve this prototype",
         reject: "Reject",
