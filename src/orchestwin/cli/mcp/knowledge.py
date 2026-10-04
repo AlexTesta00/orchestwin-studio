@@ -631,6 +631,11 @@ def design_view(document: Mapping[str, object]) -> DesignView:
     )
 
 
+def alternative_direction(alternative: Mapping[str, object]) -> Mapping[str, object] | None:
+    direction = _mapping(alternative.get("visual_language")).get("direction")
+    return direction if isinstance(direction, Mapping) else None
+
+
 def markdown_files(root: Path) -> list[str]:
     if not root.is_dir():
         return []

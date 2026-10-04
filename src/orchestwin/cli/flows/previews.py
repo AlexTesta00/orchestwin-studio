@@ -177,6 +177,9 @@ def _card(
     if alternative.product_name:
         product = context.text("design.page_product", name=alternative.product_name)
         parts.append(f'<p class="muted">{_escape(product)}</p>')
+    if alternative.direction is not None:
+        direction = context.text("design.page_direction", name=alternative.direction.name)
+        parts.append(f'<p class="muted">{_escape(direction)}</p>')
     verdicts = _verdicts(context, state, alternative)
     if verdicts:
         parts.append(f"<h3>{_escape(context.text('design.page_twins'))}</h3>")

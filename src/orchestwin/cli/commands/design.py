@@ -178,6 +178,7 @@ def show(
     if kind == design_state.JOB_RUNNING:
         console.say("design.show_running", names=running_names(context, state))
     modelless = prices.modelless(state)
+    state = design_state.with_distance(client, state)
     describe(context, client, project, state, everything=True, modelless=modelless)
     recovery = design_recovery.read(client, project, state)
     if recovery.action is not None:

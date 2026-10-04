@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 
+from orchestwin.cli.views import directions
 from orchestwin.cli.views.workflow_inputs import show_limits
 
 
@@ -38,9 +40,7 @@ def show(console, answer, *, details=False):
                 if rationale:
                     console.say("why.origin." + rationale["origin"])
                     console.write(rationale["text"])
-                console.write(
-                    json.dumps(node.get("declared_context", {}), ensure_ascii=True, sort_keys=True)
-                )
+                show_declared(console, node.get("declared_context", {}))
                 for item in node.get("citations", []):
                     console.write(json.dumps(item, ensure_ascii=True, sort_keys=True))
         if not details and len(answer[key]) > len(nodes):
@@ -81,3 +81,33 @@ def show(console, answer, *, details=False):
                 indent=2,
             )
         )
+
+
+def show_declared(console, declared):
+    direction = declared.get("direction") if isinstance(declared, Mapping) else None
+    if not isinstance(direction, Mapping):
+        console.write(json.dumps(declared, ensure_ascii=True, sort_keys=True))
+        return
+    rest = {key: value for key, value in declared.items() if key != "direction"}
+    console.write(json.dumps(rest, ensure_ascii=True, sort_keys=True))
+    for line in direction_lines(console, direction):
+        console.write(f"    {line}")
+
+
+def direction_lines(console, direction):
+    axes = directions.axes_of(direction)
+    lines = [
+        console.text("why.direction", name=direction.get("name") or "-"),
+        " · ".join(
+            console.text(
+                "why.direction_axis",
+                axis=directions.axis_label(console.text, axis),
+                value=directions.value_label(console.text, axis, axes.get(axis)),
+            )
+            for axis in directions.AXES
+        ),
+    ]
+    count = direction.get("candidates")
+    if isinstance(count, int) and not isinstance(count, bool):
+        lines.append(console.text("why.direction_origin", count=count))
+    return lines

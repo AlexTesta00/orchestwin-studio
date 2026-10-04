@@ -52,6 +52,7 @@ from orchestwin.api.requirements import (
 )
 from orchestwin.api.research_evidence import EvidenceBody
 from orchestwin.artifacts.bound_mockups import create_bound_mockup, markup_requirement_codes
+from orchestwin.artifacts.design_distance import design_distance_report
 from orchestwin.artifacts.design_evaluation import (
     ANCHOR_LABEL_LENGTH,
     MATCH_SIMILARITY,
@@ -59,6 +60,7 @@ from orchestwin.artifacts.design_evaluation import (
     finding_similarity,
     synthetic_finding_from_snapshot,
 )
+from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.generated_mockup_document import MockupPin, mockup_document
 from orchestwin.artifacts.generated_mockup_review import (
     MockupIssueSeverity,
@@ -73,6 +75,14 @@ from orchestwin.artifacts.generated_mockups import (
     screen_trees,
 )
 from orchestwin.artifacts.visual_catalog import MODES, VisualChoices
+from orchestwin.artifacts.visual_directions import (
+    AXIS_BINDINGS,
+    DIRECTION_AXES,
+    DIRECTION_CANDIDATES,
+    DirectionAxes,
+    VisualDirection,
+    create_visual_direction,
+)
 from orchestwin.artifacts.visual_language import TwinFit, create_visual_language
 from orchestwin.evaluation.findings import (
     SyntheticFindingCriterion,
@@ -325,6 +335,7 @@ COSTS = {
     "REQUIREMENTS_CHANGE": 300_000,
     "DESIGN_PROPOSAL": 450_000,
     "DESIGN_REGENERATION": 450_000,
+    "DESIGN_DIRECTIONS": 150_000,
     "MOCKUP": 1_450_000,
     "ITERATION": 1_100_000,
     "DESIGN_EVALUATION": 165_000,
@@ -345,6 +356,7 @@ TASKS = {
     "REQUIREMENTS_CHANGE": "requirements",
     "DESIGN_PROPOSAL": "design",
     "DESIGN_REGENERATION": "design",
+    "DESIGN_DIRECTIONS": "design",
     "MOCKUP": "design",
     "ITERATION": "design",
     "DESIGN_EVALUATION": "twin_review",
@@ -365,6 +377,7 @@ PURPOSES = {
     "REQUIREMENTS_CHANGE": "REQUIREMENTS_CHANGE",
     "DESIGN_PROPOSAL": "DESIGN_ALTERNATIVES_HOSTED",
     "DESIGN_REGENERATION": "DESIGN_ALTERNATIVES_HOSTED",
+    "DESIGN_DIRECTIONS": "DESIGN_DIRECTIONS",
     "MOCKUP": "DESIGN_MOCKUP_HTML",
     "ITERATION": "DESIGN_ITERATION",
     "DESIGN_EVALUATION": "DESIGN_TWIN_REVIEW",
@@ -942,6 +955,76 @@ ALTERNATIVES = {
             "tone": "ESSENTIAL",
         },
     ),
+}
+DIRECTED_ALTERNATIVES = {
+    "DES-001": (
+        {
+            "layout": "STAGE",
+            "shape": "SOFT_FILL",
+            "type": "READING",
+            "colour": "TINTED",
+            "density": "SPACIOUS",
+        },
+        8,
+    ),
+    "DES-002": (
+        {
+            "layout": "WORKBENCH",
+            "shape": "SQUARE_RULES",
+            "type": "CAPS_LABELS",
+            "colour": "INK",
+            "density": "COMFORTABLE",
+        },
+        5,
+    ),
+}
+DIRECTION_TEXTS = {
+    "it": {
+        "DES-001": (
+            "Foglio da lettura",
+            "Una sola colonna centrata, come una pagina da leggere con calma. Al tavolo, con poca "
+            "luce, chi paga trova un compito per volta e cifre grandi.",
+            (
+                "Il titolo della schermata sta in alto al centro, grande e da solo.",
+                "I gruppi stanno su superfici tinte, senza bordi.",
+                "L'azione principale è un pulsante pieno, l'unico elemento colorato.",
+            ),
+        ),
+        "DES-002": (
+            "Scontrino di cassa",
+            "Uno strumento a tutta larghezza, come uno scontrino: righe fitte, etichette "
+            "maiuscole, cifre in colonna. Chi divide il conto confronta le quote a colpo d'occhio.",
+            (
+                "Il titolo è un'etichetta piccola nella barra in alto.",
+                "Filetti sottili separano le righe; nessun riquadro.",
+                "Le cifre stanno in colonna, allineate a destra.",
+                "Il colore primario compare solo sull'azione principale.",
+            ),
+        ),
+    },
+    "en": {
+        "DES-001": (
+            "Reading sheet",
+            "One centred column, like a page read at leisure. At the table, in dim light, whoever "
+            "pays finds one task at a time and large digits.",
+            (
+                "The screen title sits at the top centre, large and alone.",
+                "Groups sit on tinted surfaces, without borders.",
+                "The main action is a filled button, the only coloured element.",
+            ),
+        ),
+        "DES-002": (
+            "Till receipt",
+            "A full-width tool, like a receipt: dense rows, upper-case labels, digits in columns. "
+            "Whoever splits the bill compares the shares at a glance.",
+            (
+                "The title is a small label in the top bar.",
+                "Thin rules separate the rows; no boxes.",
+                "Digits stand in columns, aligned to the right.",
+                "The primary colour appears only on the main action.",
+            ),
+        ),
+    },
 }
 DESIGN_TEXTS = {
     "it": {
@@ -1552,6 +1635,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}/design/current", "design_current"),
     Route("GET", "/projects/{project_id}/design", "design_history"),
     Route("GET", "/projects/{project_id}/design/readiness", "design_readiness"),
+    Route("GET", "/projects/{project_id}/design/distance", "design_distance"),
     Route("POST", "/projects/{project_id}/design/revisions", "design_revision"),
     Route("GET", "/projects/{project_id}/design/revisions", "design_revisions"),
     Route("GET", "/projects/{project_id}/design/revisions/{diff_id}", "design_revision_view"),
@@ -2504,9 +2588,12 @@ class FakeStudio:
         billing: str | None = None,
         job_polls: int = 2,
         now: Callable[[], datetime] | None = None,
+        directions: bool = False,
     ) -> None:
         if language not in LANGUAGES:
             raise ValueError("language must be it or en")
+        if directions and not hosted:
+            raise ValueError("directions need a hosted model")
         if isinstance(twins, bool) or not isinstance(twins, int) or not 1 <= twins <= MAX_TWINS:
             raise ValueError(f"twins must be between 1 and {MAX_TWINS}")
         if isinstance(job_polls, bool) or not isinstance(job_polls, int) or job_polls < 0:
@@ -2520,6 +2607,7 @@ class FakeStudio:
         self.language = language
         self.twins = twins
         self.hosted = hosted
+        self.directions = directions
         self.billing = billing
         self.job_polls = job_polls
         self.requests: list[RecordedRequest] = []
@@ -6082,11 +6170,13 @@ class FakeStudio:
             for twin in twins
         )
         for spec in ALTERNATIVES[self.language]:
+            direction = self._direction(spec["code"]) if self.directions else None
             language = create_visual_language(
-                choices=VisualChoices.from_snapshot(_choices(spec)),
+                choices=VisualChoices.from_snapshot(_choices(spec, direction)),
                 product_name=spec["product_name"],
                 rationale=spec["rationale"],
                 twin_fit=fits,
+                direction=direction,
             )
             alternatives.append(
                 {
@@ -6181,6 +6271,18 @@ class FakeStudio:
             "generated_mockup": None,
             "owner_assertions": [],
         }
+
+    def _direction(self, code: str) -> VisualDirection:
+        axes, typicality = DIRECTED_ALTERNATIVES[code]
+        name, concept, rules = DIRECTION_TEXTS[self.language][code]
+        return create_visual_direction(
+            name=name,
+            concept=concept,
+            rules=rules,
+            axes=DirectionAxes(**axes),
+            typicality=typicality,
+            candidates=DIRECTION_CANDIDATES,
+        )
 
     def _append_design(
         self, project: FakeProject, package: dict[str, object], account: _Account
@@ -6296,9 +6398,14 @@ class FakeStudio:
             raise _Refusal(
                 409, {"code": "PROPOSAL_REJECTED", "proposal_issue": "UX_DESIGNER_REQUIRED"}
             )
+        self._record_directions(project)
         self._record(project, "DESIGN_PROPOSAL")
         version = self._append_design(project, self._design_package(project), call.account)
         return _Answer(201, _generation_payload("CREATED", version, None))
+
+    def _record_directions(self, project: FakeProject) -> None:
+        if self.directions:
+            self._record(project, "DESIGN_DIRECTIONS")
 
     def _has_designer(self, project: FakeProject) -> bool:
         team = project.team
@@ -6329,6 +6436,7 @@ class FakeStudio:
                     "REJECTED", None, "PROPOSAL_REJECTED", proposal_issue="UX_DESIGNER_REQUIRED"
                 ),
             )
+        self._record_directions(project)
         self._record(project, "DESIGN_REGENERATION")
         version = self._append_design(project, self._design_package(project), call.account)
         return _Answer(201, _generation_payload("CREATED", version, None))
@@ -6366,6 +6474,14 @@ class FakeStudio:
                 "approved_current_package": bool(approved),
             },
         )
+
+    def _route_design_distance(self, call: _Call) -> _Answer:
+        from orchestwin.api.design_distance import DesignDistancePayload
+
+        project, design = self._governed_design(call)
+        version = _design_version(design)
+        report = design_distance_report(version, _kept_mockups(project, design))
+        return _Answer(200, DesignDistancePayload.model_validate(report).model_dump(mode="json"))
 
     def _route_design_revision(self, call: _Call) -> _Answer:
         fields = _Fields(call.json(), ("package",))
@@ -12580,6 +12696,40 @@ def _fake_design(package: Mapping[str, object]):
     return DesignPackagePayload.model_validate(package).to_domain()
 
 
+def _design_version(design: Mapping[str, object]) -> DesignPackageVersion:
+    return DesignPackageVersion(
+        id=UUID(str(design["id"])),
+        project_id=UUID(str(design["project_id"])),
+        version_number=int(design["version_number"]),
+        package=_fake_design(design["package"]),
+        content_hash=str(design["content_hash"]),
+        created_by_user_id=UUID(str(design["created_by_user_id"])),
+        created_at=datetime.fromisoformat(str(design["created_at"])),
+        based_on_version_number=design["based_on_version_number"],
+    )
+
+
+def _kept_mockups(
+    project: FakeProject, design: Mapping[str, object]
+) -> dict[UUID, GeneratedMockup]:
+    package = design["package"]
+    applied = package.get("generated_mockup")
+    mockups: dict[UUID, GeneratedMockup] = {}
+    for alternative in package["alternatives"]:
+        identifier = str(alternative["id"])
+        bound = applied
+        if bound is None or str(bound["mockup"]["design_alternative_id"]) != identifier:
+            stored = project.mockups.get(identifier)
+            bound = None if stored is None else stored["package"].get("generated_mockup")
+        language = alternative.get("visual_language")
+        if bound is None or language is None:
+            continue
+        mockups[UUID(identifier)] = generated_mockup_from_snapshot(
+            bound["mockup"], token_names=language["tokens"]
+        )
+    return mockups
+
+
 def _fake_persona_profile(profile: Mapping[str, object]):
     payload = copy.deepcopy(dict(profile))
     payload.setdefault("schema_version", 1)
@@ -12765,7 +12915,19 @@ def _generation_payload(
     }
 
 
-def _choices(spec: Mapping[str, str]) -> dict[str, str]:
+def _choices(spec: Mapping[str, str], direction: VisualDirection | None = None) -> dict[str, str]:
+    choices = _plain_choices(spec)
+    if direction is None:
+        return choices
+    for axis in DIRECTION_AXES:
+        for dimension, allowed in AXIS_BINDINGS[axis][getattr(direction.axes, axis)].items():
+            values = [item.value for item in allowed]
+            if choices[dimension] not in values:
+                choices[dimension] = values[0]
+    return choices
+
+
+def _plain_choices(spec: Mapping[str, str]) -> dict[str, str]:
     return {
         "archetype": spec["archetype"],
         "hue_family": spec["hue"],

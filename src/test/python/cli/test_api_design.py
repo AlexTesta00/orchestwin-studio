@@ -112,6 +112,7 @@ def design_session(
     team_without: Sequence[str] = (),
     billing: str | None = None,
     requirements_schema_version: int = 2,
+    directions: bool = False,
 ) -> Iterator[Session]:
     with FakeStudio(
         language=language,
@@ -120,6 +121,7 @@ def design_session(
         billing=billing,
         job_polls=job_polls,
         twins=twins,
+        directions=directions,
     ) as studio:
         studio.add_account(EMAIL, PASSWORD)
         project = studio.seed_project(

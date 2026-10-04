@@ -119,6 +119,7 @@ ITALIAN: Final = "it"
 ENGLISH: Final = "en"
 TEXT_VALUE: Final = "TEXT"
 ITEMS_VALUE: Final = "ITEMS"
+DIRECTION_FIELDS: Final = ("name", "concept", "rules", "axes")
 
 
 class ToolError(Exception):
@@ -813,10 +814,21 @@ def get_design(session: Session, values: Mapping[str, object]) -> dict[str, obje
             "screens": listed,
         },
         "alternatives": [
-            {"code": item.get("code"), "title": item.get("title"), "chosen": item is chosen}
-            for item in view.alternatives
+            alternative_entry(item, chosen=item is chosen) for item in view.alternatives
         ],
     }
+
+
+def alternative_entry(item: Mapping[str, object], *, chosen: bool) -> dict[str, object]:
+    entry: dict[str, object] = {
+        "code": item.get("code"),
+        "title": item.get("title"),
+        "chosen": chosen,
+    }
+    direction = knowledge.alternative_direction(item)
+    if direction is not None:
+        entry["direction"] = {name: _plain(direction.get(name)) for name in DIRECTION_FIELDS}
+    return entry
 
 
 def get_feedback(session: Session, values: Mapping[str, object]) -> dict[str, object]:

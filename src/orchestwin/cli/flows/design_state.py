@@ -13,6 +13,7 @@ from orchestwin.cli.api import packages
 from orchestwin.cli.api import projects as project_api
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.messages import known
+from orchestwin.cli.views import directions
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -70,6 +71,20 @@ NEXT_COMMANDS: Final = (
     "design.after_twins",
     "design.after_watch",
 )
+CLOSE: Final = "CLOSE"
+VERDICTS: Final = frozenset({"FAR", CLOSE, "UNKNOWN"})
+NOT_FOLLOWED: Final = "NOT_FOLLOWED"
+LEVELS: Final = (
+    ("styles", "design.distance_styles"),
+    ("structure", "design.distance_structure"),
+)
+JOINER: Final = " · "
+
+
+@dataclass(frozen=True, slots=True)
+class Direction:
+    name: str
+    axes: Mapping[str, str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +97,7 @@ class Alternative:
     product_name: str | None
     choices: Mapping[str, str]
     recommended: bool
+    direction: Direction | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +122,7 @@ class DesignState:
     documents: Mapping[str, Mapping[str, object]] = field(default=EMPTY)
     review: Mapping[str, object] | None = None
     pending_change: Mapping[str, object] | None = None
+    distance: Mapping[str, object] | None = None
 
     @property
     def kind(self) -> str:
@@ -162,6 +179,7 @@ class DesignState:
                         for name, value in (choices.items() if isinstance(choices, Mapping) else ())
                     },
                     recommended=identifier == recommended,
+                    direction=_direction(visual.get("direction")),
                 )
             )
         return tuple(found)
@@ -300,6 +318,16 @@ def read_state(client: StudioClient, project: ProjectFolder) -> DesignState:
     )
 
 
+def with_distance(client: StudioClient, state: DesignState) -> DesignState:
+    version = state.version
+    if version is None or all(item.direction is None for item in state.alternatives):
+        return state
+    report = design_api.distance(client, state.project_id)
+    if report is None or report.get("design_version_id") != version.get("id"):
+        return state
+    return replace(state, distance=report)
+
+
 def read_documents(client: StudioClient, state: DesignState) -> Mapping[str, Mapping[str, object]]:
     if not state.generated:
         return EMPTY
@@ -352,6 +380,7 @@ def show_state(
     listed = kind in (NO_MOCKUPS, MOCKUPS_READY) or (everything and state.version is not None)
     if listed:
         show_alternatives(context, state)
+        show_distance(context, state)
         show_verdicts(context, state)
     if kind in (CHOSEN, APPROVED):
         show_chosen(context, state)
@@ -395,10 +424,82 @@ def show_alternative(
     line = visual_line(context, alternative)
     if line is not None:
         wrapped(context, line, indent="  ")
+    direction = direction_line(context, alternative)
+    if direction is not None:
+        wrapped(context, direction, indent="  ")
     if mockups and state.generated and state.chosen is None:
         ready = alternative.id in state.documents
         console.say("design.mockup_present" if ready else "design.mockup_absent")
     console.write()
+
+
+def show_distance(context: CommandContext, state: DesignState) -> None:
+    report = state.distance
+    if report is None:
+        return
+    pairs = _mappings(report.get("pairs"))
+    lines = [line for pair in pairs for line in pair_lines(context, pair, named=len(pairs) > 1)]
+    lines.extend(adherence_lines(context, report))
+    if not lines:
+        return
+    console = context.console
+    console.heading(context.text("design.distance_heading"))
+    for line in [*lines, context.text("design.distance_caveat")]:
+        wrapped(context, line)
+    console.write()
+
+
+def pair_lines(context: CommandContext, pair: Mapping[str, object], *, named: bool) -> list[str]:
+    declared = _mapping(pair.get("declared"))
+    verdict = pair.get("verdict")
+    head = [context.text(f"design.distance_{verdict}")] if verdict in VERDICTS else []
+    count = _whole(declared.get("axes_different"))
+    if count is not None:
+        head.append(context.text("design.distance_axes", count=count))
+    score = _whole(declared.get("score"))
+    levels = [] if score is None else [context.text("design.distance_declared", score=score)]
+    for name, key in LEVELS:
+        level = _mapping(pair.get(name))
+        score = _whole(level.get("score"))
+        if level.get("available") is True and score is not None:
+            levels.append(context.text(key, score=score))
+    lines: list[str] = []
+    if head:
+        text = JOINER.join(head)
+        if named:
+            text = context.text(
+                "design.distance_pair",
+                first=_text(pair.get("first")) or "-",
+                second=_text(pair.get("second")) or "-",
+                verdict=text,
+            )
+        lines.append(text)
+    if levels:
+        lines.append(JOINER.join(levels))
+    if verdict == CLOSE:
+        lines.append(context.text("design.distance_close"))
+    return lines
+
+
+def adherence_lines(context: CommandContext, report: Mapping[str, object]) -> list[str]:
+    lines: list[str] = []
+    for item in _mappings(report.get("alternatives")):
+        adherence = _mapping(item.get("adherence"))
+        axes = _mapping(adherence.get("axes")) if adherence.get("available") is True else {}
+        missed = [
+            directions.axis_label(context.text, axis)
+            for axis in directions.AXES
+            if axes.get(axis) == NOT_FOLLOWED
+        ]
+        if missed:
+            lines.append(
+                context.text(
+                    "design.distance_adherence",
+                    code=_text(item.get("code")) or "-",
+                    axes=", ".join(missed),
+                )
+            )
+    return lines
 
 
 def show_verdicts(context: CommandContext, state: DesignState) -> None:
@@ -595,6 +696,14 @@ def visual_word(context: CommandContext, dimension: str, value: str | None) -> s
     return value.replace("_", " ").lower()
 
 
+def direction_line(context: CommandContext, alternative: Alternative) -> str | None:
+    direction = alternative.direction
+    if direction is None:
+        return None
+    words = directions.value_labels(context.text, direction.axes)
+    return context.text("design.alternative_direction", name=direction.name, axes=", ".join(words))
+
+
 def _latest_folder(client: StudioClient, project_id: str) -> int | None:
     try:
         latest = packages.latest(client, project_id)
@@ -622,8 +731,29 @@ def _verdict_cell(
     return "-"
 
 
+def _direction(value: object) -> Direction | None:
+    if not isinstance(value, Mapping):
+        return None
+    name = _text(value.get("name"))
+    if not name:
+        return None
+    axes = directions.axes_of(value)
+    return Direction(
+        name=name,
+        axes={axis: str(axes[axis]) for axis in directions.AXES if isinstance(axes.get(axis), str)},
+    )
+
+
 def _mappings(value: object) -> list[Mapping[str, object]]:
     return [item for item in _sequence(value) if isinstance(item, Mapping)]
+
+
+def _mapping(value: object) -> Mapping[str, object]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _whole(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def _sequence(value: object) -> list[object]:
