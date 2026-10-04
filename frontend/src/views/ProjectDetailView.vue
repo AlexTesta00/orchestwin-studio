@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, provide, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
@@ -14,6 +14,7 @@ import {
 import { projectImportsApi } from "@/api/projectImports";
 import { whyApi } from "@/api/why";
 import { whyContextKey } from "@/components/whyContext";
+import ActivitySessionControl from "@/components/ActivitySessionControl.vue";
 import ProjectImportVerification from "@/components/ProjectImportVerification.vue";
 import { projectImportResult } from "@/stores/projectImportResults";
 import GeneratedMockupFrame from "@/components/GeneratedMockupFrame.vue";
@@ -56,6 +57,7 @@ import { useClarificationStore } from "@/stores/clarification";
 import { useInsightTrayStore } from "@/stores/insightTray";
 import { useKnowledgePackagesStore } from "@/stores/knowledgePackages";
 import { useSectionsStore } from "@/stores/sections";
+import { activitySignalKey, useActivityJournalStore } from "@/stores/activityJournal";
 import type { ProjectImportOriginPayload } from "@/types/projectImports";
 import type { SectionState, SectionsAlignmentPayload } from "@/types/sections";
 import type { UserTwinVersionPayload } from "@/types/userModeling";
@@ -97,6 +99,9 @@ const tray = useInsightTrayStore();
 const packages = useKnowledgePackagesStore();
 const mockups = useDesignMockupsStore();
 const sectionsStore = useSectionsStore();
+const journal = useActivityJournalStore();
+const activityRow = ref<HTMLElement | null>(null);
+provide(activitySignalKey, journal);
 const remounts = ref<readonly number[]>([0, 0, 0, 0, 0, 0]);
 // Reload downstream state when its approved inputs change on this page.
 const briefContext = computed(() =>
@@ -969,13 +974,26 @@ watch(
   { immediate: true },
 );
 
+function onVisibilityChange(): void {
+  journal.visibilityChanged(document.visibilityState === "hidden");
+}
+
 watch(projectId, loadProject, { immediate: true });
 watch(projectId, loadImportOrigin, { immediate: true });
 watch(projectId, refreshSections, { immediate: true });
+watch(projectId, (id) => void journal.open(id, authorized), { immediate: true });
+watch(
+  [activeKey, () => guidance.mode, () => (locale.value === "it" ? "it" : "en")],
+  ([section, mode, language]) => journal.observe({ section, mode, locale: language }),
+  { immediate: true },
+);
+onMounted(() => document.addEventListener("visibilitychange", onVisibilityChange));
 onUnmounted(() => {
   projectEpoch++;
   originSequence++;
   stageDetailsObserver?.disconnect();
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+  journal.close();
 });
 </script>
 
@@ -984,6 +1002,7 @@ onUnmounted(() => {
     class="relative mx-auto grid w-full gap-x-12 gap-y-6 rounded-stage bg-night px-5 pt-6 text-on-night sm:px-8 sm:pt-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:px-[clamp(24px,4vw,56px)]"
     data-surface="night"
     data-testid="project-workspace"
+    @toggle.capture="journal.detailToggled"
   >
     <aside v-if="project !== null" class="flex min-w-0 flex-col lg:sticky lg:top-24">
       <RouterLink
@@ -1033,6 +1052,7 @@ onUnmounted(() => {
     </aside>
 
     <div class="min-w-0 pb-16 lg:pb-24" :class="{ 'lg:col-span-2': project === null }">
+      <div ref="activityRow" />
       <UiStateBlock v-if="loading" kind="loading" :title="t('detail.loading')" />
       <UiStateBlock
         v-else-if="errorDetail !== null"
@@ -1370,6 +1390,12 @@ onUnmounted(() => {
           </UiButton>
         </div>
       </UiTechnicalDetails>
+
+      <ActivitySessionControl
+        v-if="project !== null"
+        :locale="locale === 'it' ? 'it' : 'en'"
+        :row-target="activityRow"
+      />
     </div>
 
     <template v-if="project !== null">

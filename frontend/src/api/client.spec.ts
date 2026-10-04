@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiClient, resolveApiBaseUrl } from "./client";
+import { ApiClient, ApiError, onRequestFailure, resolveApiBaseUrl } from "./client";
+import { ApiRequestError } from "./requestError";
 
 describe("ApiClient", () => {
   it("uses a same-origin API path by default", () => {
@@ -182,5 +183,50 @@ describe("ApiClient", () => {
       status: "REJECTED",
       issue: "STALE_ARTIFACT",
     });
+  });
+
+  it("tells the registered listeners about every failed answer and changes nothing else", async () => {
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: { code: "PROJECT_NOT_FOUND" } }), { status: 404 }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: "gate_state_conflict" }), { status: 409 }),
+      );
+    const client = new ApiClient("/api/v1", fetchImplementation);
+    const seen: [number, string][] = [];
+    const broken = vi.fn(() => {
+      throw new Error("listener failure");
+    });
+    const stopBroken = onRequestFailure(broken);
+    const stop = onRequestFailure((error) => seen.push([error.status, error.detail]));
+
+    await expect(client.getProject("token", "project")).rejects.toMatchObject({
+      name: "ApiError",
+      status: 404,
+      detail: "PROJECT_NOT_FOUND",
+    });
+    await expect(client.listBriefVersions("token", "project")).resolves.toEqual([]);
+    void new ApiRequestError("The sections request failed", {
+      status: 422,
+      code: "SECTIONS_INVALID",
+      payload: null,
+    });
+    void new ApiError(0, "ACCESS_TOKEN_REQUIRED");
+    void new ApiError(200, "INVALID_API_RESPONSE");
+    stop();
+    stopBroken();
+    await expect(client.decideAgentTeamGate("token", "project", "APPROVE")).rejects.toMatchObject({
+      status: 409,
+      detail: "gate_state_conflict",
+    });
+
+    expect(seen).toEqual([
+      [404, "PROJECT_NOT_FOUND"],
+      [422, "SECTIONS_INVALID"],
+    ]);
+    expect(broken).toHaveBeenCalledTimes(2);
   });
 });

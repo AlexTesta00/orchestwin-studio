@@ -61,6 +61,18 @@ async function errorDetail(response: Response): Promise<string> {
   return "unexpected_api_error";
 }
 
+export type RequestFailureListener = (error: ApiError) => void;
+
+const requestFailureListeners = new Set<RequestFailureListener>();
+
+export function onRequestFailure(listener: RequestFailureListener): () => void {
+  requestFailureListeners.add(listener);
+
+  return () => {
+    requestFailureListeners.delete(listener);
+  };
+}
+
 export class ApiError extends Error {
   public readonly status: number;
   public readonly detail: string;
@@ -71,6 +83,16 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
     this.detail = detail;
+
+    if (status >= 400) {
+      for (const listener of [...requestFailureListeners]) {
+        try {
+          listener(this);
+        } catch {
+          continue;
+        }
+      }
+    }
   }
 }
 

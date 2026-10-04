@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, ref, watch } from "vue";
 import { WhyApiError } from "../api/why";
+import { activitySignalKey } from "../stores/activityJournal";
 import ArtifactWhyNode from "./ArtifactWhyNode.vue";
 import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
 import { whyContextKey } from "./whyContext";
@@ -23,6 +24,7 @@ const props = withDefaults(
   { locale: "en", contexts: () => [], testId: "artifact-why" },
 );
 const context = inject(whyContextKey, null);
+const activity = inject(activitySignalKey, null);
 const surface = useSurface(() => undefined);
 const copy = computed(() => whyMessages[props.locale]);
 const answer = ref<WhyAnswer | null>(null);
@@ -50,6 +52,7 @@ const nodeTitles = computed(
     ),
 );
 let epoch = 0;
+let signalled = false;
 
 function perspectiveName(item: WhyPerspective): string {
   const key = item.key ?? "";
@@ -130,6 +133,10 @@ async function load(selector?: string): Promise<void> {
 }
 
 function toggle(event: Event): void {
+  if (event.target === event.currentTarget && event.target instanceof HTMLDetailsElement) {
+    if (event.target.open && !signalled) activity?.whyOpened(props.code);
+    signalled = event.target.open;
+  }
   if (
     event.target === event.currentTarget &&
     event.target instanceof HTMLDetailsElement &&
