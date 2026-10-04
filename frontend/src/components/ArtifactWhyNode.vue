@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
+import { DIRECTION_AXES, directionAxisLabel, directionValueLabel } from "./visualLanguage";
 import { whyGapLabel, whyMessages, whyNodeTitle } from "./whyCopy";
 import { humanValidationCopy } from "./humanValidationCopy";
 import type { WhyNode } from "../types/why";
@@ -19,6 +20,20 @@ const rationaleLabel = computed(() => {
       : origin === "SYSTEM"
         ? copy.value.system
         : copy.value.unknown;
+});
+const direction = computed(() => {
+  const value = props.node.declared_context.direction;
+  if (!value) return null;
+  return {
+    title: `${copy.value.visualDirection}: ${value.name}`,
+    concept: value.concept,
+    axes: DIRECTION_AXES.flatMap((axis) => {
+      const label = directionValueLabel(props.locale, axis, value.axes[axis]);
+      if (label === null) return [];
+      return [{ axis, text: `${directionAxisLabel(props.locale, axis)}: ${label}` }];
+    }),
+    origin: copy.value.directionOrigin.replace("{count}", String(value.candidates)),
+  };
 });
 </script>
 
@@ -138,6 +153,14 @@ const rationaleLabel = computed(() => {
       <p v-if="node.declared_context.observation_value.reason" class="m-0 whitespace-pre-wrap">
         {{ node.declared_context.observation_value.reason }}
       </p>
+    </section>
+    <section v-if="direction" class="grid gap-1" data-testid="why-direction">
+      <strong>{{ direction.title }}</strong>
+      <p class="m-0 whitespace-pre-wrap">{{ direction.concept }}</p>
+      <ul v-if="direction.axes.length > 0" class="m-0 grid list-disc gap-1 pl-5 text-xs">
+        <li v-for="item in direction.axes" :key="item.axis">{{ item.text }}</li>
+      </ul>
+      <p class="m-0 text-xs" data-testid="why-direction-origin">{{ direction.origin }}</p>
     </section>
     <p class="m-0 text-xs">
       {{ node.current ? copy.current : copy.historical }} · {{ copy.version }}

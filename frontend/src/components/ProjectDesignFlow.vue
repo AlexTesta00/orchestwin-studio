@@ -257,7 +257,7 @@ import { elementNames, type ScreenName, type WorkflowName } from "./screenNames"
 import { rosterAvatar, type TwinRoster } from "./twinIdentity";
 import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 import { workflowStatusLabel } from "./workflowLabels";
-import { designApi, type DesignApi } from "../api/design";
+import { designApi, type DesignApi, type DesignDistanceApi } from "../api/design";
 import type { DesignAlignmentApi } from "../api/designAlignment";
 import { designIterationsApi, type DesignIterationsApi } from "../api/designIterations";
 import { designLoopApi, DesignLoopApiError, type DesignLoopApi } from "../api/designLoop";
@@ -296,6 +296,7 @@ import type {
   SyntheticFindingPayload,
   SyntheticFindingSeverity,
 } from "../types/designLoop";
+import type { DesignDistanceReportPayload } from "../types/designDistance";
 import type {
   MockupDocumentPayload,
   MockupDocumentSource,
@@ -373,6 +374,7 @@ const props = withDefaults(
     iterationsApi?: DesignIterationsApi;
     pinsApi?: DesignReviewPinsApi;
     usageApi?: ModelUsageApi;
+    distanceApi?: DesignDistanceApi;
     upstream?: UpstreamValue;
     active?: boolean;
     sectionsMode?: boolean;
@@ -747,6 +749,7 @@ const mockupsApi = computed(() => props.mockupsApi ?? designMockupsApi);
 const iterationsApi = computed(() => props.iterationsApi ?? designIterationsApi);
 const pinsApi = computed(() => props.pinsApi ?? designReviewPinsApi);
 const usageApi = computed(() => props.usageApi ?? modelUsageApi);
+const distanceApi = computed(() => props.distanceApi ?? designApi);
 
 const uid = useId();
 const root = ref<HTMLElement | null>(null);
@@ -778,6 +781,7 @@ const iterationScreen = ref<string | null>(null);
 const requestOpen = ref(false);
 const keepAsRule = ref(false);
 const usage = ref<ModelUsagePayload | null>(null);
+const distance = ref<DesignDistanceReportPayload | null>(null);
 const validationFailure = ref<{ key: string; code: string } | null>(null);
 const applyingSource = ref<string | null>(null);
 const applyFailure = ref<{ id: string; code: string } | null>(null);
@@ -789,6 +793,8 @@ let handledApplicationId: string | null = null;
 let declarativeEpoch = 0;
 let dialogSequence = 0;
 let usageSequence = 0;
+let distanceSequence = 0;
+let distanceKey: string | null = null;
 let visibility: ResizeObserver | null = null;
 
 const current = computed(() => (store.projectId === props.projectId ? store.current : null));
@@ -1246,6 +1252,35 @@ const cardNotes = computed<Record<string, string>>(() => {
     }
   }
   return result;
+});
+
+const distanceWant = computed(() => {
+  const version = current.value;
+  if (
+    version === null ||
+    !stepShown.value ||
+    !props.active ||
+    !generatedPath.value ||
+    Object.keys(ensuring).length > 0 ||
+    alternatives.value.some((alternative) => mockups.isChecking(alternative.id))
+  ) {
+    return null;
+  }
+  const drawn = alternatives.value.map((alternative) => {
+    const entry = mockups.entry(alternative.id);
+    return entry.state === "ready" ? entry.result.generation_id : "";
+  });
+  return [props.projectId, versionKey(version), ...drawn].join("|");
+});
+const distanceReport = computed(() => {
+  const report = distance.value;
+  const version = current.value;
+  return report !== null &&
+    version !== null &&
+    report.design_version_id === version.id &&
+    report.design_content_hash === version.content_hash
+    ? report
+    : null;
 });
 
 const previewAlternative = computed(
@@ -2553,6 +2588,21 @@ async function loadUsage(): Promise<void> {
   }
 }
 
+async function loadDistance(): Promise<void> {
+  const sequence = ++distanceSequence;
+  const projectId = props.projectId;
+  try {
+    const report = await authorizedRequest((token) => distanceApi.value.distance(projectId, token));
+    if (sequence === distanceSequence) {
+      distance.value = report;
+    }
+  } catch {
+    if (sequence === distanceSequence) {
+      distance.value = null;
+    }
+  }
+}
+
 function holdThumbnail(alternativeId: string): void {
   ensuring[alternativeId] = (ensuring[alternativeId] ?? 0) + 1;
 }
@@ -2817,6 +2867,17 @@ watch(stepShown, (shown) => {
     void prepareMockups();
   }
 });
+
+watch(
+  distanceWant,
+  (key) => {
+    if (key !== null && key !== distanceKey) {
+      distanceKey = key;
+      void loadDistance();
+    }
+  },
+  { immediate: true, flush: "post" },
+);
 
 watch(() => props.active, refreshWhenDrawn);
 
@@ -3109,6 +3170,7 @@ onBeforeUnmount(() => {
           :choosable="choosable"
           :hints="hints"
           :notes="cardNotes"
+          :distance="distanceReport"
           :choosing="choosing"
           :disabled="store.isBusy || deciding"
           :paid="mockupsPaid"

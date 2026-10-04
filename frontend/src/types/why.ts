@@ -1,4 +1,5 @@
 import type { ObservationValuePayload, ReadableClaimStatus } from "./userModeling";
+import type { DirectionAxes } from "./design";
 import type { EvidenceCitationPayload } from "./researchEvidence";
 import type { HumanValidationOutcome, OperationalHypothesis } from "./humanValidation";
 import type { ProvidedPrototype, WorkflowDecision, WorkflowInputsPayload } from "./workflowInputs";
@@ -76,6 +77,14 @@ export interface WhyNode {
       screen_code: string;
       source: string;
       document_hashes: Record<string, string>;
+    };
+    direction?: {
+      name: string;
+      concept: string;
+      axes: DirectionAxes;
+      candidates: number;
+      origin: "MODEL";
+      selected_by: "STUDIO";
     };
   };
 }

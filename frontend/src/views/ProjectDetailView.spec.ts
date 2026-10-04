@@ -3002,6 +3002,7 @@ const FIRST_DESIGN_VIEW: Record<string, number> = {
   [`…/design/mockups?alternative_id=${DESIGN_ALTERNATIVE_ID}`]: 1,
   [`…/design/mockups?alternative_id=${SECOND_DESIGN_ALTERNATIVE_ID}`]: 1,
   [`…/design/mockups/document?alternative_id=${SECOND_DESIGN_ALTERNATIVE_ID}&source=latest`]: 1,
+  "…/design/distance": 1,
   "…/design/iterations": 1,
   "…/model-usage": 1,
 };

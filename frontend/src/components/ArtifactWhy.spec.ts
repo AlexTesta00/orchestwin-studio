@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { WhyApiError } from "../api/why";
 import { expectAccessible } from "../test/axe";
 import { whyAnswer, whyDocument, whyNode } from "../test/whyFixtures";
-import type { WhyAnswer } from "../types/why";
+import type { DirectionShape } from "../types/design";
+import type { WhyAnswer, WhyNode } from "../types/why";
 import ArtifactWhy from "./ArtifactWhy.vue";
+import ArtifactWhyNode from "./ArtifactWhyNode.vue";
 import { whyContextKey, twinClaimCode } from "./whyContext";
 import { whyNodeTitle } from "./whyCopy";
 
@@ -35,6 +37,70 @@ async function open(wrapper: ReturnType<typeof setup>["wrapper"]): Promise<void>
   (wrapper.element as HTMLDetailsElement).open = true;
   await wrapper.trigger("toggle");
   await flushPromises();
+}
+
+const direction: NonNullable<WhyNode["declared_context"]["direction"]> = {
+  name: "Quaderno di bordo",
+  concept: "Una pagina editoriale con titoli molto grandi e filetti sottili.",
+  axes: {
+    layout: "EDITORIAL",
+    shape: "SQUARE_RULES",
+    type: "DISPLAY",
+    colour: "INK",
+    density: "SPACIOUS",
+  },
+  candidates: 5,
+  origin: "MODEL",
+  selected_by: "STUDIO",
+};
+
+const directionWords = {
+  it: {
+    title: "Direzione visiva: Quaderno di bordo",
+    axes: [
+      "Impianto: Pagina editoriale",
+      "Forme: Angoli vivi e filetti",
+      "Tipografia: Titoli molto grandi",
+      "Colore: Quasi monocromo",
+      "Densità: Ariosa",
+    ],
+    origin: "Proposta dal modello fra 5 candidate; scelta dallo Studio perché lontana dall'altra.",
+  },
+  en: {
+    title: "Visual direction: Quaderno di bordo",
+    axes: [
+      "Layout: Editorial page",
+      "Shapes: Square corners and rules",
+      "Type: Very large titles",
+      "Colour: Almost monochrome",
+      "Density: Spacious",
+    ],
+    origin:
+      "Proposed by the model among 5 candidates; chosen by the Studio because it is far from the other.",
+  },
+} as const;
+
+const internalIds = ["EDITORIAL", "SQUARE_RULES", "DISPLAY", "INK", "SPACIOUS", "MODEL", "STUDIO"];
+
+function designAlternative(context: Partial<WhyNode["declared_context"]> = {}): WhyNode {
+  return whyNode({
+    key: "DESIGN_ALTERNATIVE:alternative:2:alternative-hash",
+    code: "ALT-002",
+    kind: "DESIGN_ALTERNATIVE",
+    title: "Quaderno di bordo per il turno",
+    reference: { artifact_id: "alternative", version_number: 2, content_hash: "alternative-hash" },
+    rationale: {
+      text: "Separa la lettura del turno dalla scrittura delle note.",
+      origin: "MODEL",
+      version_number: 2,
+      content_hash: "rationale-hash",
+    },
+    declared_context: { perspectives: [], ...context },
+  });
+}
+
+function withoutComments(element: Element): string {
+  return element.outerHTML.replace(/<!--[\s\S]*?-->/g, "");
 }
 
 describe("Artifact Why", () => {
@@ -367,4 +433,73 @@ describe("Artifact Why", () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="why-summary"]').exists()).toBe(false);
   });
+
+  it.each(["it", "en"] as const)(
+    "shows the %s visual direction of a design alternative in plain words without internal ids",
+    async (locale) => {
+      const words = directionWords[locale];
+      const target = designAlternative({ direction });
+      const original = structuredClone(target);
+      const { wrapper } = setup({ code: target.code, locale }, whyAnswer(target));
+      await open(wrapper);
+      const details = wrapper.get('[data-testid="why-details"]');
+      (details.element as HTMLDetailsElement).open = true;
+      await details.trigger("toggle");
+      const blocks = details.findAll('[data-testid="why-direction"]');
+      expect(blocks).toHaveLength(1);
+      const block = blocks[0]!;
+      expect(block.get("strong").text()).toBe(words.title);
+      expect(block.get("p").text()).toBe(direction.concept);
+      expect(block.findAll("li").map((item) => item.text())).toEqual(words.axes);
+      expect(block.get('[data-testid="why-direction-origin"]').text()).toBe(words.origin);
+      for (const id of internalIds) {
+        expect(wrapper.text()).not.toContain(id);
+        expect(block.html()).not.toContain(id);
+      }
+      expect(target).toEqual(original);
+      await expectAccessible(wrapper.element);
+      wrapper.unmount();
+    },
+  );
+
+  it.each(["it", "en"] as const)(
+    "skips an unknown %s direction value instead of showing its id",
+    (locale) => {
+      const node = designAlternative({
+        direction: {
+          ...direction,
+          axes: { ...direction.axes, shape: "NOT_IN_VOCABULARY" as unknown as DirectionShape },
+        },
+      });
+      const wrapper = mount(ArtifactWhyNode, { props: { node, locale } });
+      const [layout, , type, colour, density] = directionWords[locale].axes;
+      expect(
+        wrapper
+          .get('[data-testid="why-direction"]')
+          .findAll("li")
+          .map((item) => item.text()),
+      ).toEqual([layout, type, colour, density]);
+      expect(wrapper.text()).not.toContain("NOT_IN_VOCABULARY");
+      wrapper.unmount();
+    },
+  );
+
+  it.each(["it", "en"] as const)(
+    "renders a %s node without a direction exactly as before",
+    (locale) => {
+      const plain = mount(ArtifactWhyNode, { props: { node: designAlternative(), locale } });
+      const directed = mount(ArtifactWhyNode, {
+        props: { node: designAlternative({ direction }), locale },
+      });
+      expect(plain.find('[data-testid="why-direction"]').exists()).toBe(false);
+      expect(plain.text()).not.toContain(locale === "it" ? "Direzione visiva" : "Visual direction");
+      expect(plain.text()).not.toContain(directionWords[locale].origin);
+      const block = directed.get('[data-testid="why-direction"]').element;
+      expect(withoutComments(directed.element).replace(withoutComments(block), "")).toBe(
+        withoutComments(plain.element),
+      );
+      plain.unmount();
+      directed.unmount();
+    },
+  );
 });

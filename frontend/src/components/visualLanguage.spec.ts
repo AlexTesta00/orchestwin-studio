@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   ARCHETYPE_LABELS,
+  DIRECTION_AXES,
+  DIRECTION_VALUE_LABELS,
   NEUTRAL_CHOICES,
   choiceLabel,
   dimensionLabel,
+  directionAxisLabel,
+  directionValueLabel,
   valueLabel,
 } from "./visualLanguage";
 
@@ -145,5 +149,90 @@ describe("visualLanguage labels", () => {
     expect(choiceLabel("it", "tone", "NOT_IN_CATALOG")).toBe("Not in catalog");
     expect(choiceLabel("it", "unknown_dimension", "SIDE_RAIL")).toBe("Side rail");
     expect(dimensionLabel("it", "unknown_dimension")).toBe("Unknown dimension");
+  });
+});
+
+const DIRECTION_WORDS: Record<string, Record<string, [string, string]>> = {
+  layout: {
+    PANELS: ["Pannelli", "Panels"],
+    BANDS: ["Fasce", "Bands"],
+    EDITORIAL: ["Pagina editoriale", "Editorial page"],
+    STAGE: ["Palcoscenico", "Stage"],
+    WORKBENCH: ["Banco di lavoro", "Workbench"],
+    MOSAIC: ["Mosaico", "Mosaic"],
+  },
+  shape: {
+    ROUNDED_OUTLINE: ["Contorni arrotondati", "Rounded outlines"],
+    SQUARE_RULES: ["Angoli vivi e filetti", "Square corners and rules"],
+    HEAVY_FRAME: ["Cornici spesse", "Heavy frames"],
+    SOFT_FILL: ["Superfici piene", "Filled surfaces"],
+    PILL: ["Pillole", "Pills"],
+  },
+  type: {
+    EVEN: ["Scala contenuta", "Restrained scale"],
+    DISPLAY: ["Titoli molto grandi", "Very large titles"],
+    CAPS_LABELS: ["Etichette maiuscole", "Upper-case labels"],
+    READING: ["Da lettura", "Reading"],
+  },
+  colour: {
+    ACCENT_ONLY: ["Colore solo sull'azione", "Colour on the action only"],
+    FIELDS: ["Campiture di colore", "Fields of colour"],
+    INK: ["Quasi monocromo", "Almost monochrome"],
+    TINTED: ["Superfici tinte", "Tinted surfaces"],
+  },
+  density: {
+    COMPACT: ["Compatta", "Compact"],
+    COMFORTABLE: ["Comoda", "Comfortable"],
+    SPACIOUS: ["Ariosa", "Spacious"],
+  },
+};
+
+describe("visual direction labels", () => {
+  it("names the five axes in their order, in Italian and in English", () => {
+    expect(DIRECTION_AXES).toEqual(["layout", "shape", "type", "colour", "density"]);
+    expect(DIRECTION_AXES.map((axis) => directionAxisLabel("it", axis))).toEqual([
+      "Impianto",
+      "Forme",
+      "Tipografia",
+      "Colore",
+      "Densità",
+    ]);
+    expect(DIRECTION_AXES.map((axis) => directionAxisLabel("en", axis))).toEqual([
+      "Layout",
+      "Shapes",
+      "Type",
+      "Colour",
+      "Density",
+    ]);
+  });
+
+  it("names every value of every axis with the words of the contract", () => {
+    expect(Object.keys(DIRECTION_WORDS)).toEqual([...DIRECTION_AXES]);
+    for (const axis of DIRECTION_AXES) {
+      const words = DIRECTION_WORDS[axis] ?? {};
+      for (const locale of ["it", "en"] as const) {
+        const values = Object.keys(DIRECTION_VALUE_LABELS[locale][axis]);
+        expect(values, `${locale}.${axis}`).toEqual(Object.keys(words));
+      }
+      for (const [value, [italian, english]] of Object.entries(words)) {
+        expect(directionValueLabel("it", axis, value)).toBe(italian);
+        expect(directionValueLabel("en", axis, value)).toBe(english);
+      }
+    }
+    const values = Object.values(DIRECTION_WORDS).flatMap((words) => Object.keys(words));
+    expect(values).toHaveLength(22);
+  });
+
+  it("never gives an internal id as the words of a value", () => {
+    for (const locale of ["it", "en"] as const) {
+      for (const axis of DIRECTION_AXES) {
+        for (const [value, label] of Object.entries(DIRECTION_VALUE_LABELS[locale][axis])) {
+          expect(label).not.toBe(value);
+          expect(label).not.toMatch(/_|^[A-Z]{2,}/);
+        }
+      }
+    }
+    expect(directionValueLabel("it", "layout", "NOT_IN_VOCABULARY")).toBeNull();
+    expect(directionValueLabel("en", "shape", "EDITORIAL")).toBeNull();
   });
 });
