@@ -1,6 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { WhyApiError } from "../api/why";
+import { activitySignalKey } from "../stores/activityJournal";
 import { expectAccessible } from "../test/axe";
 import { whyAnswer, whyDocument, whyNode } from "../test/whyFixtures";
 import type { DirectionShape } from "../types/design";
@@ -502,4 +503,38 @@ describe("Artifact Why", () => {
       directed.unmount();
     },
   );
+
+  it("tells the study session its code once for every opening and nothing for inner details", async () => {
+    const signal = { whyOpened: vi.fn(), mockupOpened: vi.fn() };
+    const api = { explain: vi.fn().mockResolvedValue(whyAnswer()), document: vi.fn() };
+    const wrapper = mount(ArtifactWhy, {
+      props: { code: "REQ-001" },
+      global: {
+        provide: {
+          [whyContextKey as symbol]: {
+            projectId: () => "project",
+            api,
+            authorize: <T>(request: (token: string) => Promise<T>) => request("token"),
+          },
+          [activitySignalKey as symbol]: signal,
+        },
+      },
+    });
+    const element = wrapper.element as HTMLDetailsElement;
+
+    element.open = true;
+    await wrapper.trigger("toggle");
+    await wrapper.trigger("toggle");
+    await flushPromises();
+    await wrapper.get('[data-testid="why-details"]').trigger("toggle");
+    expect(signal.whyOpened).toHaveBeenCalledExactlyOnceWith("REQ-001");
+
+    element.open = false;
+    await wrapper.trigger("toggle");
+    element.open = true;
+    await wrapper.trigger("toggle");
+    expect(signal.whyOpened).toHaveBeenCalledTimes(2);
+    expect(signal.mockupOpened).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
 });

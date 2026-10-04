@@ -12,6 +12,7 @@ import GeneratedMockupDialog, {
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
 import source from "./GeneratedMockupDialog.vue?raw";
 import { whyContextKey } from "./whyContext";
+import { activitySignalKey } from "../stores/activityJournal";
 import { whyDocument, whyNode } from "../test/whyFixtures";
 
 function documentFor(entry: string): MockupDocument {
@@ -518,5 +519,31 @@ describe("generated mockup dialog", () => {
     wrapper?.unmount();
     open({ observations: [], document: null, busy: true });
     await expectAccessible(query("[data-testid='mockup-dialog']"), { iframes: false });
+  });
+
+  it("tells the study session the code of the opened alternative and nothing of its title", async () => {
+    const signal = { whyOpened: vi.fn(), mockupOpened: vi.fn() };
+    const openTitled = (title: string) =>
+      mount(GeneratedMockupDialog, {
+        props: { title, document: documentFor("SCR-001") },
+        global: {
+          plugins: [createAppI18n("it")],
+          provide: { [activitySignalKey as symbol]: signal },
+        },
+        attachTo: document.body,
+      });
+
+    wrapper = openTitled("DES-002 · Registro con tabella");
+    await flushPromises();
+    all("[data-testid='mockup-dialog-screen']")[1]?.click();
+    await flushPromises();
+    expect(signal.mockupOpened).toHaveBeenCalledExactlyOnceWith("DES-002");
+
+    wrapper.unmount();
+    wrapper = openTitled("Registro con tabella");
+    await flushPromises();
+    expect(signal.mockupOpened).toHaveBeenCalledTimes(2);
+    expect(signal.mockupOpened).toHaveBeenLastCalledWith(null);
+    expect(signal.whyOpened).not.toHaveBeenCalled();
   });
 });

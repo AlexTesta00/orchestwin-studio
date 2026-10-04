@@ -57,6 +57,7 @@ import {
 } from "vue";
 import { useI18n } from "vue-i18n";
 
+import { activitySignalKey } from "../stores/activityJournal";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
 import MockupWhyElements from "./MockupWhyElements.vue";
 import MockupScenarioWalkthrough from "./MockupScenarioWalkthrough.vue";
@@ -165,6 +166,8 @@ const SEVERITY_STYLES: Record<MockupSeverity, string> = {
 const FOCUSABLE =
   "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, summary, [tabindex]";
 
+const ALTERNATIVE_CODE = /^([A-Z]{2,8}-[0-9]{1,6}) · /;
+
 provide(
   surfaceKey,
   computed<SurfaceContext>(() => "night"),
@@ -175,6 +178,7 @@ const { locale: appLocale } = useI18n({ useScope: "global" });
 const lang = computed<Locale>(() => props.locale ?? (appLocale.value === "it" ? "it" : "en"));
 const copy = computed(() => messages[lang.value]);
 const whyContext = inject(whyContextKey, null);
+const activity = inject(activitySignalKey, null);
 const hasSidecar = computed(
   () => items.value.length > 0 || (whyContext !== null && props.document !== null),
 );
@@ -434,6 +438,7 @@ watch(
 );
 
 onMounted(async () => {
+  activity?.mockupOpened(ALTERNATIVE_CODE.exec(props.title)?.[1] ?? null);
   opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.addEventListener("keydown", onDocumentKeydown);
   document.addEventListener("focusin", onDocumentFocus);
