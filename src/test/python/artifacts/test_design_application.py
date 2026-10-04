@@ -15,6 +15,7 @@ from orchestwin.agents.catalog import (
 )
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.references import ArtifactKind, VersionedArtifactReference
+from orchestwin.artifacts.visual_directions import DirectionAxes, VisualDirection
 from orchestwin.models.design import (
     DesignAgentTeamInput,
     DesignProposalIssueCode,
@@ -55,10 +56,14 @@ from orchestwin.workflow.gates import (
 )
 
 from .design_fixtures import OWNER_ID, PROJECT_ID, requirements_version
+from .test_visual_directions import directed_language, direction
 
 DESIGN_VERSION_ID = UUID("00000000-0000-4000-8000-000000000091")
 GATE_ID = UUID("00000000-0000-4000-8000-000000000092")
 CREATED_AT = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
+BANDS_AXES = DirectionAxes(
+    layout="BANDS", shape="PILL", type="READING", colour="TINTED", density="COMFORTABLE"
+)
 
 
 def current_requirements_version() -> RequirementsSpecificationVersion:
@@ -217,10 +222,12 @@ class CountingProposalPort:
 
     def __init__(self) -> None:
         self.calls = 0
+        self.requests: list[DesignProposalRequest] = []
         self.delegate = FakeDeterministicDesignAdapter()
 
     async def propose(self, request: DesignProposalRequest) -> DesignProposalResult:
         self.calls += 1
+        self.requests.append(request)
         return await self.delegate.propose(request)
 
 
@@ -341,6 +348,24 @@ def generated_version() -> DesignPackageVersion:
     return result.version
 
 
+def directed_version(
+    version: DesignPackageVersion, directions: dict[str, VisualDirection]
+) -> DesignPackageVersion:
+    package = replace(
+        version.package,
+        alternatives=tuple(
+            replace(
+                item,
+                visual_language=directed_language(item.visual_language, directions[item.code]),
+            )
+            if item.code in directions
+            else item
+            for item in version.package.alternatives
+        ),
+    )
+    return replace(version, package=package, content_hash=package.content_hash)
+
+
 def test_generation_creates_one_unselected_immutable_design_version() -> None:
     """Persist deterministic design output only after exact Requirements approval."""
     governance = StaticGovernance(governed_context())
@@ -367,6 +392,8 @@ def test_generation_creates_one_unselected_immutable_design_version() -> None:
     assert not result.version.package.ready_for_gate
     assert repository.appended == [result.version]
     assert proposals.calls == 1
+    assert proposals.requests == [governed_context().to_proposal_request()]
+    assert proposals.requests[0].avoided_directions == ()
     assert governance.calls == 2
     assert sum(unit.commits for unit in factory.units) == 1
 
@@ -522,8 +549,36 @@ def test_regeneration_appends_a_new_version_after_an_existing_design() -> None:
     assert result.version.based_on_version_number == 1
     assert result.version.package.owner_selected_alternative_id is None
     assert proposals.calls == 1
+    assert proposals.requests == [governed_context().to_proposal_request()]
+    assert proposals.requests[0].avoided_directions == ()
     assert repository.appended[-1] is result.version
     assert factory.units[-1].commits == 1
+
+
+def test_regeneration_asks_to_avoid_the_directions_of_the_current_version() -> None:
+    first = direction()
+    second = direction(name="Soft bands", axes=BANDS_AXES)
+    existing = directed_version(generated_version(), {"DES-001": first, "DES-002": second})
+    proposals = CountingProposalPort()
+    application, _ = service(
+        governance=StaticGovernance(governed_context()),
+        proposals=proposals,
+        repository=InMemoryPackageRepository(current=existing),
+    )
+
+    result = asyncio.run(application.regenerate(owner_user_id=OWNER_ID, project_id=PROJECT_ID))
+
+    assert result.status is DesignGenerationStatus.CREATED
+    assert existing.package.alternatives[2].visual_language.direction is None
+    [request] = proposals.requests
+    assert request.avoided_directions == (first.axes, second.axes)
+    assert request == replace(
+        governed_context().to_proposal_request(), avoided_directions=(first.axes, second.axes)
+    )
+    assert request.to_snapshot()["avoided_directions"] == [
+        first.axes.to_snapshot(),
+        second.axes.to_snapshot(),
+    ]
 
 
 def test_regeneration_requires_an_existing_design_and_approved_requirements() -> None:
