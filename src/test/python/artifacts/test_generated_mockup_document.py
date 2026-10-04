@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from html import escape
 from html.parser import HTMLParser
 from random import Random
@@ -22,6 +23,9 @@ from orchestwin.artifacts.generated_mockups import (
     create_generated_mockup,
 )
 from orchestwin.artifacts.prototypes import PrototypeScreenState
+from orchestwin.artifacts.visual_catalog import FontFamily
+from orchestwin.artifacts.visual_fonts import font_faces
+from orchestwin.artifacts.visual_language import create_visual_language
 
 from .test_generated_mockup_support import (
     ALTERNATIVE_ID,
@@ -34,6 +38,7 @@ from .test_generated_mockup_support import (
     FIXTURES,
     HTML_COMMENT_CLOSE,
     HTML_COMMENT_OPEN,
+    LIGHT_CHOICES,
     LIGHT_TOKENS,
     TOKEN_NAMES,
     build,
@@ -42,12 +47,14 @@ from .test_generated_mockup_support import (
     screen_payloads,
     with_first,
 )
+from .test_visual_directions import direction
 
 POLICY = (
     "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; "
     "form-action 'none'; base-uri 'none'"
 )
 SECTION = re.compile(r'<section class="ot-screen" id="(SCR-\d{3})"[^>]*>')
+DATA_FONT = re.compile(r"url\(data:font/woff2;base64,[A-Za-z0-9+/]+={0,2}\)")
 
 
 class Collector(HTMLParser):
@@ -487,3 +494,83 @@ def test_random_hostile_strings_never_produce_scripts_handlers_or_an_early_style
         document = mockup_document(mockup, tokens=LIGHT_TOKENS, language="it", pins=pins)
         assert_safe(document)
     assert accepted >= 80
+
+
+def directed_tokens() -> dict[str, str]:
+    return create_visual_language(
+        choices=replace(
+            LIGHT_CHOICES,
+            heading_family=FontFamily.GEOMETRIC_SANS,
+            body_family=FontFamily.GROTESQUE_SANS,
+        ),
+        product_name="Registro dei prestiti",
+        rationale="Una pagina stampata per il banco prestiti.",
+        direction=direction(),
+    ).token_values
+
+
+def root_of(tokens: dict[str, str]) -> str:
+    return ":root{" + ";".join(f"{name}:{value}" for name, value in sorted(tokens.items())) + "}"
+
+
+@pytest.mark.parametrize("name", FIXTURES)
+def test_a_design_without_bundled_fonts_keeps_the_document_of_today(name: str) -> None:
+    for mockup, tokens in ((build(), LIGHT_TOKENS), (fixture_mockup(name), fixture_tokens(name))):
+        document = mockup_document(mockup, tokens=tokens, language="it")
+        assert font_faces(tokens) == ""
+        assert style_of(document) == root_of(tokens) + BASE_RULES + mockup.styles
+        assert "@font-face" not in document
+        assert "url(" not in document
+
+
+def test_the_bundled_fonts_open_the_style_before_the_tokens() -> None:
+    tokens = directed_tokens()
+    mockup = build(token_names=frozenset(tokens))
+    document = mockup_document(mockup, tokens=tokens, language="it")
+    faces = font_faces(tokens)
+
+    assert style_of(document) == faces + root_of(tokens) + BASE_RULES + mockup.styles
+    assert faces.count("@font-face{") == 8
+    for family in ("Geist", "Geist Mono", "Libre Franklin"):
+        assert f'@font-face{{font-family:"{family}";' in faces
+    assert CONTENT_SECURITY_POLICY == POLICY
+    assert f'<meta http-equiv="Content-Security-Policy" content="{POLICY}">' in document
+    assert_safe(document)
+    assert mockup_document(mockup, tokens=tokens, language="it") == document
+
+
+def test_the_document_with_bundled_fonts_makes_no_external_reference() -> None:
+    tokens = directed_tokens()
+    document = mockup_document(build(token_names=frozenset(tokens)), tokens=tokens, language="it")
+    bare = DATA_FONT.sub("", document).lower()
+
+    assert len(DATA_FONT.findall(document)) == document.count("url(") == 8
+    assert document.count("url(data:font/woff2;base64,") == 8
+    for reference in ("http:", "https:", "//", "url(", "@import", "<link", " src="):
+        assert reference not in bare, reference
+
+
+def test_tokens_that_name_a_bundled_family_are_checked_before_the_faces() -> None:
+    for value in ('"Geist", url(x)', '"Geist"</style><script>', '"Geist";}p{color:red'):
+        with pytest.raises(GeneratedMockupError) as error:
+            mockup_document(
+                build(), tokens={**LIGHT_TOKENS, "--vl-font-heading": value}, language="it"
+            )
+        assert error.value.code == "DOCUMENT_TOKEN"
+
+
+@pytest.mark.parametrize(
+    "styles",
+    [
+        '@font-face{font-family:"Geist";src:url(data:font/woff2;base64,d09GMg==)}',
+        "@font-face{font-family:x}",
+        "p{font-family:x;src:url(data:font/woff2;base64,d09GMg==)}",
+        "p{background:url(data:image/png;base64,iVBORw0KGgo=)}",
+        "p{background:url(//fonts.example/x.woff2)}",
+        "@import url(fonts.css);",
+    ],
+)
+def test_a_sheet_cannot_bring_its_own_fonts_into_a_design_with_bundled_fonts(styles: str) -> None:
+    with pytest.raises(GeneratedMockupError) as error:
+        build(styles=styles, token_names=frozenset(directed_tokens()))
+    assert error.value.code == "STYLES_FORBIDDEN"
