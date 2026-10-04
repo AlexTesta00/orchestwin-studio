@@ -54,6 +54,9 @@ export const whyMessages = {
       "La valutazione dei twin sul prototipo fornito non è disponibile nello sprint 36.",
     sourceUnavailable:
       "Il testo originale non è disponibile. La citazione conservata resta leggibile.",
+    visualDirection: "Direzione visiva",
+    directionOrigin:
+      "Proposta dal modello fra {count} candidate; scelta dallo Studio perché lontana dall'altra.",
     gaps: {
       DECLARED_MISSING: "Lacuna dichiarata dal proprietario",
       MISSING_REQUIREMENT_ANCHOR: "Il prototipo non contiene l'ancoraggio a questo requisito",
@@ -139,6 +142,9 @@ export const whyMessages = {
     prototypeEvaluationLimit:
       "Twin evaluation of the supplied prototype is unavailable in sprint 36.",
     sourceUnavailable: "The original text is unavailable. The preserved quote can still be read.",
+    visualDirection: "Visual direction",
+    directionOrigin:
+      "Proposed by the model among {count} candidates; chosen by the Studio because it is far from the other.",
     gaps: {
       DECLARED_MISSING: "Gap declared by the owner",
       MISSING_REQUIREMENT_ANCHOR: "The prototype has no anchor for this requirement",

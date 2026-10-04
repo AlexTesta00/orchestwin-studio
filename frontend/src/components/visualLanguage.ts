@@ -1,6 +1,14 @@
-import type { LayoutArchetype, VisualChoicesPayload, VisualLanguagePayload } from "../types/design";
+import type {
+  DirectionAxes,
+  DirectionAxis,
+  LayoutArchetype,
+  VisualChoicesPayload,
+  VisualLanguagePayload,
+} from "../types/design";
 
 export type VisualLocale = "en" | "it";
+
+type DirectionValueLabels = { [Axis in DirectionAxis]: Record<DirectionAxes[Axis], string> };
 
 export const NEUTRAL_CHOICES: VisualChoicesPayload = {
   archetype: "SINGLE_CARD",
@@ -253,6 +261,101 @@ const CHOICE_LABELS_IT: Record<string, Record<string, string>> = {
     CIVIC: "Civico",
   },
 };
+
+export const DIRECTION_AXES: readonly DirectionAxis[] = [
+  "layout",
+  "shape",
+  "type",
+  "colour",
+  "density",
+];
+
+export const DIRECTION_AXIS_LABELS: Record<VisualLocale, Record<DirectionAxis, string>> = {
+  en: { layout: "Layout", shape: "Shapes", type: "Type", colour: "Colour", density: "Density" },
+  it: {
+    layout: "Impianto",
+    shape: "Forme",
+    type: "Tipografia",
+    colour: "Colore",
+    density: "Densità",
+  },
+};
+
+export const DIRECTION_VALUE_LABELS: Record<VisualLocale, DirectionValueLabels> = {
+  en: {
+    layout: {
+      PANELS: "Panels",
+      BANDS: "Bands",
+      EDITORIAL: "Editorial page",
+      STAGE: "Stage",
+      WORKBENCH: "Workbench",
+      MOSAIC: "Mosaic",
+    },
+    shape: {
+      ROUNDED_OUTLINE: "Rounded outlines",
+      SQUARE_RULES: "Square corners and rules",
+      HEAVY_FRAME: "Heavy frames",
+      SOFT_FILL: "Filled surfaces",
+      PILL: "Pills",
+    },
+    type: {
+      EVEN: "Restrained scale",
+      DISPLAY: "Very large titles",
+      CAPS_LABELS: "Upper-case labels",
+      READING: "Reading",
+    },
+    colour: {
+      ACCENT_ONLY: "Colour on the action only",
+      FIELDS: "Fields of colour",
+      INK: "Almost monochrome",
+      TINTED: "Tinted surfaces",
+    },
+    density: { COMPACT: "Compact", COMFORTABLE: "Comfortable", SPACIOUS: "Spacious" },
+  },
+  it: {
+    layout: {
+      PANELS: "Pannelli",
+      BANDS: "Fasce",
+      EDITORIAL: "Pagina editoriale",
+      STAGE: "Palcoscenico",
+      WORKBENCH: "Banco di lavoro",
+      MOSAIC: "Mosaico",
+    },
+    shape: {
+      ROUNDED_OUTLINE: "Contorni arrotondati",
+      SQUARE_RULES: "Angoli vivi e filetti",
+      HEAVY_FRAME: "Cornici spesse",
+      SOFT_FILL: "Superfici piene",
+      PILL: "Pillole",
+    },
+    type: {
+      EVEN: "Scala contenuta",
+      DISPLAY: "Titoli molto grandi",
+      CAPS_LABELS: "Etichette maiuscole",
+      READING: "Da lettura",
+    },
+    colour: {
+      ACCENT_ONLY: "Colore solo sull'azione",
+      FIELDS: "Campiture di colore",
+      INK: "Quasi monocromo",
+      TINTED: "Superfici tinte",
+    },
+    density: { COMPACT: "Compatta", COMFORTABLE: "Comoda", SPACIOUS: "Ariosa" },
+  },
+};
+
+export function directionAxisLabel(locale: VisualLocale, axis: DirectionAxis): string {
+  return DIRECTION_AXIS_LABELS[locale][axis];
+}
+
+export function directionValueLabel(
+  locale: VisualLocale,
+  axis: DirectionAxis,
+  value: string,
+): string | null {
+  const labels: Readonly<Record<string, string>> = DIRECTION_VALUE_LABELS[locale][axis];
+  return labels[value] ?? null;
+}
 
 export function dimensionLabel(locale: VisualLocale, dimension: string): string {
   return DIMENSION_LABELS[locale][dimension] ?? valueLabel(dimension);

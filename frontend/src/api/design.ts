@@ -17,6 +17,7 @@ import type {
   HumanGateEventPayload,
   HumanGatePayload,
 } from "../types/design";
+import type { DesignDistanceReportPayload } from "../types/designDistance";
 
 const DEFAULT_API_BASE_PATH = "/api/v1";
 
@@ -27,6 +28,7 @@ interface RequestOptions {
   accessToken: string;
   body?: unknown;
   generationProjectId?: string;
+  accepts?: (payload: unknown) => boolean;
 }
 
 export interface DesignApiOptions {
@@ -78,6 +80,10 @@ export interface DesignApi {
   readiness(projectId: string, accessToken: string): Promise<DesignReadinessPayload>;
 }
 
+export interface DesignDistanceApi {
+  distance(projectId: string, accessToken: string): Promise<DesignDistanceReportPayload>;
+}
+
 function normalizedBasePath(value: string): string {
   const normalized = value.trim().replace(/\/+$/, "");
 
@@ -104,6 +110,56 @@ function requiredAccessToken(value: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isScore(value: unknown): boolean {
+  return value === null || typeof value === "number";
+}
+
+function isMeasure(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.available === "boolean" &&
+    isScore(value.score) &&
+    Array.isArray(value.differences)
+  );
+}
+
+function isDistancePair(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.first === "string" &&
+    typeof value.second === "string" &&
+    typeof value.verdict === "string" &&
+    isRecord(value.declared) &&
+    isScore(value.declared.score) &&
+    isScore(value.declared.axes_different) &&
+    Array.isArray(value.declared.axes) &&
+    isMeasure(value.styles) &&
+    isMeasure(value.structure)
+  );
+}
+
+function isDistanceAlternative(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.code === "string" &&
+    isRecord(value.adherence) &&
+    typeof value.adherence.available === "boolean" &&
+    isRecord(value.adherence.axes)
+  );
+}
+
+function isDistanceReport(payload: unknown): boolean {
+  return (
+    isRecord(payload) &&
+    typeof payload.design_version_id === "string" &&
+    typeof payload.design_content_hash === "string" &&
+    Array.isArray(payload.pairs) &&
+    payload.pairs.every(isDistancePair) &&
+    Array.isArray(payload.alternatives) &&
+    payload.alternatives.every(isDistanceAlternative)
+  );
 }
 
 function errorCode(payload: unknown): string | null {
@@ -142,7 +198,7 @@ function projectDesignPath(basePath: string, projectId: string): string {
   return `${basePath}/projects/${encodeURIComponent(projectId)}/design`;
 }
 
-export function createDesignApi(options: DesignApiOptions = {}): DesignApi {
+export function createDesignApi(options: DesignApiOptions = {}): DesignApi & DesignDistanceApi {
   const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
 
   async function request<T>(path: string, optionsValue: RequestOptions): Promise<T> {
@@ -179,6 +235,14 @@ export function createDesignApi(options: DesignApiOptions = {}): DesignApi {
       throw new DesignApiError(code ?? `Design API request failed with status ${response.status}`, {
         status: response.status,
         code,
+        payload,
+      });
+    }
+
+    if (optionsValue.accepts !== undefined && !optionsValue.accepts(payload)) {
+      throw new DesignApiError("The Design API returned an unexpected answer", {
+        status: response.status,
+        code: "INVALID_API_RESPONSE",
         payload,
       });
     }
@@ -294,6 +358,14 @@ export function createDesignApi(options: DesignApiOptions = {}): DesignApi {
       return request(`${projectPath(projectId)}/readiness`, {
         method: "GET",
         accessToken,
+      });
+    },
+
+    distance(projectId, accessToken) {
+      return request(`${projectPath(projectId)}/distance`, {
+        method: "GET",
+        accessToken,
+        accepts: isDistanceReport,
       });
     },
   };

@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, vShow, withDirectives } from "vue";
 
 import { createAppI18n } from "@/i18n";
-import { createDesignApi, DesignApiError, type DesignApi } from "../api/design";
+import {
+  createDesignApi,
+  DesignApiError,
+  type DesignApi,
+  type DesignDistanceApi,
+} from "../api/design";
 import {
   DesignAlignmentApiError,
   type DesignAlignmentApi,
@@ -29,12 +34,14 @@ import {
   DESIGN_CREATED_AT,
   DESIGN_OWNER_ID,
   DESIGN_PROJECT_ID,
+  DIRECTED_DESIGN_VERSION,
   PENDING_DESIGN_GATE,
   PROPOSED_DESIGN_DIFF,
   SECOND_DESIGN_ALTERNATIVE_ID,
   SELECTED_DESIGN_PACKAGE,
   SELECTED_DESIGN_VERSION,
   UNSELECTED_DESIGN_VERSION,
+  designDistanceReport,
 } from "../test/designFixtures";
 import { buildSelectedDesignPackage } from "../test/prototypeFixtures";
 import type {
@@ -49,6 +56,7 @@ import type {
   DesignReadinessPayload,
   SyntheticDesignCritiquePayload,
 } from "../types/design";
+import type { DesignDistanceReportPayload } from "../types/designDistance";
 import type {
   DesignEvaluationRunPayload,
   InsightApplicationPayload,
@@ -430,6 +438,25 @@ function fakeUsageApi(cost = 412000) {
   } satisfies ModelUsageApi;
 }
 
+function distanceMissing(): DesignApiError {
+  return new DesignApiError("DESIGN_PACKAGE_NOT_FOUND", {
+    status: 404,
+    code: "DESIGN_PACKAGE_NOT_FOUND",
+    payload: { detail: { code: "DESIGN_PACKAGE_NOT_FOUND" } },
+  });
+}
+
+function fakeDistanceApi(answer: DesignDistanceReportPayload | Error = distanceMissing()) {
+  return {
+    distance: vi.fn(async (): Promise<DesignDistanceReportPayload> => {
+      if (answer instanceof Error) {
+        throw answer;
+      }
+      return answer;
+    }),
+  } satisfies DesignDistanceApi;
+}
+
 function fakeSubscriptionUsageApi() {
   const paid = fakeUsageApi(412000);
   return {
@@ -447,6 +474,33 @@ function fakeSubscriptionUsageApi() {
           ...report.items,
         ],
         totals: { ...report.totals, generations: 2 },
+      };
+    }),
+  } satisfies ModelUsageApi;
+}
+
+function fakeDirectionsUsageApi() {
+  const paid = fakeUsageApi(412000);
+  return {
+    ...paid,
+    usage: vi.fn(async () => {
+      const report = await paid.usage();
+      const subscription = {
+        ...report.items[0]!,
+        provider_kind: "CLAUDE_CODE_CLI" as const,
+        cost_microusd: null,
+      };
+      return {
+        items: [
+          {
+            ...subscription,
+            generation_id: "generation-usage-3",
+            purpose: "DESIGN_ALTERNATIVES_HOSTED",
+          },
+          { ...subscription, generation_id: "generation-usage-2", purpose: "DESIGN_DIRECTIONS" },
+          { ...subscription, generation_id: "generation-usage-1", purpose: "DESIGN_DIRECTIONS" },
+        ],
+        totals: { ...report.totals, generations: 3, cost_microusd: 0 },
       };
     }),
   } satisfies ModelUsageApi;
@@ -861,6 +915,8 @@ interface MountOptions {
   iterationsApi?: DesignIterationsApi;
   pinsApi?: DesignReviewPinsApi;
   usageApi?: ModelUsageApi;
+  distanceApi?: DesignDistanceApi;
+  active?: boolean;
   attach?: boolean;
   pinia?: Pinia;
   stubs?: Record<string, boolean>;
@@ -885,6 +941,8 @@ function mountFlow(api: FakeDesignApi, options: MountOptions = {}) {
       ...(options.iterationsApi === undefined ? {} : { iterationsApi: options.iterationsApi }),
       ...(options.pinsApi === undefined ? {} : { pinsApi: options.pinsApi }),
       usageApi: options.usageApi ?? fakeUsageApi(),
+      distanceApi: options.distanceApi ?? fakeDistanceApi(),
+      ...(options.active === undefined ? {} : { active: options.active }),
     },
     global: {
       plugins: [...(options.pinia === undefined ? [] : [options.pinia]), createAppI18n(locale)],
@@ -1929,6 +1987,137 @@ describe("ProjectDesignFlow", () => {
     expect(api.decisions).toEqual(["APPROVE"]);
   });
 
+  it("reads the distance once the mockups are known, again when one becomes ready and when the design changes", async () => {
+    const api = new FakeDesignApi(DIRECTED_DESIGN_VERSION);
+    const documents: Record<string, MockupDocumentPayload> = {
+      [`${DESIGN_ALTERNATIVE_ID}|latest`]: mockupDocument(DESIGN_ALTERNATIVE_ID, "latest"),
+    };
+    const mockupsApi = fakeMockupsApi({
+      capabilities: GENERATED,
+      latest: {
+        [DESIGN_ALTERNATIVE_ID]: mockupResult(DESIGN_ALTERNATIVE_ID, DIRECTED_DESIGN_VERSION),
+      },
+      documents,
+      started: (alternativeId) =>
+        job(alternativeId, "SUCCEEDED", {
+          result: mockupResult(alternativeId, DIRECTED_DESIGN_VERSION),
+        }),
+    });
+    const report = designDistanceReport(DIRECTED_DESIGN_VERSION, {
+      styles: { available: false, score: null, differences: [] },
+      structure: { available: false, score: null, differences: [] },
+      verdict: "UNKNOWN",
+    });
+    const distanceApi = fakeDistanceApi(report);
+    const wrapper = mountFlow(api, { mockupsApi, distanceApi });
+    await flushPromises();
+
+    expect(distanceApi.distance).toHaveBeenCalledTimes(1);
+    expect(distanceApi.distance).toHaveBeenCalledWith(DESIGN_PROJECT_ID, "access-token");
+    expect(wrapper.getComponent(DesignAlternativeComparison).props("distance")).toEqual(report);
+    expect(wrapper.get('[data-testid="design-distance-verdict"]').text()).toBe(
+      "Complete measure when both mockups are ready",
+    );
+    expect(card(wrapper, "DES-001").get('[data-testid="alternative-direction"] p').text()).toBe(
+      "Visual direction: Printed timetable",
+    );
+    expect(card(wrapper, "DES-002").attributes("data-preview")).toBe("missing");
+
+    documents[`${SECOND_DESIGN_ALTERNATIVE_ID}|latest`] = mockupDocument(
+      SECOND_DESIGN_ALTERNATIVE_ID,
+      "latest",
+    );
+    await card(wrapper, "DES-002").get('[data-testid="alternative-draw"]').trigger("click");
+    await flushPromises();
+    expect(mockupsApi.startJob).toHaveBeenCalledTimes(1);
+    expect(card(wrapper, "DES-002").attributes("data-preview")).toBe("document");
+    expect(distanceApi.distance).toHaveBeenCalledTimes(2);
+
+    await card(wrapper, "DES-002").get('[data-testid="alternative-choose"]').trigger("click");
+    await flushPromises();
+    expect(api.decisions).toEqual(["APPROVE"]);
+    expect(distanceApi.distance).toHaveBeenCalledTimes(3);
+    expect(wrapper.getComponent(DesignAlternativeComparison).props("distance")).toBeNull();
+    expect(wrapper.find('[data-testid="design-distance"]').exists()).toBe(false);
+    expect(mockupsApi.startJob).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["the Studio has no report for the design", () => distanceMissing()],
+    ["the request fails", () => new Error("Design API request failed with status 503")],
+  ])("shows no distance and blocks nothing when %s", async (_case, failure) => {
+    const api = new FakeDesignApi(DIRECTED_DESIGN_VERSION);
+    const mockupsApi = fakeMockupsApi({
+      capabilities: GENERATED,
+      latest: {
+        [DESIGN_ALTERNATIVE_ID]: mockupResult(DESIGN_ALTERNATIVE_ID, DIRECTED_DESIGN_VERSION),
+        [SECOND_DESIGN_ALTERNATIVE_ID]: mockupResult(
+          SECOND_DESIGN_ALTERNATIVE_ID,
+          DIRECTED_DESIGN_VERSION,
+        ),
+      },
+      documents: {
+        [`${DESIGN_ALTERNATIVE_ID}|latest`]: mockupDocument(DESIGN_ALTERNATIVE_ID, "latest"),
+        [`${SECOND_DESIGN_ALTERNATIVE_ID}|latest`]: mockupDocument(
+          SECOND_DESIGN_ALTERNATIVE_ID,
+          "latest",
+        ),
+      },
+    });
+    const distanceApi = fakeDistanceApi(failure());
+    const wrapper = mountFlow(api, { mockupsApi, distanceApi, locale: "it" });
+    await flushPromises();
+
+    expect(distanceApi.distance).toHaveBeenCalledTimes(1);
+    expect(wrapper.getComponent(DesignAlternativeComparison).props("distance")).toBeNull();
+    expect(wrapper.find('[data-testid="design-distance"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="design-error"]').exists()).toBe(false);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(card(wrapper, "DES-002").get('[data-testid="alternative-direction"] p').text()).toBe(
+      "Direzione visiva: Front desk ledger",
+    );
+
+    await card(wrapper, "DES-002").get('[data-testid="alternative-choose"]').trigger("click");
+    await flushPromises();
+    expect(api.decisions).toEqual(["APPROVE"]);
+  });
+
+  it("reads the distance only once the step is shown, and not again when it is shown again", async () => {
+    const api = new FakeDesignApi(DIRECTED_DESIGN_VERSION);
+    const mockupsApi = fakeMockupsApi({ capabilities: GENERATED });
+    const distanceApi = fakeDistanceApi(designDistanceReport(DIRECTED_DESIGN_VERSION));
+    const wrapper = mountFlow(api, { mockupsApi, distanceApi, active: false });
+    await flushPromises();
+
+    expect(mockupsApi.capabilities).not.toHaveBeenCalled();
+    expect(distanceApi.distance).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="design-distance"]').exists()).toBe(false);
+
+    await wrapper.setProps({ active: true });
+    await flushPromises();
+    expect(distanceApi.distance).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="design-distance-verdict"]').text()).toBe("They differ");
+
+    await wrapper.setProps({ active: false });
+    await flushPromises();
+    await wrapper.setProps({ active: true });
+    await flushPromises();
+    expect(distanceApi.distance).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not read the distance on the declarative preview, where no mockup is drawn", async () => {
+    const api = new FakeDesignApi(DIRECTED_DESIGN_VERSION);
+    const distanceApi = fakeDistanceApi(designDistanceReport(DIRECTED_DESIGN_VERSION));
+    const wrapper = mountFlow(api, { distanceApi });
+    await flushPromises();
+
+    expect(distanceApi.distance).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="design-distance"]').exists()).toBe(false);
+    expect(card(wrapper, "DES-001").find('[data-testid="alternative-direction"]').exists()).toBe(
+      true,
+    );
+  });
+
   it("chooses a mockup drawn for an earlier version on top of the current design", async () => {
     const current: DesignPackageVersionPayload = {
       ...GENERATED_SELECTED,
@@ -2784,6 +2973,34 @@ describe("ProjectDesignFlow", () => {
       const labels = details.findAll("dt").map((item) => item.text());
       expect(labels).toContain(costLabel);
       expect(details.findAll("dd")[labels.indexOf(costLabel)]?.text()).toContain(cost);
+    },
+  );
+
+  it.each([
+    ["en", "subscription"],
+    ["it", "abbonamento"],
+  ] as const)(
+    "lists the generations that proposed the visual directions with their purpose code, like the others (%s)",
+    async (locale, subscription) => {
+      const api = new FakeDesignApi(GENERATED_UNSELECTED);
+      const wrapper = mountFlow(api, {
+        locale,
+        usageApi: fakeDirectionsUsageApi(),
+        mockupsApi: fakeMockupsApi({ capabilities: GENERATED }),
+      });
+      await flushPromises();
+
+      await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
+      const details = wrapper.get('[data-testid="step-technical-details-content"]');
+      const lines = details
+        .findAll("li")
+        .map((item) => item.text())
+        .filter((text) => text.includes("generation-usage-"));
+      expect(lines.map((text) => text.slice(text.indexOf(" · ") + 3))).toEqual([
+        `DESIGN_ALTERNATIVES_HOSTED · claude-opus-5-5 · SUCCEEDED · ${subscription} · generation-usage-3`,
+        `DESIGN_DIRECTIONS · claude-opus-5-5 · SUCCEEDED · ${subscription} · generation-usage-2`,
+        `DESIGN_DIRECTIONS · claude-opus-5-5 · SUCCEEDED · ${subscription} · generation-usage-1`,
+      ]);
     },
   );
 

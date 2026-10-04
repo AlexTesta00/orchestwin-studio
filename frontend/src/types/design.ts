@@ -210,6 +210,33 @@ export interface TwinFitPayload {
   statement: string;
 }
 
+export type DirectionLayout = "PANELS" | "BANDS" | "EDITORIAL" | "STAGE" | "WORKBENCH" | "MOSAIC";
+export type DirectionShape =
+  "ROUNDED_OUTLINE" | "SQUARE_RULES" | "HEAVY_FRAME" | "SOFT_FILL" | "PILL";
+export type DirectionType = "EVEN" | "DISPLAY" | "CAPS_LABELS" | "READING";
+export type DirectionColour = "ACCENT_ONLY" | "FIELDS" | "INK" | "TINTED";
+export type DirectionDensity = "COMPACT" | "COMFORTABLE" | "SPACIOUS";
+
+export interface DirectionAxes {
+  layout: DirectionLayout;
+  shape: DirectionShape;
+  type: DirectionType;
+  colour: DirectionColour;
+  density: DirectionDensity;
+}
+
+export type DirectionAxis = keyof DirectionAxes;
+
+export interface VisualDirection {
+  name: string;
+  concept: string;
+  rules: string[];
+  axes: DirectionAxes;
+  typicality: number;
+  candidates: number;
+  vocabulary_version: number;
+}
+
 export interface VisualLanguagePayload {
   catalog_version: number;
   catalog_content_hash: string;
@@ -219,6 +246,7 @@ export interface VisualLanguagePayload {
   palette: Record<string, string>;
   tokens: Record<string, string>;
   twin_fit: TwinFitPayload[];
+  direction?: VisualDirection | null;
 }
 
 export interface DesignAlternativePayload {

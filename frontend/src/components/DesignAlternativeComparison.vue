@@ -25,12 +25,61 @@ import DesignStyleTile from "./DesignStyleTile.vue";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
 import ArtifactWhy from "./ArtifactWhy.vue";
 import UiButton from "./UiButton.vue";
-import { archetypeLabel } from "./visualLanguage";
-import type { DesignAlternativePayload, UserTwinVersionReferencePayload } from "../types/design";
+import {
+  archetypeLabel,
+  DIRECTION_AXES,
+  directionAxisLabel,
+  directionValueLabel,
+} from "./visualLanguage";
+import type {
+  DesignAlternativePayload,
+  DirectionAxis,
+  UserTwinVersionReferencePayload,
+  VisualDirection,
+} from "../types/design";
+import type {
+  DeclaredDistancePayload,
+  DesignDistancePairPayload,
+  DesignDistanceReportPayload,
+  DesignDistanceVerdict,
+} from "../types/designDistance";
 
 type Locale = "en" | "it";
+type DistanceLevelKey = "declared" | "styles" | "structure";
+
+interface DirectionView {
+  name: string;
+  concept: string;
+  rules: readonly string[];
+  chips: { axis: DirectionAxis; label: string; value: string }[];
+  origin: string;
+}
+
+interface DistanceLevel {
+  key: DistanceLevelKey;
+  label: string;
+  score: number;
+  value: string;
+  detail: string | null;
+}
+
+interface DistancePair {
+  key: string;
+  title: string;
+  verdict: DesignDistanceVerdict;
+  verdictText: string;
+  axes: string | null;
+  levels: DistanceLevel[];
+  missing: string | null;
+}
 
 const REASON_LIMIT = 3;
+
+const VERDICT_CLASSES: Readonly<Record<DesignDistanceVerdict, string>> = {
+  FAR: "border-petrol-on-night/60 text-petrol-on-night-2",
+  CLOSE: "border-warn-on-night/60 bg-warn-on-night/8 text-warn-on-night",
+  UNKNOWN: "border-night-line-strong text-on-night-2",
+};
 
 const props = withDefaults(
   defineProps<{
@@ -42,6 +91,7 @@ const props = withDefaults(
     choosable?: Readonly<Record<string, boolean>>;
     hints?: Readonly<Record<string, string>>;
     notes?: Readonly<Record<string, string>>;
+    distance?: DesignDistanceReportPayload | null;
     choosing?: string | null;
     disabled?: boolean;
     paid?: boolean;
@@ -57,6 +107,7 @@ const props = withDefaults(
     choosable: () => ({}),
     hints: () => ({}),
     notes: () => ({}),
+    distance: null,
     choosing: null,
     disabled: false,
     paid: true,
@@ -117,6 +168,54 @@ const messages = {
     security: "Security",
     workflows: "Workflows",
     twinFit: "How it serves the twins",
+    direction: "Visual direction",
+    rules: "Rules",
+    origin:
+      "Proposed by the model among {n} candidates; chosen by the Studio because it is far from the other.",
+    adherence: "The mockup does not follow the direction on: {axes}",
+    distance: "Distance between the alternatives",
+    verdicts: {
+      FAR: "They differ",
+      CLOSE: "Too close",
+      UNKNOWN: "Complete measure when both mockups are ready",
+    },
+    axesDifferent: "{n} of 5 axes differ",
+    close: "The two alternatives look alike in drawn style. You can regenerate them.",
+    measure: "Details of the measure",
+    levels: {
+      declared: "Declared choices",
+      styles: "Drawn style",
+      structure: "Structure of the screens",
+    },
+    score: "{n}/100",
+    differences: "Differences: {list}",
+    choicesDifferent: ["1 of {total} choices differs", "{n} of {total} choices differ"],
+    caveat: "Measure computed by the Studio: it does not replace your judgement.",
+    styleDifferences: {
+      RADIUS: "corner radius",
+      BORDER: "borders",
+      BOXING: "boxes or rules",
+      SHADOW: "shadows",
+      TYPE_SCALE: "size of the titles against the text",
+      TITLE_SCALE: "title size",
+      UPPERCASE: "upper-case text",
+      COLOUR_FIELDS: "fields of colour",
+      TINTS: "tinted surfaces",
+      GRADIENT: "gradients",
+      CONTAINER: "width of the content",
+      COLUMNS: "columns",
+      SPACING: "spacing",
+      MONOSPACE: "fixed-width type",
+    },
+    structureDifferences: {
+      OUTLINE: "arrangement of the first screen",
+      TAGS: "elements used in the screens",
+      TABLE: "tables",
+      CARDS: "cards",
+      SIDE_COLUMN: "side column",
+      NAVIGATION: "position of the navigation",
+      FORMS: "forms",
+    },
   },
   it: {
     title: "Le alternative di design",
@@ -164,6 +263,54 @@ const messages = {
     security: "Sicurezza",
     workflows: "Flussi",
     twinFit: "Come serve i twin",
+    direction: "Direzione visiva",
+    rules: "Regole",
+    origin:
+      "Proposta dal modello fra {n} candidate; scelta dallo Studio perché lontana dall'altra.",
+    adherence: "Il mockup non segue la direzione su: {axes}",
+    distance: "Distanza fra le alternative",
+    verdicts: {
+      FAR: "Si distinguono",
+      CLOSE: "Troppo vicine",
+      UNKNOWN: "Misura completa quando i due mockup sono pronti",
+    },
+    axesDifferent: "{n} assi diversi su 5",
+    close: "Le due alternative si somigliano nello stile disegnato. Puoi rigenerarle.",
+    measure: "Dettagli della misura",
+    levels: {
+      declared: "Scelte dichiarate",
+      styles: "Stile disegnato",
+      structure: "Struttura delle schermate",
+    },
+    score: "{n}/100",
+    differences: "Differenze: {list}",
+    choicesDifferent: ["1 scelta diversa su {total}", "{n} scelte diverse su {total}"],
+    caveat: "Misura calcolata dallo Studio: non sostituisce il tuo giudizio.",
+    styleDifferences: {
+      RADIUS: "raggio degli angoli",
+      BORDER: "bordi",
+      BOXING: "riquadri o filetti",
+      SHADOW: "ombre",
+      TYPE_SCALE: "grandezza dei titoli rispetto al testo",
+      TITLE_SCALE: "grandezza del titolo",
+      UPPERCASE: "testi in maiuscolo",
+      COLOUR_FIELDS: "campiture di colore",
+      TINTS: "superfici tinte",
+      GRADIENT: "sfumature",
+      CONTAINER: "larghezza del contenuto",
+      COLUMNS: "colonne",
+      SPACING: "spaziature",
+      MONOSPACE: "caratteri a larghezza fissa",
+    },
+    structureDifferences: {
+      OUTLINE: "disposizione della prima schermata",
+      TAGS: "elementi usati nelle schermate",
+      TABLE: "tabelle",
+      CARDS: "schede",
+      SIDE_COLUMN: "colonna laterale",
+      NAVIGATION: "posizione della navigazione",
+      FORMS: "moduli",
+    },
   },
 } as const;
 
@@ -188,7 +335,8 @@ const cards = computed(() =>
       canChoose: !props.disabled && props.choosable[alternative.id] !== false,
       busy: props.choosing === alternative.id,
       hint: props.hints[alternative.id] ?? null,
-      note: props.notes[alternative.id] ?? null,
+      notes: notesOf(alternative),
+      direction: directionOf(alternative),
       layout: layoutRow(alternative),
       fits: fitsOf(alternative),
       pro: alternative.advantages[0] ?? null,
@@ -199,8 +347,144 @@ const cards = computed(() =>
   }),
 );
 
+const distancePairs = computed<DistancePair[]>(() => {
+  const report = props.distance;
+  if (report === null) {
+    return [];
+  }
+  const codes = new Set(props.alternatives.map((alternative) => alternative.code));
+  const pairs = report.pairs.filter((pair) => codes.has(pair.first) && codes.has(pair.second));
+  return pairs.map((pair) => distancePair(pair, pairs.length > 1));
+});
+
 function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
+}
+
+function listed(items: readonly string[]): string {
+  return new Intl.ListFormat(props.locale, { type: "conjunction" }).format(items);
+}
+
+function axisLabels(axes: readonly string[]): string[] {
+  return DIRECTION_AXES.filter((axis) => axes.includes(axis)).map((axis) =>
+    directionAxisLabel(props.locale, axis),
+  );
+}
+
+function directionOf(alternative: DesignAlternativePayload): DirectionView | null {
+  const direction = alternative.visual_language?.direction ?? null;
+  if (direction === null) {
+    return null;
+  }
+  return {
+    name: direction.name,
+    concept: direction.concept,
+    rules: direction.rules,
+    chips: axisChips(direction),
+    origin: fill(copy.value.origin, { n: direction.candidates }),
+  };
+}
+
+function axisChips(direction: VisualDirection): DirectionView["chips"] {
+  return DIRECTION_AXES.flatMap((axis) => {
+    const value = directionValueLabel(props.locale, axis, direction.axes[axis]);
+    return value === null ? [] : [{ axis, label: directionAxisLabel(props.locale, axis), value }];
+  });
+}
+
+function adherenceNote(code: string): string | null {
+  const entry = props.distance?.alternatives.find((item) => item.code === code);
+  if (entry === undefined || !entry.adherence.available) {
+    return null;
+  }
+  const missed = DIRECTION_AXES.filter((axis) => entry.adherence.axes[axis] === "NOT_FOLLOWED");
+  return missed.length === 0
+    ? null
+    : fill(copy.value.adherence, { axes: listed(axisLabels(missed)) });
+}
+
+function notesOf(alternative: DesignAlternativePayload): string[] {
+  const lines: string[] = [];
+  const note = props.notes[alternative.id];
+  if (note !== undefined) {
+    lines.push(note);
+  }
+  const adherence = adherenceNote(alternative.code);
+  if (adherence !== null) {
+    lines.push(adherence);
+  }
+  return lines;
+}
+
+function differencesOf(words: readonly string[]): string | null {
+  return words.length === 0 ? null : fill(copy.value.differences, { list: listed(words) });
+}
+
+function wordsOf(ids: readonly string[], words: Readonly<Record<string, string>>): string[] {
+  return ids.flatMap((id) => {
+    const word = words[id];
+    return word === undefined ? [] : [word];
+  });
+}
+
+function declaredDetail(declared: DeclaredDistancePayload): string | null {
+  const axes = axisLabels(declared.axes);
+  if (axes.length > 0) {
+    return differencesOf(axes);
+  }
+  if (declared.choices_different === null) {
+    return null;
+  }
+  const [one, many] = copy.value.choicesDifferent;
+  return fill(declared.choices_different === 1 ? one : many, {
+    n: declared.choices_different,
+    total: declared.choices_total,
+  });
+}
+
+function distanceLevel(key: DistanceLevelKey, score: number, detail: string | null): DistanceLevel {
+  const value = Math.min(100, Math.max(0, Math.round(score)));
+  return {
+    key,
+    label: copy.value.levels[key],
+    score: value,
+    value: fill(copy.value.score, { n: value }),
+    detail,
+  };
+}
+
+function distancePair(pair: DesignDistancePairPayload, several: boolean): DistancePair {
+  const text = copy.value;
+  const verdict: DesignDistanceVerdict =
+    pair.verdict === "FAR" || pair.verdict === "CLOSE" ? pair.verdict : "UNKNOWN";
+  const levels: DistanceLevel[] = [];
+  const missing: string[] = [];
+  if (pair.declared.score !== null) {
+    levels.push(distanceLevel("declared", pair.declared.score, declaredDetail(pair.declared)));
+  }
+  const measured = [
+    { key: "styles", measure: pair.styles, words: text.styleDifferences },
+    { key: "structure", measure: pair.structure, words: text.structureDifferences },
+  ] as const;
+  for (const { key, measure, words } of measured) {
+    if (measure.available && measure.score !== null) {
+      levels.push(
+        distanceLevel(key, measure.score, differencesOf(wordsOf(measure.differences, words))),
+      );
+    } else {
+      missing.push(text.levels[key]);
+    }
+  }
+  const axes = pair.declared.axes_different;
+  return {
+    key: `${pair.first}|${pair.second}`,
+    title: several ? `${text.distance} · ${pair.first} · ${pair.second}` : text.distance,
+    verdict,
+    verdictText: text.verdicts[verdict],
+    axes: axes === null ? null : fill(text.axesDifferent, { n: axes }),
+    levels,
+    missing: missing.length > 0 ? listed(missing) : null,
+  };
 }
 
 function failureTitle(kind: "rejected" | "failed", code: string): string {
@@ -306,6 +590,102 @@ onBeforeUnmount(() => {
 <template>
   <section class="text-on-night" :aria-labelledby="titleId" data-testid="design-alternatives">
     <h2 :id="titleId" class="sr-only">{{ copy.title }}</h2>
+    <div
+      v-for="pair in distancePairs"
+      :key="pair.key"
+      class="mb-4 grid min-w-0 gap-2 rounded-tile border border-night-line bg-on-night/4 px-4 py-3"
+      :data-verdict="pair.verdict"
+      data-testid="design-distance"
+    >
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h3 class="text-[15px] leading-snug font-semibold break-words">{{ pair.title }}</h3>
+        <span
+          :class="[
+            'inline-flex max-w-full items-center rounded-pill border px-2.5 py-0.5 text-xs font-semibold break-words',
+            VERDICT_CLASSES[pair.verdict],
+          ]"
+          data-testid="design-distance-verdict"
+        >
+          {{ pair.verdictText }}
+        </span>
+        <span
+          v-if="pair.axes !== null"
+          class="text-[13px] text-on-night-2"
+          data-testid="design-distance-axes"
+        >
+          {{ pair.axes }}
+        </span>
+      </div>
+      <p
+        v-if="pair.verdict === 'CLOSE'"
+        class="rounded-field border border-warn-on-night/30 bg-warn-on-night/6 px-3 py-2 text-[13px] leading-normal text-warn-on-night"
+        role="status"
+        data-testid="design-distance-close"
+      >
+        {{ copy.close }}
+      </p>
+      <details class="group text-sm" data-testid="design-distance-details">
+        <summary
+          class="flex min-h-11 cursor-pointer list-none items-center gap-2.5 font-semibold text-petrol-on-night-2 [&::-webkit-details-marker]:hidden"
+        >
+          <span
+            aria-hidden="true"
+            class="inline-block h-1.5 w-1.5 shrink-0 -rotate-45 border-r-[1.5px] border-b-[1.5px] border-petrol-on-night-2 transition-transform duration-150 group-open:rotate-45"
+          />
+          {{ copy.measure }}
+        </summary>
+        <div class="grid gap-3 pb-1 text-on-night-2">
+          <ul v-if="pair.levels.length > 0" class="m-0 grid list-none gap-3 p-0">
+            <li
+              v-for="level in pair.levels"
+              :key="level.key"
+              class="grid gap-1"
+              :data-level="level.key"
+              data-testid="design-distance-level"
+            >
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span class="font-semibold text-on-night">{{ level.label }}</span>
+                <span class="inline-flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="relative block h-1.5 w-20 shrink-0 overflow-hidden rounded-pill bg-night-line-strong"
+                  >
+                    <span
+                      class="absolute inset-y-0 left-0 block rounded-pill bg-petrol-on-night"
+                      :style="{ width: `${level.score}%` }"
+                      data-testid="design-distance-meter"
+                    />
+                  </span>
+                  <span
+                    class="font-mono text-[13px] text-on-night-2"
+                    data-testid="design-distance-score"
+                  >
+                    {{ level.value }}
+                  </span>
+                </span>
+              </div>
+              <p v-if="level.detail !== null" class="leading-normal break-words">
+                {{ level.detail }}
+              </p>
+            </li>
+          </ul>
+          <p
+            v-if="pair.missing !== null"
+            class="leading-normal break-words"
+            data-testid="design-distance-missing"
+          >
+            <span class="font-semibold text-on-night">{{ pair.missing }}</span> ·
+            {{ copy.verdicts.UNKNOWN }}
+          </p>
+          <p
+            class="text-[13px] leading-normal text-on-night-3"
+            data-testid="design-distance-caveat"
+          >
+            {{ copy.caveat }}
+          </p>
+        </div>
+      </details>
+    </div>
     <div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-4">
       <article
         v-for="card in cards"
@@ -439,6 +819,27 @@ onBeforeUnmount(() => {
         <h3 class="-mt-1 text-[22px] leading-tight font-semibold tracking-[-0.015em] break-words">
           {{ card.alternative.title }}
         </h3>
+        <div
+          v-if="card.direction !== null"
+          class="grid gap-1.5"
+          data-testid="alternative-direction"
+        >
+          <p class="text-sm leading-snug break-words text-on-night-2">
+            {{ copy.direction }}:
+            <span class="font-semibold text-on-night">{{ card.direction.name }}</span>
+          </p>
+          <ul class="m-0 flex list-none flex-wrap gap-1.5 p-0">
+            <li
+              v-for="chip in card.direction.chips"
+              :key="chip.axis"
+              class="max-w-full rounded-pill border border-night-line px-2 py-0.5 text-xs break-words text-on-night-2"
+              :data-axis="chip.axis"
+              data-testid="alternative-direction-axis"
+            >
+              <span class="sr-only">{{ chip.label }}: </span>{{ chip.value }}
+            </li>
+          </ul>
+        </div>
         <p class="text-[15px] leading-normal text-on-night-2">{{ card.alternative.summary }}</p>
         <ArtifactWhy
           :code="card.alternative.code"
@@ -478,11 +879,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <p
-          v-if="card.note !== null"
+          v-if="card.notes.length > 0"
           class="rounded-field border border-warn-on-night/30 bg-warn-on-night/6 px-3 py-2 text-[13px] leading-normal text-warn-on-night"
           data-testid="alternative-note"
         >
-          {{ card.note }}
+          <span v-for="(line, index) in card.notes" :key="index" class="block">{{ line }}</span>
         </p>
 
         <div class="mt-auto flex flex-wrap items-center gap-2 pt-1">
@@ -538,6 +939,22 @@ onBeforeUnmount(() => {
             {{ copy.details }}<span class="sr-only">: {{ card.alternative.title }}</span>
           </summary>
           <div class="grid gap-4 pt-2 pb-1 text-on-night-2">
+            <section v-if="card.direction !== null" data-testid="alternative-direction-detail">
+              <h4 class="font-semibold text-on-night">{{ copy.direction }}</h4>
+              <p class="mt-1 leading-normal break-words">{{ card.direction.concept }}</p>
+              <h5 class="mt-3 font-semibold text-on-night">{{ copy.rules }}</h5>
+              <ul class="mt-1 list-disc space-y-1 pl-5" data-testid="alternative-direction-rules">
+                <li v-for="(rule, index) in card.direction.rules" :key="index" class="break-words">
+                  {{ rule }}
+                </li>
+              </ul>
+              <p
+                class="mt-2 text-[13px] leading-normal text-on-night-3"
+                data-testid="alternative-direction-origin"
+              >
+                {{ card.direction.origin }}
+              </p>
+            </section>
             <dl class="grid gap-3">
               <div v-if="card.layout" data-testid="alternative-layout">
                 <dt class="font-semibold text-on-night">{{ card.layout.label }}</dt>
