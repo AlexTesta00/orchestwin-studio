@@ -21,6 +21,7 @@ from orchestwin.artifacts.references import (
     VersionedArtifactReference,
     require_artifact_kind,
 )
+from orchestwin.artifacts.visual_directions import DirectionAxes
 from orchestwin.projects.domain import ProjectMode
 from orchestwin.projects.requirements_primitives import (
     RequirementsContextReference,
@@ -200,6 +201,7 @@ class DesignProposalRequest:
     user_modeling: DesignUserModelingInput
     catalog_version: int
     catalog_content_hash: str
+    avoided_directions: tuple[DirectionAxes, ...] = ()
 
     def __post_init__(self) -> None:
         """Protect project scope, catalog metadata, and exact User Twin context."""
@@ -247,9 +249,14 @@ class DesignProposalRequest:
         if self.user_modeling.user_twin_references != specification.user_twin_references:
             raise ValueError("design proposal User Twins must match the Requirements specification")
 
+        if not isinstance(self.avoided_directions, tuple) or not all(
+            isinstance(item, DirectionAxes) for item in self.avoided_directions
+        ):
+            raise ValueError("design proposal avoided directions must be direction axes")
+
     def to_snapshot(self) -> dict[str, object]:
         """Return the complete deterministic provider request."""
-        return {
+        snapshot: dict[str, object] = {
             "schema_version": DESIGN_PROPOSAL_SCHEMA_VERSION,
             "project_id": str(self.project_id),
             "project_mode": self.project_mode.value,
@@ -261,6 +268,11 @@ class DesignProposalRequest:
             "team": self.team.to_snapshot(),
             "user_modeling": self.user_modeling.to_snapshot(),
         }
+        if self.avoided_directions:
+            snapshot["avoided_directions"] = [
+                item.to_snapshot() for item in self.avoided_directions
+            ]
+        return snapshot
 
     def canonical_json(self) -> str:
         """Serialize this provider request deterministically."""
