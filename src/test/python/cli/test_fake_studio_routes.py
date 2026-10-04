@@ -290,7 +290,7 @@ def test_the_fake_serves_every_area_that_the_commands_need(
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 156
+    assert len(ROUTES) == 161
 
 
 def test_validation_routes_are_exactly_the_two_authorized_read_only_routes() -> None:

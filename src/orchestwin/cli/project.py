@@ -16,9 +16,12 @@ LOCAL_FOLDER: Final = ".orchestwin"
 LINK_FILE: Final = "project.json"
 STEPS_FOLDER: Final = "steps"
 PREVIEWS_FOLDER: Final = "previews"
+ACTIVITY_FILE: Final = "activity-session.json"
 LOCAL_IGNORE: Final = "previews/\n"
 LINK_SCHEMA_VERSION: Final = 1
 STEP_SCHEMA_VERSION: Final = 1
+ACTIVITY_SCHEMA_VERSION: Final = 1
+_ACTIVITY_TEXTS: Final = ("session_code", "started_at")
 KNOWLEDGE_FOLDER: Final = "orchestwin"
 STEP_STAGES: Final = ("brief", "team", "twins", "requirements", "design")
 MODES: Final = ("DESIGN_ONLY", "DESIGN_AND_CODE")
@@ -125,6 +128,31 @@ class ProjectFolder:
             if document is not None:
                 found[stage] = document
         return found
+
+    def activity_session(self) -> Mapping[str, object] | None:
+        document = read_json(self.local / ACTIVITY_FILE)
+        if (
+            not isinstance(document, dict)
+            or document.get("schema_version") != ACTIVITY_SCHEMA_VERSION
+            or not all(
+                isinstance(document.get(name), str) and document[name] for name in _ACTIVITY_TEXTS
+            )
+        ):
+            return None
+        return document
+
+    def save_activity_session(self, session_code: str, started_at: str) -> Path:
+        path = self.local / ACTIVITY_FILE
+        document = {
+            "schema_version": ACTIVITY_SCHEMA_VERSION,
+            "session_code": session_code,
+            "started_at": started_at,
+        }
+        write_atomically(path, json_bytes(document))
+        return path
+
+    def forget_activity_session(self) -> None:
+        (self.local / ACTIVITY_FILE).unlink(missing_ok=True)
 
     def _step_path(self, stage: str) -> Path:
         if stage not in STEP_STAGES:
