@@ -260,6 +260,33 @@ describe("owner workflow inputs in sprint 36", () => {
     },
   );
 
+  it.each([
+    [
+      "en",
+      "Its structure matches generated mockups. ut code and the scenario walkthrough are also unavailable for this Design.",
+    ],
+    [
+      "it",
+      "La struttura è la stessa dei mockup generati. Per questo Design non sono disponibili nemmeno ut code e il percorso sugli scenari.",
+    ],
+  ] as const)(
+    "says in %s what the supplied Design shares with generated mockups without naming sprints",
+    async (locale, sentence) => {
+      const api = fakeApi();
+      vi.mocked(api.read).mockResolvedValue(envelope([provided]));
+      vi.mocked(api.currentPrototype).mockResolvedValue(provided);
+      vi.mocked(api.prototypeGate).mockResolvedValue(prototypeGate);
+      const { wrapper } = render(api, { stage: 4, expert: false, locale });
+      await flushPromises();
+      const lines = wrapper
+        .get('[data-testid="provided-prototype"]')
+        .findAll("p")
+        .map((line) => line.text());
+      expect(lines).toContain(sentence);
+      expect(lines.filter((line) => /sprint 3[58]|del 35/.test(line))).toEqual([]);
+    },
+  );
+
   it("requires a separate approval click and refuses to approve a stale Definition", async () => {
     const api = fakeApi();
     vi.mocked(api.currentPrototype).mockResolvedValue(provided);
