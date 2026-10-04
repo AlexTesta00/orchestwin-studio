@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID
+
+import pytest
 
 from orchestwin.projects import sections_service as reads
 from orchestwin.projects.progress import ArtifactVersion, GateState, ProjectStage
@@ -15,6 +18,7 @@ from orchestwin.projects.sections import (
     project_sections,
 )
 from orchestwin.workflow.gates import HumanGateStatus
+from src.test.python.artifacts import design_fixtures
 from src.test.python.artifacts.test_provided_prototypes36 import prototype
 from src.test.python.projects.test_sections import (
     TWINS_2,
@@ -34,7 +38,7 @@ PROJECT_ID = UUID("838e3a26-0a99-43d3-8488-192b02922139")
 
 def supplied(**changes):
     return replace(
-        design(provided=True, has_mockup=True),
+        design(provided=True),
         version=replace(artifact("design"), artifact_id=PROTOTYPE_ID),
         **changes,
     )
@@ -44,7 +48,49 @@ def facts(**changes):
     return aligned(design=supplied(), design_approved_once=False, **changes)
 
 
-def install_prototype_reads(monkeypatch):
+def anchored(result):
+    base = aligned(design_approved_once=False)
+    return replace(
+        base,
+        team=replace(base.team, version=result.team),
+        user_twins=replace(
+            base.user_twins, version=result.user_modeling, team=result.team, twins=result.twins
+        ),
+        requirements=replace(
+            base.requirements,
+            version=result.requirements,
+            team=result.team,
+            user_modeling=result.user_modeling,
+            twins=result.twins,
+        ),
+        design=result,
+    )
+
+
+def install_generated_reads(monkeypatch, *, reviewed, provided):
+    version = design_fixtures.design_version()
+    for name, result in (
+        ("SqlAlchemyDesignPackageRepository", version),
+        ("SqlAlchemyWorkflowInputsRepository", provided),
+    ):
+        monkeypatch.setattr(
+            reads,
+            name,
+            lambda *args, result=result, **kwargs: SimpleNamespace(
+                current=AsyncMock(return_value=result)
+            ),
+        )
+    monkeypatch.setattr(
+        reads,
+        "SqlAlchemyDesignDiffRepository",
+        lambda *args, **kwargs: SimpleNamespace(current_proposed=AsyncMock(return_value=None)),
+    )
+    review = AsyncMock(return_value=reviewed)
+    monkeypatch.setattr(reads, "_design_reviewed", review)
+    return version, review
+
+
+def install_prototype_reads(monkeypatch, codes=("REQ-001", "REQ-002", "REQ-003")):
     current = prototype()
     base = aligned()
     specification = SimpleNamespace(
@@ -58,7 +104,7 @@ def install_prototype_reads(monkeypatch):
             )
             for item in base.user_twins.twins
         ],
-        requirements=[SimpleNamespace(code=code) for code in ("REQ-001", "REQ-002", "REQ-003")],
+        requirements=[SimpleNamespace(code=code) for code in codes],
     )
     for name, result in (
         ("SqlAlchemyDesignPackageRepository", None),
@@ -94,7 +140,7 @@ def test_exact_approved_prototype_gate_produces_approved_design_facts(monkeypatc
     assert result.version == identity
     assert result.approved is True
     assert result.provided is True
-    assert result.has_mockup is True
+    assert result.has_mockup is False
     assert result.reviewed is False
     assert result.requirements == ArtifactVersion(
         UUID(current.definition_reference["artifact_id"]),
@@ -102,6 +148,82 @@ def test_exact_approved_prototype_gate_produces_approved_design_facts(monkeypatc
         current.definition_reference["content_hash"],
     )
     assert result.uncovered_codes == ("REQ-003",)
+
+
+@pytest.mark.parametrize(
+    ("codes", "state", "reasons", "uncovered"),
+    [
+        (("REQ-001", "REQ-002"), "FINE", [], []),
+        (
+            ("REQ-001", "REQ-002", "REQ-003"),
+            "UPDATE_AVAILABLE",
+            ["REQUIREMENTS_NOT_COVERED"],
+            ["REQ-003"],
+        ),
+    ],
+)
+def test_an_approved_supplied_prototype_is_not_sent_to_a_twin_evaluation_it_cannot_have(
+    monkeypatch, codes, state, reasons, uncovered
+):
+    _, identity = install_prototype_reads(monkeypatch, codes)
+
+    result = asyncio.run(
+        reads.SqlAlchemySectionReads._design(
+            None,
+            GateState(HumanGateStatus.APPROVED, identity),
+            owner_user_id=OWNER_ID,
+            project_id=PROJECT_ID,
+        )
+    )
+
+    assert project_sections(anchored(result)).section(ProjectStage.DESIGN).to_snapshot() == {
+        "key": "DESIGN",
+        "state": state,
+        "version_number": 1,
+        "reasons": reasons,
+        "blocked": None,
+        "codes": uncovered,
+    }
+
+
+@pytest.mark.parametrize(
+    ("reviewed", "superseded", "state", "reasons"),
+    [
+        (False, False, "UPDATE_AVAILABLE", ["EVALUATION_MISSING"]),
+        (True, False, "FINE", []),
+        (False, True, "UPDATE_AVAILABLE", ["EVALUATION_MISSING"]),
+    ],
+)
+def test_a_generated_design_read_still_waits_for_a_twin_review_of_its_own_version(
+    monkeypatch, reviewed, superseded, state, reasons
+):
+    provided = (
+        prototype(created_at=design_fixtures.CREATED_AT - timedelta(days=1)) if superseded else None
+    )
+    version, review = install_generated_reads(monkeypatch, reviewed=reviewed, provided=provided)
+    identity = ArtifactVersion(version.id, version.version_number, version.content_hash)
+
+    result = asyncio.run(
+        reads.SqlAlchemySectionReads._design(
+            None,
+            GateState(HumanGateStatus.APPROVED, identity),
+            owner_user_id=OWNER_ID,
+            project_id=PROJECT_ID,
+        )
+    )
+
+    assert (result.provided, result.has_mockup, result.reviewed) == (False, True, reviewed)
+    review.assert_awaited_once_with(
+        None, owner_user_id=OWNER_ID, project_id=PROJECT_ID, design_version_id=version.id
+    )
+    assert project_sections(anchored(result)).section(ProjectStage.DESIGN).to_snapshot() == {
+        "key": "DESIGN",
+        "state": state,
+        "version_number": 1,
+        "reasons": reasons,
+        "blocked": None,
+        "codes": [],
+    }
 
 
 def test_other_identity_or_gate_status_cannot_approve_the_supplied_design(monkeypatch):
@@ -192,7 +314,7 @@ def test_sections_read_does_not_query_generated_alignment_for_a_supplied_design(
     assert step.mock_calls == []
 
 
-def test_missing_evaluation_and_missing_anchors_stay_visible_after_approval():
+def test_missing_anchors_stay_visible_after_approval_and_no_evaluation_is_asked():
     value = replace(facts(), design=supplied(uncovered_codes=("REQ-004", "REQ-007")))
     result = project_sections(value)
 
@@ -201,14 +323,14 @@ def test_missing_evaluation_and_missing_anchors_stay_visible_after_approval():
         "key": "DESIGN",
         "state": "UPDATE_AVAILABLE",
         "version_number": 1,
-        "reasons": ["REQUIREMENTS_NOT_COVERED", "EVALUATION_MISSING"],
+        "reasons": ["REQUIREMENTS_NOT_COVERED"],
         "blocked": None,
         "codes": ["REQ-004", "REQ-007"],
     }
     assert result.alignment.available is False
     covered = project_sections(facts()).section(ProjectStage.DESIGN)
-    assert covered.state is SectionState.UPDATE_AVAILABLE
-    assert covered.reasons == (SectionReason.EVALUATION_MISSING,)
+    assert covered.state is SectionState.FINE
+    assert covered.reasons == ()
     assert covered.codes == ()
 
 
