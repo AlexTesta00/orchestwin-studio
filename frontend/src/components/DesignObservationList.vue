@@ -147,6 +147,8 @@ const messages = {
     confirm: "Confermo",
     dismiss: "Non pertinente",
     confirmed: "Confermata · portala nel progetto:",
+    confirmationNotice:
+      "La tua conferma è una decisione di progetto: non è una verifica con persone reali.",
     dismissed: "Non pertinente: resta fuori dal progetto.",
     reconsider: "Confermala",
     saving: "Salvo la tua decisione…",
@@ -204,6 +206,8 @@ const messages = {
     confirm: "I confirm",
     dismiss: "Not relevant",
     confirmed: "Confirmed · bring it into the project:",
+    confirmationNotice:
+      "Your confirmation is a project decision: it is not a check with real people.",
     dismissed: "Not relevant: it stays out of the project.",
     reconsider: "Confirm it",
     saving: "Saving your decision…",
@@ -520,6 +524,9 @@ function dismiss(finding: ObservationFinding): void {
                   </button>
                 </div>
               </div>
+              <p class="text-xs text-on-night-3" data-testid="finding-confirmation-notice">
+                {{ copy.confirmationNotice }}
+              </p>
             </template>
             <div
               v-else
