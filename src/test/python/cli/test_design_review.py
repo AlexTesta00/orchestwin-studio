@@ -10,6 +10,7 @@ from orchestwin.cli.api import design as design_api
 from orchestwin.cli.errors import ApiFailure
 from orchestwin.cli.flows import review
 from orchestwin.cli.http import UrlTransport
+from orchestwin.cli.messages import text
 from orchestwin.cli.project import ProjectFolder
 from orchestwin.knowledge.folder import folder_archive
 
@@ -19,6 +20,13 @@ from .test_api_design import Session, choose, choose_in_the_web, design_session,
 from .test_design_generate import Unreachable
 
 EVALUATIONS = "/design/evaluations"
+SIMULATED = {
+    "en": "The twins' findings are simulated by the model: hypotheses to verify with real people, "
+    "not evidence.\n",
+    "it": "I rilievi dei twin sono simulati dal modello: ipotesi da verificare con persone reali, "
+    "non prove.\n",
+}
+HEADING = {"en": "Review of the twins, version 2", "it": "Revisione dei twin, versione 2"}
 NOT_AVAILABLE = {
     "en": (
         "I am about to ask the twins to review the chosen design.\n"
@@ -59,6 +67,8 @@ def test_the_review_shows_each_twin_with_the_weight_and_the_screen(tmp_path: Pat
         "\n"
         "Review of the twins, version 2\n"
         "==============================\n"
+        "The twins' findings are simulated by the model: hypotheses to verify with real people, "
+        "not evidence.\n"
         "Pizzeria owner\n"
         "- Major: The main button is at the bottom: at the table I look for it every\n"
         "  time. (screen “Tip calculator”, element “Split the bill”)\n"
@@ -79,6 +89,7 @@ def test_the_review_in_italian(tmp_path: Path) -> None:
     assert run.status == 0, run.errors
     assert "Adesso chiedo ai twin di rivedere il design scelto." in run.output
     assert "Revisione dei twin, versione 2" in run.output
+    assert run.output.count(SIMULATED["it"]) == 1
     assert "- Importante: Il pulsante principale è in fondo" in run.output
     assert "(schermata “Calcolo mancia”, elemento “Dividi il conto”)" in run.output
 
@@ -144,6 +155,7 @@ def test_a_running_review_is_followed_instead_of_starting_another(tmp_path: Path
         "follow it." in run.output
     )
     assert "Review of the twins, version 2" in run.output
+    assert run.output.count(SIMULATED["en"]) == 1
     assert started == 1
 
 
@@ -168,6 +180,7 @@ def test_the_guided_command_follows_a_running_review(tmp_path: Path) -> None:
         "follow it." in run.output
     )
     assert run.output.count("Review of the twins, version 2") == 1
+    assert run.output.count(SIMULATED["en"]) == 1
     assert "Chosen: DES-002 “Single card”, version 2, not approved yet." in run.output
     assert started == 1
 
@@ -202,6 +215,7 @@ def test_the_review_after_a_change_is_compared_with_the_previous_one(tmp_path: P
         "review, here is theirs." in again.output
     )
     assert "Review of the twins, version 3" in again.output
+    assert change.output.count(SIMULATED["en"]) == again.output.count(SIMULATED["en"]) == 1
     assert started == 2
 
 
@@ -217,9 +231,34 @@ def test_a_version_already_reviewed_is_not_reviewed_again(tmp_path: Path) -> Non
     assert choice.status == 0 and run.status == 0 and guided.status == 0
     assert "I twin hanno già rivisto questa versione del design" in run.output
     assert "Revisione dei twin, versione 2" in run.output
+    assert run.output.count(SIMULATED["it"]) == 1
+    assert guided.output.count(SIMULATED["en"]) == 1
     assert "Estimate" not in run.output and "Stima" not in run.output
     assert "Have the twins review the design" not in guided.output
     assert started == 1
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+@pytest.mark.parametrize("command", ["design", "twins"])
+def test_both_review_commands_say_once_that_the_findings_are_simulated(
+    tmp_path: Path, command: str, language: str
+) -> None:
+    with design_session(tmp_path, language=language) as session:
+        chosen(session)
+        started = session.ut(command, "review", language=language)
+        reread = session.ut(command, "review", language=language)
+        evaluations = session.count("POST", EVALUATIONS)
+
+    assert started.status == 0, started.errors
+    assert reread.status == 0, reread.errors
+    assert text("design.review_about", language) in started.output
+    assert text("design.review_exists", language) in reread.output
+    for run in (started, reread):
+        heading = run.output.index(HEADING[language])
+        notice = run.output.index(SIMULATED[language])
+        assert run.output.count(SIMULATED[language]) == 1
+        assert heading < notice < run.output.index("\n- ", heading)
+    assert evaluations == 1
 
 
 def test_review_errors_use_the_sentences_of_the_design_for_every_command(
@@ -281,6 +320,7 @@ def test_a_reviewer_that_is_not_configured(tmp_path: Path) -> None:
         "review (DESIGN_REVIEWER_NOT_CONFIGURED). The design stays as it is; whoever runs the "
         "Studio can connect one.\n"
     )
+    assert SIMULATED["en"] not in run.output
 
 
 @pytest.mark.parametrize("language", ["en", "it"])
@@ -388,6 +428,8 @@ def test_findings_without_a_known_screen_keep_their_place_as_written(tmp_path: P
         "\n"
         "Review of the twins, version 4\n"
         "==============================\n"
+        "The twins' findings are simulated by the model: hypotheses to verify with real people, "
+        "not evidence.\n"
         "Anna\n"
         "- Critical: Hard (screen “Start”, element “Go”)\n"
         "- Minor: Small (screen “Start”)\n"
@@ -395,4 +437,18 @@ def test_findings_without_a_known_screen_keep_their_place_as_written(tmp_path: P
         "Twin\n"
         "- No observation.\n"
         "\n"
+    )
+
+
+def test_a_review_without_twins_shows_no_finding_and_no_notice(tmp_path: Path) -> None:
+    bundle = terminal(tmp_path, transport=UrlTransport())
+    context = command_context(bundle.environment)
+
+    review.show_review(context, {"design_version_number": 4, "responses": []}, {"package": {}})
+
+    assert bundle.output == (
+        "\n"
+        "Review of the twins, version 4\n"
+        "==============================\n"
+        "The review contains no observations.\n"
     )

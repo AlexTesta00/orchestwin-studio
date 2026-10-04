@@ -152,6 +152,7 @@ def show_review(
     if not responses:
         console.say("design.review_empty")
         return
+    console.say("design.review_simulated")
     for response in responses:
         twin = response.get("twin_id")
         name = names.get(twin) if isinstance(twin, str) else None
