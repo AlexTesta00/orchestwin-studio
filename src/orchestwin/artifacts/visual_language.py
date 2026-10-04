@@ -15,6 +15,12 @@ from orchestwin.artifacts.visual_catalog import (
     resolve_visual_tokens,
 )
 from orchestwin.artifacts.visual_color import is_hex_colour
+from orchestwin.artifacts.visual_directions import (
+    VisualDirection,
+    direction_tokens,
+    visual_direction_from_snapshot,
+)
+from orchestwin.artifacts.visual_fonts import bundled_font_tokens
 from orchestwin.projects.requirements_primitives import (
     UserTwinVersionReference,
     canonical_json,
@@ -72,8 +78,11 @@ class VisualLanguage:
     catalog_version: int
     catalog_content_hash: str
     twin_fit: tuple[TwinFit, ...] = ()
+    direction: VisualDirection | None = None
 
     def __post_init__(self) -> None:
+        if self.direction is not None and not isinstance(self.direction, VisualDirection):
+            raise ValueError("visual direction must be a VisualDirection")
         validate_positive_integer(self.catalog_version, label="visual catalog version")
         identifiers = [item.twin_id for item in self.twin_fit]
         if len(set(identifiers)) != len(identifiers):
@@ -111,7 +120,7 @@ class VisualLanguage:
         return dict(self.tokens)
 
     def to_snapshot(self) -> dict[str, object]:
-        return {
+        snapshot: dict[str, object] = {
             "catalog_version": self.catalog_version,
             "catalog_content_hash": self.catalog_content_hash,
             "choices": self.choices.to_snapshot(),
@@ -121,6 +130,9 @@ class VisualLanguage:
             "tokens": dict(self.tokens),
             "twin_fit": [item.to_snapshot() for item in self.twin_fit],
         }
+        if self.direction is not None:
+            snapshot["direction"] = self.direction.to_snapshot()
+        return snapshot
 
     def canonical_json(self) -> str:
         return canonical_json(self.to_snapshot())
@@ -146,6 +158,7 @@ def create_visual_language(
     product_name: str,
     rationale: str,
     twin_fit: tuple[TwinFit, ...] = (),
+    direction: VisualDirection | None = None,
 ) -> VisualLanguage:
     palette = resolve_palette(
         choices.hue_family,
@@ -154,6 +167,10 @@ def create_visual_language(
         choices.saturation,
         choices.surface_tone,
     )
+    tokens = dict(resolve_visual_tokens(choices))
+    if isinstance(direction, VisualDirection):
+        tokens.update(direction_tokens(direction, tokens))
+        tokens.update(bundled_font_tokens(choices, tokens))
     return VisualLanguage(
         choices=choices,
         product_name=normalize_required_text(
@@ -167,10 +184,11 @@ def create_visual_language(
             maximum_length=MAX_VISUAL_RATIONALE_LENGTH,
         ),
         palette=tuple(palette.items()),
-        tokens=tuple(resolve_visual_tokens(choices).items()),
+        tokens=tuple(tokens.items()),
         catalog_version=VISUAL_CATALOG_VERSION,
         catalog_content_hash=VISUAL_CATALOG_CONTENT_HASH,
         twin_fit=tuple(twin_fit),
+        direction=direction,
     )
 
 
@@ -228,6 +246,7 @@ def visual_language_from_snapshot(payload: Mapping[str, object]) -> VisualLangua
     for key in ("catalog_content_hash", "product_name", "rationale"):
         if not isinstance(payload[key], str):
             raise ValueError(f"visual language {key} must be a string")
+    direction = payload.get("direction")
     language = VisualLanguage(
         choices=VisualChoices.from_snapshot(choices),
         product_name=str(payload["product_name"]),
@@ -237,6 +256,7 @@ def visual_language_from_snapshot(payload: Mapping[str, object]) -> VisualLangua
         catalog_version=catalog_version,
         catalog_content_hash=str(payload["catalog_content_hash"]),
         twin_fit=_twin_fit(payload["twin_fit"]),
+        direction=None if direction is None else visual_direction_from_snapshot(direction),
     )
     if language.to_snapshot() != dict(payload):
         raise ValueError("visual language snapshot is not canonical")
