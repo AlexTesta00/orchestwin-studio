@@ -65,7 +65,12 @@ from orchestwin.knowledge.research_evidence import (
     evidence_markdown,
 )
 from orchestwin.knowledge.research_evidence import present as has_evidence
-from orchestwin.knowledge.schema import SCHEMA_NAMES, has_design_additions, schema_files
+from orchestwin.knowledge.schema import (
+    SCHEMA_NAMES,
+    has_design_additions,
+    has_direction_additions,
+    schema_files,
+)
 from orchestwin.knowledge.sources import KnowledgeSources
 from orchestwin.knowledge.state_documents import (
     acceptance_runs,
@@ -364,7 +369,10 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
         files[twin.document_path] = json_text(twin.document)
         files[twin.text_path] = twin_markdown(twin.document, language=folder_language(sources))
     files.update(
-        schema_files(design_additions=package is not None and has_design_additions(package))
+        schema_files(
+            design_additions=package is not None and has_design_additions(package),
+            direction_additions=package is not None and has_direction_additions(package),
+        )
     )
     if has_evidence(sources.research_evidence):
         files[EVIDENCE_DOCUMENT] = json_text(sources.research_evidence)

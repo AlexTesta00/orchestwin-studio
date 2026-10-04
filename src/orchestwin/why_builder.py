@@ -774,6 +774,16 @@ class _Builder:
                     rationale_origin="MODEL",
                 )
                 self.note_stage(node, envelope)
+                direction = _mapping(_mapping(alternative.get("visual_language")).get("direction"))
+                if direction:
+                    node["declared_context"]["direction"] = {
+                        "name": direction.get("name"),
+                        "concept": direction.get("concept"),
+                        "axes": deepcopy(direction.get("axes")),
+                        "candidates": direction.get("candidates"),
+                        "origin": "MODEL",
+                        "selected_by": "STUDIO",
+                    }
                 self.index[("DESIGN_ALTERNATIVE", str(alternative.get("id")), context)] = node
                 self.artifact_links(node, alternative, req_context)
                 for workflow in _items(alternative.get("workflows")):
