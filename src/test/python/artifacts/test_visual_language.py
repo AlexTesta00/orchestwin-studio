@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import suppress
 from dataclasses import replace
 
@@ -25,6 +26,8 @@ from orchestwin.artifacts.visual_catalog import (
     resolve_palette,
     resolve_visual_tokens,
 )
+from orchestwin.artifacts.visual_directions import DirectionLayout, direction_tokens
+from orchestwin.artifacts.visual_fonts import bundled_families, bundled_font_tokens
 from orchestwin.artifacts.visual_language import (
     MAX_PRODUCT_NAME_LENGTH,
     MAX_TOKEN_VALUE_LENGTH,
@@ -34,6 +37,10 @@ from orchestwin.artifacts.visual_language import (
 )
 
 from . import design_fixtures
+from .test_visual_directions import directed_language, directed_package, direction
+
+STORED_LANGUAGE_HASH = "026e86df07466c1186c4a46bd2c95d133d928a381ef5dd53927a722cf82dc219"
+STORED_NEUTRAL_LANGUAGE_HASH = "56267ebe50ae8713d8253ec3e6f7ca3145ae4fa333b37641711a1dc586c3699a"
 
 CATALOG_BASES = (
     NEUTRAL_VISUAL_CHOICES,
@@ -285,3 +292,114 @@ def test_api_payload_round_trips_the_visual_language_and_strips_absent_ones():
     assert second.visual_language.palette["primary"].startswith("#")
     assert payload.to_domain() == package
     assert payload.model_dump(mode="json")["alternatives"][0]["visual_language"] is None
+
+
+def test_a_language_without_a_direction_keeps_its_snapshot_tokens_and_hash() -> None:
+    language = design_fixtures.visual_language()
+    neutral = create_visual_language(
+        choices=NEUTRAL_VISUAL_CHOICES, product_name="Catalog", rationale="Every catalog value"
+    )
+    snapshot = language.to_snapshot()
+
+    assert (language.direction, neutral.direction) == (None, None)
+    assert language.content_hash == STORED_LANGUAGE_HASH
+    assert neutral.content_hash == STORED_NEUTRAL_LANGUAGE_HASH
+    assert "direction" not in snapshot
+    assert list(snapshot)[-1] == "twin_fit"
+    assert neutral.token_values == resolve_visual_tokens(NEUTRAL_VISUAL_CHOICES)
+    assert (
+        create_visual_language(
+            choices=NEUTRAL_VISUAL_CHOICES,
+            product_name="Catalog",
+            rationale="Every catalog value",
+            direction=None,
+        )
+        == neutral
+    )
+    assert visual_language_from_snapshot(json.loads(language.canonical_json())) == language
+    with pytest.raises(ValueError, match="not canonical"):
+        visual_language_from_snapshot({**snapshot, "direction": None})
+
+
+def test_a_language_with_a_direction_carries_it_last_and_round_trips() -> None:
+    plain = design_fixtures.visual_language()
+    value = direction()
+    language = directed_language(plain, value)
+    snapshot = language.to_snapshot()
+    restored = visual_language_from_snapshot(json.loads(language.canonical_json()))
+
+    assert language.direction == value
+    assert list(snapshot)[-1] == "direction"
+    assert snapshot["direction"] == value.to_snapshot()
+    assert {key: item for key, item in snapshot.items() if key not in {"direction", "tokens"}} == {
+        key: item for key, item in plain.to_snapshot().items() if key != "tokens"
+    }
+    assert language.token_values == {
+        **plain.token_values,
+        **direction_tokens(value, plain.token_values),
+        **bundled_font_tokens(plain.choices, plain.token_values),
+    }
+    assert visual_language_from_snapshot(snapshot) == language
+    assert restored == language
+    assert restored.content_hash == language.content_hash
+    assert language.content_hash != plain.content_hash
+    with pytest.raises(ValueError, match="visual direction must be a VisualDirection"):
+        replace(plain, direction=value.to_snapshot())
+    with pytest.raises(ValueError, match="visual direction snapshot must be a mapping"):
+        visual_language_from_snapshot({**snapshot, "direction": []})
+    with pytest.raises(ValueError, match="needs 3 to 5 rules"):
+        visual_language_from_snapshot(
+            {**snapshot, "direction": {**snapshot["direction"], "rules": []}}
+        )
+
+
+def test_a_package_with_a_direction_round_trips_through_snapshot_and_api_payload() -> None:
+    package = directed_package(design_fixtures.design_package())
+    payload = DesignPackagePayload.from_domain(package)
+    dumped = payload.model_dump(mode="json")
+    language = next(
+        item.visual_language for item in payload.alternatives if item.visual_language is not None
+    )
+    stored = next(
+        item["visual_language"]
+        for item in dumped["alternatives"]
+        if item["visual_language"] is not None
+    )
+
+    assert language.direction is not None
+    assert language.direction.axes.layout is DirectionLayout.EDITORIAL
+    assert stored["direction"] == direction().to_snapshot()
+    assert payload.to_domain() == package
+    assert DesignPackagePayload.model_validate(dumped).to_domain() == package
+    assert DesignPackagePayload.model_validate(dumped).to_domain().content_hash == (
+        package.content_hash
+    )
+    assert design_package_from_snapshot(json.loads(package.canonical_json())) == package
+    assert package.content_hash != design_fixtures.design_package().content_hash
+
+
+def test_only_a_language_with_a_direction_names_the_bundled_fonts() -> None:
+    choices = replace(
+        NEUTRAL_VISUAL_CHOICES,
+        heading_family=FontFamily.GEOMETRIC_SANS,
+        body_family=FontFamily.GROTESQUE_SANS,
+    )
+    plain = create_visual_language(choices=choices, product_name="Catalog", rationale="Fonts")
+    language = create_visual_language(
+        choices=choices, product_name="Catalog", rationale="Fonts", direction=direction()
+    )
+    catalog = resolve_visual_tokens(choices)
+    restored = visual_language_from_snapshot(json.loads(language.canonical_json()))
+
+    assert plain.token_values == catalog
+    assert bundled_families(plain.token_values) == ()
+    assert language.token_values == {
+        **catalog,
+        **direction_tokens(direction(), catalog),
+        "--vl-font-heading": f'"Geist", {FONTS[FontFamily.GEOMETRIC_SANS].stack}',
+        "--vl-font-body": f'"Libre Franklin", {FONTS[FontFamily.GROTESQUE_SANS].stack}',
+        "--vl-font-mono": '"Geist Mono", ui-monospace, Consolas, monospace',
+    }
+    assert bundled_families(language.token_values) == ("Geist", "Geist Mono", "Libre Franklin")
+    assert restored == language
+    assert restored.content_hash == language.content_hash

@@ -39,6 +39,13 @@ from orchestwin.artifacts.design_revisions import (
     decide_design_revision,
     propose_design_revision,
 )
+from orchestwin.artifacts.visual_directions import (
+    DirectionColour,
+    DirectionDensity,
+    DirectionLayout,
+    DirectionShape,
+    DirectionType,
+)
 from orchestwin.config import ApplicationSettings, LogLevel, RuntimeEnvironment
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
 from orchestwin.models.design import DesignProposalIssueCode
@@ -65,6 +72,7 @@ from src.test.python.artifacts.test_design_package_extension import (
     VERDICTS,
     fixture_package,
 )
+from src.test.python.artifacts.test_visual_directions import directed_package, direction
 
 FIXTURE_PATH = Path(__file__).resolve().parents[1] / "artifacts" / "design_fixtures.py"
 DIFF_ID = UUID("00000000-0000-4000-8000-000000000701")
@@ -843,3 +851,111 @@ def test_router_freezes_the_sprint_six_design_http_surface() -> None:
         f"{prefix}/gate/events",
         f"{prefix}/readiness",
     }.issubset(paths)
+
+
+def visual_languages(package: dict) -> list[dict]:
+    return [
+        item["visual_language"]
+        for item in package["alternatives"]
+        if item["visual_language"] is not None
+    ]
+
+
+def test_the_current_design_without_directions_answers_null_and_converts_back() -> None:
+    client, _generation, _queries, _revisions, _gates = client_fixture()
+    package = design_version().package
+
+    body = client.get(path("/current")).json()["package"]
+    omitted = json.loads(json.dumps(body))
+    for language in visual_languages(omitted):
+        del language["direction"]
+
+    assert [language["direction"] for language in visual_languages(body)] == [None]
+    assert DesignPackagePayload.model_validate(body).to_domain() == package
+    assert DesignPackagePayload.model_validate(body).to_domain().content_hash == (
+        package.content_hash
+    )
+    assert DesignPackagePayload.model_validate(omitted).to_domain() == package
+
+
+def test_a_package_with_a_visual_direction_round_trips_through_the_revision_endpoint() -> None:
+    client, _generation, _queries, revisions, _gates = client_fixture()
+    proposed = directed_package(design_version().package)
+    dumped = DesignPackagePayload.from_domain(proposed).model_dump(mode="json")
+
+    def variant(change) -> dict:
+        value = json.loads(json.dumps(dumped))
+        change(visual_languages(value)[0]["direction"])
+        return value
+
+    def unknown_layout(value) -> None:
+        value["axes"]["layout"] = "NEON"
+
+    def extra_key(value) -> None:
+        value["motion"] = "CALM"
+
+    def two_rules(value) -> None:
+        value["rules"] = value["rules"][:2]
+
+    def typicality_out_of_range(value) -> None:
+        value["typicality"] = 101
+
+    for change in (unknown_layout, extra_key):
+        response = client.post(path("/revisions"), json={"package": variant(change)})
+
+        assert response.status_code == 422
+
+    for change in (two_rules, typicality_out_of_range):
+        response = client.post(path("/revisions"), json={"package": variant(change)})
+
+        assert response.status_code == 422
+        assert response.json() == {"detail": {"code": "INVALID_DESIGN_PACKAGE"}}
+
+    assert revisions.proposed is None
+
+    response = client.post(path("/revisions"), json={"package": dumped})
+
+    assert [language["direction"] for language in visual_languages(dumped)] == [
+        direction().to_snapshot()
+    ]
+    assert DesignPackagePayload.model_validate(dumped).to_domain() == proposed
+    assert DesignPackagePayload.model_validate(dumped).to_domain().content_hash == (
+        proposed.content_hash
+    )
+    assert response.status_code == 201
+    assert revisions.proposed == proposed
+
+
+def test_openapi_describes_the_visual_direction_of_a_visual_language() -> None:
+    app = FastAPI()
+    app.include_router(create_design_router())
+    schemas = app.openapi()["components"]["schemas"]
+    plain = visual_languages(
+        DesignPackagePayload.from_domain(design_version().package).model_dump(mode="json")
+    )[0]
+    directed = visual_languages(
+        DesignPackagePayload.from_domain(directed_package(design_version().package)).model_dump(
+            mode="json"
+        )
+    )[0]
+
+    def named(model: str) -> list[dict]:
+        found = [
+            schema
+            for name, schema in schemas.items()
+            if name == model or name.startswith(f"{model}-")
+        ]
+        assert found
+        return found
+
+    for model, sample in (
+        ("VisualLanguagePayload", plain),
+        ("VisualLanguagePayload", directed),
+        ("VisualDirectionPayload", directed["direction"]),
+        ("DirectionAxesPayload", directed["direction"]["axes"]),
+    ):
+        for schema in named(model):
+            assert set(schema["properties"]) == set(sample)
+
+    for enum in (DirectionLayout, DirectionShape, DirectionType, DirectionColour, DirectionDensity):
+        assert schemas[enum.__name__]["enum"] == [item.value for item in enum]
