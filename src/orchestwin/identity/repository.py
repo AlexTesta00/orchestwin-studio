@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
 from orchestwin.identity.domain import (
+    GuidanceMode,
     NormalizedEmail,
     UserAccount,
 )
@@ -39,3 +41,11 @@ class UserRepository(Protocol):
         password_hash: str,
     ) -> None:
         """Replace a stored password hash after successful verification."""
+
+    async def add_guidance_choice(
+        self,
+        *,
+        user_id: UUID,
+        mode: GuidanceMode,
+        chosen_at: datetime,
+    ) -> None: ...

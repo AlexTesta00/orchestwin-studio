@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from enum import StrEnum
 from types import TracebackType
 from typing import Protocol, Self
+from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
 
 from orchestwin.identity.domain import (
+    GuidanceMode,
     InvalidEmailAddress,
     NormalizedEmail,
     UserAccount,
@@ -76,6 +79,23 @@ class AuthenticationResult:
             and self.status is not AuthenticationStatus.INVALID_REGISTRATION
         ):
             raise ValueError("only invalid registrations may report a password violation")
+
+
+class GuidanceChoiceStatus(StrEnum):
+    CHOSEN = "guidance_mode_chosen"
+    ALREADY_CHOSEN = "guidance_mode_already_chosen"
+    INVALID = "invalid_guidance_mode"
+    USER_UNAVAILABLE = "user_unavailable"
+
+
+@dataclass(frozen=True, slots=True)
+class GuidanceChoiceResult:
+    status: GuidanceChoiceStatus
+    user: UserAccount | None = None
+
+    def __post_init__(self) -> None:
+        if (self.status is GuidanceChoiceStatus.CHOSEN) != (self.user is not None):
+            raise ValueError("only a chosen guidance mode may contain the account")
 
 
 class IdentityUnitOfWork(Protocol):
@@ -145,6 +165,13 @@ class IdentityApplicationService(Protocol):
         access_token: str,
     ) -> UserAccount | None:
         """Resolve an active user from an access token."""
+
+    async def choose_guidance_mode(
+        self,
+        *,
+        user_id: UUID,
+        mode: str,
+    ) -> GuidanceChoiceResult: ...
 
 
 class LocalIdentityApplicationService:
@@ -323,6 +350,40 @@ class LocalIdentityApplicationService:
             return None
 
         return user
+
+    async def choose_guidance_mode(
+        self,
+        *,
+        user_id: UUID,
+        mode: str,
+    ) -> GuidanceChoiceResult:
+        try:
+            choice = GuidanceMode(mode)
+        except ValueError:
+            return GuidanceChoiceResult(status=GuidanceChoiceStatus.INVALID)
+
+        try:
+            async with self._unit_of_work_factory() as unit:
+                user = await unit.users.get_by_id(user_id)
+
+                if user is None or not user.is_active:
+                    return GuidanceChoiceResult(status=GuidanceChoiceStatus.USER_UNAVAILABLE)
+
+                if user.guidance_mode is not None:
+                    return GuidanceChoiceResult(status=GuidanceChoiceStatus.ALREADY_CHOSEN)
+
+                await unit.users.add_guidance_choice(
+                    user_id=user.id,
+                    mode=choice,
+                    chosen_at=datetime.now(UTC),
+                )
+        except IntegrityError:
+            return GuidanceChoiceResult(status=GuidanceChoiceStatus.ALREADY_CHOSEN)
+
+        return GuidanceChoiceResult(
+            status=GuidanceChoiceStatus.CHOSEN,
+            user=replace(user, guidance_mode=choice),
+        )
 
     async def _issue_session(
         self,
