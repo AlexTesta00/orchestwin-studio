@@ -324,6 +324,8 @@ const messages = {
     discarded: "Discarded",
     openInText: "{code} · {title}: read it in the text",
     loadError: "The Definition could not be loaded.",
+    genericFailure: "The request could not be completed. You can try again.",
+    unexpectedError: "An unexpected error occurred in the requirements.",
   },
   it: {
     loading: "Carico la definizione…",
@@ -343,7 +345,7 @@ const messages = {
     functionalGroup: "Requisiti funzionali",
     nonFunctional: "Requisiti non funzionali",
     constraints: "Vincoli",
-    viewLabel: "Vista della definizione",
+    viewLabel: "Viste della definizione",
     digestBoth: [
       "In breve: {must} cosa che l'applicazione deve fare e {should} che dovrebbe fare.",
       "In breve: {must} cose che l'applicazione deve fare e {should} che dovrebbe fare.",
@@ -441,9 +443,9 @@ const messages = {
       "L'analista non ha trovato nulla da cambiare con questa richiesta. Prova a descrivere la modifica in un altro modo.",
     reasonRequired: "Per respingere o scartare serve una motivazione.",
     approveGate: "Approva la definizione",
-    barDefault: "Approvando, il designer prepara le alternative di design e i twin le provano.",
+    barDefault: "Quando approvi, il designer prepara le alternative di design e i twin le provano.",
     barDefaultSections:
-      "Approvando, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
+      "Quando approvi, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
     barApproved:
       "Hai approvato questa definizione. Puoi ancora chiedere una modifica a parole: la nuova versione torna qui per la tua approvazione.",
     barPending:
@@ -512,6 +514,8 @@ const messages = {
     discarded: "Scartata",
     openInText: "{code} · {title}: leggilo nel testo",
     loadError: "Non è stato possibile caricare la Definizione.",
+    genericFailure: "Non è stato possibile completare la richiesta. Puoi riprovare.",
+    unexpectedError: "Si è verificato un errore inatteso nei requisiti.",
   },
 } as const;
 
@@ -905,7 +909,10 @@ const errorMessage = computed(() => {
     return null;
   }
 
-  return modelFeedback(error.code, props.locale) ?? error.message ?? copy.value.loadError;
+  return (
+    modelFeedback(error.code, props.locale) ??
+    (error.status === null ? copy.value.unexpectedError : copy.value.genericFailure)
+  );
 });
 
 function counted(count: number, [singular, plural]: readonly [string, string]): string {
@@ -1021,7 +1028,7 @@ async function run(operation: () => Promise<unknown>): Promise<boolean> {
     localError.value =
       modelFeedback(store.error?.code, props.locale) ??
       (error instanceof Error
-        ? (modelFeedback(error.message, props.locale) ?? error.message)
+        ? (modelFeedback(error.message, props.locale) ?? copy.value.genericFailure)
         : copy.value.loadError);
     return false;
   }

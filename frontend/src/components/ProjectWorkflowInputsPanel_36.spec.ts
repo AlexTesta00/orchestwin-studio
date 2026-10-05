@@ -3,11 +3,19 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api/client";
-import type { WorkflowInputsApi } from "@/api/workflowInputs";
+import {
+  AGENT_IDENTIFIERS,
+  type AgentCatalogEntryResponse,
+  type AgentCatalogResponse,
+  type AgentIdentifier,
+} from "@/api/team-contracts";
+import { createWorkflowInputsApi, type WorkflowInputsApi } from "@/api/workflowInputs";
 import { createAppI18n } from "@/i18n";
+import { useTeamStore } from "@/stores/team";
 import type { HumanGatePayload } from "@/types/design";
 import type { ProvidedPrototype, WorkflowInputsPayload } from "@/types/workflowInputs";
 import ProjectWorkflowInputsPanel from "./ProjectWorkflowInputsPanel.vue";
+import teamFlowSource from "./ProjectTeamSelectionFlow.vue?raw";
 
 const reference = { artifact_id: "definition-id", version_number: 2, content_hash: "d".repeat(64) };
 const provided: ProvidedPrototype = {
@@ -110,6 +118,34 @@ function render(api = fakeApi(), extra: Record<string, unknown> = {}) {
   return { wrapper, api };
 }
 
+const CATALOG_IDS = [...AGENT_IDENTIFIERS, "FUTURE_REVIEWER" as AgentIdentifier];
+
+function catalog(): AgentCatalogResponse {
+  return {
+    catalog_version: 1,
+    content_hash: "c".repeat(64),
+    agents: CATALOG_IDS.map((agentId): AgentCatalogEntryResponse => ({
+      agent_id: agentId,
+      catalog_version: 1,
+      kind: "SPECIALIST",
+      selection_policy: "OWNER_SELECTABLE",
+      capabilities: [],
+      supported_project_modes: ["GREENFIELD_GENERATION"],
+      name_key: `agentCatalog.roles.${agentId.toLowerCase()}.name`,
+      description_key: `agentCatalog.roles.${agentId.toLowerCase()}.description`,
+      is_always_present: false,
+    })),
+  };
+}
+
+function prototypeInput() {
+  return {
+    title: provided.title,
+    visual_choices: provided.visual_choices,
+    mockup: { styles: "", screens: provided.mockup.mockup.screens },
+  };
+}
+
 describe("owner workflow inputs in sprint 36", () => {
   beforeEach(() => vi.restoreAllMocks());
 
@@ -190,6 +226,90 @@ describe("owner workflow inputs in sprint 36", () => {
     expect(api.submitPrototype).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      locale: "it",
+      names: [
+        "Coordinatore",
+        "Guida del progetto",
+        "Organizzatore delle prospettive",
+        "Referente delle approvazioni",
+        "Custode delle versioni",
+        "Responsabile delle prove",
+        "Prodotto",
+        "Esperienza d'uso (UX) · Ricercatore degli utenti",
+        "Esperienza d'uso (UX) · Designer UX/UI",
+        "Ingegneria del software · Architetto del prodotto",
+        "Interfaccia web",
+        "Servizi e dati",
+        "Mobile",
+        "Ingegneria del software · Specialista della qualità",
+        "Sicurezza",
+        "Accessibilità",
+        "Collegamenti con altri sistemi",
+        "Future reviewer",
+      ],
+    },
+    {
+      locale: "en",
+      names: [
+        "Coordinator",
+        "Project guide",
+        "Perspectives planner",
+        "Approval guide",
+        "Version keeper",
+        "Test environment keeper",
+        "Product",
+        "User experience (UX) · User researcher",
+        "User experience (UX) · UX/UI designer",
+        "Software engineering · Product architect",
+        "Web interface",
+        "Services and data",
+        "Mobile",
+        "Software engineering · Quality specialist",
+        "Security",
+        "Accessibility",
+        "Connections to other systems",
+        "Future reviewer",
+      ],
+    },
+  ] as const)(
+    "names the catalog perspectives in $locale with the words of the Perspectives step, adds the role where two share a name, never with a key",
+    async ({ locale, names }) => {
+      const pinia = createPinia();
+      useTeamStore(pinia).catalog = catalog();
+      const wrapper = mount(ProjectWorkflowInputsPanel, {
+        props: {
+          projectId: "project",
+          stage: 1,
+          expert: true,
+          locale,
+          authorize: async (operation) => operation("token"),
+          baseContext: {},
+          api: fakeApi(),
+        },
+        global: {
+          plugins: [pinia, createAppI18n(locale)],
+          stubs: { UiButton: false, UiStateBlock: true },
+        },
+      });
+      await flushPromises();
+      const items = wrapper.findAll('[data-testid="owner-catalog-agent"]');
+      const shown = items.map((item) => item.get("span").text());
+      expect(shown).toEqual(names);
+      expect(new Set(shown.slice(0, AGENT_IDENTIFIERS.length)).size).toBe(17);
+      expect(shown.filter((name) => /[A-Z]+_[A-Z_]+|agentCatalog\./u.test(name))).toEqual([]);
+      expect(items.map((item) => item.get("code").text())).toEqual(CATALOG_IDS);
+      expect(items.every((item) => item.classes().includes("min-w-0"))).toBe(true);
+      expect(items.every((item) => item.get("span").classes().includes("wrap-anywhere"))).toBe(
+        true,
+      );
+      expect(wrapper.html()).not.toContain("agentCatalog.");
+      const perspectives = new Set(names.slice(6, 17).map((name) => name.replace(/ · .+$/u, "")));
+      for (const name of perspectives) expect(teamFlowSource).toContain(`name: "${name}"`);
+    },
+  );
+
   it("refuses a legacy incomplete Definition instead of using schema one", async () => {
     const { wrapper, api } = render(fakeApi(), { stage: 3 });
     await flushPromises();
@@ -201,6 +321,171 @@ describe("owner workflow inputs in sprint 36", () => {
     expect(api.definition).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="workflow-inputs-error"]').attributes("text")).toBe(
       "OWNER_DEFINITION_SCHEMA_2_REQUIRED",
+    );
+  });
+
+  it.each([
+    {
+      locale: "it",
+      sentence: "Lo Studio ha dato una risposta che questa pagina non riesce a leggere.",
+    },
+    { locale: "en", sentence: "The Studio gave an answer that this page cannot read." },
+  ] as const)(
+    "says in $locale that the answer could not be read without a code or the words of the API",
+    async ({ locale, sentence }) => {
+      const failing = createWorkflowInputsApi({
+        fetchImpl: async () => new Response("<html>", { status: 200 }),
+      });
+      const { wrapper } = render({ ...fakeApi(), read: failing.read }, { locale });
+      await flushPromises();
+      const text = wrapper.get('[data-testid="workflow-inputs-error"]').attributes("text");
+      expect(text).toBe(sentence);
+      expect(text).not.toMatch(/[A-Z]+_[A-Z_]+/);
+      expect(wrapper.html()).not.toContain("Invalid response");
+      expect(
+        wrapper.findAll('[data-testid="workflow-inputs-error-details"]').map((details) => ({
+          open: details.attributes("open") !== undefined,
+          code: details.get("code").text(),
+        })),
+      ).toEqual([{ open: false, code: "INVALID_API_RESPONSE" }]);
+    },
+  );
+
+  it.each(
+    (["it", "en"] as const).flatMap((locale) =>
+      [
+        {
+          status: 422,
+          body: JSON.stringify({
+            detail: { code: "WORKFLOW_RECORDS_INVALID", message: "invalid UUID" },
+          }),
+          sentence: {
+            it: "I dati inseriti non sono validi: controlla il contenuto e riprova.",
+            en: "The data you entered is not valid: check the content and try again.",
+          },
+          detail: "WORKFLOW_RECORDS_INVALID · invalid UUID",
+        },
+        {
+          status: 409,
+          body: JSON.stringify({ detail: { code: "WORKFLOW_CONTEXT_CHANGED" } }),
+          sentence: {
+            it: "Il progetto è cambiato nel frattempo: ricarica la pagina e riprova.",
+            en: "The project changed in the meantime: reload the page and try again.",
+          },
+          detail: "WORKFLOW_CONTEXT_CHANGED",
+        },
+        {
+          status: 500,
+          body: "",
+          sentence: {
+            it: "Non è stato possibile completare la richiesta. Puoi riprovare.",
+            en: "The request could not be completed. You can try again.",
+          },
+          detail: null,
+        },
+        {
+          status: null,
+          body: "",
+          sentence: {
+            it: "Non è stato possibile completare la richiesta. Puoi riprovare.",
+            en: "The request could not be completed. You can try again.",
+          },
+          detail: null,
+        },
+      ].map((answer) => ({ locale, ...answer })),
+    ),
+  )(
+    "says in $locale why saving failed and keeps the code in the technical details ($status)",
+    async ({ locale, status, body, sentence, detail }) => {
+      const failing = createWorkflowInputsApi({
+        fetchImpl: async () => {
+          if (status === null) throw new TypeError("Failed to fetch");
+          return new Response(body, { status });
+        },
+      });
+      const { wrapper, api } = render({ ...fakeApi(), team: failing.team }, { locale });
+      await flushPromises();
+      await wrapper
+        .get('[data-testid="owner-input-json"]')
+        .setValue(
+          JSON.stringify({ selected_agent_ids: ["QA_TEST_ENGINEER"], owner_rationales: [] }),
+        );
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+      const text = wrapper.get('[data-testid="workflow-inputs-error"]').attributes("text");
+      expect(text).toBe(sentence[locale]);
+      expect(text).not.toMatch(/[A-Z]+_[A-Z_]+/);
+      expect(text).not.toMatch(/\d{3}/);
+      expect(
+        wrapper.findAll('[data-testid="workflow-inputs-error-details"]').map((details) => ({
+          open: details.attributes("open") !== undefined,
+          summary: details.get("summary").text(),
+          code: details.get("code").text(),
+        })),
+      ).toEqual(
+        detail === null
+          ? []
+          : [
+              {
+                open: false,
+                summary: locale === "it" ? "Dettagli tecnici" : "Technical details",
+                code: detail,
+              },
+            ],
+      );
+      expect(wrapper.html()).not.toMatch(/Workflow inputs request failed|Failed to fetch/);
+      expect(api.read).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    { locale: "it", sentence: "Serve prima una Definizione approvata." },
+    { locale: "en", sentence: "An approved Definition is required first." },
+  ] as const)(
+    "says in $locale that an approved Definition is required when the Studio refuses the prototype for it",
+    async ({ locale, sentence }) => {
+      const failing = createWorkflowInputsApi({
+        fetchImpl: async () =>
+          new Response(JSON.stringify({ detail: { code: "REQUIREMENTS_APPROVAL_REQUIRED" } }), {
+            status: 409,
+          }),
+      });
+      const { wrapper } = render(
+        { ...fakeApi(), savePrototype: failing.savePrototype },
+        { stage: 4, locale },
+      );
+      await flushPromises();
+      await wrapper
+        .get('[data-testid="owner-input-json"]')
+        .setValue(JSON.stringify(prototypeInput()));
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+      expect(wrapper.get('[data-testid="workflow-inputs-error"]').attributes("text")).toBe(
+        sentence,
+      );
+      expect(
+        wrapper.findAll('[data-testid="workflow-inputs-error-details"]').map((details) => ({
+          open: details.attributes("open") !== undefined,
+          code: details.get("code").text(),
+        })),
+      ).toEqual([{ open: false, code: "REQUIREMENTS_APPROVAL_REQUIRED" }]);
+    },
+  );
+
+  it("says the same sentence when the page has no approved Definition to send with the prototype", async () => {
+    const { wrapper, api } = render(fakeApi(), { stage: 4, locale: "it", baseContext: {} });
+    await flushPromises();
+    await wrapper
+      .get('[data-testid="owner-input-json"]')
+      .setValue(JSON.stringify(prototypeInput()));
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(api.savePrototype).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="workflow-inputs-error"]').attributes("text")).toBe(
+      "Serve prima una Definizione approvata.",
+    );
+    expect(wrapper.get('[data-testid="workflow-inputs-error-details"] code').text()).toBe(
+      "REQUIREMENTS_APPROVAL_REQUIRED",
     );
   });
 
@@ -241,8 +526,8 @@ describe("owner workflow inputs in sprint 36", () => {
       await flushPromises();
       expect(wrapper.get('[data-testid="provided-prototype-evaluation-limit"]').text()).toBe(
         locale === "it"
-          ? "La valutazione dei twin sul prototipo fornito non è disponibile nello sprint 36."
-          : "Twin evaluation of the supplied prototype is unavailable in sprint 36.",
+          ? "La valutazione dei twin sul prototipo fornito non è disponibile."
+          : "Twin evaluation of the supplied prototype is unavailable.",
       );
       await wrapper.findAll("button")[0]!.trigger("click");
       await flushPromises();
@@ -267,7 +552,7 @@ describe("owner workflow inputs in sprint 36", () => {
     ],
     [
       "it",
-      "La struttura è la stessa dei mockup generati. Per questo Design non sono disponibili nemmeno ut code e il percorso sugli scenari.",
+      "La struttura è la stessa dei mockup generati. Per questo Design non sono disponibili nemmeno ut code e il percorso dello scenario.",
     ],
   ] as const)(
     "says in %s what the supplied Design shares with generated mockups without naming sprints",
