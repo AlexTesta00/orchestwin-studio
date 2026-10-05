@@ -455,14 +455,27 @@ describe("generated mockup dialog", () => {
     expect(onClose).toHaveBeenCalledTimes(3);
   });
 
-  it("wraps the tabs on more lines and cuts a long title, keeping the whole title in its name", () => {
+  it("wraps the tabs on more lines and a long title between its words, without cutting it", () => {
     const long: MockupDocument = {
       ...documentFor("SCR-001"),
-      screens: Array.from({ length: 6 }, (_item, index) => ({
-        code: `SCR-00${index + 1}`,
-        title: `Schermata ${index + 1} con un titolo davvero molto lungo da tagliare`,
-        state: "DEFAULT",
-      })),
+      screens: [
+        {
+          code: "SCR-001",
+          title: "Beverly Hills, palestra indipendente a Riccione",
+          state: "DEFAULT",
+        },
+        { code: "SCR-002", title: "Chiamata avviata", state: "SUCCESS" },
+        {
+          code: "SCR-003",
+          title: "Chiamata non disponibile su questo dispositivo",
+          state: "ERROR",
+        },
+        ...Array.from({ length: 3 }, (_item, index) => ({
+          code: `SCR-00${index + 4}`,
+          title: `Schermata ${index + 4} con un titolo davvero molto lungo da leggere intero`,
+          state: "DEFAULT",
+        })),
+      ],
     };
     open({ document: long, observations: [], pins: [], unanchored: [] });
     const list = query("[role='tablist']");
@@ -472,14 +485,24 @@ describe("generated mockup dialog", () => {
     expect(tabs).toHaveLength(6);
     for (const [index, tab] of tabs.entries()) {
       const title = long.screens[index]?.title ?? "";
+      const label = tab.querySelector("[data-testid='mockup-dialog-screen-title']");
       expect(tab.getAttribute("title")).toBe(title);
       expect(tab.textContent?.trim()).toBe(title);
+      expect(label?.textContent).toBe(title);
       expect(tab.className).toContain("max-w-[calc(28ch+1.75rem)]");
-      expect(tab.className).not.toContain("whitespace-nowrap");
-      expect(tab.querySelector("[data-testid='mockup-dialog-screen-title']")?.className).toContain(
-        "truncate",
-      );
+      expect(tab.className).not.toMatch(/\b(?:truncate|whitespace-nowrap|line-clamp-\d)\b/);
+      expect(label?.className.split(" ")).toEqual(["min-w-0", "break-words"]);
     }
+    expect(tabs.map((tab) => tab.getAttribute("aria-selected"))).toEqual([
+      "true",
+      "false",
+      "false",
+      "false",
+      "false",
+      "false",
+    ]);
+    expect(tabs[0]?.className).toContain("bg-on-night text-ink");
+    expect(tabs[0]?.getAttribute("tabindex")).toBe("0");
   });
 
   it("names screens and elements by their titles in the texts of the observations", () => {
