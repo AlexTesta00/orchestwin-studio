@@ -190,7 +190,7 @@ def test_requirements_traceability_follows_twins_stories_requirements_and_checks
     assert diagram.description == (
         "Tracciabilità da 2 user twin, attraverso 2 storie utente, a 3 requisiti, "
         "1 criterio di accettazione e 1 scenario d'uso, con 1 rischio e "
-        "1 voce della definizione di fatto."
+        "1 condizione di completamento."
     )
 
 

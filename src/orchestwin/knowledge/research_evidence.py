@@ -31,7 +31,7 @@ def evidence_markdown(document: Mapping[str, object], *, language: str | None) -
     lines = ["# Evidenze" if italian else "# Evidence", ""]
     lines.extend(
         [
-            "Il Dossier conserva citazioni e provenienza, senza documenti originali. Inserimento e approvazione non attestano ricerca empirica o validazione umana."
+            "Il Dossier conserva citazioni e provenienza, senza documenti originali. L'inserimento e l'approvazione di una fonte non attestano ricerca empirica o validazione umana."
             if italian
             else "The Dossier preserves citations and provenance without original documents. Adding and approving a source does not establish empirical research or human validation.",
             "",
