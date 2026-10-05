@@ -36,7 +36,7 @@ const props = withDefaults(
 
 const auth = useAuthStore();
 const store = useArtifactGraphStore();
-const localError = ref<string | null>(null);
+const localError = ref<"loadError" | "downloadError" | null>(null);
 const stageFilter = ref<StageFilter>("ALL");
 const kindFilter = ref<"ALL" | ArtifactGraphNodeKind>("ALL");
 
@@ -101,8 +101,7 @@ const messages = {
       "Il grafo deriva le relazioni dagli artefatti immutabili. Mantiene origine e tracciabilità delle critiche sintetiche, ma un collegamento non è evidenza empirica né prova che un requisito abbia superato l'esecuzione.",
     loading: "Caricamento del grafo corrente degli artefatti…",
     loadError: "Non è stato possibile caricare il grafo degli artefatti.",
-    unavailable:
-      "Il grafo diventa disponibile dopo la creazione di una Requirements Specification.",
+    unavailable: "Il grafo diventa disponibile dopo la creazione della Definizione.",
     refresh: "Aggiorna grafo",
     export: "Esporta grafo JSON",
     nodes: "Nodi",
@@ -291,8 +290,8 @@ async function load(): Promise<void> {
 
   try {
     await store.load(props.projectId, authorizedRequest, api.value);
-  } catch (error) {
-    localError.value = error instanceof Error ? error.message : copy.value.loadError;
+  } catch {
+    localError.value = "loadError";
   }
 }
 
@@ -316,8 +315,8 @@ async function exportGraph(): Promise<void> {
   try {
     const blob = await store.exportGraph(props.projectId, authorizedRequest, api.value);
     saveBlob(blob, `orchestwin-${props.projectId}-artifact-graph.json`);
-  } catch (error) {
-    localError.value = error instanceof Error ? error.message : copy.value.downloadError;
+  } catch {
+    localError.value = "downloadError";
   }
 }
 
@@ -359,7 +358,7 @@ watch(
       class="rounded-field border border-fail-on-night/40 bg-fail-on-night/10 px-4 py-3 text-sm font-semibold text-fail-on-night"
       role="alert"
     >
-      {{ localError ?? store.error?.message ?? copy.loadError }}
+      {{ copy[localError ?? "loadError"] }}
     </p>
 
     <div class="flex flex-wrap gap-3">

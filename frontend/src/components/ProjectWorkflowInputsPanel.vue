@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { computed, reactive, ref, useId, watch } from "vue";
-import { useI18n } from "vue-i18n";
 
 import { ApiError } from "@/api/client";
 import { requirementsApi } from "@/api/requirements";
+import { ApiRequestError } from "@/api/requestError";
 import {
-  workflowInputsApi,
-  WorkflowInputsApiError,
-  type WorkflowInputsApi,
-} from "@/api/workflowInputs";
+  AGENT_IDENTIFIERS,
+  type PerspectiveAspectKey,
+  type PerspectiveKey,
+} from "@/api/team-contracts";
+import { workflowInputsApi, type WorkflowInputsApi } from "@/api/workflowInputs";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
 import ArtifactWhy from "./ArtifactWhy.vue";
 import UiButton from "./UiButton.vue";
 import UiStateBlock from "./UiStateBlock.vue";
+import { twinIdentity } from "./twinIdentity";
 import { useTeamStore } from "@/stores/team";
 import { useUserModelingStore } from "@/stores/userModeling";
 import { useRequirementsStore } from "@/stores/requirements";
@@ -46,7 +48,6 @@ const emit = defineEmits<{
   "prototype-changed": [prototype: ProvidedPrototype | null, gate: HumanGatePayload | null];
 }>();
 const team = useTeamStore();
-const { t } = useI18n({ useScope: "global" });
 const modeling = useUserModelingStore();
 const requirements = useRequirementsStore();
 const id = useId();
@@ -55,7 +56,7 @@ const prototype = ref<ProvidedPrototype | null>(null);
 const gate = ref<HumanGatePayload | null>(null);
 const document = ref<{ html: string; title: string } | null>(null);
 const busy = ref(false);
-const error = ref<string | null>(null);
+const error = ref<{ text: string; detail: string | null } | null>(null);
 const saved = ref(false);
 const editors = reactive<Record<number, string>>({});
 const reasons = reactive<Partial<Record<WorkflowTarget, string>>>({});
@@ -63,6 +64,25 @@ const target = ref<WorkflowTarget>("BRIEF");
 const origin = ref("");
 const gateReason = ref("");
 let epoch = 0;
+const APPROVAL_REQUIRED = "REQUIREMENTS_APPROVAL_REQUIRED";
+const agentPerspectives = new Map<string, PerspectiveKey | PerspectiveAspectKey>([
+  ["REQUIREMENTS_ANALYST", "PRODUCT"],
+  ["UX_RESEARCHER_USER_MODELER", "UX"],
+  ["UX_UI_DESIGNER", "UX"],
+  ["SOFTWARE_ARCHITECT", "SOFTWARE_ENGINEERING"],
+  ["FRONTEND_ENGINEER", "WEB"],
+  ["BACKEND_ENGINEER", "SERVICES"],
+  ["MOBILE_ENGINEER", "MOBILE"],
+  ["QA_TEST_ENGINEER", "SOFTWARE_ENGINEERING"],
+  ["SECURITY_REVIEWER", "SECURITY"],
+  ["ACCESSIBILITY_REVIEWER", "ACCESSIBILITY"],
+  ["INTEGRATION_ENGINEER", "INTEGRATIONS"],
+]);
+const sharedPerspectives = new Set(
+  [...agentPerspectives.values()].filter(
+    (perspective, index, perspectives) => perspectives.indexOf(perspective) !== index,
+  ),
+);
 const stageTargets: WorkflowTarget[][] = [
   ["BRIEF"],
   ["TEAM"],
@@ -96,10 +116,9 @@ const copy = computed(() =>
           "Fornisci un prototipo con 2–8 schermate, stili e scelte visive del catalogo. Una sola schermata viene rifiutata. Il server controlla sicurezza, accessibilità e collegamenti ai requisiti.",
         origin: "Origine dichiarata",
         originHint: "Facoltativa, per esempio lo strumento usato per realizzarlo.",
-        evaluation:
-          "La valutazione dei twin sul prototipo fornito non è disponibile nello sprint 36.",
+        evaluation: "La valutazione dei twin sul prototipo fornito non è disponibile.",
         future:
-          "La struttura è la stessa dei mockup generati. Per questo Design non sono disponibili nemmeno ut code e il percorso sugli scenari.",
+          "La struttura è la stessa dei mockup generati. Per questo Design non sono disponibili nemmeno ut code e il percorso dello scenario.",
         submit: "Invia il prototipo all'approvazione",
         approve: "Approva questo prototipo",
         reject: "Rifiuta",
@@ -112,6 +131,23 @@ const copy = computed(() =>
         refresh: "Rileggi",
         unresolved:
           "Le lacune restano visibili nel Perché? e nel Dossier. Non creano contenuti o approvazioni.",
+        invalidResponse: "Lo Studio ha dato una risposta che questa pagina non riesce a leggere.",
+        invalidInput: "I dati inseriti non sono validi: controlla il contenuto e riprova.",
+        projectChanged: "Il progetto è cambiato nel frattempo: ricarica la pagina e riprova.",
+        approvalRequired: "Serve prima una Definizione approvata.",
+        genericFailure: "Non è stato possibile completare la richiesta. Puoi riprovare.",
+        technical: "Dettagli tecnici",
+        perspectives: {
+          UX: "Esperienza d'uso (UX)",
+          ACCESSIBILITY: "Accessibilità",
+          SOFTWARE_ENGINEERING: "Ingegneria del software",
+          PRODUCT: "Prodotto",
+          SECURITY: "Sicurezza",
+          WEB: "Interfaccia web",
+          SERVICES: "Servizi e dati",
+          MOBILE: "Mobile",
+          INTEGRATIONS: "Collegamenti con altri sistemi",
+        },
         statuses: {
           DRAFT: "Bozza",
           PENDING_APPROVAL: "In attesa della tua approvazione",
@@ -143,7 +179,7 @@ const copy = computed(() =>
           "Supply a prototype with 2–8 screens, styles and catalog visual choices. A single screen is rejected. The server checks safety, accessibility and requirement links.",
         origin: "Declared origin",
         originHint: "Optional, for example the tool used to create it.",
-        evaluation: "Twin evaluation of the supplied prototype is unavailable in sprint 36.",
+        evaluation: "Twin evaluation of the supplied prototype is unavailable.",
         future:
           "Its structure matches generated mockups. ut code and the scenario walkthrough are also unavailable for this Design.",
         submit: "Submit the prototype for approval",
@@ -158,6 +194,23 @@ const copy = computed(() =>
         refresh: "Reread",
         unresolved:
           "Gaps remain visible in Why? and the Dossier. They create no content or approvals.",
+        invalidResponse: "The Studio gave an answer that this page cannot read.",
+        invalidInput: "The data you entered is not valid: check the content and try again.",
+        projectChanged: "The project changed in the meantime: reload the page and try again.",
+        approvalRequired: "An approved Definition is required first.",
+        genericFailure: "The request could not be completed. You can try again.",
+        technical: "Technical details",
+        perspectives: {
+          UX: "User experience (UX)",
+          ACCESSIBILITY: "Accessibility",
+          SOFTWARE_ENGINEERING: "Software engineering",
+          PRODUCT: "Product",
+          SECURITY: "Security",
+          WEB: "Web interface",
+          SERVICES: "Services and data",
+          MOBILE: "Mobile",
+          INTEGRATIONS: "Connections to other systems",
+        },
         statuses: {
           DRAFT: "Draft",
           PENDING_APPROVAL: "Waiting for your approval",
@@ -245,6 +298,48 @@ const gateStatus = computed(() =>
       : copy.value.statuses.DRAFT,
 );
 
+function technicalDetail(failure: ApiError): string | null {
+  if (!(failure instanceof ApiRequestError)) return null;
+  const message = (failure.payload as { detail?: { message?: unknown } } | null)?.detail?.message;
+  const parts = [
+    failure.code,
+    typeof message === "string" && message !== failure.code ? message : null,
+  ];
+  const shown = parts.filter((part): part is string => !!part);
+  return shown.length > 0 ? shown.join(" · ") : null;
+}
+
+function failureOf(failure: unknown): { text: string; detail: string | null } {
+  if (!(failure instanceof ApiError)) return { text: copy.value.genericFailure, detail: null };
+  const text =
+    failure.detail === "INVALID_API_RESPONSE"
+      ? copy.value.invalidResponse
+      : failure.status === 422
+        ? copy.value.invalidInput
+        : failure.status === 409 && failure.detail === APPROVAL_REQUIRED
+          ? copy.value.approvalRequired
+          : failure.status === 409
+            ? copy.value.projectChanged
+            : copy.value.genericFailure;
+  return { text, detail: technicalDetail(failure) };
+}
+
+function catalogName(agentId: string): string {
+  const perspective = agentPerspectives.get(agentId);
+  if (perspective) {
+    const name = copy.value.perspectives[perspective];
+    return sharedPerspectives.has(perspective)
+      ? `${name} · ${twinIdentity(agentId, "", props.locale).name}`
+      : name;
+  }
+  if ((AGENT_IDENTIFIERS as readonly string[]).includes(agentId))
+    return twinIdentity(agentId, "", props.locale).name;
+  return agentId
+    .toLocaleLowerCase()
+    .replaceAll("_", " ")
+    .replace(/^./, (character) => character.toLocaleUpperCase());
+}
+
 async function optional<T>(operation: () => Promise<T>): Promise<T | null> {
   try {
     return await operation();
@@ -269,8 +364,7 @@ async function load(): Promise<void> {
     gate.value = nextGate;
     emit("prototype-changed", nextPrototype, nextGate);
   } catch (failure) {
-    if (currentEpoch === epoch)
-      error.value = failure instanceof ApiError ? failure.detail : "WORKFLOW_INPUTS_READ_FAILED";
+    if (currentEpoch === epoch) error.value = failureOf(failure);
   }
 }
 
@@ -292,15 +386,14 @@ async function perform(operation: () => Promise<unknown>): Promise<void> {
       emit("changed");
     }
   } catch (failure) {
+    const message = failure instanceof Error ? failure.message : "OWNER_INPUT_REJECTED";
     if (projectId === props.projectId)
       error.value =
-        failure instanceof WorkflowInputsApiError && failure.message !== failure.detail
-          ? `${failure.detail} · ${failure.message}`
-          : failure instanceof ApiError
-            ? failure.detail
-            : failure instanceof Error
-              ? failure.message
-              : "OWNER_INPUT_REJECTED";
+        failure instanceof ApiError || failure instanceof TypeError
+          ? failureOf(failure)
+          : message === APPROVAL_REQUIRED
+            ? { text: copy.value.approvalRequired, detail: message }
+            : { text: message, detail: null };
   } finally {
     if (projectId === props.projectId) busy.value = false;
   }
@@ -414,7 +507,7 @@ async function saveInput(): Promise<void> {
         : props.authorize((token) => props.api.definition(props.projectId, input, token));
     }
     const reference = props.baseContext.REQUIREMENTS;
-    if (!reference) throw new Error("REQUIREMENTS_APPROVAL_REQUIRED");
+    if (!reference) throw new Error(APPROVAL_REQUIRED);
     const input = parsed as ProvidedPrototypeInput;
     const { declared_origin: discardedOrigin, ...contents } = input;
     void discardedOrigin;
@@ -456,8 +549,7 @@ async function showPreview(screen?: string): Promise<void> {
     );
     if (epoch === currentEpoch && prototype.value?.id === version.id) document.value = next;
   } catch (failure) {
-    error.value =
-      failure instanceof ApiError ? failure.detail : "PROVIDED_PROTOTYPE_DOCUMENT_UNAVAILABLE";
+    error.value = failureOf(failure);
   }
 }
 
@@ -513,7 +605,19 @@ watch(
     data-testid="workflow-inputs-panel"
     :aria-label="copy.owner"
   >
-    <UiStateBlock v-if="error" kind="error" :text="error" data-testid="workflow-inputs-error" />
+    <div v-if="error" class="grid gap-1">
+      <UiStateBlock kind="error" :text="error.text" data-testid="workflow-inputs-error" />
+      <details
+        v-if="error.detail"
+        class="text-xs text-on-night-3"
+        data-testid="workflow-inputs-error-details"
+      >
+        <summary class="inline-flex min-h-11 cursor-pointer items-center font-mono">
+          {{ copy.technical }}
+        </summary>
+        <code class="block wrap-anywhere">{{ error.detail }}</code>
+      </details>
+    </div>
     <p v-if="saved" role="status" class="text-sm text-petrol-on-night-2">{{ copy.saved }}</p>
     <ul
       v-if="latestDecisions.length"
@@ -600,9 +704,10 @@ watch(
             <li
               v-for="agent in team.catalog.agents"
               :key="agent.agent_id"
-              class="grid gap-1 text-sm"
+              class="grid min-w-0 gap-1 text-sm"
+              data-testid="owner-catalog-agent"
             >
-              <span>{{ t(agent.name_key) }}</span
+              <span class="wrap-anywhere">{{ catalogName(agent.agent_id) }}</span
               ><code class="text-xs wrap-anywhere">{{ agent.agent_id }}</code>
             </li>
           </ul>
