@@ -668,7 +668,7 @@ describe("DesignAlternativeComparison", () => {
     expect(block.attributes("data-verdict")).toBe("CLOSE");
     expect(block.get("h3").text()).toBe("Distanza fra le alternative");
     expect(block.get('[data-testid="design-distance-verdict"]').text()).toBe("Troppo vicine");
-    expect(block.get('[data-testid="design-distance-axes"]').text()).toBe("4 assi diversi su 5");
+    expect(block.get('[data-testid="design-distance-axes"]').text()).toBe("Assi diversi: 4 su 5");
     const warning = block.get('[data-testid="design-distance-close"]');
     expect(warning.attributes("role")).toBe("status");
     expect(warning.text()).toBe(

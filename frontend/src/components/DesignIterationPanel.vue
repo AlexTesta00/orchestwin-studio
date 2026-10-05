@@ -81,7 +81,7 @@ const FAILURES: Sentences = {
     "Questa alternativa non ha uno stile visivo, quindi il suo mockup non si può disegnare.",
   ],
   GENERATION_BUDGET_EXCEEDED: [
-    "The spending limit that is set is not enough for this generation.",
+    "The spending ceiling that is set is not enough for this generation.",
     "Il tetto di spesa impostato non basta per questa generazione.",
   ],
   TOO_MANY_GENERATIONS: [
@@ -209,7 +209,7 @@ const FAILURES: Sentences = {
     "Il servizio del modello non ha accettato la richiesta.",
   ],
   ACCESS_TOKEN_REQUIRED: [
-    "Your session has expired. Sign in again.",
+    "Your session has expired. Log in again.",
     "La sessione è scaduta. Accedi di nuovo.",
   ],
   GENERATED_MOCKUP_PATH_INACTIVE: [

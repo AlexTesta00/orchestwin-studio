@@ -23,7 +23,7 @@ const copy = computed(() =>
         verified:
           "La catena è stata ricalcolata dai dati importati e verificata con quella esportata.",
         unavailable: "La verifica della catena ricalcolata non è disponibile per questa cartella.",
-        approvals: "L'import non approva le sezioni.",
+        approvals: "L'importazione non approva le sezioni.",
         LEARNED_PROJECTION_NOT_RESTORED:
           "La proiezione dei twin appresa dal feedback non è stata ripristinata.",
         LEGACY_FEEDBACK_CONTEXT_MISSING:

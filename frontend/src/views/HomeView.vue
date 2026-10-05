@@ -47,7 +47,7 @@ const messages = {
     ownershipLabel: "Sempre tuo",
     ownershipTitle: "Prove e decisioni restano con te",
     ownershipText: "Prove, decisioni e provenienza restano tue, esportabili in ogni momento.",
-    legend: "Due tipi di contenuto, sempre distinguibili in ogni schermata dello Studio.",
+    legend: "Tre tipi di contenuto, sempre distinguibili in ogni schermata dello Studio.",
     twinAlts: {
       brief:
         "Un foglio di carta che si sfilaccia in fili tratteggiati e diventa tre piccole figure di vetro",
@@ -85,7 +85,7 @@ const messages = {
     ownershipLabel: "Always yours",
     ownershipTitle: "Evidence and decisions stay with you",
     ownershipText: "Evidence, decisions and provenance remain yours, exportable at any time.",
-    legend: "Two kinds of content, always distinguishable on every screen of the Studio.",
+    legend: "Three kinds of content, always distinguishable on every screen of the Studio.",
     twinAlts: {
       brief: "A sheet of paper fraying into dotted threads that become three small glass figures",
       critique:

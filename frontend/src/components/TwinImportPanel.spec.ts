@@ -244,7 +244,7 @@ describe("TwinImportPanel", () => {
     expect(wrapper.find('[data-testid="twin-import-source-twins"]').exists()).toBe(false);
     expect(select.attributes("aria-describedby")).toBeUndefined();
     expect(wrapper.get('[data-testid="twin-import-file-alternative"]').text()).toBe(
-      "or load the twin file of a knowledge folder",
+      "or upload the twin file of a knowledge folder",
     );
     expect(wrapper.find('[data-testid="twin-import-no-sources"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="twin-import-step-1"]').attributes("aria-current")).toBe(
