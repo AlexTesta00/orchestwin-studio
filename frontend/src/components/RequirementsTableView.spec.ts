@@ -1,9 +1,11 @@
-import { mount, type VueWrapper } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { describe, expect, it, vi } from "vitest";
 
 import type { RequirementsSpecificationPayload } from "../types/requirements";
 import RequirementsTableView from "./RequirementsTableView.vue";
+import { whyContextKey } from "./whyContext";
 import { expectAccessible } from "@/test/axe";
+import { whyAnswer, whyDocument, whyNode } from "@/test/whyFixtures";
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
@@ -484,6 +486,66 @@ describe("RequirementsTableView", () => {
     const wrapper = mounted(SPECIFICATION, "it");
 
     await expectAccessible(wrapper.element);
+  });
+
+  it("explains a row of the tables that can explain their rows in a row right under it", async () => {
+    const target = whyNode({
+      key: "SCENARIO:scenario:2:spec-hash",
+      code: "SCN-001",
+      kind: "SCENARIO",
+      title: "Walk-in guest",
+      reference: { artifact_id: "scenario", version_number: 2, content_hash: "spec-hash" },
+    });
+    const older = whyNode({
+      ...target,
+      key: "SCENARIO:scenario:1:old-hash",
+      reference: { artifact_id: "scenario", version_number: 1, content_hash: "old-hash" },
+      current: false,
+    });
+    const api = {
+      explain: vi.fn().mockResolvedValue(whyAnswer(target)),
+      document: vi.fn().mockResolvedValue(whyDocument([older, target])),
+    };
+    const wrapper = mount(RequirementsTableView, {
+      props: {
+        specification: SPECIFICATION,
+        versionNumber: 2,
+        contentHash: "spec-hash",
+        locale: "it",
+      },
+      attachTo: document.body,
+      global: {
+        provide: {
+          [whyContextKey as symbol]: {
+            projectId: () => "project",
+            api,
+            authorize: <T>(request: (token: string) => Promise<T>) => request("token"),
+          },
+        },
+      },
+    });
+
+    for (const key of ["scenarios", "stories", "requirements"]) {
+      expect(section(wrapper, key).findAll('[data-testid="why-open"]').length).toBeGreaterThan(0);
+    }
+    for (const key of ["criteria", "risks", "done"]) {
+      expect(section(wrapper, key).find('[data-testid="why-open"]').exists()).toBe(false);
+    }
+
+    const scenarios = section(wrapper, "scenarios");
+    await scenarios.get('tr[data-row-key="SCN-001"] [data-testid="why-open"]').trigger("click");
+    await flushPromises();
+
+    const item = scenarios.get('tr[data-row-key="SCN-001"]');
+    const row = scenarios.get('tr[data-why-row="SCN-001"]');
+    const columns = scenarios.findAll('thead th[scope="col"]').length;
+    expect(row.element.previousElementSibling).toBe(item.element);
+    expect(row.get("td").attributes("colspan")).toBe(String(columns));
+    expect(row.get('[data-testid="why-target-title"]').text()).toBe("Walk-in guest");
+    expect(api.document).toHaveBeenCalledTimes(1);
+    expect(api.explain).toHaveBeenCalledExactlyOnceWith("project", target.key, "token");
+    await expectAccessible(wrapper.element);
+    wrapper.unmount();
   });
 
   it("renders journey phase rows in their narrative order with full linked titles and sources", () => {
