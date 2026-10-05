@@ -366,10 +366,10 @@ def test_a_design_that_is_outdated_gets_a_new_version_approved(tmp_path: Path) -
         approved = current.project.approved("design")
 
     assert run.status == 0, run.errors
-    assert "  1. Ask a new version of the design with this request" in run.output
+    assert "  1. Ask for a new version of the design with this request" in run.output
     assert "Change applied: the design is now at version 3, to be approved." in run.output
     assert (
-        "Decision recorded: a new version of the design was asked from commit 1111111."
+        "Decision recorded: a new version of the design was requested from commit 1111111."
         in run.output
     )
     assert "Do you approve version 3 of the design now? [Y/n] " in run.output
@@ -419,7 +419,7 @@ def test_requirements_that_are_outdated_get_a_change_approved(tmp_path: Path) ->
         )
 
     assert run.status == 0, run.errors
-    assert "  1. Ask a change of the requirements with this request" in run.output
+    assert "  1. Ask for a change of the requirements with this request" in run.output
     assert "Change applied: the requirements are at version 2." in run.output
     assert "check the design with `ut design`" not in run.output
     assert changes[0]["decision"]["kind"] == "REQUIREMENTS_CHANGE"
@@ -460,7 +460,7 @@ def test_a_ceiling_of_the_studio_is_named(tmp_path: Path) -> None:
     )
     assert run.errors == (
         "The Studio reached its overall spending ceiling (0.50 USD): the review did not start. "
-        "The commits stay recorded; whoever runs the Studio can raise the ceiling, then launch "
+        "The commits stay recorded; whoever runs the Studio can raise the ceiling; then launch "
         "`ut align` again.\n"
     )
 
@@ -614,8 +614,8 @@ def test_the_review_in_italian(tmp_path: Path) -> None:
     assert note["kind"] == "ALIGNED"
 
 
-DESIGN_FOLLOW = "Ask a new version of the design that follows this commit"
-REQUIREMENTS_FOLLOW = "Ask a change of the requirements that follows this commit"
+DESIGN_FOLLOW = "Ask for a new version of the design that follows this commit"
+REQUIREMENTS_FOLLOW = "Ask for a change of the requirements that follows this commit"
 MENU_LINES = {
     "Add the amount field": [
         "  1. Mark this commit as aligned",
@@ -625,14 +625,14 @@ MENU_LINES = {
         "  5. Leave it for later",
     ],
     "Rework the card of the design": [
-        "  1. Ask a new version of the design with this request",
+        "  1. Ask for a new version of the design with this request",
         "  2. Mark it as aligned anyway",
         "  3. Record tasks for the code",
         f"  4. {REQUIREMENTS_FOLLOW}",
         "  5. Leave it for later",
     ],
     "New requirement: split the bill": [
-        "  1. Ask a change of the requirements with this request",
+        "  1. Ask for a change of the requirements with this request",
         "  2. Mark it as aligned anyway",
         "  3. Record tasks for the code",
         f"  4. {DESIGN_FOLLOW}",
@@ -769,7 +769,7 @@ def test_code_drift_can_ask_the_requirements_to_follow_the_code(tmp_path: Path) 
             502,
             "The model gave an answer that the Studio cannot use (INVALID_PROVIDER_OUTPUT): "
             "nothing was stored. Launching `ut align` again tries once more, and it is a new "
-            "spending.\n",
+            "expense.\n",
         ),
         (
             "TOO_MANY_GENERATIONS",

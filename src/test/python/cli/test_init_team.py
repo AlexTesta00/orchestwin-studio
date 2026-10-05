@@ -100,7 +100,7 @@ ALWAYS_MISSING = {
     "en": "This version was prepared before this perspective became always applied: prepare the "
     "perspectives again in the web Studio.",
     "it": "Questa versione è stata preparata prima che questa prospettiva diventasse sempre "
-    "applicata: prepara di nuovo le prospettive nel web.",
+    "applicata: prepara di nuovo le prospettive nello Studio web.",
 }
 
 Evidence = dict[str, list[str]]
@@ -306,7 +306,7 @@ NO_SIGNALS = {
 }
 APPROVED = {
     "en": 'Step "Perspectives" approved (version 1). Saved in .orchestwin/steps/team.json.',
-    "it": 'Passo "Prospettive" approvato (versione 1). Salvato in .orchestwin/steps/team.json.',
+    "it": "Passo «Prospettive» approvato (versione 1). Salvato in .orchestwin/steps/team.json.",
 }
 
 
@@ -334,12 +334,12 @@ def test_the_five_perspectives_of_a_brief_without_signals(tmp_path: Path, langua
 STANDING_LINES = {
     "en": [
         "  [x] Software engineering: Always applied",
-        "      [x] Web interface: The brief asks for it («browser», «responsive» in The idea, "
+        '      [x] Web interface: The brief asks for it ("browser", "responsive" in The idea, '
         "Technical constraints)",
         "      [ ] Services and data: The brief says two different things: you decide (asks for "
-        "it with «api» in Technical constraints; rules it out with «senza server» in The idea)",
+        'it with "api" in Technical constraints; rules it out with "senza server" in The idea)',
         "      [x] Mobile: Applied, your choice",
-        "      [ ] Connections to other systems: The brief rules it out («no integrations» in "
+        '      [ ] Connections to other systems: The brief rules it out ("no integrations" in '
         "The idea)",
         "  [x] Product: Always applied",
         "  [ ] Security: Your choice",
@@ -485,7 +485,7 @@ def test_a_contested_aspect_starts_off_and_is_switched_on_without_a_reason(
             "  3. [ ] Security: Protects data and access: who may see and do what.",
             "Perspectives updated (version 2).",
             "      [x] Services and data: The brief says two different things: you decide (asks "
-            "for it with «api» in Technical constraints; rules it out with «senza server» in "
+            'for it with "api" in Technical constraints; rules it out with "senza server" in '
             "The idea)",
         ],
         "it": [
@@ -761,7 +761,7 @@ def proposed_team(studio: FakeStudio, tmp_path: Path, language: str) -> Mapping[
             "it",
             "Prospettive aggiornate (versione 2).",
             "  [x] Sicurezza: Applicata, a tua scelta",
-            'Passo "Prospettive" approvato (versione 2). Salvato in .orchestwin/steps/team.json.',
+            "Passo «Prospettive» approvato (versione 2). Salvato in .orchestwin/steps/team.json.",
         ),
     ],
 )
@@ -821,7 +821,7 @@ def test_a_brief_that_contradicts_itself_goes_on_and_the_aspect_can_be_switched_
         assert saved_step(tmp_path, "team")["version"] == current
     contested = (
         "      [ ] Services and data: The brief says two different things: you decide (asks for it "
-        "with «database» in The idea; rules it out with «senza backend» in The idea)"
+        'with "database" in The idea; rules it out with "senza backend" in The idea)'
     )
     assert contested in first.output.splitlines()
     assert contested.replace("[ ]", "[x]", 1) in second.output.splitlines()
@@ -916,9 +916,9 @@ def test_an_older_studio_that_blocks_names_the_words_of_the_brief(tmp_path: Path
     assert run.status == 1
     assert (
         "The perspectives cannot be prepared: the brief both asks for and rules out Services "
-        "and data. Services and data: the brief rules it out («senza server» in The idea, "
-        "Technical constraints) and also asks for it («server» in Budget). Correct the brief in "
-        "the web Studio (step Brief, «Edit the brief yourself»), then launch `ut init` again."
+        'and data. Services and data: the brief rules it out ("senza server" in The idea, '
+        'Technical constraints) and also asks for it ("server" in Budget). Correct the brief in '
+        'the web Studio (step Brief, "Edit the brief yourself"), then launch `ut init` again.'
         in run.errors.splitlines()
     )
     assert saved_stages(tmp_path) == ["brief"]
@@ -952,8 +952,8 @@ def test_a_blocked_unit_without_words_of_the_brief_is_only_named(tmp_path: Path)
     assert run.status == 1
     assert (
         "The perspectives cannot be prepared: the brief both asks for and rules out Mobile, "
-        "Services and data. Correct the brief in the web Studio (step Brief, «Edit the brief "
-        "yourself»), then launch `ut init` again." in run.errors.splitlines()
+        'Services and data. Correct the brief in the web Studio (step Brief, "Edit the brief '
+        'yourself"), then launch `ut init` again.' in run.errors.splitlines()
     )
 
 
@@ -977,11 +977,11 @@ def test_the_words_of_several_reasons_and_units_are_merged_in_order(tmp_path: Pa
     assert run.status == 1
     assert (
         "The perspectives cannot be prepared: the brief both asks for and rules out Services "
-        "and data, Mobile. Services and data: the brief rules it out («senza server» in "
-        "Technical constraints) and also asks for it («database», «server», «api» in The idea, "
-        "Budget, Risks). Mobile: the brief rules it out («web only» in Technical constraints) "
-        "and also asks for it («iphone» in The idea). Correct the brief in the web Studio (step "
-        "Brief, «Edit the brief yourself»), then launch `ut init` again." in run.errors.splitlines()
+        'and data, Mobile. Services and data: the brief rules it out ("senza server" in '
+        'Technical constraints) and also asks for it ("database", "server", "api" in The idea, '
+        'Budget, Risks). Mobile: the brief rules it out ("web only" in Technical constraints) '
+        'and also asks for it ("iphone" in The idea). Correct the brief in the web Studio (step '
+        'Brief, "Edit the brief yourself"), then launch `ut init` again.' in run.errors.splitlines()
     )
 
 
@@ -1178,13 +1178,13 @@ def test_a_contradiction_is_written_only_with_something_to_say_on_both_sides(
     )
 
     assert init_team.contradiction(journey, words_only) == (
-        "Mobile: the brief rules it out («web only» in delivery channel) and also asks for it "
-        "(«iphone»)."
+        'Mobile: the brief rules it out ("web only" in delivery channel) and also asks for it '
+        '("iphone").'
     )
     assert init_team.contradiction(journey, one_sided) is None
     assert init_team.contradiction(journey, broken) is None
     assert init_team.contradiction(journey, unknown) == (
-        "chart engineer: the brief rules it out («senza grafici» in Goals) and also asks for it "
-        "(«grafici» in Goals)."
+        'chart engineer: the brief rules it out ("senza grafici" in Goals) and also asks for it '
+        '("grafici" in Goals).'
     )
     transport.assert_done()

@@ -15,7 +15,7 @@ MESSAGES = MappingProxyType(
         "evidence.option_json": {"it": "Mostra JSON.", "en": "Show JSON."},
         "evidence.option_text": {
             "it": "Richiedi il testo originale allo Studio.",
-            "en": "Request the original text from Studio.",
+            "en": "Request the original text from the Studio.",
         },
         "evidence.help_add": {
             "it": "Aggiungi un file UTF-8 .txt o .md.",
@@ -34,8 +34,8 @@ MESSAGES = MappingProxyType(
             "en": "Retire a source and reopen its dependants.",
         },
         "evidence.help_delete-text": {
-            "it": "Elimina i corpi originali dopo il ritiro.",
-            "en": "Delete original bodies after retirement.",
+            "it": "Elimina i testi originali dopo il ritiro.",
+            "en": "Delete original texts after retirement.",
         },
         "evidence.help_reassociate": {
             "it": "Riassocia il testo originale importato con hash identico.",
@@ -63,7 +63,7 @@ MESSAGES = MappingProxyType(
         "evidence.content_hash": {"it": "Hash del testo", "en": "Text hash"},
         "evidence.offline": {
             "it": "Studio non raggiungibile: leggo gli estratti del Dossier, senza testo originale.",
-            "en": "Studio is unavailable: reading Dossier excerpts without original text.",
+            "en": "The Studio is unavailable: reading Dossier excerpts without original text.",
         },
         "evidence.retire_warning": {
             "it": "La fonte non sarà più utilizzabile. I twin collegati vengono ricalcolati e le sezioni a valle segnalano revisione, senza generazioni.",
@@ -72,11 +72,11 @@ MESSAGES = MappingProxyType(
         "evidence.confirm_retire": {"it": "Ritiri questa fonte?", "en": "Retire this source?"},
         "evidence.retired": {"it": "{code} ritirata.", "en": "{code} retired."},
         "evidence.review_required": {
-            "it": "Un aggiornamento del profilo è già in corso: la fonte è ritirata, ma occorre rivedere il profilo pendente.",
+            "it": "Un aggiornamento del profilo è già in corso: la fonte è ritirata, ma occorre rivedere il profilo in attesa.",
             "en": "A profile update is already in progress: the source is retired, but the pending profile requires review.",
         },
         "evidence.delete_warning": {
-            "it": "Si eliminano soltanto i testi originali dal deposito dello Studio. Citazioni storiche, copie esportate, backup e copie del provider possono restare.",
+            "it": "Si eliminano soltanto i testi originali dal deposito dello Studio. Citazioni storiche, copie esportate, backup e copie del fornitore del modello possono restare.",
             "en": "Only original texts in Studio storage are deleted. Historical citations, exported copies, backups and provider copies may remain.",
         },
         "evidence.confirm_delete": {
@@ -88,8 +88,8 @@ MESSAGES = MappingProxyType(
             "en": "Original texts for {code} deleted.",
         },
         "evidence.errors.EVIDENCE_LIMIT": {
-            "it": "Testo oltre il limite: 24.000 caratteri e 32 KiB per evidenza. Dividi il testo in parti e riprova.",
-            "en": "Text exceeds the limit: 24,000 characters and 32 KiB per evidence. Split the text into parts and retry.",
+            "it": "Testo oltre il limite: 24.000 caratteri e 32 KiB per fonte. Dividi il testo in parti e riprova.",
+            "en": "Text exceeds the limit: 24,000 characters and 32 KiB per source. Split the text into parts and retry.",
         },
         "evidence.errors.EVIDENCE_INVALID_TEXT": {
             "it": "Usa un file .txt o .md UTF-8 valido, non vuoto e senza dati binari.",

@@ -91,7 +91,7 @@ def test_the_review_in_italian(tmp_path: Path) -> None:
     assert "Revisione dei twin, versione 2" in run.output
     assert run.output.count(SIMULATED["it"]) == 1
     assert "- Importante: Il pulsante principale è in fondo" in run.output
-    assert "(schermata “Calcolo mancia”, elemento “Dividi il conto”)" in run.output
+    assert "(schermata «Calcolo mancia», elemento «Dividi il conto»)" in run.output
 
 
 def test_an_italian_folder_asks_the_studio_for_italian_from_an_english_terminal(

@@ -9,7 +9,10 @@ MESSAGES = {
         "it": "Percorso dello scenario a richiesta.",
         "en": "Scenario walkthrough on request.",
     },
-    "validation.option_scenario": {"it": "Key esatta dello scenario.", "en": "Exact scenario key."},
+    "validation.option_scenario": {
+        "it": "Chiave esatta dello scenario.",
+        "en": "Exact scenario key.",
+    },
     "validation.option_alternative": {
         "it": "Identificatore dell'alternativa.",
         "en": "Alternative identifier.",
@@ -27,7 +30,7 @@ MESSAGES = {
         "en": "Return the complete answer as JSON.",
     },
     "validation.option_offline": {
-        "it": "Legge il Dossier verificato senza rete o login.",
+        "it": "Legge il Dossier verificato senza rete né accesso allo Studio.",
         "en": "Read the verified Dossier without network or login.",
     },
     "validation.offline": {

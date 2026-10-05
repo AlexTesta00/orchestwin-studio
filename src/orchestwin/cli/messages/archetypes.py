@@ -29,7 +29,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "context, empty if unknown",
     },
     "archetypes.option_goal": {
-        "it": "obiettivo; ripeti il flag per più obiettivi",
+        "it": "obiettivo; ripeti l'opzione per più obiettivi",
         "en": "goal; repeat the flag for more goals",
     },
     "archetypes.column_number": {"it": "N.", "en": "No."},
@@ -37,7 +37,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "archetypes.column_description": {"it": "Descrizione", "en": "Description"},
     "archetypes.column_version": {"it": "Versione", "en": "Version"},
     "archetypes.changed": {
-        "it": "Archetipo salvato. Usa ut init per aggiornare e approvare i User Twin.",
+        "it": "Archetipo salvato. Usa ut init per aggiornare e approvare gli User Twin.",
         "en": "Archetype saved. Use ut init to update and approve the User Twins.",
     },
     "archetypes.manage": {"it": "Gestisci gli archetipi:", "en": "Manage the archetypes:"},
@@ -82,7 +82,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The archetype is already archived; its history is still saved.",
     },
     "archetypes.errors.USER_TWIN_REVISION_PENDING": {
-        "it": "Decidi prima la revisione del User Twin in attesa.",
+        "it": "Decidi prima la revisione dello User Twin in attesa.",
         "en": "Decide the pending User Twin revision first.",
     },
     "archetypes.errors.PERSISTENCE_REJECTED": {

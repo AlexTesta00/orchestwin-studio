@@ -86,16 +86,16 @@ VERDICT_LINES = {
     },
     "it": {
         "FAR": [
-            "Si distinguono · 5 assi diversi su 5",
+            "Si distinguono · Assi diversi: 5 su 5",
             "Scelte dichiarate 100/100 · Stile disegnato 80/100 · Struttura delle schermate 41/100",
         ],
         "CLOSE": [
-            "Troppo vicine · 5 assi diversi su 5",
+            "Troppo vicine · Assi diversi: 5 su 5",
             "Scelte dichiarate 100/100 · Stile disegnato 30/100 · Struttura delle schermate 12/100",
             "Le due alternative si somigliano nello stile disegnato. Puoi rigenerarle.",
         ],
         "UNKNOWN": [
-            "Misura completa quando i due mockup sono pronti · 5 assi diversi su 5",
+            "Misura completa quando i due mockup sono pronti · Assi diversi: 5 su 5",
             "Scelte dichiarate 100/100",
         ],
     },

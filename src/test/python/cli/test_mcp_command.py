@@ -17,8 +17,8 @@ FREE = (
     "to allow them, add --spend."
 )
 SPEND = (
-    "With --spend the agents can use ask_twin, review_changes and run_tests: each call is a "
-    "spending of the model."
+    "With --spend the agents can use ask_twin, review_changes and run_tests: each call is an "
+    "expense on the model."
 )
 NOT_LINKED = (
     "This folder is not linked to a project of the Studio, so the MCP server has no knowledge "

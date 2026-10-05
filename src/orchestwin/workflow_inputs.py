@@ -39,20 +39,20 @@ PROVIDED_PROTOTYPE_LIMIT_MESSAGES: Final = MappingProxyType(
     {
         "it": MappingProxyType(
             {
-                PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE: "La revisione sintetica non è disponibile per il prototipo fornito nello sprint 36.",
-                PROVIDED_PROTOTYPE_CODE_UNAVAILABLE: "La generazione del codice non è disponibile per il prototipo fornito nello sprint 36.",
-                PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE: "Il percorso sugli scenari non è disponibile per il prototipo fornito nello sprint 36.",
-                PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE: "Questa operazione non è disponibile per il prototipo fornito nello sprint 36.",
-                PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE: "La valutazione dei twin non è disponibile per il prototipo fornito nello sprint 36. La struttura dei mockup è conservata per il collegamento previsto nello sprint 38.",
+                PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE: "La revisione sintetica non è disponibile per il prototipo fornito.",
+                PROVIDED_PROTOTYPE_CODE_UNAVAILABLE: "La generazione del codice non è disponibile per il prototipo fornito.",
+                PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE: "Il percorso dello scenario non è disponibile per il prototipo fornito.",
+                PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE: "Questa operazione non è disponibile per il prototipo fornito.",
+                PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE: "La valutazione dei twin non è disponibile per il prototipo fornito. La struttura dei mockup è conservata per un collegamento futuro.",
             }
         ),
         "en": MappingProxyType(
             {
-                PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE: "Synthetic review is unavailable for a supplied prototype in sprint 36.",
-                PROVIDED_PROTOTYPE_CODE_UNAVAILABLE: "Code generation is unavailable for a supplied prototype in sprint 36.",
-                PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE: "Scenario walkthrough is unavailable for a supplied prototype in sprint 36.",
-                PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE: "This operation is unavailable for a supplied prototype in sprint 36.",
-                PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE: "Twin evaluation is unavailable for a supplied prototype in sprint 36. The mockup structure is preserved for the integration planned in sprint 38.",
+                PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE: "Synthetic review is unavailable for a supplied prototype.",
+                PROVIDED_PROTOTYPE_CODE_UNAVAILABLE: "Code generation is unavailable for a supplied prototype.",
+                PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE: "Scenario walkthrough is unavailable for a supplied prototype.",
+                PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE: "This operation is unavailable for a supplied prototype.",
+                PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE: "Twin evaluation is unavailable for a supplied prototype. The mockup structure is preserved for a future integration.",
             }
         ),
     }

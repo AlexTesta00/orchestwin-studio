@@ -137,7 +137,7 @@ def test_two_changes_are_applied_and_reviewed_keeping_the_rule_in_force(tmp_path
     assert saved == before.encode("utf-8")
     assert 'href="DES-002-before.html">Before the change (version 3)</a>' in index
     assert 'href="DES-002.html">After the change (version 4)</a>' in index
-    assert "Change asked: “Use a larger title”" in index
+    assert "Change requested: “Use a larger title”" in index
     assert second.opened == (session.uri("index.html"),)
 
 
@@ -150,7 +150,7 @@ def test_a_change_in_italian(tmp_path: Path) -> None:
     assert run.status == 0, run.errors
     assert "Stima: 1,12-1,73 USD, circa 9 min." in run.output
     assert "Modifica applicata: il design è ora alla versione 3, da approvare." in run.output
-    assert "Avevi chiesto: “Titolo più grande”" in run.output
+    assert "Avevi chiesto: «Titolo più grande»" in run.output
     assert "Nessuna regola in vigore" in run.output
     assert "Revisione dei twin, versione 3" in run.output
     assert started == 1
@@ -297,7 +297,7 @@ def test_a_rejected_change_leaves_the_design_as_it_was(tmp_path: Path) -> None:
     assert run.status == 1
     assert run.errors == (
         "The result did not pass the checks of the Studio: the screen fails the check "
-        "(MOCKUP_REJECTED). The design did not change; asking again is a new spending.\n"
+        "(MOCKUP_REJECTED). The design did not change; asking again is a new expense.\n"
     )
     assert (number, started) == (2, 0)
 
@@ -462,7 +462,7 @@ def test_an_empty_change_in_the_guided_command_spends_nothing(tmp_path: Path) ->
         started = session.count("POST", ITERATIONS)
 
     assert run.status == 0
-    assert "No change asked: nothing was spent." in run.output
+    assert "No change requested: nothing was spent." in run.output
     assert started == 0
 
 

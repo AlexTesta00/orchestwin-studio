@@ -294,7 +294,7 @@ def test_the_alternatives_and_the_twins_in_italian(tmp_path: Path) -> None:
         "Chiaro al tavolo",
         "Tutto a portata di mano",
     ]
-    assert "- Titolare della pizzeria: “Vedo subito dove inserire l'importo.”" in lines
+    assert "- Titolare della pizzeria: «Vedo subito dove inserire l'importo.»" in lines
 
 
 def test_critiques_without_verdicts_show_what_each_twin_wrote(tmp_path: Path) -> None:

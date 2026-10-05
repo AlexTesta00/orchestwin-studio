@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 MESSAGES = {
-    "why.origin.OWNER_INPUT": {"it": "Fornito dal proprietario", "en": "Supplied by the owner"},
+    "why.origin.OWNER_INPUT": {"it": "Fornito dal proprietario", "en": "Owner supplied"},
     "why.gap.DECLARED_MISSING": {
         "it": "Manca, dichiarato da te.",
         "en": "Missing, declared by you.",
@@ -23,7 +23,7 @@ MESSAGES = {
         "en": "Return the complete answer as JSON.",
     },
     "why.option_offline": {
-        "it": "Legge il Dossier locale verificato senza rete o login.",
+        "it": "Legge il Dossier locale verificato senza rete né accesso allo Studio.",
         "en": "Read the verified local Dossier without network or login.",
     },
     "why.target": {"it": "Perché? {title}", "en": "Why? {title}"},
@@ -43,9 +43,9 @@ MESSAGES = {
         "it": "Motivazione generata dal modello",
         "en": "Model-generated rationale",
     },
-    "why.origin.OWNER": {"it": "motivazione del proprietario", "en": "owner rationale"},
-    "why.origin.SYSTEM": {"it": "motivazione del sistema", "en": "system rationale"},
-    "why.origin.UNKNOWN": {"it": "origine non dichiarata", "en": "undeclared origin"},
+    "why.origin.OWNER": {"it": "Motivazione del proprietario", "en": "Owner rationale"},
+    "why.origin.SYSTEM": {"it": "Motivazione del sistema", "en": "System rationale"},
+    "why.origin.UNKNOWN": {"it": "Origine non dichiarata", "en": "Undeclared origin"},
     "why.offline": {
         "it": "Dossier locale verificato ({reason}); i dati possono essere precedenti a Studio.",
         "en": "Verified local Dossier ({reason}); its data may predate Studio.",
@@ -81,7 +81,7 @@ MESSAGES = {
         "it": "Motivazione generata dal modello",
         "en": "Model-generated rationale",
     },
-    "why.status.EVIDENCED": {"it": "Evidenziato", "en": "Evidenced"},
+    "why.status.EVIDENCED": {"it": "Documentato", "en": "Evidenced"},
     "why.status.INFERRED": {"it": "Dedotto", "en": "Inferred"},
     "why.status.HYPOTHESIZED": {"it": "Ipotizzato", "en": "Hypothesized"},
     "why.status.CONTESTED": {"it": "Contestato", "en": "Contested"},
@@ -107,8 +107,8 @@ MESSAGES = {
         "en": "A linked scenario is missing.",
     },
     "why.gap.MISSING_TWIN": {
-        "it": "Manca il modello utente collegato.",
-        "en": "The linked user model is missing.",
+        "it": "Manca il twin collegato.",
+        "en": "The linked twin is missing.",
     },
     "why.gap.MISSING_CLAIM": {
         "it": "Manca il claim collegato.",

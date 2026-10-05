@@ -635,7 +635,7 @@ def test_a_failed_answer_of_the_studio_is_a_tool_error_with_its_code(tmp_path: P
         "code": "INVALID_TWIN_CHAT_OUTPUT",
         "message": f"{name} could not answer: the model gave no valid answer or could not be "
         "reached (INVALID_TWIN_CHAT_OUTPUT). You can ask the question again, but it is a new "
-        "spending.",
+        "expense.",
     }
     assert tool_error(answered[3]) == {
         "code": "TWIN_NOT_FOUND",

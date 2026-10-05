@@ -14,7 +14,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Legge a richiesta il compito, i passi e i collegamenti attestati dello scenario nel Dossier verificato.",
         "en": "Read the task, steps and attested scenario links in the verified Dossier on request.",
     },
-    "mcp.parameter_scenario_key": {"it": "Key esatta dello scenario.", "en": "Exact scenario key."},
+    "mcp.parameter_scenario_key": {
+        "it": "Chiave esatta dello scenario.",
+        "en": "Exact scenario key.",
+    },
     "mcp.parameter_alternative_id": {
         "it": "Identificatore dell'alternativa.",
         "en": "Alternative identifier.",
@@ -51,7 +54,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "permette agli agenti gli strumenti a pagamento ask_twin, review_changes e "
         "run_tests: ogni chiamata è una spesa del modello",
         "en": "allow the agents the paid tools ask_twin, review_changes and run_tests: each call "
-        "is a spending of the model",
+        "is an expense on the model",
     },
     "mcp.option_config": {
         "it": "invece di avviare il server mostra la configurazione da copiare nell'editor: "
@@ -69,7 +72,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Con --spend gli agenti possono usare ask_twin, review_changes e run_tests: ogni "
         "chiamata è una spesa del modello.",
         "en": "With --spend the agents can use ask_twin, review_changes and run_tests: each call "
-        "is a spending of the model.",
+        "is an expense on the model.",
     },
     "mcp.config_claude_code_command": {
         "it": "Per aggiungere il server a Claude Code lancia questo comando dalla cartella del "
@@ -311,9 +314,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "number of observations learned during the development. User Twins are profiles of the "
         "user groups simulated by the model. No spending.",
     },
-    "mcp.title_get_twin": {"it": "Profilo di un User Twin", "en": "Profile of a User Twin"},
+    "mcp.title_get_twin": {"it": "Profilo di uno User Twin", "en": "Profile of a User Twin"},
     "mcp.describe_get_twin": {
-        "it": "Profilo completo di un User Twin: ruolo, obiettivi, frustrazioni, difficoltà, "
+        "it": "Profilo completo di uno User Twin: ruolo, obiettivi, frustrazioni, difficoltà, "
         "contesto d'uso e ogni osservazione con la sua origine; in learned, le osservazioni che "
         "il twin ha imparato durante lo sviluppo, approvate dal proprietario. Nessuna spesa.",
         "en": "Full profile of a User Twin: role, goals, frustrations, pain points, context of "
@@ -348,9 +351,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "alignment verdict and proposed tasks; with commit only the reviews of that commit. "
         "No spending.",
     },
-    "mcp.title_ask_twin": {"it": "Domanda a un User Twin", "en": "Ask a User Twin"},
+    "mcp.title_ask_twin": {"it": "Domanda a uno User Twin", "en": "Ask a User Twin"},
     "mcp.describe_ask_twin": {
-        "it": "Fa una domanda a un User Twin nello Studio e restituisce la risposta simulata "
+        "it": "Fa una domanda a uno User Twin nello Studio e restituisce la risposta simulata "
         "dal modello: un'ipotesi da valutare, non l'opinione di una persona reale. A "
         "pagamento, circa {amount} USD a domanda.",
         "en": "Ask a User Twin a question in the Studio and return the answer simulated by the "
@@ -592,7 +595,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "{name} non ha potuto rispondere: il modello non ha dato una risposta valida "
         "oppure non era raggiungibile ({code}). Puoi rifare la domanda, ma è una nuova spesa.",
         "en": "{name} could not answer: the model gave no valid answer or could not be reached "
-        "({code}). You can ask the question again, but it is a new spending.",
+        "({code}). You can ask the question again, but it is a new expense.",
     },
     "mcp.errors.TWIN_CHAT_MODEL_NOT_CONFIGURED": {
         "it": "Il modello che dà voce ai twin non è collegato allo Studio: chi gestisce lo "
@@ -677,23 +680,23 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Il modello ha risposto in un modo che lo Studio non può usare, quindi la "
         "revisione non è stata salvata. Puoi riprovare, ma è una nuova spesa.",
         "en": "The model answered in a way the Studio cannot use, so the review was not "
-        "saved. You can try again, but it is a new spending.",
+        "saved. You can try again, but it is a new expense.",
     },
     "mcp.errors.RESPONSE_SCHEMA_ERROR": {
         "it": "Il modello ha risposto due volte in una forma sbagliata, quindi la revisione "
         "non è stata salvata. Puoi riprovare, ma è una nuova spesa.",
         "en": "The model answered twice in a wrong form, so the review was not saved. You can "
-        "try again, but it is a new spending.",
+        "try again, but it is a new expense.",
     },
     "mcp.errors.INCOMPLETE_OUTPUT": {
         "it": "Il modello ha interrotto la risposta due volte, quindi la revisione non è stata "
         "salvata. Puoi riprovare, ma è una nuova spesa.",
         "en": "The model cut its answer short twice, so the review was not saved. You can try "
-        "again, but it is a new spending.",
+        "again, but it is a new expense.",
     },
     "mcp.errors.CONTEXT_BUDGET_EXCEEDED": {
         "it": "Il commit con il design e i requisiti è troppo grande perché il modello lo "
-        "rivegga: dividi il lavoro in commit più piccoli.",
+        "riveda: dividi il lavoro in commit più piccoli.",
         "en": "The commit together with the design and the requirements is too large for the "
         "model to review: split the work into smaller commits.",
     },
@@ -707,7 +710,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "La revisione si è persa, forse perché lo Studio è ripartito. Puoi richiamare "
         "review_changes, ma è una nuova spesa.",
         "en": "The review was lost, perhaps because the Studio restarted. You can call "
-        "review_changes again, but it is a new spending.",
+        "review_changes again, but it is a new expense.",
     },
     "mcp.errors.TEST_DESIGN_REQUIRED": {
         "it": "I test di accettazione richiedono i requisiti e il design approvati nella "
@@ -757,7 +760,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Il piano dei test salvato su questo computer non è più nello Studio: richiama "
         "run_tests con new_plan true, che è una nuova spesa.",
         "en": "The test plan saved on this computer is no longer in the Studio: call run_tests "
-        "again with new_plan true, which is a new spending.",
+        "again with new_plan true, which is a new expense.",
     },
     "mcp.errors.ACCEPTANCE_CRITERION_UNKNOWN": {
         "it": "Lo Studio non conosce alcuni dei criteri indicati: scarica di nuovo la cartella "
@@ -793,7 +796,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Il browser non ha potuto eseguire un passo dei test: riprova, oppure chiedi un "
         "nuovo piano con new_plan true, che è una nuova spesa.",
         "en": "The browser could not carry out a step of the tests: try again, or ask for a new "
-        "plan with new_plan true, which is a new spending.",
+        "plan with new_plan true, which is a new expense.",
     },
     "mcp.errors.run_tests.REQUIREMENTS_APPROVAL_REQUIRED": {
         "it": "Per verificare l'applicazione servono i requisiti approvati nello Studio: "
@@ -817,19 +820,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Il modello ha risposto in un modo che lo Studio non può usare, quindi il piano dei "
         "test o le critiche non sono stati salvati. Puoi riprovare, ma è una nuova spesa.",
         "en": "The model answered in a way the Studio cannot use, so the test plan or the "
-        "critiques were not saved. You can try again, but it is a new spending.",
+        "critiques were not saved. You can try again, but it is a new expense.",
     },
     "mcp.errors.run_tests.RESPONSE_SCHEMA_ERROR": {
         "it": "Il modello ha risposto due volte in una forma sbagliata, quindi il piano dei test "
         "o le critiche non sono stati salvati. Puoi riprovare, ma è una nuova spesa.",
         "en": "The model answered twice in a wrong form, so the test plan or the critiques were "
-        "not saved. You can try again, but it is a new spending.",
+        "not saved. You can try again, but it is a new expense.",
     },
     "mcp.errors.run_tests.INCOMPLETE_OUTPUT": {
         "it": "Il modello ha interrotto la risposta due volte, quindi il piano dei test o le "
         "critiche non sono stati salvati. Puoi riprovare, ma è una nuova spesa.",
         "en": "The model cut its answer short twice, so the test plan or the critiques were not "
-        "saved. You can try again, but it is a new spending.",
+        "saved. You can try again, but it is a new expense.",
     },
     "mcp.errors.run_tests.CONTEXT_BUDGET_EXCEEDED": {
         "it": "La pagina insieme al design e ai requisiti è troppo grande per il modello: "
@@ -846,6 +849,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "La generazione si è persa, forse perché lo Studio è ripartito. Puoi richiamare "
         "run_tests, ma è una nuova spesa.",
         "en": "The generation was lost, perhaps because the Studio restarted. You can call "
-        "run_tests again, but it is a new spending.",
+        "run_tests again, but it is a new expense.",
     },
 }

@@ -121,9 +121,9 @@ DIRECTION_WORDS: Final[dict[str, dict[str, tuple[str, str]]]] = {
 
 MESSAGES: dict[str, dict[str, str]] = {
     "design.help": {
-        "it": "lavora sul design: alternative, mockup nel browser, parere dei twin, modifiche "
+        "it": "Lavora sul design: alternative, mockup nel browser, parere dei twin, modifiche "
         "a parole, scelta e approvazione",
-        "en": "work on the design: alternatives, mockups in the browser, what the twins think, "
+        "en": "Work on the design: alternatives, mockups in the browser, what the twins think, "
         "changes in words, choice and approval",
     },
     "design.option_action": {
@@ -332,7 +332,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "{first} · {second}: {verdict}",
         "en": "{first} · {second}: {verdict}",
     },
-    "design.distance_axes": {"it": "{count} assi diversi su 5", "en": "{count} of 5 axes differ"},
+    "design.distance_axes": {"it": "Assi diversi: {count} su 5", "en": "{count} of 5 axes differ"},
     "design.distance_declared": {
         "it": "Scelte dichiarate {score}/100",
         "en": "Declared choices {score}/100",
@@ -359,7 +359,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "design.verdicts_heading": {"it": "Cosa pensano i twin", "en": "What the twins think"},
     "design.column_twin": {"it": "Twin", "en": "Twin"},
-    "design.quote": {"it": "{twin}: “{quote}”", "en": "{twin}: “{quote}”"},
+    "design.quote": {"it": "{twin}: «{quote}»", "en": "{twin}: “{quote}”"},
     "design.verdict_below": {"it": "vedi sotto", "en": "see below"},
     "design.point": {"it": "{label}: {text}", "en": "{label}: {text}"},
     "design.point_strengths": {"it": "Punti di forza", "en": "Strengths"},
@@ -400,11 +400,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The alternatives are ready; none has been chosen yet.",
     },
     "design.summary_chosen": {
-        "it": "Scelta: {code} “{title}”, versione {version}, non ancora approvata.",
+        "it": "Scelta: {code} «{title}», versione {version}, non ancora approvata.",
         "en": "Chosen: {code} “{title}”, version {version}, not approved yet.",
     },
     "design.summary_approved": {
-        "it": "Approvato: {code} “{title}”, versione {version}.",
+        "it": "Approvato: {code} «{title}», versione {version}.",
         "en": "Approved: {code} “{title}”, version {version}.",
     },
     "design.folder_here": {
@@ -461,7 +461,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Draw the missing mockups: {codes}",
     },
     "design.menu_apply": {
-        "it": "Applica la modifica che avevi chiesto: “{request}” (nessuna spesa)",
+        "it": "Applica la modifica che avevi chiesto: «{request}» (nessuna spesa)",
         "en": "Apply the change you asked for: “{request}” (no spending)",
     },
     "design.menu_change": {
@@ -494,7 +494,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "design.change_cancelled": {
         "it": "Nessuna modifica chiesta: non ho speso nulla.",
-        "en": "No change asked: nothing was spent.",
+        "en": "No change requested: nothing was spent.",
     },
     "design.busy_wait": {
         "it": "Nello Studio girano già troppe generazioni: aspetto {seconds} secondi e riprovo "
@@ -583,7 +583,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "design.mockup_again": {
         "it": "Le altre alternative restano utilizzabili. Disegnare di nuovo {code} è una nuova "
         "spesa ({amount} USD, circa {minutes}): `ut design` te lo propone nel menu.",
-        "en": "The other alternatives remain usable. Drawing {code} again is a new spending "
+        "en": "The other alternatives remain usable. Drawing {code} again is a new expense "
         "({amount} USD, about {minutes}): `ut design` offers it in its menu.",
     },
     "design.mockup_again_subscription": {
@@ -622,7 +622,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{code} has no mockup to open yet. `ut design` offers it in its menu.",
     },
     "design.already_chosen": {
-        "it": "{code} “{title}” è già l'alternativa scelta: non ho cambiato nulla.",
+        "it": "{code} «{title}» è già l'alternativa scelta: non ho cambiato nulla.",
         "en": "{code} “{title}” is already the chosen alternative: nothing changed.",
     },
     "design.choose_needs_mockup": {
@@ -642,7 +642,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "To apply the choice I prepare the prototype of {code}.",
     },
     "design.chosen": {
-        "it": "Hai scelto {code} “{title}”: il design è ora alla versione {version}.",
+        "it": "Hai scelto {code} «{title}»: il design è ora alla versione {version}.",
         "en": "You chose {code} “{title}”: the design is now at version {version}.",
     },
     "design.approve_needs_choice": {
@@ -652,11 +652,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "DES-001`.",
     },
     "design.already_approved": {
-        "it": "Il design è già approvato: {code} “{title}”, versione {version}.",
+        "it": "Il design è già approvato: {code} «{title}», versione {version}.",
         "en": "The design is already approved: {code} “{title}”, version {version}.",
     },
     "design.approved": {
-        "it": "Design approvato: {code} “{title}”, versione {version}. Ora preparo la cartella "
+        "it": "Design approvato: {code} «{title}», versione {version}. Ora preparo la cartella "
         "di conoscenza.",
         "en": "Design approved: {code} “{title}”, version {version}. Now I prepare the "
         "knowledge folder.",
@@ -783,7 +783,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "design has no mockup drawn by the model.",
     },
     "design.about_change": {
-        "it": "Adesso chiedo al modello di cambiare il design scelto: “{request}”. Subito dopo "
+        "it": "Adesso chiedo al modello di cambiare il design scelto: «{request}». Subito dopo "
         "i twin rivedono la nuova versione.",
         "en": "I am about to ask the model to change the chosen design: “{request}”. Right "
         "after, the twins review the new version.",
@@ -803,7 +803,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "and the design stays at version {version}.",
     },
     "design.change_request": {
-        "it": "Avevi chiesto: “{request}”",
+        "it": "Avevi chiesto: «{request}»",
         "en": "You asked: “{request}”",
     },
     "design.change_list": {"it": "Che cosa è cambiato:", "en": "What changed:"},
@@ -824,7 +824,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "review done.",
     },
     "design.pending_change": {
-        "it": "Una modifica che avevi chiesto è pronta ma non ancora applicata: “{request}”. "
+        "it": "Una modifica che avevi chiesto è pronta ma non ancora applicata: «{request}». "
         "`ut design` te la propone nel menu, senza nuova spesa.",
         "en": "A change you asked for is ready but not applied yet: “{request}”. `ut design` "
         "offers it in its menu, without new spending.",
@@ -833,7 +833,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Lo Studio non ha più il risultato di quella modifica: chiedila di nuovo se ti "
         "serve (è una nuova spesa).",
         "en": "The Studio no longer has the result of that change: ask for it again if you "
-        "need it (it is a new spending).",
+        "need it (it is a new expense).",
     },
     "design.review_no_design": {
         "it": "Il design non esiste ancora, quindi i twin non hanno niente da rivedere. Lancia "
@@ -922,9 +922,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "{weight}: {summary} ({place})",
         "en": "{weight}: {summary} ({place})",
     },
-    "design.place_screen": {"it": "schermata “{screen}”", "en": "screen “{screen}”"},
+    "design.place_screen": {"it": "schermata «{screen}»", "en": "screen “{screen}”"},
     "design.place_element": {
-        "it": "schermata “{screen}”, elemento “{element}”",
+        "it": "schermata «{screen}», elemento «{element}»",
         "en": "screen “{screen}”, element “{element}”",
     },
     "design.weight_critical": {"it": "Grave", "en": "Critical"},
@@ -948,15 +948,15 @@ MESSAGES: dict[str, dict[str, str]] = {
     "design.page_product": {"it": "Prodotto: {name}", "en": "Product: {name}"},
     "design.page_direction": {"it": "Direzione visiva: {name}", "en": "Visual direction: {name}"},
     "design.page_twins": {"it": "Cosa pensano i twin", "en": "What the twins think"},
-    "design.page_quote": {"it": "“{quote}”", "en": "“{quote}”"},
+    "design.page_quote": {"it": "«{quote}»", "en": "“{quote}”"},
     "design.page_open": {"it": "Apri il mockup di {code}", "en": "Open the mockup of {code}"},
     "design.page_missing": {
         "it": "Mockup non ancora disegnato.",
         "en": "Mockup not drawn yet.",
     },
     "design.page_change": {
-        "it": "Modifica chiesta: “{request}”",
-        "en": "Change asked: “{request}”",
+        "it": "Modifica chiesta: «{request}»",
+        "en": "Change requested: “{request}”",
     },
     "design.page_before": {
         "it": "Prima della modifica (versione {version})",
@@ -1017,31 +1017,31 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Il risultato non ha superato i controlli dello Studio: {detail} ({code}). Il "
         "design non è cambiato; chiedere di nuovo è una nuova spesa.",
         "en": "The result did not pass the checks of the Studio: {detail} ({code}). The design "
-        "did not change; asking again is a new spending.",
+        "did not change; asking again is a new expense.",
     },
     "design.errors.INCOMPLETE_OUTPUT": {
         "it": "La generazione è stata tagliata perché era troppo lunga ({code}). Il design non "
         "è cambiato; riprovare è una nuova spesa.",
         "en": "The generation was stopped because it was too long ({code}). The design did not "
-        "change; trying again is a new spending.",
+        "change; trying again is a new expense.",
     },
     "design.errors.TIMEOUT": {
         "it": "La generazione è stata tagliata perché durava troppo ({code}). Il design non è "
         "cambiato; riprovare è una nuova spesa.",
         "en": "The generation was stopped because it took too long ({code}). The design did "
-        "not change; trying again is a new spending.",
+        "not change; trying again is a new expense.",
     },
     "design.errors.INVALID_MOCKUP_OUTPUT": {
         "it": "Il modello ha restituito un prototipo che non si può usare ({code}). Il design "
         "non è cambiato; riprovare è una nuova spesa.",
         "en": "The model returned a prototype that cannot be used ({code}). The design did not "
-        "change; trying again is a new spending.",
+        "change; trying again is a new expense.",
     },
     "design.errors.INVALID_PROVIDER_OUTPUT": {
         "it": "Il modello ha restituito una risposta che non si può usare ({code}). Il design "
         "non è cambiato; riprovare è una nuova spesa.",
         "en": "The model returned an answer that cannot be used ({code}). The design did not "
-        "change; trying again is a new spending.",
+        "change; trying again is a new expense.",
     },
     "design.errors.REQUIREMENTS_APPROVAL_REQUIRED": {
         "it": "Lo Studio chiede prima l'approvazione dei requisiti: completala con `ut init`.",
@@ -1202,7 +1202,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it again; nothing was spent.",
     },
     "design.errors.RULE_NOT_VALID": {
-        "it": "La regola “{rule}” non va bene: al massimo {limit} caratteri e nessun carattere "
+        "it": "La regola «{rule}» non va bene: al massimo {limit} caratteri e nessun carattere "
         "di controllo. Correggila; non ho speso nulla.",
         "en": "The rule “{rule}” is not valid: at most {limit} characters and no control "
         "characters. Correct it; nothing was spent.",

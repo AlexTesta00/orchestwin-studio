@@ -154,7 +154,7 @@ MESSAGES: dict[str, Mapping[str, str]] = {
         "it": "La generazione non ha superato i controlli dello Studio. Puoi riprovare, ma è "
         "una nuova spesa.",
         "en": "The generation did not pass the checks of the Studio. You can try again, but "
-        "it is a new spending.",
+        "it is a new expense.",
     },
     "errors.GENERATION_STILL_RUNNING": {
         "it": "{label}: la generazione continua nello Studio. Rilancia il comando più tardi: "
@@ -177,7 +177,7 @@ MESSAGES: dict[str, Mapping[str, str]] = {
         "it": "Il modello ha impiegato troppo tempo e la generazione è stata fermata. Puoi "
         "riprovare, ma è una nuova spesa.",
         "en": "The model took too long and the generation was stopped. You can try again, "
-        "but it is a new spending.",
+        "but it is a new expense.",
     },
     "errors.PROVIDER_UNAVAILABLE": {
         "it": "Il fornitore del modello non si raggiunge in questo momento. Riprova tra "
