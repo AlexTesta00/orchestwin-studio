@@ -19,6 +19,7 @@ const AUTHENTICATED: AuthenticationResponse = {
     email: "owner@example.com",
     is_active: true,
     created_at: "2026-08-10T12:00:00Z",
+    guidance_mode: "GUIDED",
   },
 };
 

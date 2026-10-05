@@ -24,9 +24,10 @@ import {
   generationJobsApi,
   type GenerationRequestJob,
 } from "../api/generationJobs";
+import type { GuidanceMode, UserResponse } from "../api/contracts";
 import type { ModelUsageApi } from "../api/modelUsage";
 import { useInsightTrayStore } from "../stores/insightTray";
-import { useGuidanceStore } from "../stores/guidance";
+import { useAuthStore } from "../stores/auth";
 import { expectAccessible } from "../test/axe";
 import {
   BASE_DESIGN_PACKAGE,
@@ -962,10 +963,21 @@ function barOf(wrapper: VueWrapper) {
   return wrapper.get('[data-testid="decision-bar"]');
 }
 
+function owner(guidanceMode: GuidanceMode): UserResponse {
+  return {
+    id: DESIGN_OWNER_ID,
+    email: "owner@example.com",
+    is_active: true,
+    created_at: DESIGN_CREATED_AT,
+    guidance_mode: guidanceMode,
+  };
+}
+
 describe("ProjectDesignFlow", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
   });
 
   afterEach(() => {
@@ -1181,6 +1193,37 @@ describe("ProjectDesignFlow", () => {
       expect(api.proposeRevision).toHaveBeenCalledTimes(1);
       expect(api.decideRevision).not.toHaveBeenCalled();
       expect(api.submissions).toBe(0);
+    },
+  );
+
+  it.each([
+    { locale: "it", status: 502, code: null },
+    { locale: "en", status: 502, code: null },
+    { locale: "it", status: 404, code: "PROJECT_NOT_FOUND" },
+    { locale: "en", status: 404, code: "PROJECT_NOT_FOUND" },
+  ] as const)(
+    "says in $locale that the design could not be read when the Studio answers $status",
+    async ({ locale, status, code }) => {
+      const api = new FakeDesignApi();
+      const failing = createDesignApi({
+        fetchImpl: async () =>
+          new Response(code === null ? "" : JSON.stringify({ detail: { code } }), { status }),
+      });
+      vi.spyOn(api, "readiness").mockImplementation(() =>
+        failing.readiness(DESIGN_PROJECT_ID, "access-token"),
+      );
+      const wrapper = mountFlow(api, { locale });
+      await flushPromises();
+
+      const error = wrapper.get('[data-testid="design-error"]').text();
+      expect(error).toBe(
+        locale === "it"
+          ? "Non è stato possibile completare la richiesta. Puoi riprovare."
+          : "The request could not be completed. You can try again.",
+      );
+      expect(wrapper.text()).not.toContain(code ?? "Design API request failed");
+      expect(error).not.toContain(String(status));
+      expect(error).not.toMatch(/[A-Z]+_[A-Z_]+/);
     },
   );
 
@@ -1465,6 +1508,7 @@ describe("ProjectDesignFlow", () => {
     const mockupsApi = fakeMockupsApi({ capabilities: GENERATED });
     const pinia = createPinia();
     setActivePinia(pinia);
+    useAuthStore().user = owner("GUIDED");
     const first = mountFlow(api, { mockupsApi, pinia });
     await flushPromises();
     await first.get('[data-testid="generate-design"]').trigger("click");
@@ -1496,6 +1540,7 @@ describe("ProjectDesignFlow", () => {
 
     const reloaded = createPinia();
     setActivePinia(reloaded);
+    useAuthStore().user = owner("GUIDED");
     vi.mocked(mockupsApi.job).mockImplementation(async (_project, jobId) => ({
       ...job(DESIGN_ALTERNATIVE_ID),
       job_id: jobId,
@@ -1701,8 +1746,8 @@ describe("ProjectDesignFlow", () => {
   });
 
   it("requires an expert gesture for each mockup and never draws skipped mockups on a mode change", async () => {
-    const guidance = useGuidanceStore();
-    guidance.mode = "EXPERT";
+    const auth = useAuthStore();
+    auth.user = owner("EXPERT");
     const api = designToPrepare(GENERATED_UNSELECTED);
     const mockupsApi = fakeMockupsApi({ capabilities: GENERATED });
     const wrapper = mountFlow(api, { mockupsApi });
@@ -1711,10 +1756,10 @@ describe("ProjectDesignFlow", () => {
     await flushPromises();
     expect(api.generate).toHaveBeenCalledTimes(1);
     expect(mockupsApi.startJob).not.toHaveBeenCalled();
-    guidance.mode = "GUIDED";
+    auth.user = owner("GUIDED");
     await flushPromises();
     expect(mockupsApi.startJob).not.toHaveBeenCalled();
-    guidance.mode = "EXPERT";
+    auth.user = owner("EXPERT");
     await flushPromises();
     await wrapper.get('[data-testid="generate-mockup-DES-001"]').trigger("click");
     await flushPromises();
@@ -1735,6 +1780,7 @@ describe("ProjectDesignFlow", () => {
     mounted.splice(mounted.indexOf(first), 1);
 
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
     vi.mocked(mockupsApi.job).mockImplementation(async (_project, jobId) => ({
       ...job(DESIGN_ALTERNATIVE_ID),
       job_id: jobId,
@@ -3111,6 +3157,7 @@ describe("ProjectDesignFlow in sections mode", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
   });
 
   afterEach(() => {
@@ -3284,7 +3331,7 @@ describe("ProjectDesignFlow in sections mode", () => {
     ],
     [
       "en",
-      "The design is anchored to Definition v1; now there is v2. The alternatives stay: use «Update and confirm» above to re-anchor it.",
+      "The design is anchored to Definition v1; now there is v2. The alternatives stay: use “Update and confirm” above to re-anchor it.",
     ],
   ] as const)(
     "tells in %s to re-anchor an approved design above instead of regenerating it",
@@ -3541,6 +3588,7 @@ describe("ProjectDesignFlow and a long generation", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
     clearFollowedGenerations();
     vi.useFakeTimers();
   });
@@ -3764,6 +3812,7 @@ describe("ProjectDesignFlow and a refused first proposal", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
     clearFollowedGenerations();
     vi.useFakeTimers();
     vi.spyOn(generationJobsApi, "list").mockResolvedValue([]);

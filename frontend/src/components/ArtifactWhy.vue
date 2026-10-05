@@ -20,6 +20,8 @@ const props = withDefaults(
     contexts?: readonly string[];
     locale?: "en" | "it";
     testId?: string;
+    panel?: boolean;
+    open?: boolean;
   }>(),
   { locale: "en", contexts: () => [], testId: "artifact-why" },
 );
@@ -31,7 +33,7 @@ const answer = ref<WhyAnswer | null>(null);
 const candidates = ref<WhyNode[]>([]);
 const busy = ref(false);
 const error = ref<string | null>(null);
-const container = ref<HTMLDetailsElement | null>(null);
+const container = ref<HTMLElement | null>(null);
 const SUMMARY_LIMIT = 3;
 const stopReasons = computed(() => [...new Set(answer.value?.summary.stop_reasons ?? [])]);
 const targetGapCodes = computed(() => [
@@ -132,21 +134,29 @@ async function load(selector?: string): Promise<void> {
   }
 }
 
-function toggle(event: Event): void {
-  if (event.target === event.currentTarget && event.target instanceof HTMLDetailsElement) {
-    if (event.target.open && !signalled) activity?.whyOpened(props.code);
-    signalled = event.target.open;
-  }
-  if (
-    event.target === event.currentTarget &&
-    event.target instanceof HTMLDetailsElement &&
-    event.target.open &&
-    !answer.value &&
-    !busy.value &&
-    candidates.value.length === 0
-  )
-    void load();
+function reveal(open: boolean): void {
+  if (open && !signalled) activity?.whyOpened(props.code);
+  signalled = open;
+  if (open && !answer.value && !busy.value && candidates.value.length === 0) void load();
 }
+
+function toggle(event: Event): void {
+  if (event.target === event.currentTarget && event.target instanceof HTMLDetailsElement)
+    reveal(event.target.open);
+}
+
+function isOpen(): boolean {
+  if (props.panel) return props.open;
+  return container.value instanceof HTMLDetailsElement && container.value.open;
+}
+
+watch(
+  () => props.panel && props.open,
+  (open) => {
+    if (props.panel) reveal(open);
+  },
+  { immediate: true },
+);
 
 watch(
   () =>
@@ -164,22 +174,28 @@ watch(
     candidates.value = [];
     busy.value = false;
     error.value = null;
-    if (container.value?.open) void load();
+    if (isOpen()) void load();
   },
 );
 </script>
 
 <template>
-  <details
+  <component
+    :is="panel ? 'div' : 'details'"
     v-if="context"
     ref="container"
-    class="max-w-full min-w-0 rounded-field border border-current/15 text-sm [overflow-wrap:anywhere] whitespace-normal"
-    :class="surface === 'night' ? 'bg-night-panel text-on-night-2' : 'bg-surface text-ink-2'"
+    :class="[
+      panel
+        ? 'min-w-0 rounded-field border border-current/15 text-sm break-words whitespace-normal'
+        : 'max-w-full min-w-0 rounded-field border border-current/15 text-sm [overflow-wrap:anywhere] whitespace-normal',
+      surface === 'night' ? 'bg-night-panel text-on-night-2' : 'bg-surface text-ink-2',
+    ]"
     :data-testid="testId"
     :data-why-code="code"
     @toggle="toggle"
   >
     <summary
+      v-if="!panel"
       tabindex="0"
       class="flex min-h-11 cursor-pointer items-center px-3 font-sans font-semibold"
       :aria-label="`${copy.why} ${title ?? code}`"
@@ -188,7 +204,11 @@ watch(
       {{ copy.why }}
     </summary>
     <div
-      class="grid min-w-0 gap-3 border-t border-current/15 p-3 font-sans"
+      :class="
+        panel
+          ? 'grid min-w-0 gap-3 p-3 font-sans'
+          : 'grid min-w-0 gap-3 border-t border-current/15 p-3 font-sans'
+      "
       data-testid="why-content"
     >
       <p v-if="busy" class="m-0" role="status">{{ copy.loading }}</p>
@@ -278,17 +298,17 @@ watch(
           :data-why-key="answer.target.key"
         >
           <div>
-            <dt class="inline font-semibold">{{ copy.twin }}:</dt>
+            <dt class="inline font-semibold">{{ copy.twin }}:{{ " " }}</dt>
             <dd class="m-0 inline">{{ answer.summary.complete_to_twin ? copy.yes : copy.no }}</dd>
           </div>
           <div>
-            <dt class="inline font-semibold">{{ copy.evidence }}:</dt>
+            <dt class="inline font-semibold">{{ copy.evidence }}:{{ " " }}</dt>
             <dd class="m-0 inline">
               {{ answer.summary.complete_to_evidence ? copy.yes : copy.no }}
             </dd>
           </div>
           <div>
-            <dt class="inline font-semibold">{{ copy.allPaths }}:</dt>
+            <dt class="inline font-semibold">{{ copy.allPaths }}:{{ " " }}</dt>
             <dd class="m-0 inline">{{ answer.summary.all_paths_complete ? copy.yes : copy.no }}</dd>
           </div>
         </dl>
@@ -465,5 +485,5 @@ watch(
         </details>
       </template>
     </div>
-  </details>
+  </component>
 </template>

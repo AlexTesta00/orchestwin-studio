@@ -33,7 +33,7 @@ describe("Validation in Why", () => {
       );
       expect(wrapper.text()).toContain(locale === "it" ? "Esito ritirato" : "Retired outcome");
       expect(wrapper.text()).not.toContain(
-        locale === "it" ? "Sostiene questo claim" : "Supports this claim",
+        locale === "it" ? "Sostiene questa affermazione" : "Supports this claim",
       );
       expect(wrapper.find('[data-testid="epistemic-badge"]').exists()).toBe(false);
       expect(wrapper.get('[data-testid="why-quote"]').element.textContent?.trimStart()).toBe(

@@ -34,6 +34,7 @@ async function mountApplication(
         email,
         is_active: true,
         created_at: "2026-08-10T12:00:00Z",
+        guidance_mode: "GUIDED",
       },
       accessToken: "access-token",
       expiresAt: "2026-08-10T12:15:00Z",

@@ -30,6 +30,7 @@ const STAGE_KEYS: readonly KnowledgeStage[] = ["brief", "team", "twins", "requir
 const TWINS_STAGE = STAGE_KEYS.indexOf("twins");
 const DESIGN_STAGE = STAGE_KEYS.indexOf("design");
 const FOLDER_NAME_LIMIT = 40;
+const COMMAND_BOX = "[&>code]:overflow-x-auto [&>code]:whitespace-pre [&>code]:contain-inline-size";
 const TERMINAL_STEPS = [
   { key: "login", command: "ut login --studio {address}" },
   { key: "folder", command: "mkdir {folder}; cd {folder}" },
@@ -103,22 +104,24 @@ const messages = {
     notReady: "The folder can be prepared as soon as the brief is approved.",
     held: ["{count} of {total} steps", "{count} of {total} steps"],
     partial: [
-      "The folder holds {held}: {steps} is still to approve.",
-      "The folder holds {held}: {steps} are still to approve.",
+      "The folder holds {held}: {steps} is still to be approved.",
+      "The folder holds {held}: {steps} are still to be approved.",
     ],
     partialRule: "Each step joins the folder when you approve it.",
     prepare: "Prepare and download the folder",
     preparing: "Preparing the folder…",
     latest: "{files} files · version {number}",
     created: "Version {number} of the folder is ready and downloaded: {file}",
-    reused: "Nothing changed since version {number}: the same folder was downloaded again: {file}",
+    reused:
+      "Nothing has changed since version {number}: the same folder was downloaded again: {file}",
     failed: "The folder could not be prepared.",
     downloadFailed: "The folder could not be downloaded.",
     behind:
-      "{section} is behind: use «Update and confirm» at the top of the page, then publish again.",
+      "{section} is behind: use “Update and confirm” at the top of the page, then prepare the folder again.",
     behindStep:
-      "The {section} step is behind: open it and bring it up to date, then publish again.",
-    perspectivesBehind: "The brief changed: prepare the perspectives again, then publish again.",
+      "The {section} step is behind: open it and bring it up to date, then prepare the folder again.",
+    perspectivesBehind:
+      "The brief changed: prepare the perspectives again, then prepare the folder again.",
     outdated: {
       USER_TWINS_OUTDATED: "User Twin",
       REQUIREMENTS_OUTDATED: "Definition",
@@ -175,7 +178,7 @@ const messages = {
     ],
     history: "Versions of the folder",
     historyIntro:
-      "A new version is created only when something changed. Every version can be downloaded again exactly as it was.",
+      "A new version is created only when something has changed. Every version can be downloaded again exactly as it was.",
     loadingHistory: "Loading the versions…",
     noHistory: "No version has been prepared yet.",
     version: "Version {number}",
@@ -221,11 +224,11 @@ const messages = {
     failed: "Non è stato possibile preparare la cartella.",
     downloadFailed: "Non è stato possibile scaricare la cartella.",
     behind:
-      "{section} è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi pubblica di nuovo.",
+      "La sezione {section} è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi prepara di nuovo la cartella.",
     behindStep:
-      "Il passo {section} è rimasto indietro: aprilo e aggiornalo, poi pubblica di nuovo.",
+      "Il passo {section} è rimasto indietro: aprilo e aggiornalo, poi prepara di nuovo la cartella.",
     perspectivesBehind:
-      "Il brief è cambiato: prepara di nuovo le prospettive, poi pubblica di nuovo.",
+      "Il brief è cambiato: prepara di nuovo le prospettive, poi prepara di nuovo la cartella.",
     outdated: {
       USER_TWINS_OUTDATED: "User Twin",
       REQUIREMENTS_OUTDATED: "Definizione",
@@ -914,6 +917,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
                 </template>
               </p>
               <UiCommandLine
+                :class="COMMAND_BOX"
                 :command="step.command"
                 :copy-label="copy.copyCommand"
                 :copied-label="copy.commandCopied"
@@ -930,12 +934,14 @@ watch(() => props.projectId, loadHistory, { immediate: true });
           <p class="text-sm">{{ suppliedCopy.prototypeEvaluationLimit }}</p>
           <p class="text-sm">{{ suppliedCopy.gaps.PROVIDED_PROTOTYPE_CODE_UNAVAILABLE }}</p>
           <UiCommandLine
+            :class="COMMAND_BOX"
             command="ut design show"
             :copy-label="copy.copyCommand"
             :copied-label="copy.commandCopied"
             :failed-label="copy.commandNotCopied"
           />
           <UiCommandLine
+            :class="COMMAND_BOX"
             command="ut design open"
             :copy-label="copy.copyCommand"
             :copied-label="copy.commandCopied"
@@ -969,6 +975,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
                 </template>
               </p>
               <UiCommandLine
+                :class="COMMAND_BOX"
                 :command="step.command"
                 :copy-label="copy.copyCommand"
                 :copied-label="copy.commandCopied"

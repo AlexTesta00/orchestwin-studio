@@ -28,9 +28,9 @@ export const whyMessages = {
     claim: "Affermazione registrata",
     unknownValue: "Valore sconosciuto",
     abstainedValue: "Il modello si è astenuto",
-    supports: "Sostiene questo claim",
-    contradicts: "Contesta questo claim",
-    adds: "Aggiunge questo claim",
+    supports: "Sostiene questa affermazione",
+    contradicts: "Contesta questa affermazione",
+    adds: "Aggiunge questa affermazione",
     quote: "Citazione",
     lines: "Righe",
     offsets: "Caratteri",
@@ -39,7 +39,7 @@ export const whyMessages = {
     unknown: "Origine della motivazione sconosciuta",
     system: "Motivazione di sistema",
     twin: "Arriva al twin",
-    evidence: "Arriva a evidenza attiva",
+    evidence: "Arriva a un'evidenza attiva",
     allPaths: "Tutti i percorsi arrivano all'evidenza",
     yes: "Sì",
     no: "No",
@@ -50,8 +50,7 @@ export const whyMessages = {
     resolvedGap: "Lacuna risolta",
     declaredOrigin: "Origine dichiarata",
     supplied: "Fornito dal proprietario",
-    prototypeEvaluationLimit:
-      "La valutazione dei twin sul prototipo fornito non è disponibile nello sprint 36.",
+    prototypeEvaluationLimit: "La valutazione dei twin sul prototipo fornito non è disponibile.",
     sourceUnavailable:
       "Il testo originale non è disponibile. La citazione conservata resta leggibile.",
     visualDirection: "Direzione visiva",
@@ -61,18 +60,16 @@ export const whyMessages = {
       DECLARED_MISSING: "Lacuna dichiarata dal proprietario",
       MISSING_REQUIREMENT_ANCHOR: "Il prototipo non contiene l'ancoraggio a questo requisito",
       PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE:
-        "La valutazione dei twin sul prototipo fornito non è disponibile nello sprint 36.",
-      PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE:
-        "La revisione del prototipo fornito non è disponibile nello sprint 36",
-      PROVIDED_PROTOTYPE_CODE_UNAVAILABLE:
-        "ut code non è disponibile per il Design fornito nello sprint 36",
+        "La valutazione dei twin sul prototipo fornito non è disponibile",
+      PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE: "La revisione del prototipo fornito non è disponibile",
+      PROVIDED_PROTOTYPE_CODE_UNAVAILABLE: "ut code non è disponibile per il prototipo fornito",
       PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE:
-        "Il percorso sugli scenari del 35 non è disponibile per il Design fornito",
+        "Il percorso dello scenario non è disponibile per il prototipo fornito.",
       PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE: "Questa operazione richiede alternative generate",
       MISSING_NEED: "Manca il bisogno collegato",
       MISSING_SCENARIO: "Manca lo scenario collegato",
       MISSING_TWIN: "Manca il twin collegato",
-      MISSING_CLAIM: "Manca il claim collegato",
+      MISSING_CLAIM: "Manca l'affermazione collegata",
       MISSING_SOURCE: "Manca la fonte collegata",
       MISSING_SOURCE_VERSION: "Manca la versione esatta della fonte",
       MISSING_RATIONALE: "La motivazione non è stata registrata",
@@ -139,8 +136,7 @@ export const whyMessages = {
     resolvedGap: "Resolved gap",
     declaredOrigin: "Declared origin",
     supplied: "Owner supplied",
-    prototypeEvaluationLimit:
-      "Twin evaluation of the supplied prototype is unavailable in sprint 36.",
+    prototypeEvaluationLimit: "Twin evaluation of the supplied prototype is unavailable.",
     sourceUnavailable: "The original text is unavailable. The preserved quote can still be read.",
     visualDirection: "Visual direction",
     directionOrigin:
@@ -149,13 +145,11 @@ export const whyMessages = {
       DECLARED_MISSING: "Gap declared by the owner",
       MISSING_REQUIREMENT_ANCHOR: "The prototype has no anchor for this requirement",
       PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE:
-        "Twin evaluation of the supplied prototype is unavailable in sprint 36.",
-      PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE:
-        "Review of the supplied prototype is unavailable in sprint 36",
-      PROVIDED_PROTOTYPE_CODE_UNAVAILABLE:
-        "ut code is unavailable for the supplied Design in sprint 36",
+        "Twin evaluation of the supplied prototype is unavailable",
+      PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE: "Review of the supplied prototype is unavailable",
+      PROVIDED_PROTOTYPE_CODE_UNAVAILABLE: "ut code is unavailable for the supplied prototype",
       PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE:
-        "The sprint 35 scenario walkthrough is unavailable for the supplied Design",
+        "The scenario walkthrough is unavailable for the supplied prototype.",
       PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE: "This operation requires generated alternatives",
       MISSING_NEED: "The linked need is missing",
       MISSING_SCENARIO: "The linked scenario is missing",
@@ -212,9 +206,9 @@ const claimLabels = {
 const containerLabels = {
   AGENT_TEAM: ["Prospettive", "Perspectives"],
   PROJECT_BRIEF: ["Brief del progetto", "Project brief"],
-  USER_MODELING: ["User twin", "User twins"],
+  USER_MODELING: ["User Twin", "User Twin"],
   REQUIREMENTS_SPECIFICATION: ["Definizione", "Definition"],
-  DESIGN_PACKAGE: ["Design e valutazione", "Design and evaluation"],
+  DESIGN_PACKAGE: ["Design e valutazione", "Design & Evaluation"],
   PROVIDED_PROTOTYPE: ["Prototipo fornito dal proprietario", "Owner-supplied prototype"],
   WORKFLOW_DECISION: ["Decisione del proprietario", "Owner decision"],
 } as const;
@@ -255,8 +249,8 @@ const relationLabels = {
   ADDS: ["Deriva dalla fonte", "Comes from the source"],
   CONTEXT: ["Ha come contesto", "Has context"],
   ACTOR: ["Ha come attore", "Has actor"],
-  CLAIM_OF: ["È un claim del twin", "Is a claim of the twin"],
-  HAS_CLAIM: ["Ha il claim", "Has claim"],
+  CLAIM_OF: ["È un'affermazione del twin", "Is a claim of the twin"],
+  HAS_CLAIM: ["Ha l'affermazione", "Has claim"],
   CONTAINS: ["Contiene", "Contains"],
   ORIGINATES_FROM: ["Origina da", "Originates from"],
   VERIFIES_SCENARIO: ["Verifica lo scenario", "Verifies the scenario"],

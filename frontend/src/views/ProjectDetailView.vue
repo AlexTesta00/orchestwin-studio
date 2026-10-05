@@ -18,7 +18,7 @@ import ActivitySessionControl from "@/components/ActivitySessionControl.vue";
 import ProjectImportVerification from "@/components/ProjectImportVerification.vue";
 import { projectImportResult } from "@/stores/projectImportResults";
 import GeneratedMockupFrame from "@/components/GeneratedMockupFrame.vue";
-import GuidanceModeSelector from "@/components/GuidanceModeSelector.vue";
+import GuidanceModeNote from "@/components/GuidanceModeNote.vue";
 import ProjectWorkflowInputsPanel from "@/components/ProjectWorkflowInputsPanel.vue";
 import InsightBriefTray from "@/components/InsightBriefTray.vue";
 import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
@@ -138,7 +138,7 @@ const { t, locale } = useI18n({
       detail: {
         loading: "Loading project…",
         loadError: "The project could not be loaded.",
-        saveError: "The Project Brief version could not be saved.",
+        saveError: "The version of the brief could not be saved.",
         allProjects: "All projects",
         principle: "AI proposes, you decide",
         readOnly:
@@ -148,7 +148,7 @@ const { t, locale } = useI18n({
         readOnlyTeam:
           "You already approved the perspectives: you can read them again. You can still switch on or off the ones left to your choice: every change you save makes a new version that you approve again.",
         readOnlyTwins:
-          "You already approved the user twins: you can read them again and talk to them. If you correct a twin or reuse one from another project, a new version is made that you approve again.",
+          "You already approved the User Twins: you can read them again and talk to them. If you correct a twin or reuse one from another project, a new version is made that you approve again.",
         readOnlyRequirements:
           "You already approved the requirements: you can read them again. If you change one, a new version is made that you approve again.",
         readOnlyDesign:
@@ -188,17 +188,17 @@ const { t, locale } = useI18n({
       detail: {
         loading: "Caricamento progetto…",
         loadError: "Non è stato possibile caricare il progetto.",
-        saveError: "Non è stato possibile salvare la versione del Project Brief.",
+        saveError: "Non è stato possibile salvare la versione del brief.",
         allProjects: "Tutti i progetti",
         principle: "L'AI propone, decidi tu",
         readOnly:
           "Hai già approvato questo passo: puoi rileggerlo. Ogni modifica crea una nuova versione da approvare di nuovo.",
         readOnlyBrief:
-          "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
+          "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi, nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
         readOnlyTeam:
           "Hai già approvato le prospettive: puoi rileggerle. Puoi ancora attivare o togliere quelle a tua scelta: ogni cambio che salvi crea una nuova versione da approvare di nuovo.",
         readOnlyTwins:
-          "Hai già approvato gli user twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
+          "Hai già approvato gli User Twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
         readOnlyRequirements:
           "Hai già approvato i requisiti: puoi rileggerli. Se ne modifichi uno, nasce una nuova versione da approvare di nuovo.",
         readOnlyDesign:
@@ -256,15 +256,6 @@ const briefView = computed(
 const stepsOpen = ref(false);
 const editorOpen = ref(false);
 let projectEpoch = 0;
-
-watch(
-  () => guidance.expert,
-  (_expert, previous) => {
-    if (briefMode.value === null)
-      briefMode.value = currentBrief.value === null && !previous ? "dialogue" : "form";
-  },
-  { flush: "sync" },
-);
 
 function onDialogueActive(active: boolean): void {
   if (active && briefMode.value === null) briefMode.value = "dialogue";
@@ -1061,7 +1052,7 @@ onUnmounted(() => {
       />
 
       <template v-else-if="project !== null">
-        <GuidanceModeSelector class="mb-6" />
+        <GuidanceModeNote class="mb-6" />
         <UiStepHeader
           :step="activeStage + 1"
           :total="6"

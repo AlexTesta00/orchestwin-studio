@@ -2,6 +2,7 @@ import type {
   AuthenticationApi,
   AuthenticationInput,
   AuthenticationResponse,
+  GuidanceMode,
   ProjectApi,
   ProjectBriefInput,
   ProjectBriefVersionResponse,
@@ -166,6 +167,16 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
   public me(accessToken: string): Promise<UserResponse> {
     return this.request<UserResponse>("/auth/me", {
       headers: this.authorization(accessToken),
+    });
+  }
+
+  public chooseGuidanceMode(accessToken: string, mode: GuidanceMode): Promise<UserResponse> {
+    return this.request<UserResponse>("/auth/guidance-mode", {
+      method: "POST",
+      headers: this.authorization(accessToken),
+      body: JSON.stringify({
+        guidance_mode: mode,
+      }),
     });
   }
 

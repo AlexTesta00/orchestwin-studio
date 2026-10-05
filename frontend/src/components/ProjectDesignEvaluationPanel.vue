@@ -112,7 +112,7 @@ const messages = {
     },
     version: "design version {n}, {code}",
     findings: "{n} findings",
-    noFindings: "No findings: the twin had nothing to object.",
+    noFindings: "No findings: the twin had nothing to object to.",
     summary: "Summary",
     gaps: "Evidence gaps",
     recommended: "Suggested action",

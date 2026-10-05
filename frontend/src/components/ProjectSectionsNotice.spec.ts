@@ -257,7 +257,7 @@ describe("ProjectSectionsNotice", () => {
     [
       "en",
       [
-        "User Twin, Definition and Design & Evaluation to update: something upstream changed. The content you approved stays the same, it is only re-anchored to the new versions.",
+        "User Twin, Definition and Design & Evaluation to update: something upstream changed. The content you approved stays the same; it is only re-anchored to the new versions.",
         "New requirements that the design does not cover yet: REQ-008 and REQ-009. After the update you can ask for a change to the design.",
       ],
       "Update and confirm",
@@ -342,14 +342,14 @@ describe("ProjectSectionsNotice", () => {
       "it",
       [
         "✓ Sezioni aggiornate: User Twin e Definizione.",
-        "Design e valutazione non si aggiorna da sola: il design cita REQ-004 e REQ-007, che la Definizione non contiene più: rigenera le alternative nel passo Design e valutazione.",
+        "La sezione Design e valutazione non si aggiorna da sola: il design cita REQ-004 e REQ-007, che la Definizione non contiene più: rigenera le alternative nella sezione Design e valutazione.",
       ],
     ],
     [
       "en",
       [
         "✓ Sections updated: User Twin and Definition.",
-        "Design & Evaluation cannot be updated by itself: the design cites REQ-004 and REQ-007, which the Definition no longer contains: regenerate the alternatives in the Design & Evaluation step.",
+        "Design & Evaluation cannot be updated by itself: the design cites REQ-004 and REQ-007, which the Definition no longer contains: regenerate the alternatives in the Design & Evaluation section.",
       ],
     ],
   ])("tells in %s what a partial gesture updated and why it stopped", (locale, expected) => {
@@ -392,7 +392,7 @@ describe("ProjectSectionsNotice", () => {
       "it",
       "DESIGN",
       "TWIN_SET_CHANGED",
-      "Design e valutazione non si aggiorna da sola: i twin non sono più gli stessi.",
+      "La sezione Design e valutazione non si aggiorna da sola: i twin non sono più gli stessi.",
     ],
     [
       "en",
@@ -404,7 +404,7 @@ describe("ProjectSectionsNotice", () => {
       "it",
       "REQUIREMENTS",
       "TWIN_NO_LONGER_AVAILABLE",
-      "Definizione non si aggiorna da sola: i twin non sono più gli stessi.",
+      "La sezione Definizione non si aggiorna da sola: i twin non sono più gli stessi.",
     ],
     [
       "en",
@@ -416,7 +416,7 @@ describe("ProjectSectionsNotice", () => {
       "it",
       "REQUIREMENTS",
       "REVISION_PENDING",
-      "Definizione non si aggiorna da sola: c'è una modifica proposta da decidere.",
+      "La sezione Definizione non si aggiorna da sola: c'è una modifica proposta da decidere.",
     ],
     [
       "en",
@@ -428,7 +428,7 @@ describe("ProjectSectionsNotice", () => {
       "it",
       "USER_TWINS",
       "UPSTREAM_NOT_READY",
-      "User Twin non si aggiorna da sola: prima va sistemata la sezione a monte.",
+      "La sezione User Twin non si aggiorna da sola: prima va sistemata la sezione a monte.",
     ],
     [
       "en",
@@ -440,7 +440,7 @@ describe("ProjectSectionsNotice", () => {
       "it",
       "TEAM",
       "PREPARE_AGAIN",
-      "Prospettive non si aggiorna da sola: il brief è cambiato: prepara di nuovo le prospettive.",
+      "La sezione Prospettive non si aggiorna da sola: il brief è cambiato: prepara di nuovo le prospettive.",
     ],
     [
       "en",
@@ -469,7 +469,7 @@ describe("ProjectSectionsNotice", () => {
     });
 
     expect(lines(mountNotice({ sections: chain }))).toEqual([
-      "User Twin non si aggiorna da sola: prima va sistemata la sezione a monte.",
+      "La sezione User Twin non si aggiorna da sola: prima va sistemata la sezione a monte.",
     ]);
   });
 
@@ -483,7 +483,7 @@ describe("ProjectSectionsNotice", () => {
     );
 
     expect(lines(mountNotice({ sections }, "en"))).toEqual([
-      "User Twin and Design & Evaluation to update: something upstream changed. The content you approved stays the same, it is only re-anchored to the new versions.",
+      "User Twin and Design & Evaluation to update: something upstream changed. The content you approved stays the same; it is only re-anchored to the new versions.",
       "Design & Evaluation cannot be updated by itself: a proposed change is waiting for your decision.",
     ]);
   });
@@ -499,7 +499,7 @@ describe("ProjectSectionsNotice", () => {
     });
 
     expect(lines(wrapper)).toEqual([
-      "Design e valutazione non si aggiorna da sola: non è stato possibile farlo adesso, riprova tra poco.",
+      "La sezione Design e valutazione non si aggiorna da sola: non è stato possibile farlo adesso, riprova tra poco.",
     ]);
   });
 

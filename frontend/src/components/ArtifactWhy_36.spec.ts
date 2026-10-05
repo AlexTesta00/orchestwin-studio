@@ -66,8 +66,8 @@ describe("owner records in Why in sprint 36", () => {
       await flushPromises();
       const limit =
         locale === "it"
-          ? "La valutazione dei twin sul prototipo fornito non è disponibile nello sprint 36."
-          : "Twin evaluation of the supplied prototype is unavailable in sprint 36.";
+          ? "La valutazione dei twin sul prototipo fornito non è disponibile."
+          : "Twin evaluation of the supplied prototype is unavailable.";
       expect(wrapper.get('[data-testid="why-provided-evaluation-limit"]').text()).toBe(limit);
       expect(wrapper.get('[data-testid="why-provided-prototype-summary"]').text()).toContain(
         "Penpot",

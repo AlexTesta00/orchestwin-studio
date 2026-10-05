@@ -84,7 +84,7 @@ const messages = {
     archetypesBehind:
       "{sections} to update: the archetypes changed. Prepare and approve the updated twins, then update the dependent sections. Earlier versions remain in the history.",
     behind:
-      "{sections} to update: something upstream changed. The content you approved stays the same, it is only re-anchored to the new versions.",
+      "{sections} to update: something upstream changed. The content you approved stays the same; it is only re-anchored to the new versions.",
     uncovered:
       "New requirements that the design does not cover yet: {codes}. After the update you can ask for a change to the design.",
     covered:
@@ -96,13 +96,13 @@ const messages = {
     blocked: "{section} cannot be updated by itself: {reason}.",
     reasons: {
       requirementMissing:
-        "the design cites {codes}, which the Definition no longer contains: regenerate the alternatives in the Design & Evaluation step",
+        "the design cites {codes}, which the Definition no longer contains: regenerate the alternatives in the Design & Evaluation section",
       twins: "the twins are no longer the same",
       revision: "a proposed change is waiting for your decision",
       upstream: "the section upstream has to be settled first",
       prepare: "the brief changed: prepare the perspectives again",
       prepareTwins:
-        "the archetypes changed: prepare and approve the updated twins in the User Twin step",
+        "the archetypes changed: prepare and approve the updated twins in the User Twin section",
       unknown: "it could not be done right now, try again in a moment",
     },
     evaluation:
@@ -130,16 +130,16 @@ const messages = {
     running: "Aggiorno le sezioni…",
     done: "Sezioni aggiornate: {sections}.",
     nothing: "Non c'era niente da aggiornare: le sezioni erano già a posto.",
-    blocked: "{section} non si aggiorna da sola: {reason}.",
+    blocked: "La sezione {section} non si aggiorna da sola: {reason}.",
     reasons: {
       requirementMissing:
-        "il design cita {codes}, che la Definizione non contiene più: rigenera le alternative nel passo Design e valutazione",
+        "il design cita {codes}, che la Definizione non contiene più: rigenera le alternative nella sezione Design e valutazione",
       twins: "i twin non sono più gli stessi",
       revision: "c'è una modifica proposta da decidere",
       upstream: "prima va sistemata la sezione a monte",
       prepare: "il brief è cambiato: prepara di nuovo le prospettive",
       prepareTwins:
-        "gli archetipi sono cambiati: prepara e approva i twin aggiornati nel passo User Twin",
+        "gli archetipi sono cambiati: prepara e approva i twin aggiornati nella sezione User Twin",
       unknown: "non è stato possibile farlo adesso, riprova tra poco",
     },
     evaluation:

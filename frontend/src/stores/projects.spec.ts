@@ -5,6 +5,7 @@ import type {
   AuthenticationApi,
   AuthenticationInput,
   AuthenticationResponse,
+  GuidanceMode,
   ProjectApi,
   ProjectBriefInput,
   ProjectBriefVersionResponse,
@@ -21,6 +22,7 @@ const USER: UserResponse = {
   email: "owner@example.com",
   is_active: true,
   created_at: "2026-08-10T12:00:00Z",
+  guidance_mode: "GUIDED",
 };
 
 const PROJECT: ProjectResponse = {
@@ -58,6 +60,12 @@ class FakeApplicationApi implements AuthenticationApi, ProjectApi {
     void accessToken;
 
     return USER;
+  }
+
+  public async chooseGuidanceMode(accessToken: string, mode: GuidanceMode): Promise<UserResponse> {
+    void accessToken;
+
+    return { ...USER, guidance_mode: mode };
   }
 
   public async createProject(

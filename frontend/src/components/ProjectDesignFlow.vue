@@ -420,6 +420,7 @@ const messages = {
     numbers: ["no", "one", "two", "three", "four", "five", "six", "seven", "eight"],
     viewLabel: "Views of the design",
     loadError: "Design & Evaluation could not be loaded.",
+    genericFailure: "The request could not be completed. You can try again.",
     mockupRequired: "The mockup of this alternative is not ready yet: wait for it before choosing.",
     mockupRequiredDeclarative: "Try the mockup of this alternative first: then you can choose it.",
     pendingOther:
@@ -583,6 +584,7 @@ const messages = {
     numbers: ["nessuna", "una", "due", "tre", "quattro", "cinque", "sei", "sette", "otto"],
     viewLabel: "Viste del design",
     loadError: "Non è stato possibile caricare Design e valutazione.",
+    genericFailure: "Non è stato possibile completare la richiesta. Puoi riprovare.",
     mockupRequired:
       "Il mockup di questa alternativa non è ancora pronto: aspettalo prima di sceglierla.",
     mockupRequiredDeclarative:
@@ -674,7 +676,7 @@ const messages = {
     reason: "Motivazione (serve per respingere o per chiedere una revisione)",
     rejectGate: "Respingi il design",
     requestRevision: "Chiedi una revisione",
-    pause: "Metti in pausa",
+    pause: "Metti in pausa l'approvazione",
     cancelGate: "Annulla l'approvazione",
     pausedText: "L'approvazione di questo design è in pausa.",
     resume: "Riprendi l'approvazione",
@@ -714,7 +716,7 @@ const messages = {
     tokensValue: "{input} in ingresso · {output} in uscita · {reasoning} di ragionamento",
     none: "Nessuno",
     methodology:
-      "Il Gate 5 approva ID, versione e hash esatti del Design Package. L'approvazione del proprietario è governance, non validazione empirica. Il feedback sintetico dei User Twin resta un'ipotesi progettuale.",
+      "Il Gate 5 approva ID, versione e hash esatti del Design Package. L'approvazione del proprietario è governance, non validazione empirica. Il feedback sintetico degli User Twin resta un'ipotesi progettuale.",
     history: "Versioni del design",
     historyItem: "Versione {n} · {date}",
     decided: "Modifiche già decise",
@@ -1480,9 +1482,7 @@ const errorMessage = computed(() => {
   if (error === null || isGenerationInterrupted(error.code)) {
     return null;
   }
-  return revisionFailure(
-    modelFeedback(error.code, props.locale) ?? error.message ?? copy.value.loadError,
-  );
+  return revisionFailure(modelFeedback(error.code, props.locale) ?? copy.value.genericFailure);
 });
 const concernCount = computed(
   () =>
@@ -1879,7 +1879,7 @@ async function run(operation: () => Promise<unknown>): Promise<boolean> {
     localError.value = revisionFailure(
       modelFeedback(store.error?.code, props.locale) ??
         (error instanceof Error
-          ? (modelFeedback(error.message, props.locale) ?? error.message)
+          ? (modelFeedback(error.message, props.locale) ?? copy.value.genericFailure)
           : copy.value.loadError),
     );
     return false;
@@ -2496,7 +2496,7 @@ async function createDeclarative(alternativeId: string): Promise<void> {
     if (epoch === declarativeEpoch) {
       localError.value =
         error instanceof Error
-          ? (modelFeedback(error.message, props.locale) ?? error.message)
+          ? (modelFeedback(error.message, props.locale) ?? copy.value.genericFailure)
           : copy.value.loadError;
     }
   } finally {

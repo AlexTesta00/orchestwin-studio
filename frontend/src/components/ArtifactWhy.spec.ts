@@ -111,9 +111,9 @@ describe("Artifact Why", () => {
       const labels = {
         AGENT_TEAM: ["Prospettive", "Perspectives"],
         PROJECT_BRIEF: ["Brief del progetto", "Project brief"],
-        USER_MODELING: ["User twin", "User twins"],
+        USER_MODELING: ["User Twin", "User Twin"],
         REQUIREMENTS_SPECIFICATION: ["Definizione", "Definition"],
-        DESIGN_PACKAGE: ["Design e valutazione", "Design and evaluation"],
+        DESIGN_PACKAGE: ["Design e valutazione", "Design & Evaluation"],
       } as const;
       const containers = Object.keys(labels).map((kind) =>
         whyNode({ key: kind, kind, title: kind }),
@@ -322,6 +322,44 @@ describe("Artifact Why", () => {
       wrapper.unmount();
     }
   });
+
+  it.each([
+    [
+      "it",
+      [
+        "Arriva al twin: Sì",
+        "Arriva a un'evidenza attiva: No",
+        "Tutti i percorsi arrivano all'evidenza: No",
+      ],
+    ],
+    [
+      "en",
+      ["Reaches the twin: Yes", "Reaches active evidence: No", "All paths reach evidence: No"],
+    ],
+  ] as const)(
+    "separates every %s summary label from its answer with a space",
+    async (locale, rows) => {
+      const result = whyAnswer(whyNode(), {
+        summary: {
+          upstream_count: 0,
+          downstream_count: 0,
+          complete_to_twin: true,
+          complete_to_evidence: false,
+          all_paths_complete: false,
+          stop_reasons: [],
+        },
+      });
+      const { wrapper } = setup({ locale }, result);
+      await open(wrapper);
+      expect(
+        wrapper
+          .get('[data-testid="why-summary"]')
+          .findAll("div")
+          .map((row) => row.element.textContent),
+      ).toEqual(rows);
+      wrapper.unmount();
+    },
+  );
 
   it("resolves the displayed version and hash without selecting another revision of the same code", async () => {
     const old = whyNode({
@@ -535,6 +573,116 @@ describe("Artifact Why", () => {
     await wrapper.trigger("toggle");
     expect(signal.whyOpened).toHaveBeenCalledTimes(2);
     expect(signal.mockupOpened).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("keeps its own disclosure and look outside tables", async () => {
+    const { wrapper, api } = setup({ title: "Accessible keyboard input" });
+
+    expect(wrapper.element.tagName).toBe("DETAILS");
+    expect(wrapper.classes()).toEqual([
+      "max-w-full",
+      "min-w-0",
+      "rounded-field",
+      "border",
+      "border-current/15",
+      "text-sm",
+      "[overflow-wrap:anywhere]",
+      "whitespace-normal",
+      "bg-surface",
+      "text-ink-2",
+    ]);
+    expect(wrapper.get('[data-testid="why-open"]').element.tagName).toBe("SUMMARY");
+    expect(wrapper.get('[data-testid="why-open"]').attributes("aria-label")).toBe(
+      "Why? Accessible keyboard input",
+    );
+    expect(wrapper.get('[data-testid="why-content"]').classes()).toEqual([
+      "grid",
+      "min-w-0",
+      "gap-3",
+      "border-t",
+      "border-current/15",
+      "p-3",
+      "font-sans",
+    ]);
+    await open(wrapper);
+    expect(api.explain).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("works as a panel opened by its owner, reading once and signalling every opening", async () => {
+    const signal = { whyOpened: vi.fn(), mockupOpened: vi.fn() };
+    const api = { explain: vi.fn().mockResolvedValue(whyAnswer()), document: vi.fn() };
+    const wrapper = mount(ArtifactWhy, {
+      props: { code: "REQ-001", panel: true, open: false, locale: "it" },
+      global: {
+        provide: {
+          [whyContextKey as symbol]: {
+            projectId: () => "project",
+            api,
+            authorize: <T>(request: (token: string) => Promise<T>) => request("token"),
+          },
+          [activitySignalKey as symbol]: signal,
+        },
+      },
+    });
+
+    expect(wrapper.element.tagName).toBe("DIV");
+    expect(wrapper.find('[data-testid="why-open"]').exists()).toBe(false);
+    expect(wrapper.classes()).toEqual(expect.arrayContaining(["rounded-field", "break-words"]));
+    expect(wrapper.classes()).not.toContain("[overflow-wrap:anywhere]");
+    expect(wrapper.get('[data-testid="why-content"]').classes()).not.toContain("border-t");
+    expect(api.explain).not.toHaveBeenCalled();
+    expect(signal.whyOpened).not.toHaveBeenCalled();
+
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+
+    expect(api.explain).toHaveBeenCalledExactlyOnceWith("project", "REQ-001", "token");
+    expect(signal.whyOpened).toHaveBeenCalledExactlyOnceWith("REQ-001");
+    expect(wrapper.get('[data-testid="why-summary"]').attributes("data-why-key")).toBe(
+      whyNode().key,
+    );
+    await expectAccessible(wrapper.element);
+
+    await wrapper.setProps({ open: false });
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+
+    expect(signal.whyOpened).toHaveBeenCalledTimes(2);
+    expect(api.explain).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({ code: "REQ-002" });
+    await flushPromises();
+
+    expect(api.explain).toHaveBeenLastCalledWith("project", "REQ-002", "token");
+    expect(signal.whyOpened).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it("reads and signals at once when the panel is shown already open", async () => {
+    const signal = { whyOpened: vi.fn(), mockupOpened: vi.fn() };
+    const api = { explain: vi.fn().mockResolvedValue(whyAnswer()), document: vi.fn() };
+    const wrapper = mount(ArtifactWhy, {
+      props: { code: "REQ-001", panel: true, open: true },
+      global: {
+        provide: {
+          [whyContextKey as symbol]: {
+            projectId: () => "project",
+            api,
+            authorize: <T>(request: (token: string) => Promise<T>) => request("token"),
+          },
+          [activitySignalKey as symbol]: signal,
+        },
+      },
+    });
+
+    expect(wrapper.get('[role="status"]').text()).toBe("Reading the links…");
+    await flushPromises();
+
+    expect(api.explain).toHaveBeenCalledExactlyOnceWith("project", "REQ-001", "token");
+    expect(signal.whyOpened).toHaveBeenCalledExactlyOnceWith("REQ-001");
+    expect(wrapper.find('[role="status"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });

@@ -414,7 +414,7 @@ describe("DesignLoopNextStep with the re-anchoring of the design", () => {
     expect(wrapper.emitted("reapproved")).toHaveLength(1);
     expect(wrapper.find('[data-testid="design-next-step"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="design-next-step-reanchor"] p:last-child').text()).toBe(
-      "The design is anchored to Definition v1; now there is v2. The alternatives stay: use «Update and confirm» above to re-anchor it.",
+      "The design is anchored to Definition v1; now there is v2. The alternatives stay: use “Update and confirm” above to re-anchor it.",
     );
     expect(wrapper.find('[data-testid="design-next-regenerate"]').exists()).toBe(false);
   });
@@ -428,7 +428,7 @@ describe("DesignLoopNextStep with the re-anchoring of the design", () => {
     [
       "en",
       true,
-      "The design is anchored to Definition v1; now there is v2. The alternatives stay: use «Update and confirm» above to re-anchor it.",
+      "The design is anchored to Definition v1; now there is v2. The alternatives stay: use “Update and confirm” above to re-anchor it.",
     ],
     [
       "it",
@@ -438,7 +438,7 @@ describe("DesignLoopNextStep with the re-anchoring of the design", () => {
     [
       "en",
       false,
-      "The design is anchored to Definition v1; now there is v2. The alternatives stay: approve the design in the bar at the bottom, then use «Update and confirm» above to re-anchor it.",
+      "The design is anchored to Definition v1; now there is v2. The alternatives stay: approve the design in the bar at the bottom, then use “Update and confirm” above to re-anchor it.",
     ],
   ] as const)(
     "says in %s that a design approved %s can be re-anchored above, with no button of its own",
