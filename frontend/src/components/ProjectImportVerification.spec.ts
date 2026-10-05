@@ -39,7 +39,7 @@ describe("Import chain verification", () => {
       );
       expect(wrapper.text()).toContain(
         locale === "it"
-          ? "L'import non approva le sezioni."
+          ? "L'importazione non approva le sezioni."
           : "The import does not approve the sections.",
       );
       expect(wrapper.get("details").attributes("open")).toBeUndefined();

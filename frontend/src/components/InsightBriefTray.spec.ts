@@ -233,8 +233,8 @@ describe("InsightBriefTray", () => {
     ],
     [
       "INSIGHT_SOURCE_DISMISSED",
-      "Uno spunto viene da un'osservazione messa da parte: toglilo e riprova.",
-      "Osservazione messa da parte",
+      "Uno spunto viene da un'osservazione segnata come non pertinente: toglilo e riprova.",
+      "Osservazione non pertinente",
     ],
   ])(
     "explains a batch refused with %s and marks the insight to remove",

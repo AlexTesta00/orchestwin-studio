@@ -809,6 +809,16 @@ describe("design iteration panel", () => {
     );
   });
 
+  it("asks to log in again when the session has expired, in both languages", () => {
+    expect(generationFailureText("ACCESS_TOKEN_REQUIRED", "en")).toBe(
+      "Your session has expired. Log in again.",
+    );
+    expect(generationFailureText("ACCESS_TOKEN_REQUIRED", "it")).toBe(
+      "La sessione è scaduta. Accedi di nuovo.",
+    );
+    expect(source).not.toContain("Sign in again");
+  });
+
   it("names the section of the design by its new name and no failure by an old step name", () => {
     expect(generationFailureText("GENERATED_MOCKUP_PATH_INACTIVE", "en")).toBe(
       "The model that draws the mockups is not in use for this project: Design & Evaluation shows the simple preview.",

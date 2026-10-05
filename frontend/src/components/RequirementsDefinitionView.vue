@@ -83,7 +83,7 @@ const messages = {
     sourceKinds: {
       PROJECT_BRIEF: "Brief di progetto",
       USER_TWIN: "Twin utente",
-      OWNER_INPUT: "Indicazione del committente",
+      OWNER_INPUT: "Indicazione del proprietario",
       MODEL_PROPOSAL: "Proposta del modello",
       SYSTEM_ARTIFACT: "Artefatto di sistema",
     },

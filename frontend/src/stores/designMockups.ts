@@ -127,7 +127,7 @@ const FAILURE_MESSAGES: Readonly<Record<string, LocalizedText>> = {
   },
   ITERATION_REQUEST_INVALID: {
     en: "Write the change in 1 to 1000 characters, with at most five rules of up to 300 characters each.",
-    it: "Scrivi la modifica in 1-1000 caratteri, con al massimo cinque regole di 300 caratteri ciascuna.",
+    it: "Scrivi la modifica in 1-1000 caratteri, con al massimo cinque regole lunghe fino a 300 caratteri ciascuna.",
   },
   PROVIDER_UNAVAILABLE: {
     en: "The model cannot be reached right now. Try again in a few minutes.",
@@ -178,11 +178,11 @@ const FAILURE_MESSAGES: Readonly<Record<string, LocalizedText>> = {
     it: "Lo Studio ha dato una risposta che questa pagina non riesce a leggere.",
   },
   ACCESS_TOKEN_REQUIRED: {
-    en: "Your session has expired. Sign in again.",
+    en: "Your session has expired. Log in again.",
     it: "La sessione è scaduta. Accedi di nuovo.",
   },
   invalid_authentication: {
-    en: "Your session has expired. Sign in again.",
+    en: "Your session has expired. Log in again.",
     it: "La sessione è scaduta. Accedi di nuovo.",
   },
 };

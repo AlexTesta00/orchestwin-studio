@@ -38,7 +38,7 @@ const labels = {
     UNKNOWN: "Unknown",
   },
   it: {
-    EVIDENCED: "Evidenziato",
+    EVIDENCED: "Documentato",
     INFERRED: "Dedotto",
     HYPOTHESIZED: "Ipotizzato",
     CONTESTED: "Contestato",
@@ -73,7 +73,7 @@ const validationLabel = computed(() =>
       ? "Validazione umana richiesta"
       : "Human validation required"
     : props.locale === "it"
-      ? "Nessuna validazione aggiuntiva richiesta"
+      ? "Nessuna validazione umana aggiuntiva richiesta"
       : "No additional human validation required",
 );
 </script>

@@ -305,7 +305,7 @@ describe("twin chat panel", () => {
     await flushPromises();
     const insight = () => italian.get("[data-testid='twin-chat-insight']").text();
     expect(insight()).toContain(
-      "esigenze di accessibilità, competenza tecnica, pain point e night shifts",
+      "esigenze di accessibilità, competenza tecnica, difficoltà e night shifts",
     );
     expect(insight()).not.toMatch(/accessibility_needs|technical_literacy|pain_points|_/);
 

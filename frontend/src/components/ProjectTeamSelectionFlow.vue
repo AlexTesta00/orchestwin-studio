@@ -166,7 +166,7 @@ const { t, te, locale } = useI18n({
             definition:
               "Data and actions to protect, access, session, what happens with wrong credentials.",
             design:
-              "How one sees being signed in and how to sign out, confirmations before deleting, sensitive data not in full.",
+              "How people see that they are signed in and how they sign out, confirmations before deleting, sensitive data not in full.",
           },
         },
         aspects: {

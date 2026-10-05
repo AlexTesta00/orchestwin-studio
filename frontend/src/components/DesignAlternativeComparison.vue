@@ -274,7 +274,7 @@ const messages = {
       CLOSE: "Troppo vicine",
       UNKNOWN: "Misura completa quando i due mockup sono pronti",
     },
-    axesDifferent: "{n} assi diversi su 5",
+    axesDifferent: "Assi diversi: {n} su 5",
     close: "Le due alternative si somigliano nello stile disegnato. Puoi rigenerarle.",
     measure: "Dettagli della misura",
     levels: {

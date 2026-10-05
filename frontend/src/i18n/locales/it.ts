@@ -154,7 +154,7 @@ const messages = {
     twins: {
       eyebrow: "Come funzionano i twin",
       title: "Utenti sintetici, dichiarati per quello che sono",
-      lead: "Un User Twin è una persona ipotetica derivata dal brief: obiettivi, frustrazioni, contesto d'uso, esigenze di accessibilità. Serve a mettere alla prova le scelte di design prima di scrivere una riga di codice, e ogni sua opinione resta etichettata come ipotesi.",
+      lead: "Uno User Twin è una persona ipotetica derivata dal brief: obiettivi, frustrazioni, contesto d'uso, esigenze di accessibilità. Serve a mettere alla prova le scelte di design prima di scrivere una riga di codice, e ogni sua opinione resta etichettata come ipotesi.",
       items: {
         brief: {
           label: "Uno",
@@ -299,7 +299,7 @@ const messages = {
     },
     eyebrow: "Il tuo spazio",
     title: "Progetti",
-    description: "Riprendi un’idea o inizia qualcosa di nuovo.",
+    description: "Riprendi un'idea o inizia qualcosa di nuovo.",
     listTitle: "I tuoi progetti",
     emptyTitle: "Nessun progetto presente",
     emptyDescription: "Dai un nome alla tua idea. Ti guideremo nei prossimi passaggi.",
@@ -399,7 +399,7 @@ const messages = {
       temporal_constraints: "Tempi e scadenze",
       budget: "Budget",
       functional_requirements: "Cosa deve fare",
-      non_functional_requirements: "Qualità importanti, come facilità d’uso e velocità",
+      non_functional_requirements: "Qualità importanti, come facilità d'uso e velocità",
       risks: "Rischi",
       stakeholders: "Persone coinvolte",
       available_artifacts: "Materiali già disponibili",

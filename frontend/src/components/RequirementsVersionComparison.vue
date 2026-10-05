@@ -77,7 +77,7 @@ const messages = {
       ACCEPTANCE_CRITERION: "Criterio di accettazione",
       SCENARIO: "Scenario d'uso",
       RISK: "Rischio",
-      DEFINITION_OF_DONE: "Definizione di fatto",
+      DEFINITION_OF_DONE: "Quando il lavoro è finito",
     },
   },
 } as const;
