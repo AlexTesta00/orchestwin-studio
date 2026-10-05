@@ -619,9 +619,9 @@ describe("renderPanel", () => {
     const names = {
       AGENT_TEAM: { it: "Prospettive", en: "Perspectives" },
       PROJECT_BRIEF: { it: "Brief del progetto", en: "Project brief" },
-      USER_MODELING: { it: "User twin", en: "User twins" },
+      USER_MODELING: { it: "User Twin", en: "User Twin" },
       REQUIREMENTS_SPECIFICATION: { it: "Definizione", en: "Definition" },
-      DESIGN_PACKAGE: { it: "Design e valutazione", en: "Design and evaluation" },
+      DESIGN_PACKAGE: { it: "Design e valutazione", en: "Design &amp; Evaluation" },
     };
     for (const [kind, titles] of Object.entries(names)) {
       const target = { ...whyAnswer().target, kind, title: kind, reference: { artifact_id: "exact-stage-id", version_number: 3, content_hash: "exact-stage-hash" }, citations: [{ citation: { source_id: "source", source_version: 2, content_hash: "exact-source-hash", quote: "Preserved <quote>\nsecond line", start_line: 2, end_line: 3 } }] };
