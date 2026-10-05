@@ -43,6 +43,7 @@ describe("ApiClient", () => {
             email: "owner@example.com",
             is_active: true,
             created_at: "2026-08-10T12:00:00Z",
+            guidance_mode: null,
           },
         }),
         {
@@ -76,6 +77,7 @@ describe("ApiClient", () => {
             email: "owner@example.com",
             is_active: true,
             created_at: "2026-08-10T12:00:00Z",
+            guidance_mode: "GUIDED",
           },
         }),
         {
@@ -131,6 +133,42 @@ describe("ApiClient", () => {
       message: "invalid_authentication",
       status: 401,
       detail: "invalid_authentication",
+    });
+  });
+
+  it("saves the guidance mode once with the bearer token and returns the account", async () => {
+    const account = {
+      id: "00000000-0000-4000-8000-000000000001",
+      email: "owner@example.com",
+      is_active: true,
+      created_at: "2026-08-10T12:00:00Z",
+      guidance_mode: "EXPERT",
+    };
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(account), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: "guidance_mode_already_chosen" }), { status: 409 }),
+      );
+    const client = new ApiClient("/api/v1", fetchImplementation);
+
+    await expect(client.chooseGuidanceMode("access-token", "EXPERT")).resolves.toEqual(account);
+    await expect(client.chooseGuidanceMode("access-token", "GUIDED")).rejects.toMatchObject({
+      name: "ApiError",
+      status: 409,
+      detail: "guidance_mode_already_chosen",
+    });
+
+    const [requestUrl, request] = fetchImplementation.mock.calls[0] ?? [];
+    const headers = new Headers(request?.headers);
+    expect(requestUrl).toBe("/api/v1/auth/guidance-mode");
+    expect(request?.method).toBe("POST");
+    expect(request?.credentials).toBe("include");
+    expect(headers.get("Authorization")).toBe("Bearer access-token");
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(JSON.parse(String(request?.body))).toEqual({ guidance_mode: "EXPERT" });
+    expect(JSON.parse(String(fetchImplementation.mock.calls[1]?.[1]?.body))).toEqual({
+      guidance_mode: "GUIDED",
     });
   });
 

@@ -7,7 +7,7 @@ import { useI18n } from "vue-i18n";
 import { apiClient } from "@/api/client";
 import { PROJECT_STAGES, type ProjectMode, type ProjectResponse } from "@/api/contracts";
 import ProjectImportDialog from "@/components/ProjectImportDialog.vue";
-import GuidanceModeSelector from "@/components/GuidanceModeSelector.vue";
+import GuidanceModeNote from "@/components/GuidanceModeNote.vue";
 import UiButton from "@/components/UiButton.vue";
 import UiStateBlock from "@/components/UiStateBlock.vue";
 import UiSurface from "@/components/UiSurface.vue";
@@ -86,7 +86,7 @@ const messages = {
       PACKAGE: "Dossier",
     },
     actions: {
-      DESCRIBE_IDEA: "Tell your idea",
+      DESCRIBE_IDEA: "Describe your idea",
       APPROVE_BRIEF: "Approve the brief",
       APPROVE_TEAM: "Approve the perspectives",
       CONFIRM_TWINS: "Confirm the twins",
@@ -105,7 +105,7 @@ const messages = {
     folder: "A knowledge folder",
     starts: {
       GREENFIELD_GENERATION:
-        "You tell it in a conversation: the Studio asks you one question at a time.",
+        "You describe it in a dialogue: the Studio asks you one question at a time.",
       BROWNFIELD_ASSESSMENT:
         "Start from a product that already exists: the Studio takes it into account when it prepares the perspectives.",
       folder:
@@ -388,7 +388,7 @@ async function createProject(): Promise<void> {
       </header>
 
       <div class="border-t border-night-line px-[clamp(24px,5vw,64px)] pb-[clamp(32px,4vw,56px)]">
-        <GuidanceModeSelector class="mt-6 mb-6" />
+        <GuidanceModeNote class="mt-6 mb-6" />
         <UiStateBlock
           v-if="errorDetail && !dialogOpen"
           kind="error"

@@ -38,6 +38,14 @@ const applicationRoutes = Object.freeze([
     },
   },
   {
+    path: "/guidance",
+    name: "guidance-choice",
+    component: () => import("@/views/GuidanceChoiceView.vue"),
+    meta: {
+      requiresAuthentication: true,
+    },
+  },
+  {
     path: "/projects",
     name: "projects",
     component: () => import("@/views/ProjectsView.vue"),

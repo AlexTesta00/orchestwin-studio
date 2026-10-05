@@ -39,6 +39,7 @@ import { twinPeers } from "./twinIdentity";
 import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 
 import { isGenerationInterrupted } from "../api/generationJobs";
+import { UserModelingApiError } from "../api/userModeling";
 import { useGenerationResume } from "../stores/generationJobs";
 import { useTeamStore } from "../stores/team";
 import { useGuidanceStore } from "../stores/guidance";
@@ -260,7 +261,7 @@ const fieldLabels: Record<Locale, Record<UserTwinField, string>> = {
     decision_criteria: "Criteri decisionali",
     preferred_vocabulary: "Vocabolario preferito",
     frustrations: "Frustrazioni",
-    pain_points: "Pain point",
+    pain_points: "Difficoltà",
     trust_concerns: "Preoccupazioni sulla fiducia",
     accessibility_needs: "Esigenze di accessibilità",
     operational_constraints: "Vincoli operativi",
@@ -281,7 +282,11 @@ const messages = {
     loading: "Updating user profiles…",
     generating: "Preparing the profiles. This may take a few minutes; keep this page open.",
 
-    error: "User Modeling operation failed.",
+    error: "User Twin operation failed.",
+
+    genericFailure: "The request could not be completed. You can try again.",
+
+    unexpectedError: "An unexpected error occurred in the User Twin step.",
 
     personasHeading: "Archetypes",
 
@@ -366,7 +371,7 @@ const messages = {
       "The brief or the perspectives changed: generate and approve a new User Twin version before continuing.",
 
     staleContextSections:
-      "The brief or the perspectives changed: use «Update and confirm» above to keep these twins and re-anchor them, or create them again.",
+      "The brief or the perspectives changed: use “Update and confirm” above to keep these twins and re-anchor them, or create them again.",
 
     generateTwins: "Create the twins",
 
@@ -521,7 +526,11 @@ const messages = {
     generating:
       "Preparazione dei profili in corso. Può richiedere alcuni minuti; mantieni aperta questa pagina.",
 
-    error: "Operazione User Modeling non riuscita.",
+    error: "Operazione sugli User Twin non riuscita.",
+
+    genericFailure: "Non è stato possibile completare la richiesta. Puoi riprovare.",
+
+    unexpectedError: "Si è verificato un errore inatteso nel passo User Twin.",
 
     personasHeading: "Archetipi",
 
@@ -733,9 +742,9 @@ const messages = {
 
     technicalPersonas: "Archetipi",
 
-    persistedLifecycle: "Lifecycle persistito",
+    persistedLifecycle: "Ciclo di vita salvato",
 
-    effectiveLifecycle: "Lifecycle effettivo",
+    effectiveLifecycle: "Ciclo di vita effettivo",
 
     unknown: "Sconosciuto",
 
@@ -792,56 +801,73 @@ function fill(template: string, values: Record<string, string | number>): string
   return template.replace(/\{(\w+)\}/gu, (_match, key: string) => String(values[key] ?? ""));
 }
 
+const failureMessages: Record<string, [string, string]> = {
+  ARCHETYPE_VERSION_CONFLICT: [
+    "This archetype changed. Reload the latest version before saving.",
+    "L'archetipo è cambiato. Ricarica la versione corrente prima di salvare.",
+  ],
+  ARCHETYPE_LIMIT_REACHED: [
+    "You can keep up to eight active archetypes.",
+    "Puoi mantenere fino a otto archetipi attivi.",
+  ],
+  ARCHETYPE_ALREADY_ARCHIVED: [
+    "This archetype has already been removed.",
+    "Questo archetipo è già stato rimosso.",
+  ],
+  ARCHETYPE_NOT_FOUND: [
+    "This archetype is no longer available. Reload the list.",
+    "Questo archetipo non è più disponibile. Ricarica l'elenco.",
+  ],
+  USER_TWIN_REVISION_PENDING: [
+    "Decide the pending twin changes before changing the archetypes or generating new twins.",
+    "Decidi le modifiche in attesa dei twin prima di cambiare gli archetipi o generare nuovi twin.",
+  ],
+  PERSISTENCE_REJECTED: [
+    "The change could not be saved. Reload the current version.",
+    "La modifica non è stata salvata. Ricarica la versione corrente.",
+  ],
+  INVALID_PROVIDER_OUTPUT: [
+    "The model returned an incomplete or invalid proposal. No artifact was accepted. You can try again.",
+    "Il modello ha restituito una proposta incompleta o non valida. Nessun artefatto è stato accettato. Puoi riprovare.",
+  ],
+  INCOMPLETE_OUTPUT: [
+    "The model did not complete its response. Your project has been preserved. You can try again.",
+    "Il modello non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
+  ],
+  PROVIDER_UNAVAILABLE: [
+    "The local model is unavailable. Check model status above.",
+    "Il modello locale non è disponibile. Controlla lo stato dei modelli qui sopra.",
+  ],
+  TIMEOUT: [
+    "Model generation timed out. Check model availability before retrying.",
+    "La generazione ha superato il tempo disponibile. Controlla il modello prima di riprovare.",
+  ],
+  CONTEXT_BUDGET_EXCEEDED: [
+    "These profiles exceed the model context window. Use fewer target groups or configure a larger context.",
+    "Questi profili superano il contesto del modello. Riduci i gruppi target oppure configura un contesto maggiore.",
+  ],
+  INVALID_API_RESPONSE: [
+    "The Studio gave an answer that this page cannot read.",
+    "Lo Studio ha dato una risposta che questa pagina non riesce a leggere.",
+  ],
+};
+
+function failureOf(code: string, fallback: string): string {
+  return failureMessages[code] !== undefined || isGenerationInterrupted(code) ? code : fallback;
+}
+
 const errorMessage = computed(() => {
-  const code = localError.value ?? store.error?.code ?? store.error?.message;
+  const error = store.error;
+  const code =
+    localError.value ??
+    (error === null
+      ? null
+      : failureOf(
+          error.code ?? error.message,
+          error.status === null ? copy.value.unexpectedError : copy.value.genericFailure,
+        ));
   if (!code || isGenerationInterrupted(code)) return null;
-  const errors: Record<string, [string, string]> = {
-    ARCHETYPE_VERSION_CONFLICT: [
-      "This archetype changed. Reload the latest version before saving.",
-      "L'archetipo è cambiato. Ricarica la versione corrente prima di salvare.",
-    ],
-    ARCHETYPE_LIMIT_REACHED: [
-      "You can keep up to eight active archetypes.",
-      "Puoi mantenere fino a otto archetipi attivi.",
-    ],
-    ARCHETYPE_ALREADY_ARCHIVED: [
-      "This archetype has already been removed.",
-      "Questo archetipo è già stato rimosso.",
-    ],
-    ARCHETYPE_NOT_FOUND: [
-      "This archetype is no longer available. Reload the list.",
-      "Questo archetipo non è più disponibile. Ricarica l'elenco.",
-    ],
-    USER_TWIN_REVISION_PENDING: [
-      "Decide the pending twin changes before changing the archetypes or generating new twins.",
-      "Decidi le modifiche in attesa dei twin prima di cambiare gli archetipi o generare nuovi twin.",
-    ],
-    PERSISTENCE_REJECTED: [
-      "The change could not be saved. Reload the current version.",
-      "La modifica non è stata salvata. Ricarica la versione corrente.",
-    ],
-    INVALID_PROVIDER_OUTPUT: [
-      "The model returned an incomplete or invalid proposal. No artifact was accepted. You can try again.",
-      "Il modello ha restituito una proposta incompleta o non valida. Nessun artefatto è stato accettato. Puoi riprovare.",
-    ],
-    INCOMPLETE_OUTPUT: [
-      "The model did not complete its response. Your project has been preserved. You can try again.",
-      "Il modello non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
-    ],
-    PROVIDER_UNAVAILABLE: [
-      "The local model is unavailable. Check model status above.",
-      "Il modello locale non è disponibile. Controlla lo stato dei modelli qui sopra.",
-    ],
-    TIMEOUT: [
-      "Model generation timed out. Check model availability before retrying.",
-      "La generazione ha superato il tempo disponibile. Controlla il modello prima di riprovare.",
-    ],
-    CONTEXT_BUDGET_EXCEEDED: [
-      "These profiles exceed the model context window. Use fewer target groups or configure a larger context.",
-      "Questi profili superano il contesto del modello. Riduci i gruppi target oppure configura un contesto maggiore.",
-    ],
-  };
-  return errors[code]?.[props.locale === "it" ? 1 : 0] ?? code;
+  return failureMessages[code]?.[props.locale === "it" ? 1 : 0] ?? code;
 });
 
 const personas = computed(() => store.currentPersonas);
@@ -1313,7 +1339,7 @@ function observationSummary(observation: ProfileObservationPayload): string {
     INFERRED: ["Dedotto", "Inferred"],
     HYPOTHESIZED: ["Ipotizzato", "Hypothesized"],
     CONTESTED: ["Contestato", "Contested"],
-    EVIDENCED: ["Evidenziato", "Evidenced"],
+    EVIDENCED: ["Documentato", "Evidenced"],
     UNKNOWN: ["Sconosciuto", "Unknown"],
   };
   const label = labels[observationDisplayStatus(observation)][props.locale === "it" ? 0 : 1];
@@ -1373,7 +1399,10 @@ async function runAction(action: (token: string) => Promise<unknown>): Promise<b
     return true;
   } catch (error) {
     if (error instanceof Error) {
-      localError.value = error.message;
+      localError.value = failureOf(
+        error instanceof UserModelingApiError ? (error.code ?? error.message) : error.message,
+        copy.value.genericFailure,
+      );
     } else {
       localError.value = copy.value.error;
     }

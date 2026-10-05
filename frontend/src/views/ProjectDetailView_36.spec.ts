@@ -4,49 +4,45 @@ import { flushPromises, shallowMount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/api/client";
+import type { GuidanceMode } from "@/api/contracts";
 import { projectImportsApi } from "@/api/projectImports";
 import { sectionsApi } from "@/api/sections";
-import GuidanceModeSelector from "@/components/GuidanceModeSelector.vue";
+import GuidanceModeNote from "@/components/GuidanceModeNote.vue";
 import ProjectWorkflowInputsPanel from "@/components/ProjectWorkflowInputsPanel.vue";
 import UiStepHeader from "@/components/UiStepHeader.vue";
 import { createAppI18n } from "@/i18n";
+import { useActivityJournalStore } from "@/stores/activityJournal";
 import { useAuthStore } from "@/stores/auth";
-import { useGuidanceStore } from "@/stores/guidance";
 import ProjectDetailView from "./ProjectDetailView.vue";
 
 const state = vi.hoisted(() => ({ route: { params: { projectId: "project" } } }));
 vi.mock("vue-router", () => ({ useRoute: () => state.route }));
 
-function render(expert = false) {
+function render(guidanceMode: GuidanceMode = "GUIDED") {
   const pinia = createPinia();
   const auth = useAuthStore(pinia);
   auth.user = {
     id: "owner",
-    email: "owner@example.test",
+    email: "owner@example.com",
     is_active: true,
     created_at: "2026-10-03T00:00:00Z",
+    guidance_mode: guidanceMode,
   };
   auth.accessToken = "token";
   auth.status = "authenticated";
-  const guidance = useGuidanceStore(pinia);
-  guidance.select(expert ? "EXPERT" : "GUIDED");
+  const observe = vi.spyOn(useActivityJournalStore(pinia), "observe");
   const wrapper = shallowMount(ProjectDetailView, {
     global: {
       plugins: [pinia, createAppI18n("en")],
-      stubs: { UiStepper: false, GuidanceModeSelector: false, UiStepHeader: false },
+      stubs: { UiStepper: false, GuidanceModeNote: false, UiStepHeader: false },
     },
   });
-  return { wrapper, guidance };
+  return { wrapper, observe };
 }
 
 describe("expert section access in sprint 36", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    const values = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => values.get(key) ?? null,
-      setItem: (key: string, value: string) => values.set(key, value),
-    });
     state.route = reactive({ params: { projectId: "project" } });
     vi.spyOn(apiClient, "getProject").mockResolvedValue({
       id: "project",
@@ -64,7 +60,7 @@ describe("expert section access in sprint 36", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("opens every expert section before the first loop while preserving truthful empty states", async () => {
-    const { wrapper } = render(true);
+    const { wrapper } = render("EXPERT");
     await flushPromises();
     const buttons = wrapper.get('[data-testid="stepper"]').findAll("button");
     expect(buttons).toHaveLength(6);
@@ -77,29 +73,34 @@ describe("expert section access in sprint 36", () => {
     expect(wrapper.findComponent(UiStepHeader).props("description")).toBe("");
     expect(wrapper.findComponent(ProjectWorkflowInputsPanel).props("stage")).toBe(4);
     expect(wrapper.find('[data-testid="stage-design"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="guidance-mode"]').attributes("data-mode")).toBe("EXPERT");
   });
 
-  it("keeps the guided sequence and changes preference without requests or lost selection", async () => {
-    const { wrapper, guidance } = render();
+  it("keeps the guided sequence of the account and shows its mode without a control to change it", async () => {
+    const { wrapper } = render("GUIDED");
     await flushPromises();
     expect(wrapper.findComponent(UiStepHeader).props("description")).not.toBe("");
     expect(
       wrapper.get('[data-testid="stepper"]').findAll("button")[4]!.attributes("disabled"),
     ).toBeDefined();
-    const getCount = vi.mocked(apiClient.getProject).mock.calls.length;
-    const fetchImpl = vi.spyOn(globalThis, "fetch");
-    guidance.select("EXPERT");
-    await flushPromises();
-    await wrapper.get('[data-testid="stepper"]').findAll("button")[3]!.trigger("click");
-    expect(wrapper.findComponent(ProjectWorkflowInputsPanel).props("stage")).toBe(3);
-    guidance.select("GUIDED");
-    await flushPromises();
     expect(wrapper.findComponent(ProjectWorkflowInputsPanel).props("stage")).toBe(0);
-    guidance.select("EXPERT");
-    await flushPromises();
-    expect(wrapper.findComponent(ProjectWorkflowInputsPanel).props("stage")).toBe(3);
-    expect(vi.mocked(apiClient.getProject).mock.calls.length).toBe(getCount);
-    expect(fetchImpl).not.toHaveBeenCalled();
-    expect(wrapper.findComponent(GuidanceModeSelector).exists()).toBe(true);
+    expect(wrapper.findComponent(ProjectWorkflowInputsPanel).props("expert")).toBe(false);
+    const note = wrapper.getComponent(GuidanceModeNote);
+    expect(note.attributes("data-testid")).toBe("guidance-mode");
+    expect(note.attributes("data-mode")).toBe("GUIDED");
+    expect(note.text()).toContain("Guided mode");
+    expect(note.text()).toContain("Chosen once for this account: it cannot be changed.");
+    expect(note.findAll("button, input, select")).toHaveLength(0);
+    expect(wrapper.find('[data-testid="guidance-selector"]').exists()).toBe(false);
   });
+
+  it.each<GuidanceMode>(["GUIDED", "EXPERT"])(
+    "tells the activity journal the %s mode of the account from the start",
+    async (mode) => {
+      const { observe } = render(mode);
+      await flushPromises();
+      expect(observe.mock.calls[0]?.[0]).toMatchObject({ mode, locale: "en" });
+      expect(observe.mock.calls.every(([context]) => context.mode === mode)).toBe(true);
+    },
+  );
 });

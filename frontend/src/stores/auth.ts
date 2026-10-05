@@ -6,6 +6,7 @@ import type {
   AuthenticationApi,
   AuthenticationInput,
   AuthenticationResponse,
+  GuidanceMode,
   UserResponse,
 } from "@/api/contracts";
 
@@ -152,6 +153,31 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
+  async function chooseGuidanceMode(
+    api: AuthenticationApi,
+    mode: GuidanceMode,
+  ): Promise<"chosen" | "already_chosen" | "failed"> {
+    try {
+      user.value = await withAccessToken(api, (token) => api.chooseGuidanceMode(token, mode));
+      return "chosen";
+    } catch (error: unknown) {
+      if (
+        !(error instanceof ApiError) ||
+        error.status !== 409 ||
+        error.detail !== "guidance_mode_already_chosen"
+      ) {
+        return "failed";
+      }
+    }
+
+    try {
+      user.value = await withAccessToken(api, (token) => api.me(token));
+      return "already_chosen";
+    } catch {
+      return "failed";
+    }
+  }
+
   return {
     status,
     user,
@@ -165,10 +191,11 @@ export const useAuthStore = defineStore("auth", () => {
     bootstrap,
     logout,
     withAccessToken,
+    chooseGuidanceMode,
   };
 });
 
 export type AuthenticationClient = Pick<
   ApiClient,
-  "register" | "login" | "refresh" | "logout" | "me"
+  "register" | "login" | "refresh" | "logout" | "me" | "chooseGuidanceMode"
 >;

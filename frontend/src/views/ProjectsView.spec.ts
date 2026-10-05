@@ -4,7 +4,12 @@ import { createMemoryHistory } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/api/client";
-import type { ProjectNextAction, ProjectResponse, ProjectStage } from "@/api/contracts";
+import type {
+  GuidanceMode,
+  ProjectNextAction,
+  ProjectResponse,
+  ProjectStage,
+} from "@/api/contracts";
 import ProjectImportDialog from "@/components/ProjectImportDialog.vue";
 import { createAppI18n } from "@/i18n";
 import { createAppRouter } from "@/router";
@@ -68,7 +73,7 @@ const IMPORTED: ProjectImportPayload = {
   approval_required: ["brief", "team", "twins", "requirements", "design"],
 };
 
-async function mountProjects(locale: "it" | "en" = "it") {
+async function mountProjects(locale: "it" | "en" = "it", guidanceMode: GuidanceMode = "GUIDED") {
   const router = createAppRouter(createMemoryHistory());
   const pinia = createPinia();
   useAuthStore(pinia).$patch({
@@ -78,6 +83,7 @@ async function mountProjects(locale: "it" | "en" = "it") {
       email: "owner@example.com",
       is_active: true,
       created_at: "2026-08-10T12:00:00Z",
+      guidance_mode: guidanceMode,
     },
     accessToken: "access-token",
     expiresAt: "2026-08-10T12:15:00Z",
@@ -127,6 +133,26 @@ describe("projects page", () => {
     expect(wrapper.get('[data-testid="project-next"]').text().replace(/\s+/g, " ")).toBe(expected);
     wrapper.unmount();
   });
+
+  it.each([
+    ["it", "EXPERT", "Modalità esperta"],
+    ["en", "GUIDED", "Guided mode"],
+  ] as const)(
+    "shows in %s the %s mode of the account as a note without a selector",
+    async (locale, mode, text) => {
+      const { wrapper } = await mountProjects(locale, mode);
+      const note = wrapper.get('[data-testid="guidance-mode"]');
+
+      expect(note.attributes("data-mode")).toBe(mode);
+      expect(note.text()).toContain(text);
+      expect(note.findAll("button, input, select, a")).toHaveLength(0);
+      expect(wrapper.find('[data-testid="guidance-selector"]').exists()).toBe(false);
+      expect(wrapper.get('[data-testid="projects-screen"]').element.contains(note.element)).toBe(
+        true,
+      );
+      wrapper.unmount();
+    },
+  );
 
   it("offers to start from a knowledge folder next to the usual new project", async () => {
     const { wrapper } = await mountProjects();

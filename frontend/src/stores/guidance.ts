@@ -1,39 +1,32 @@
 import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
 
+import type { GuidanceMode } from "@/api/contracts";
 import { useAuthStore } from "./auth";
 
-export type GuidanceMode = "GUIDED" | "EXPERT";
-
-export function guidancePreferenceKey(accountId: string): string {
-  return `orchestwin.guidance.v1.${encodeURIComponent(accountId)}`;
-}
-
-export function readGuidancePreference(accountId: string | null): GuidanceMode {
-  if (!accountId) return "GUIDED";
-  try {
-    return window.localStorage.getItem(guidancePreferenceKey(accountId)) === "EXPERT"
-      ? "EXPERT"
-      : "GUIDED";
-  } catch {
-    return "GUIDED";
-  }
-}
+export type { GuidanceMode } from "@/api/contracts";
 
 export const useGuidanceStore = defineStore("guidance", () => {
   const auth = useAuthStore();
-  const mode = ref<GuidanceMode>("GUIDED");
+  const lastMode = ref<GuidanceMode | null>(null);
   const accountId = computed(() => auth.user?.id ?? null);
+  const mode = computed<GuidanceMode>(() => lastMode.value ?? "GUIDED");
+  const chosen = computed(() => lastMode.value !== null);
   const expert = computed(() => mode.value === "EXPERT");
   const suppressedAutomatic = new Set<string>();
+  let lastAccountId: string | null = null;
 
   watch(
-    accountId,
-    (id) => {
-      suppressedAutomatic.clear();
-      mode.value = readGuidancePreference(id);
+    [accountId, () => auth.user?.guidance_mode ?? null],
+    ([id, guidanceMode]) => {
+      if (id === null) return;
+      if (id !== lastAccountId) {
+        lastAccountId = id;
+        suppressedAutomatic.clear();
+      }
+      lastMode.value = guidanceMode;
     },
-    { immediate: true },
+    { immediate: true, flush: "sync" },
   );
 
   function suppressAutomatic(key: string): void {
@@ -41,18 +34,8 @@ export const useGuidanceStore = defineStore("guidance", () => {
   }
 
   function automaticAllowed(key: string): boolean {
-    return !expert.value && !suppressedAutomatic.has(key);
+    return auth.user?.guidance_mode === "GUIDED" && !suppressedAutomatic.has(key);
   }
 
-  function select(value: GuidanceMode): void {
-    if (!accountId.value) return;
-    mode.value = value;
-    try {
-      window.localStorage.setItem(guidancePreferenceKey(accountId.value), value);
-    } catch {
-      return;
-    }
-  }
-
-  return { mode, expert, accountId, select, suppressAutomatic, automaticAllowed };
+  return { mode, chosen, expert, accountId, suppressAutomatic, automaticAllowed };
 });

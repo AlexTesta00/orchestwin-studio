@@ -302,15 +302,17 @@ describe("sendGeneration", () => {
       login: vi.fn(),
       logout: vi.fn(),
       me: vi.fn(),
+      chooseGuidanceMode: vi.fn(),
       refresh: vi.fn(async () => ({
         access_token: "new-token",
         token_type: "bearer" as const,
         expires_at: "2026-09-28T10:30:00+00:00",
         user: {
           id: "00000000-0000-4000-8000-000000000001",
-          email: "owner@example.test",
+          email: "owner@example.com",
           is_active: true,
           created_at: "2026-09-01T10:00:00+00:00",
+          guidance_mode: "GUIDED" as const,
         },
       })),
     };

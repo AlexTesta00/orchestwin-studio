@@ -93,6 +93,13 @@ vi.mock("vue-router", () => ({ useRoute: () => state.route }));
 vi.mock("@/stores/auth", () => ({
   useAuthStore: () => ({
     accessToken: "token",
+    user: {
+      id: "00000000-0000-4000-8000-000000000001",
+      email: "owner@example.com",
+      is_active: true,
+      created_at: "2026-09-14T00:00:00Z",
+      guidance_mode: "GUIDED",
+    },
     withAccessToken: (_api: unknown, fn: (token: string) => unknown) => fn("token"),
   }),
 }));
@@ -708,9 +715,9 @@ describe("progressive project workspace", () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="step-read-only"]').exists()).toBe(false);
     const sentences = [
-      "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
+      "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi, nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
       "Hai già approvato le prospettive: puoi rileggerle. Puoi ancora attivare o togliere quelle a tua scelta: ogni cambio che salvi crea una nuova versione da approvare di nuovo.",
-      "Hai già approvato gli user twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
+      "Hai già approvato gli User Twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
       "Hai già approvato i requisiti: puoi rileggerli. Se ne modifichi uno, nasce una nuova versione da approvare di nuovo.",
       "Hai già approvato il design: puoi rileggerlo e provare il mockup. Se cambi la scelta o il design, nasce una nuova versione da approvare di nuovo.",
     ];
@@ -1611,7 +1618,7 @@ describe("sections after the first pass", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(notice.get('[data-kind="behind"]').text()).toBe(
-      "User Twin, Definition and Design & Evaluation to update: something upstream changed. The content you approved stays the same, it is only re-anchored to the new versions.",
+      "User Twin, Definition and Design & Evaluation to update: something upstream changed. The content you approved stays the same; it is only re-anchored to the new versions.",
     );
 
     await wrapper.get('[data-testid="sections-align"]').trigger("click");
@@ -1719,7 +1726,7 @@ describe("sections after the first pass", () => {
     await wrapper.get('[data-stage="0"]').trigger("click");
 
     expect(wrapper.get('[data-kind="blocked"]').text()).toBe(
-      "Prospettive non si aggiorna da sola: il brief è cambiato: prepara di nuovo le prospettive.",
+      "La sezione Prospettive non si aggiorna da sola: il brief è cambiato: prepara di nuovo le prospettive.",
     );
     await wrapper.get('[data-testid="sections-notice-open"]').trigger("click");
     expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
@@ -3076,7 +3083,7 @@ describe("readings of the project page", () => {
     expect(studio.writes()).toEqual([]);
     expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="package-partial"]').text().replace(/\s+/g, " ")).toBe(
-      "The folder holds 1 of 5 steps: Perspectives, User Twin, Definition and Design & Evaluation are still to approve. Each step joins the folder when you approve it.",
+      "The folder holds 1 of 5 steps: Perspectives, User Twin, Definition and Design & Evaluation are still to be approved. Each step joins the folder when you approve it.",
     );
     expect(wrapper.get('[data-testid="download-package"]').attributes("disabled")).toBeUndefined();
     expect(wrapper.find('[data-testid="development-panel"]').exists()).toBe(false);
@@ -3459,9 +3466,8 @@ describe("study session on the project page", () => {
     expect(row.text()).toContain("Recording of times and steps is on · SES-P01");
     expect(document.activeElement).toBe(row.get('[data-testid="activity-session-stop"]').element);
     expect(
-      row.element.compareDocumentPosition(
-        wrapper.get('[data-testid="guidance-selector"]').element,
-      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+      row.element.compareDocumentPosition(wrapper.get('[data-testid="guidance-mode"]').element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(wrapper.find('[data-testid="activity-session"]').exists()).toBe(false);
 

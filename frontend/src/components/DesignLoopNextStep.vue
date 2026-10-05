@@ -66,9 +66,9 @@ const messages = {
     outdated:
       "The requirements are approved. Regenerate the design alternatives so that they follow the new version.",
     reanchor:
-      "The design is anchored to Definition v{old}; now there is v{new}. The alternatives stay: use «Update and confirm» above to re-anchor it.",
+      "The design is anchored to Definition v{old}; now there is v{new}. The alternatives stay: use “Update and confirm” above to re-anchor it.",
     reanchorApprove:
-      "The design is anchored to Definition v{old}; now there is v{new}. The alternatives stay: approve the design in the bar at the bottom, then use «Update and confirm» above to re-anchor it.",
+      "The design is anchored to Definition v{old}; now there is v{new}. The alternatives stay: approve the design in the bar at the bottom, then use “Update and confirm” above to re-anchor it.",
     blocked: "{section} cannot be updated by itself: {reason}.",
     section: "Design & Evaluation",
     reasons: {
