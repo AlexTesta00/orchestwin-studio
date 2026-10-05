@@ -12,7 +12,9 @@ from fastapi.responses import JSONResponse
 
 from orchestwin import __version__
 from orchestwin.api.acceptance_tests import create_acceptance_test_router
+from orchestwin.api.activity import create_activity_router
 from orchestwin.api.archetypes import create_archetypes_router
+from orchestwin.api.artifact_why import create_artifact_why_router
 from orchestwin.api.artifacts import create_artifact_graph_router
 from orchestwin.api.auth import AuthApiSettings, AuthAttemptLimits, create_auth_router
 from orchestwin.api.brief_dialogue import create_brief_dialogue_router
@@ -20,6 +22,7 @@ from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.code_changes import create_code_change_router
 from orchestwin.api.design import create_design_router
 from orchestwin.api.design_discussion import create_design_discussion_router
+from orchestwin.api.design_distance import create_design_distance_router
 from orchestwin.api.design_iterations import create_design_iteration_router
 from orchestwin.api.design_loop import create_design_loop_router
 from orchestwin.api.design_mockups import create_design_mockup_router
@@ -32,6 +35,7 @@ from orchestwin.api.generation_requests import (
     create_generation_request_router,
 )
 from orchestwin.api.health import create_health_router
+from orchestwin.api.human_validation import create_human_validation_router
 from orchestwin.api.insight_applications import create_insight_application_router
 from orchestwin.api.knowledge_packages import create_knowledge_package_router
 from orchestwin.api.model_runtime import create_model_runtime_router
@@ -55,6 +59,7 @@ from orchestwin.api.twin_learning import create_twin_learning_router
 from orchestwin.api.user_modeling_realignment import create_user_modeling_realignment_router
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
 from orchestwin.api.validation import request_validation_error
+from orchestwin.api.workflow_inputs import create_workflow_inputs_router, protect_provided_consumers
 from orchestwin.config import ApplicationSettings, load_settings
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
@@ -167,6 +172,12 @@ def create_app(
     application.state.design_query_service = resolved_runtime.design_query_service
     application.state.design_gate_service = resolved_runtime.design_gate_service
     application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
+    application.state.why_query_service = resolved_runtime.why_query_service
+    application.state.human_validation_service = resolved_runtime.human_validation_service
+    application.state.activity_service = resolved_runtime.activity_service
+    application.state.workflow_inputs_service = resolved_runtime.workflow_inputs_service
+    application.state.owner_team_inputs = resolved_runtime.owner_team_inputs
+    application.state.owner_requirements = resolved_runtime.owner_requirements
     application.state.project_diagram_service = resolved_runtime.project_diagram_service
     application.state.knowledge_package_service = resolved_runtime.knowledge_package_service
     application.state.twin_import_service = resolved_runtime.twin_import_service
@@ -213,7 +224,9 @@ def create_app(
         create_clarification_router(),
         create_brief_dialogue_router(),
         create_team_router(),
-        create_runtime_user_modeling_router(resolved_runtime.user_modeling_services),
+        create_runtime_user_modeling_router(
+            resolved_runtime.user_modeling_services, resolved_runtime.owner_user_modeling
+        ),
         create_archetypes_router(),
         create_twin_chat_router(),
         create_requirements_router(),
@@ -223,9 +236,14 @@ def create_app(
         create_design_loop_router(),
         create_design_review_pins_router(),
         create_design_discussion_router(),
+        create_design_distance_router(),
         create_generation_request_router(),
         create_insight_application_router(),
         create_artifact_graph_router(),
+        create_artifact_why_router(),
+        create_human_validation_router(),
+        create_activity_router(),
+        create_workflow_inputs_router(),
         create_diagram_router(),
         create_knowledge_package_router(),
         create_code_change_router(),
@@ -245,7 +263,7 @@ def create_app(
         create_model_usage_router(),
     ):
         application.include_router(
-            router,
+            protect_provided_consumers(router),
             prefix=resolved_settings.api_prefix,
         )
 

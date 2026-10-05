@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiClient, resolveApiBaseUrl } from "./client";
+import { ApiClient, ApiError, onRequestFailure, resolveApiBaseUrl } from "./client";
+import { ApiRequestError } from "./requestError";
 
 describe("ApiClient", () => {
   it("uses a same-origin API path by default", () => {
@@ -42,6 +43,7 @@ describe("ApiClient", () => {
             email: "owner@example.com",
             is_active: true,
             created_at: "2026-08-10T12:00:00Z",
+            guidance_mode: null,
           },
         }),
         {
@@ -75,6 +77,7 @@ describe("ApiClient", () => {
             email: "owner@example.com",
             is_active: true,
             created_at: "2026-08-10T12:00:00Z",
+            guidance_mode: "GUIDED",
           },
         }),
         {
@@ -133,6 +136,42 @@ describe("ApiClient", () => {
     });
   });
 
+  it("saves the guidance mode once with the bearer token and returns the account", async () => {
+    const account = {
+      id: "00000000-0000-4000-8000-000000000001",
+      email: "owner@example.com",
+      is_active: true,
+      created_at: "2026-08-10T12:00:00Z",
+      guidance_mode: "EXPERT",
+    };
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(account), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: "guidance_mode_already_chosen" }), { status: 409 }),
+      );
+    const client = new ApiClient("/api/v1", fetchImplementation);
+
+    await expect(client.chooseGuidanceMode("access-token", "EXPERT")).resolves.toEqual(account);
+    await expect(client.chooseGuidanceMode("access-token", "GUIDED")).rejects.toMatchObject({
+      name: "ApiError",
+      status: 409,
+      detail: "guidance_mode_already_chosen",
+    });
+
+    const [requestUrl, request] = fetchImplementation.mock.calls[0] ?? [];
+    const headers = new Headers(request?.headers);
+    expect(requestUrl).toBe("/api/v1/auth/guidance-mode");
+    expect(request?.method).toBe("POST");
+    expect(request?.credentials).toBe("include");
+    expect(headers.get("Authorization")).toBe("Bearer access-token");
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(JSON.parse(String(request?.body))).toEqual({ guidance_mode: "EXPERT" });
+    expect(JSON.parse(String(fetchImplementation.mock.calls[1]?.[1]?.body))).toEqual({
+      guidance_mode: "GUIDED",
+    });
+  });
+
   it("reports a rate-limited sign-in with its stable code", async () => {
     const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ detail: "too_many_attempts" }), {
@@ -182,5 +221,50 @@ describe("ApiClient", () => {
       status: "REJECTED",
       issue: "STALE_ARTIFACT",
     });
+  });
+
+  it("tells the registered listeners about every failed answer and changes nothing else", async () => {
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: { code: "PROJECT_NOT_FOUND" } }), { status: 404 }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: "gate_state_conflict" }), { status: 409 }),
+      );
+    const client = new ApiClient("/api/v1", fetchImplementation);
+    const seen: [number, string][] = [];
+    const broken = vi.fn(() => {
+      throw new Error("listener failure");
+    });
+    const stopBroken = onRequestFailure(broken);
+    const stop = onRequestFailure((error) => seen.push([error.status, error.detail]));
+
+    await expect(client.getProject("token", "project")).rejects.toMatchObject({
+      name: "ApiError",
+      status: 404,
+      detail: "PROJECT_NOT_FOUND",
+    });
+    await expect(client.listBriefVersions("token", "project")).resolves.toEqual([]);
+    void new ApiRequestError("The sections request failed", {
+      status: 422,
+      code: "SECTIONS_INVALID",
+      payload: null,
+    });
+    void new ApiError(0, "ACCESS_TOKEN_REQUIRED");
+    void new ApiError(200, "INVALID_API_RESPONSE");
+    stop();
+    stopBroken();
+    await expect(client.decideAgentTeamGate("token", "project", "APPROVE")).rejects.toMatchObject({
+      status: 409,
+      detail: "gate_state_conflict",
+    });
+
+    expect(seen).toEqual([
+      [404, "PROJECT_NOT_FOUND"],
+      [422, "SECTIONS_INVALID"],
+    ]);
+    expect(broken).toHaveBeenCalledTimes(2);
   });
 });

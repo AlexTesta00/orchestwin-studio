@@ -162,6 +162,8 @@ def test_folder_holds_every_view_of_every_approved_stage() -> None:
                 *DIAGRAM_FILES,
                 *TABLE_COLUMNS,
                 *schema_files(),
+                "schema/why.schema.json",
+                "traceability/why.json",
                 *(path for twin in twins for path in (twin.document_path, twin.text_path)),
             }
         )
@@ -242,8 +244,8 @@ def test_manifest_indexes_package_project_stages_twins_views_and_feedback() -> N
         "aligned_commit": None,
         "open_tasks": 0,
     }
-    assert manifest["schemas"] == {name: schema_document(name) for name in SCHEMA_NAMES}
-    assert len(manifest["schemas"]) == 14
+    assert manifest["schemas"] == {name: schema_document(name) for name in (*SCHEMA_NAMES, "why")}
+    assert len(manifest["schemas"]) == 15
     assert manifest["schemas"]["tests"] == "schema/tests.schema.json"
     assert manifest["schemas"]["learning"] == "schema/learned.schema.json"
 
@@ -484,7 +486,7 @@ def test_every_view_of_a_step_says_that_the_owner_approved_it(make) -> None:
         if make is real_sources and stage == "requirements":
             assert (
                 built.files[stage_text(stage)].splitlines()[2]
-                == f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal committente il {package.gate(stage).updated_at.isoformat()}."
+                == f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal proprietario il {package.gate(stage).updated_at.isoformat()}."
             )
             continue
         assert built.files[stage_text(stage)].splitlines()[2] == (

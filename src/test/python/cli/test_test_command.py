@@ -700,17 +700,17 @@ def test_the_review_asks_before_spending_for_three_twins_and_can_be_refused(
             "provider",
             "The model gave an answer that the Studio cannot use (INVALID_PROVIDER_OUTPUT): "
             "nothing was stored. Launching `ut test` again tries once more, and it is a new "
-            "spending.",
+            "expense.",
         ),
         (
             "lost",
             "Critiques of the twins: the generation was lost, perhaps because the Studio "
-            "restarted. Launch `ut test` again (a new generation is a new spending).",
+            "restarted. Launch `ut test` again (a new generation is a new expense).",
         ),
         (
             "ceiling",
             "The generation would go over the spending ceiling of a single generation (2.00 "
-            "USD), so it did not start. Whoever runs the Studio can raise it, then launch "
+            "USD), so it did not start. Whoever runs the Studio can raise it; then launch "
             "`ut test` again.",
         ),
         (

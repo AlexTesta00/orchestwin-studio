@@ -5,15 +5,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BASE_DESIGN_PACKAGE,
   DESIGN_ALTERNATIVE_ID,
+  DIRECTED_DESIGN_PACKAGE,
+  DIRECTED_DESIGN_VERSION,
+  LEDGER_DIRECTION,
   SECOND_DESIGN_ALTERNATIVE_ID,
+  designDistanceReport,
 } from "../test/designFixtures";
 import { expectAccessible } from "@/test/axe";
 import type { DesignAlternativePayload, UserTwinVersionReferencePayload } from "../types/design";
+import type {
+  DesignDistanceReportPayload,
+  DesignDistanceVerdict,
+  StyleDifference,
+} from "../types/designDistance";
 import DesignAlternativeComparison, {
   type AlternativePreview,
   MOCKUP_READ_FAILURE,
 } from "./DesignAlternativeComparison.vue";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
+import { DIRECTION_AXES, DIRECTION_VALUE_LABELS } from "./visualLanguage";
 import source from "./DesignAlternativeComparison.vue?raw";
 
 const RECEPTIONIST = BASE_DESIGN_PACKAGE.grounding.user_twin_references[0]!;
@@ -68,6 +78,59 @@ function card(target: VueWrapper, code: string) {
 function layoutOf(target: VueWrapper, code: string): string[] | null {
   const row = card(target, code).find('[data-testid="alternative-layout"]');
   return row.exists() ? [row.get("dt").text(), row.get("dd").text()] : null;
+}
+
+const DIRECTED = DIRECTED_DESIGN_PACKAGE.alternatives;
+const MEASURE_IDS = [
+  "FAR",
+  "CLOSE",
+  "UNKNOWN",
+  "MAYBE",
+  "FOLLOWED",
+  "NOT_FOLLOWED",
+  "NOT_CHECKED",
+  "RADIUS",
+  "BORDER",
+  "BOXING",
+  "SHADOW",
+  "TYPE_SCALE",
+  "TITLE_SCALE",
+  "UPPERCASE",
+  "COLOUR_FIELDS",
+  "TINTS",
+  "GRADIENT",
+  "CONTAINER",
+  "COLUMNS",
+  "SPACING",
+  "MONOSPACE",
+  "FUTURE_FEATURE",
+  "OUTLINE",
+  "TAGS",
+  "TABLE",
+  "CARDS",
+  "SIDE_COLUMN",
+  "NAVIGATION",
+  "FORMS",
+];
+const DIRECTION_IDS = DIRECTION_AXES.flatMap((axis) =>
+  Object.keys(DIRECTION_VALUE_LABELS.en[axis]),
+);
+const INTERNAL_IDS = new RegExp(`\\b(?:${[...DIRECTION_IDS, ...MEASURE_IDS].join("|")})\\b`);
+
+function chipsOf(target: VueWrapper, code: string): string[] {
+  return card(target, code)
+    .findAll('[data-testid="alternative-direction-axis"]')
+    .map((chip) => chip.text());
+}
+
+function detailsOf(target: VueWrapper): (string | null)[] {
+  return target
+    .findAll('[data-testid="design-distance-level"]')
+    .map((level) => (level.find("p").exists() ? level.get("p").text() : null));
+}
+
+function scoresOf(target: VueWrapper): string[] {
+  return target.findAll('[data-testid="design-distance-score"]').map((score) => score.text());
 }
 
 describe("DesignAlternativeComparison", () => {
@@ -418,6 +481,473 @@ describe("DesignAlternativeComparison", () => {
         [SECOND_DESIGN_ALTERNATIVE_ID]: { kind: "missing" },
       },
     });
+    await expectAccessible(cards.element, { iframes: false });
+  });
+
+  it("shows the visual direction of each alternative in one line with its five axes, also under a drawn thumbnail", () => {
+    const cards = mountCards({
+      alternatives: DIRECTED,
+      previews: { [DESIGN_ALTERNATIVE_ID]: { kind: "document", html: HTML } },
+    });
+    const timetable = card(cards, "DES-001");
+    expect(timetable.find('[data-testid="alternative-thumbnail"]').exists()).toBe(true);
+    const direction = timetable.get('[data-testid="alternative-direction"]');
+    expect(direction.get("p").text()).toBe("Visual direction: Printed timetable");
+    const chips = direction.findAll('[data-testid="alternative-direction-axis"]');
+    expect(chips.map((chip) => chip.text())).toEqual([
+      "Layout: Editorial page",
+      "Shapes: Square corners and rules",
+      "Type: Very large titles",
+      "Colour: Almost monochrome",
+      "Density: Spacious",
+    ]);
+    expect(chips.map((chip) => chip.get(".sr-only").text())).toEqual([
+      "Layout:",
+      "Shapes:",
+      "Type:",
+      "Colour:",
+      "Density:",
+    ]);
+    expect(chips.map((chip) => chip.attributes("data-axis"))).toEqual([...DIRECTION_AXES]);
+
+    const ledger = card(cards, "DES-002");
+    expect(ledger.find('[data-testid="design-style-tile"]').exists()).toBe(true);
+    expect(ledger.get('[data-testid="alternative-direction"] p').text()).toBe(
+      "Visual direction: Front desk ledger",
+    );
+    expect(chipsOf(cards, "DES-002")).toEqual([
+      "Layout: Workbench",
+      "Shapes: Rounded outlines",
+      "Type: Upper-case labels",
+      "Colour: Tinted surfaces",
+      "Density: Spacious",
+    ]);
+    expect(
+      timetable.get("h3").element.compareDocumentPosition(direction.element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(cards.text()).not.toMatch(INTERNAL_IDS);
+  });
+
+  it("names the visual direction and its axes in Italian", () => {
+    const cards = mountCards({ alternatives: DIRECTED, locale: "it" });
+    expect(card(cards, "DES-001").get('[data-testid="alternative-direction"] p').text()).toBe(
+      "Direzione visiva: Printed timetable",
+    );
+    expect(chipsOf(cards, "DES-001")).toEqual([
+      "Impianto: Pagina editoriale",
+      "Forme: Angoli vivi e filetti",
+      "Tipografia: Titoli molto grandi",
+      "Colore: Quasi monocromo",
+      "Densità: Ariosa",
+    ]);
+    expect(chipsOf(cards, "DES-002")).toEqual([
+      "Impianto: Banco di lavoro",
+      "Forme: Contorni arrotondati",
+      "Tipografia: Etichette maiuscole",
+      "Colore: Superfici tinte",
+      "Densità: Ariosa",
+    ]);
+    expect(cards.text()).not.toMatch(INTERNAL_IDS);
+  });
+
+  it("keeps a card without a visual direction as it was, without an empty line or a placeholder", async () => {
+    const cards = mountCards({ alternatives: BASE_DESIGN_PACKAGE.alternatives });
+    const before = BASE_DESIGN_PACKAGE.alternatives.map((item) => card(cards, item.code).html());
+    expect(cards.find('[data-testid="alternative-direction"]').exists()).toBe(false);
+    expect(cards.find('[data-testid="alternative-direction-detail"]').exists()).toBe(false);
+    expect(cards.find('[data-testid="design-distance"]').exists()).toBe(false);
+    expect(cards.text()).not.toMatch(/Visual direction|Rules|Distance/);
+
+    await cards.setProps({
+      alternatives: BASE_DESIGN_PACKAGE.alternatives.map((item) =>
+        item.visual_language === null
+          ? item
+          : { ...item, visual_language: { ...item.visual_language, direction: null } },
+      ),
+      distance: null,
+    });
+
+    const after = BASE_DESIGN_PACKAGE.alternatives.map((item) => card(cards, item.code).html());
+    expect(after).toEqual(before);
+    await cards.setProps({ locale: "it" });
+    expect(cards.text()).not.toMatch(/Direzione visiva|Regole|Distanza/);
+  });
+
+  it("puts the concept, the rules and the origin of the direction in the details of the card", async () => {
+    const cards = mountCards({ alternatives: DIRECTED });
+    const details = card(cards, "DES-002").get('[data-testid="alternative-details"]');
+    expect(details.attributes("open")).toBeUndefined();
+    const direction = details.get('[data-testid="alternative-direction-detail"]');
+    expect(direction.get("h4").text()).toBe("Visual direction");
+    expect(direction.get("p").text()).toBe(LEDGER_DIRECTION.concept);
+    expect(direction.get("h5").text()).toBe("Rules");
+    expect(
+      direction
+        .findAll('[data-testid="alternative-direction-rules"] li')
+        .map((item) => item.text()),
+    ).toEqual(LEDGER_DIRECTION.rules);
+    expect(direction.get('[data-testid="alternative-direction-origin"]').text()).toBe(
+      "Proposed by the model among 5 candidates; chosen by the Studio because it is far from the other.",
+    );
+    expect(
+      direction.element.compareDocumentPosition(details.get("dl").element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await cards.setProps({ locale: "it" });
+    const italian = card(cards, "DES-002").get('[data-testid="alternative-direction-detail"]');
+    expect(italian.get("h4").text()).toBe("Direzione visiva");
+    expect(italian.get("h5").text()).toBe("Regole");
+    expect(italian.get('[data-testid="alternative-direction-origin"]').text()).toBe(
+      "Proposta dal modello fra 5 candidate; scelta dallo Studio perché lontana dall'altra.",
+    );
+  });
+
+  it("says above the alternatives how far apart they are and keeps the measure on request", () => {
+    const cards = mountCards({ alternatives: DIRECTED, distance: designDistanceReport() });
+    const blocks = cards.findAll('[data-testid="design-distance"]');
+    expect(blocks).toHaveLength(1);
+    const block = blocks[0]!;
+    const grid = cards.get('[data-testid="design-alternative"]').element;
+    expect(
+      block.element.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(block.attributes("data-verdict")).toBe("FAR");
+    expect(block.get("h3").text()).toBe("Distance between the alternatives");
+    expect(block.get('[data-testid="design-distance-verdict"]').text()).toBe("They differ");
+    expect(block.get('[data-testid="design-distance-axes"]').text()).toBe("4 of 5 axes differ");
+    expect(block.find('[role="status"]').exists()).toBe(false);
+
+    const details = block.get('[data-testid="design-distance-details"]');
+    expect(details.attributes("open")).toBeUndefined();
+    expect(details.get("summary").text()).toBe("Details of the measure");
+    const levels = details.findAll('[data-testid="design-distance-level"]');
+    expect(levels.map((level) => level.attributes("data-level"))).toEqual([
+      "declared",
+      "styles",
+      "structure",
+    ]);
+    expect(levels.map((level) => level.get("span").text())).toEqual([
+      "Declared choices",
+      "Drawn style",
+      "Structure of the screens",
+    ]);
+    expect(scoresOf(cards)).toEqual(["80/100", "64/100", "41/100"]);
+    const meters = details.findAll('[data-testid="design-distance-meter"]');
+    expect(meters.map((meter) => meter.attributes("style"))).toEqual([
+      "width: 80%;",
+      "width: 64%;",
+      "width: 41%;",
+    ]);
+    const hidden = details.findAll('[aria-hidden="true"] [data-testid="design-distance-meter"]');
+    expect(hidden).toHaveLength(3);
+    expect(detailsOf(cards)).toEqual([
+      "Differences: Layout, Shapes, Type, and Colour",
+      "Differences: corner radius, borders, size of the titles against the text, fields of colour, and width of the content",
+      "Differences: arrangement of the first screen, tables, and cards",
+    ]);
+    expect(details.find('[data-testid="design-distance-missing"]').exists()).toBe(false);
+    expect(details.get('[data-testid="design-distance-caveat"]').text()).toBe(
+      "Measure computed by the Studio: it does not replace your judgement.",
+    );
+    expect(cards.text()).not.toMatch(INTERNAL_IDS);
+  });
+
+  it("warns in Italian when the two alternatives are too close", () => {
+    const cards = mountCards({
+      alternatives: DIRECTED,
+      locale: "it",
+      distance: designDistanceReport(DIRECTED_DESIGN_VERSION, {
+        styles: { available: true, score: 12, differences: [] },
+        structure: { available: true, score: 9, differences: ["NAVIGATION"] },
+        verdict: "CLOSE",
+      }),
+    });
+    const block = cards.get('[data-testid="design-distance"]');
+    expect(block.attributes("data-verdict")).toBe("CLOSE");
+    expect(block.get("h3").text()).toBe("Distanza fra le alternative");
+    expect(block.get('[data-testid="design-distance-verdict"]').text()).toBe("Troppo vicine");
+    expect(block.get('[data-testid="design-distance-axes"]').text()).toBe("Assi diversi: 4 su 5");
+    const warning = block.get('[data-testid="design-distance-close"]');
+    expect(warning.attributes("role")).toBe("status");
+    expect(warning.text()).toBe(
+      "Le due alternative si somigliano nello stile disegnato. Puoi rigenerarle.",
+    );
+    expect(block.get("summary").text()).toBe("Dettagli della misura");
+    expect(scoresOf(cards)).toEqual(["80/100", "12/100", "9/100"]);
+    expect(detailsOf(cards)).toEqual([
+      "Differenze: Impianto, Forme, Tipografia e Colore",
+      null,
+      "Differenze: posizione della navigazione",
+    ]);
+    expect(block.get('[data-testid="design-distance-caveat"]').text()).toBe(
+      "Misura calcolata dallo Studio: non sostituisce il tuo giudizio.",
+    );
+    expect(cards.text()).not.toMatch(INTERNAL_IDS);
+  });
+
+  it("warns in English about the drawn style alone and keeps the structure as information", () => {
+    const cards = mountCards({
+      alternatives: DIRECTED,
+      distance: designDistanceReport(DIRECTED_DESIGN_VERSION, {
+        styles: { available: true, score: 12, differences: [] },
+        verdict: "CLOSE",
+      }),
+    });
+    const block = cards.get('[data-testid="design-distance"]');
+    expect(block.get('[data-testid="design-distance-verdict"]').text()).toBe("Too close");
+    expect(block.get('[data-testid="design-distance-close"]').text()).toBe(
+      "The two alternatives look alike in drawn style. You can regenerate them.",
+    );
+    expect(scoresOf(cards)).toEqual(["80/100", "12/100", "41/100"]);
+    expect(detailsOf(cards)).toEqual([
+      "Differences: Layout, Shapes, Type, and Colour",
+      null,
+      "Differences: arrangement of the first screen, tables, and cards",
+    ]);
+    expect(cards.text()).not.toMatch(INTERNAL_IDS);
+  });
+
+  it("waits for both mockups to measure the drawn style and the structure, and says it once", async () => {
+    const cards = mountCards({
+      alternatives: DIRECTED,
+      distance: designDistanceReport(DIRECTED_DESIGN_VERSION, {
+        styles: { available: false, score: null, differences: [] },
+        structure: { available: false, score: null, differences: [] },
+        verdict: "UNKNOWN",
+      }),
+    });
+    const block = cards.get('[data-testid="design-distance"]');
+    const unknown = "Complete measure when both mockups are ready";
+    expect(block.get('[data-testid="design-distance-verdict"]').text()).toBe(unknown);
+    expect(block.get('[data-testid="design-distance-axes"]').text()).toBe("4 of 5 axes differ");
+    expect(block.find('[role="status"]').exists()).toBe(false);
+    const details = block.get('[data-testid="design-distance-details"]');
+    const levels = details.findAll('[data-testid="design-distance-level"]');
+    expect(levels.map((level) => level.attributes("data-level"))).toEqual(["declared"]);
+    expect(scoresOf(cards)).toEqual(["80/100"]);
+    expect(detailsOf(cards)).toEqual(["Differences: Layout, Shapes, Type, and Colour"]);
+    expect(details.get('[data-testid="design-distance-missing"]').text()).toBe(
+      `Drawn style and Structure of the screens · ${unknown}`,
+    );
+    expect(details.text().split(unknown)).toHaveLength(2);
+
+    await cards.setProps({ locale: "it" });
+    expect(cards.get('[data-testid="design-distance-missing"]').text()).toBe(
+      "Stile disegnato e Struttura delle schermate · Misura completa quando i due mockup sono pronti",
+    );
+    expect(cards.get('[data-testid="design-distance-verdict"]').text()).toBe(
+      "Misura completa quando i due mockup sono pronti",
+    );
+  });
+
+  it("measures the declared choices of alternatives without a direction or without a visual language", async () => {
+    const report = designDistanceReport(DIRECTED_DESIGN_VERSION, {
+      declared: {
+        score: 77,
+        axes_different: null,
+        axes: [],
+        choices_different: 17,
+        choices_total: 22,
+        primary_colour_distance: 0.4,
+      },
+    });
+    const cards = mountCards({ alternatives: BASE_DESIGN_PACKAGE.alternatives, distance: report });
+    expect(cards.find('[data-testid="design-distance-axes"]').exists()).toBe(false);
+    expect(cards.find('[data-testid="alternative-direction"]').exists()).toBe(false);
+    expect(scoresOf(cards)).toEqual(["77/100", "64/100", "41/100"]);
+    expect(detailsOf(cards)[0]).toBe("17 of 22 choices differ");
+
+    await cards.setProps({ locale: "it" });
+    expect(detailsOf(cards)[0]).toBe("17 scelte diverse su 22");
+
+    const single = designDistanceReport(DIRECTED_DESIGN_VERSION, {
+      declared: { ...report.pairs[0]!.declared, score: 5, choices_different: 1 },
+    });
+    await cards.setProps({ distance: single, locale: "en" });
+    expect(detailsOf(cards)[0]).toBe("1 of 22 choices differs");
+
+    const unmeasured = designDistanceReport(DIRECTED_DESIGN_VERSION, {
+      declared: { ...report.pairs[0]!.declared, score: null, choices_different: null },
+      styles: { available: false, score: null, differences: [] },
+      structure: { available: false, score: null, differences: [] },
+      verdict: "UNKNOWN",
+    });
+    await cards.setProps({ distance: unmeasured });
+    expect(cards.find('[data-testid="design-distance-level"]').exists()).toBe(false);
+    expect(cards.find('[data-testid="design-distance-details"] ul').exists()).toBe(false);
+    expect(cards.get('[data-testid="design-distance-missing"]').text()).toBe(
+      "Drawn style and Structure of the screens · Complete measure when both mockups are ready",
+    );
+  });
+
+  it("shows no distance without a report or with a report about other alternatives", async () => {
+    const cards = mountCards({ alternatives: DIRECTED });
+    expect(cards.find('[data-testid="design-distance"]').exists()).toBe(false);
+
+    const report = designDistanceReport();
+    await cards.setProps({
+      distance: {
+        ...report,
+        pairs: report.pairs.map((pair) => ({ ...pair, second: "DES-003" })),
+      },
+    });
+    expect(cards.find('[data-testid="design-distance"]').exists()).toBe(false);
+
+    await cards.setProps({ distance: report });
+    expect(cards.findAll('[data-testid="design-distance"]')).toHaveLength(1);
+    await cards.setProps({ distance: null });
+    expect(cards.find('[data-testid="design-distance"]').exists()).toBe(false);
+  });
+
+  it("never shows an internal id of the measure, even for a value it does not know", () => {
+    const cards = mountCards({
+      alternatives: DIRECTED,
+      distance: designDistanceReport(DIRECTED_DESIGN_VERSION, {
+        styles: {
+          available: true,
+          score: 100,
+          differences: [
+            "RADIUS",
+            "BORDER",
+            "BOXING",
+            "SHADOW",
+            "TYPE_SCALE",
+            "TITLE_SCALE",
+            "UPPERCASE",
+            "COLOUR_FIELDS",
+            "TINTS",
+            "GRADIENT",
+            "CONTAINER",
+            "COLUMNS",
+            "SPACING",
+            "MONOSPACE",
+            "FUTURE_FEATURE",
+          ] as unknown as StyleDifference[],
+        },
+        structure: {
+          available: true,
+          score: 140,
+          differences: ["OUTLINE", "TAGS", "TABLE", "CARDS", "SIDE_COLUMN", "NAVIGATION", "FORMS"],
+        },
+        verdict: "MAYBE" as unknown as DesignDistanceVerdict,
+      }),
+    });
+    expect(cards.get('[data-testid="design-distance"]').attributes("data-verdict")).toBe("UNKNOWN");
+    expect(cards.get('[data-testid="design-distance-verdict"]').text()).toBe(
+      "Complete measure when both mockups are ready",
+    );
+    expect(scoresOf(cards)).toEqual(["80/100", "100/100", "100/100"]);
+    expect(detailsOf(cards).slice(1)).toEqual([
+      "Differences: corner radius, borders, boxes or rules, shadows, size of the titles against the text, title size, upper-case text, fields of colour, tinted surfaces, gradients, width of the content, columns, spacing, and fixed-width type",
+      "Differences: arrangement of the first screen, elements used in the screens, tables, cards, side column, position of the navigation, and forms",
+    ]);
+    expect(cards.text()).not.toMatch(INTERNAL_IDS);
+  });
+
+  it("names the boxes or rules and the title size of the drawn style in plain words, in English and in Italian", async () => {
+    const cards = mountCards({
+      alternatives: DIRECTED,
+      distance: designDistanceReport(DIRECTED_DESIGN_VERSION, {
+        styles: { available: true, score: 58, differences: ["BOXING", "TITLE_SCALE", "RADIUS"] },
+      }),
+    });
+    expect(scoresOf(cards)).toEqual(["80/100", "58/100", "41/100"]);
+    expect(detailsOf(cards)).toEqual([
+      "Differences: Layout, Shapes, Type, and Colour",
+      "Differences: boxes or rules, title size, and corner radius",
+      "Differences: arrangement of the first screen, tables, and cards",
+    ]);
+    expect(cards.text()).not.toMatch(INTERNAL_IDS);
+
+    await cards.setProps({ locale: "it" });
+    expect(detailsOf(cards)).toEqual([
+      "Differenze: Impianto, Forme, Tipografia e Colore",
+      "Differenze: riquadri o filetti, grandezza del titolo e raggio degli angoli",
+      "Differenze: disposizione della prima schermata, tabelle e schede",
+    ]);
+    expect(cards.text()).not.toMatch(INTERNAL_IDS);
+  });
+
+  it("adds to the notes of a card the axes of the direction that its mockup does not follow", async () => {
+    const report = designDistanceReport();
+    const distance: DesignDistanceReportPayload = {
+      ...report,
+      alternatives: [
+        report.alternatives[0]!,
+        {
+          ...report.alternatives[1]!,
+          adherence: {
+            available: true,
+            axes: {
+              layout: "NOT_FOLLOWED",
+              shape: "FOLLOWED",
+              type: "NOT_FOLLOWED",
+              colour: "FOLLOWED",
+              density: "NOT_CHECKED",
+            },
+          },
+        },
+      ],
+    };
+    const cards = mountCards({
+      alternatives: DIRECTED,
+      distance,
+      notes: {
+        [SECOND_DESIGN_ALTERNATIVE_ID]: "The mockup does not show these requirements yet: REQ-004.",
+      },
+    });
+    const note = card(cards, "DES-002").get('[data-testid="alternative-note"]');
+    expect(note.findAll("span").map((line) => line.text())).toEqual([
+      "The mockup does not show these requirements yet: REQ-004.",
+      "The mockup does not follow the direction on: Layout and Type",
+    ]);
+    expect(note.attributes("role")).toBeUndefined();
+    expect(card(cards, "DES-001").find('[data-testid="alternative-note"]').exists()).toBe(false);
+
+    await cards.setProps({ locale: "it", notes: {} });
+    expect(card(cards, "DES-002").get('[data-testid="alternative-note"]').text()).toBe(
+      "Il mockup non segue la direzione su: Impianto e Tipografia",
+    );
+
+    await cards.setProps({
+      distance: {
+        ...distance,
+        alternatives: distance.alternatives.map((item) => ({
+          ...item,
+          adherence: { ...item.adherence, available: false },
+        })),
+      },
+    });
+    expect(card(cards, "DES-002").find('[data-testid="alternative-note"]').exists()).toBe(false);
+  });
+
+  it("lets the direction and the distance wrap on a narrow screen", () => {
+    const cards = mountCards({ alternatives: DIRECTED, distance: designDistanceReport() });
+    const list = card(cards, "DES-001").get('[data-testid="alternative-direction"] ul');
+    expect(list.classes()).toEqual(expect.arrayContaining(["flex", "flex-wrap"]));
+    for (const chip of list.findAll("li")) {
+      expect(chip.classes()).toEqual(expect.arrayContaining(["max-w-full", "break-words"]));
+    }
+    expect(cards.get('[data-testid="design-distance-verdict"]').classes()).toEqual(
+      expect.arrayContaining(["max-w-full", "break-words"]),
+    );
+    expect(cards.get('[data-testid="design-distance"] > div').classes()).toContain("flex-wrap");
+    expect(source).not.toMatch(/v-html|innerHTML/);
+  });
+
+  it("has no axe violations with the directions and the distance, details open", async () => {
+    const cards = mountCards({
+      alternatives: DIRECTED,
+      selectedAlternativeId: DESIGN_ALTERNATIVE_ID,
+      previews: { [DESIGN_ALTERNATIVE_ID]: { kind: "document", html: HTML } },
+      distance: designDistanceReport(DIRECTED_DESIGN_VERSION, { verdict: "CLOSE" }),
+      notes: { [SECOND_DESIGN_ALTERNATIVE_ID]: "The mockup does not show REQ-004 yet." },
+    });
+    for (const details of cards.findAll("details")) {
+      details.element.setAttribute("open", "");
+    }
     await expectAccessible(cards.element, { iframes: false });
   });
 });

@@ -52,7 +52,7 @@ async function register(credentials: AuthenticationInput): Promise<void> {
 
   if (succeeded) {
     await router.replace({
-      name: "projects",
+      name: "guidance-choice",
     });
   }
 }

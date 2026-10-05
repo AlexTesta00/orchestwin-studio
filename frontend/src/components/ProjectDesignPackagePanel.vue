@@ -12,11 +12,14 @@ import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import { apiClient } from "../api/client";
 import type { KnowledgePackagesApi } from "../api/knowledgePackages";
 import { useAuthStore } from "../stores/auth";
+import { useGuidanceStore } from "../stores/guidance";
 import { useDesignStore } from "../stores/design";
 import { useKnowledgePackagesStore, type AuthorizedRequest } from "../stores/knowledgePackages";
 import { useUserModelingStore } from "../stores/userModeling";
 import type { DeclarativePrototypePayload, DesignAlternativePayload } from "../types/design";
 import type { KnowledgePackageVersionPayload, KnowledgeStage } from "../types/knowledgePackages";
+import type { ProvidedPrototype } from "../types/workflowInputs";
+import { whyMessages } from "./whyCopy";
 
 type Locale = "en" | "it";
 type HeroState = "complete" | "partial" | "waiting";
@@ -27,6 +30,7 @@ const STAGE_KEYS: readonly KnowledgeStage[] = ["brief", "team", "twins", "requir
 const TWINS_STAGE = STAGE_KEYS.indexOf("twins");
 const DESIGN_STAGE = STAGE_KEYS.indexOf("design");
 const FOLDER_NAME_LIMIT = 40;
+const COMMAND_BOX = "[&>code]:overflow-x-auto [&>code]:whitespace-pre [&>code]:contain-inline-size";
 const TERMINAL_STEPS = [
   { key: "login", command: "ut login --studio {address}" },
   { key: "folder", command: "mkdir {folder}; cd {folder}" },
@@ -52,11 +56,15 @@ const props = withDefaults(
     saveExport?: (blob: Blob, fileName: string) => void;
     studioAddress?: string;
     sectionsMode?: boolean;
+    providedPrototype?: ProvidedPrototype | null;
+    providedDesignApproved?: boolean;
   }>(),
   {
     locale: "en",
     studioAddress: () => window.location.origin,
     sectionsMode: false,
+    providedPrototype: null,
+    providedDesignApproved: false,
   },
 );
 
@@ -96,22 +104,24 @@ const messages = {
     notReady: "The folder can be prepared as soon as the brief is approved.",
     held: ["{count} of {total} steps", "{count} of {total} steps"],
     partial: [
-      "The folder holds {held}: {steps} is still to approve.",
-      "The folder holds {held}: {steps} are still to approve.",
+      "The folder holds {held}: {steps} is still to be approved.",
+      "The folder holds {held}: {steps} are still to be approved.",
     ],
     partialRule: "Each step joins the folder when you approve it.",
     prepare: "Prepare and download the folder",
     preparing: "Preparing the folder…",
     latest: "{files} files · version {number}",
     created: "Version {number} of the folder is ready and downloaded: {file}",
-    reused: "Nothing changed since version {number}: the same folder was downloaded again: {file}",
+    reused:
+      "Nothing has changed since version {number}: the same folder was downloaded again: {file}",
     failed: "The folder could not be prepared.",
     downloadFailed: "The folder could not be downloaded.",
     behind:
-      "{section} is behind: use «Update and confirm» at the top of the page, then publish again.",
+      "{section} is behind: use “Update and confirm” at the top of the page, then prepare the folder again.",
     behindStep:
-      "The {section} step is behind: open it and bring it up to date, then publish again.",
-    perspectivesBehind: "The brief changed: prepare the perspectives again, then publish again.",
+      "The {section} step is behind: open it and bring it up to date, then prepare the folder again.",
+    perspectivesBehind:
+      "The brief changed: prepare the perspectives again, then prepare the folder again.",
     outdated: {
       USER_TWINS_OUTDATED: "User Twin",
       REQUIREMENTS_OUTDATED: "Definition",
@@ -168,7 +178,7 @@ const messages = {
     ],
     history: "Versions of the folder",
     historyIntro:
-      "A new version is created only when something changed. Every version can be downloaded again exactly as it was.",
+      "A new version is created only when something has changed. Every version can be downloaded again exactly as it was.",
     loadingHistory: "Loading the versions…",
     noHistory: "No version has been prepared yet.",
     version: "Version {number}",
@@ -214,11 +224,11 @@ const messages = {
     failed: "Non è stato possibile preparare la cartella.",
     downloadFailed: "Non è stato possibile scaricare la cartella.",
     behind:
-      "{section} è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi pubblica di nuovo.",
+      "La sezione {section} è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi prepara di nuovo la cartella.",
     behindStep:
-      "Il passo {section} è rimasto indietro: aprilo e aggiornalo, poi pubblica di nuovo.",
+      "Il passo {section} è rimasto indietro: aprilo e aggiornalo, poi prepara di nuovo la cartella.",
     perspectivesBehind:
-      "Il brief è cambiato: prepara di nuovo le prospettive, poi pubblica di nuovo.",
+      "Il brief è cambiato: prepara di nuovo le prospettive, poi prepara di nuovo la cartella.",
     outdated: {
       USER_TWINS_OUTDATED: "User Twin",
       REQUIREMENTS_OUTDATED: "Definizione",
@@ -383,6 +393,8 @@ const earlier = computed(() => versions.value.slice(1));
 const folderName = computed(
   () => folderSlug(latest.value?.project_name ?? "") || copy.value.folder,
 );
+const guidance = useGuidanceStore();
+const suppliedCopy = computed(() => whyMessages[props.locale]);
 const terminalSteps = computed(() => {
   const values = {
     address: props.studioAddress,
@@ -392,7 +404,12 @@ const terminalSteps = computed(() => {
   return TERMINAL_STEPS.map((step) => ({
     key: step.key,
     text: copy.value.terminalSteps[step.key],
-    command: fill(step.command, values),
+    command: fill(
+      props.providedDesignApproved && step.key === "link"
+        ? step.command.replace("--mode design-code", "--mode design")
+        : step.command,
+      values,
+    ),
   }));
 });
 const developmentSteps = computed(() =>
@@ -406,7 +423,9 @@ const loadingHistory = computed(
   () => packages.projectId === props.projectId && packages.pending.load,
 );
 const selectedAlternative = computed(() =>
-  design.projectId === props.projectId && designApproved.value ? design.selectedAlternative : null,
+  !props.providedDesignApproved && design.projectId === props.projectId && designApproved.value
+    ? design.selectedAlternative
+    : null,
 );
 const prototype = computed(() => {
   const candidate = design.current?.package.prototype ?? null;
@@ -584,7 +603,12 @@ watch(() => props.projectId, loadHistory, { immediate: true });
 
 <template>
   <div class="grid gap-4 text-on-night" data-surface="night" data-testid="design-package">
-    <UiAgentMessage :role-label="copy.agentRole" :avatar="AGENT_AVATAR" class="mb-1">
+    <UiAgentMessage
+      v-if="!guidance.expert"
+      :role-label="copy.agentRole"
+      :avatar="AGENT_AVATAR"
+      class="mb-1"
+    >
       {{ hero.agent }}
     </UiAgentMessage>
 
@@ -620,6 +644,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
             {{ hero.title }}
           </h2>
           <p
+            v-if="!guidance.expert"
             class="m-0 mb-6 text-[15px] leading-[1.55] text-on-night-2 @3xl:max-w-[calc(52cqw-2rem)]"
           >
             {{ hero.intro }}
@@ -786,6 +811,18 @@ watch(() => props.projectId, loadHistory, { immediate: true });
           </div>
         </div>
         <p
+          v-else-if="providedPrototype && providedDesignApproved"
+          class="m-0 mt-4 rounded-field border border-night-line p-3 text-sm leading-normal"
+          data-testid="package-provided-design"
+        >
+          {{ suppliedCopy.supplied }} · {{ providedPrototype.code }} · {{ providedPrototype.title
+          }}<span v-if="providedPrototype.declared_origin" class="mt-1 block"
+            >{{ suppliedCopy.declaredOrigin }}: {{ providedPrototype.declared_origin }}</span
+          ><span class="mt-2 block text-warn-on-night">{{
+            suppliedCopy.prototypeEvaluationLimit
+          }}</span>
+        </p>
+        <p
           v-else
           class="m-0 mt-4 rounded-field border border-night-line p-3 text-sm leading-normal text-on-night-3"
           data-testid="package-no-design"
@@ -880,6 +917,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
                 </template>
               </p>
               <UiCommandLine
+                :class="COMMAND_BOX"
                 :command="step.command"
                 :copy-label="copy.copyCommand"
                 :copied-label="copy.commandCopied"
@@ -888,7 +926,29 @@ watch(() => props.projectId, loadHistory, { immediate: true });
             </div>
           </li>
         </ol>
-        <template v-if="designApproved">
+        <div
+          v-if="providedDesignApproved"
+          class="mt-6 grid gap-3"
+          data-testid="package-provided-limits"
+        >
+          <p class="text-sm">{{ suppliedCopy.prototypeEvaluationLimit }}</p>
+          <p class="text-sm">{{ suppliedCopy.gaps.PROVIDED_PROTOTYPE_CODE_UNAVAILABLE }}</p>
+          <UiCommandLine
+            :class="COMMAND_BOX"
+            command="ut design show"
+            :copy-label="copy.copyCommand"
+            :copied-label="copy.commandCopied"
+            :failed-label="copy.commandNotCopied"
+          />
+          <UiCommandLine
+            :class="COMMAND_BOX"
+            command="ut design open"
+            :copy-label="copy.copyCommand"
+            :copied-label="copy.commandCopied"
+            :failed-label="copy.commandNotCopied"
+          />
+        </div>
+        <template v-if="designApproved && !providedDesignApproved">
           <h3
             class="m-0 mt-6 mb-3 text-[15px] leading-snug font-semibold"
             data-testid="package-development-title"
@@ -915,6 +975,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
                 </template>
               </p>
               <UiCommandLine
+                :class="COMMAND_BOX"
                 :command="step.command"
                 :copy-label="copy.copyCommand"
                 :copied-label="copy.commandCopied"
@@ -1044,7 +1105,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
         </ol>
       </details>
       <p
-        v-if="designApproved"
+        v-if="designApproved && !providedDesignApproved"
         class="m-0 mt-3 border-t border-on-night/10 pt-3 text-sm leading-normal text-on-night-2"
         data-testid="package-terminal"
       >
@@ -1060,14 +1121,14 @@ watch(() => props.projectId, loadHistory, { immediate: true });
     </section>
 
     <ProjectDevelopmentPanel
-      v-if="designApproved"
+      v-if="designApproved && !providedDesignApproved"
       :project-id="projectId"
       :locale="locale"
       :authorize="authorizedRequest"
     />
 
     <ProjectAcceptanceTestsPanel
-      v-if="designApproved"
+      v-if="designApproved && !providedDesignApproved"
       :project-id="projectId"
       :locale="locale"
       :authorize="authorizedRequest"

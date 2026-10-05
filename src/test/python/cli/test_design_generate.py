@@ -229,7 +229,7 @@ def test_a_rejected_mockup_can_be_drawn_again_with_a_new_gesture(tmp_path: Path)
         "(MOCKUP_REJECTED); nothing changed.\n- the screen fails the check\n" in run.output
     )
     assert (
-        "The other alternatives remain usable. Drawing DES-001 again is a new spending "
+        "The other alternatives remain usable. Drawing DES-001 again is a new expense "
         "(1.30-1.60 USD, about 10 min): `ut design` offers it in its menu." in run.output
     )
     assert "Draw the missing mockups: DES-001 (estimate 1.30-1.60 USD, about 10 min)" in run.output
@@ -304,7 +304,7 @@ def test_with_paid_routes_a_rejected_mockup_names_its_amount(tmp_path: Path, bil
     assert run.status == 0, run.errors
     assert run.output.count("Go ahead with this spending? [Y/n]") == 1
     assert (
-        "The other alternatives remain usable. Drawing DES-001 again is a new spending "
+        "The other alternatives remain usable. Drawing DES-001 again is a new expense "
         "(1.30-1.60 USD, about 10 min): `ut design` offers it in its menu." in run.output
     )
 
@@ -500,7 +500,7 @@ def test_a_proposal_cut_because_too_long_is_said(tmp_path: Path) -> None:
     assert "Preparing the design alternatives: not completed after 9 s.\n" in run.output
     assert run.errors == (
         "The generation was stopped because it took too long (TIMEOUT). The design did not "
-        "change; trying again is a new spending.\n"
+        "change; trying again is a new expense.\n"
     )
     assert mockups == 0
 

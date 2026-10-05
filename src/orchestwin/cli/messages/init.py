@@ -3,7 +3,7 @@ from __future__ import annotations
 MESSAGES: dict[str, dict[str, str]] = {
     "init.twins_manage": {"it": "Gestisco gli archetipi", "en": "Manage the archetypes"},
     "init.errors.USER_TWIN_REVISION_PENDING": {
-        "it": "Decidi prima la revisione del User Twin in attesa.",
+        "it": "Decidi prima la revisione dello User Twin in attesa.",
         "en": "Decide the pending User Twin revision first.",
     },
     "init.help": {
@@ -82,24 +82,24 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The name must have at most {limit} characters.",
     },
     "init.created": {
-        "it": 'Progetto "{name}" creato nello Studio. Il collegamento con questa cartella è '
+        "it": "Progetto «{name}» creato nello Studio. Il collegamento con questa cartella è "
         "in {path}.",
         "en": 'Project "{name}" created in the Studio. The link with this folder is in {path}.',
     },
     "init.attaching": {
-        "it": 'Collego questa cartella al progetto "{name}" dello Studio.',
+        "it": "Collego questa cartella al progetto «{name}» dello Studio.",
         "en": 'Linking this folder to the project "{name}" of the Studio.',
     },
     "init.linked": {
-        "it": 'Cartella collegata al progetto "{name}": il collegamento è in {path}.',
+        "it": "Cartella collegata al progetto «{name}»: il collegamento è in {path}.",
         "en": 'Folder linked to the project "{name}": the link is in {path}.',
     },
     "init.resume": {
-        "it": 'Riprendo il progetto "{name}" dal passo {number} di {total}: {step}.',
+        "it": "Riprendo il progetto «{name}» dal passo {number} di {total}: {step}.",
         "en": 'Resuming the project "{name}" from step {number} of {total}: {step}.',
     },
     "init.resume_done": {
-        "it": 'Il progetto "{name}" ha già approvati i passi Brief, Prospettive, User Twin e '
+        "it": "Il progetto «{name}» ha già approvati i passi Brief, Prospettive, User Twin e "
         "Definizione.",
         "en": 'The project "{name}" already has the steps Brief, Perspectives, User Twin and '
         "Definition approved.",
@@ -115,11 +115,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Step {number} of {total}: {step}",
     },
     "init.already_approved": {
-        "it": 'Passo "{step}" già approvato (versione {version}).',
+        "it": "Passo «{step}» già approvato (versione {version}).",
         "en": 'Step "{step}" already approved (version {version}).',
     },
     "init.step_approved": {
-        "it": 'Passo "{step}" approvato (versione {version}). Salvato in {path}.',
+        "it": "Passo «{step}» approvato (versione {version}). Salvato in {path}.",
         "en": 'Step "{step}" approved (version {version}). Saved in {path}.',
     },
     "init.folder_updated": {
@@ -135,13 +135,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "download it later with `ut package publish`.",
     },
     "init.until_stop": {
-        "it": 'Mi fermo dopo il passo "{step}", come chiesto con --until. Rilancia `ut init` '
-        'per continuare con il passo "{next}".',
+        "it": "Mi fermo dopo il passo «{step}», come chiesto con --until. Rilancia `ut init` "
+        "per continuare con il passo «{next}».",
         "en": 'Stopping after the step "{step}", as asked with --until. Launch `ut init` '
         'again to go on with the step "{next}".',
     },
     "init.done": {
-        "it": 'Fatto: il progetto "{name}" ha approvati tutti i passi fino alla Definizione.',
+        "it": "Fatto: il progetto «{name}» ha approvati tutti i passi fino alla Definizione.",
         "en": 'Done: the project "{name}" has every step approved up to the Definition.',
     },
     "init.done_step": {"it": "- {step}: versione {version}", "en": "- {step}: version {version}"},
@@ -194,8 +194,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "generation on the Claude subscription: it spends no credit).",
     },
     "init.dialogue_starting": {
-        "it": "L'analista delle esigenze legge l'idea e prepara la prima domanda...",
-        "en": "The needs analyst reads the idea and prepares the first question...",
+        "it": "L'analista delle esigenze legge l'idea e prepara la prima domanda…",
+        "en": "The needs analyst reads the idea and prepares the first question…",
     },
     "init.dialogue_label": {"it": "Dialogo del brief", "en": "Dialogue of the brief"},
     "init.dialogue_intro": {
@@ -203,7 +203,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "I will ask a few questions about the idea, one at a time. When you answer:",
     },
     "init.dialogue_rule_unknown": {
-        "it": '- una risposta vuota oppure ? vuol dire "non lo so, proponilo tu";',
+        "it": "- una risposta vuota oppure ? vuol dire «non lo so, proponilo tu»;",
         "en": '- an empty answer or ? means "I do not know, propose it yourself";',
     },
     "init.dialogue_rule_done": {
@@ -334,7 +334,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Do you accept proposal {number} ({field})?",
     },
     "init.proposal_reason": {
-        "it": "Non accettata dal titolare del progetto con ut init.",
+        "it": "Non accettata dal proprietario del progetto con ut init.",
         "en": "Not accepted by the owner of the project with ut init.",
     },
     "init.proposal_skipped": {
@@ -371,11 +371,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Which point do you want to correct?",
     },
     "init.correct_text": {
-        "it": 'Nuovo valore per "{field}" (? per lasciarlo aperto, riga vuota per annullare):',
+        "it": "Nuovo valore per «{field}» (? per lasciarlo aperto, riga vuota per annullare):",
         "en": 'New value for "{field}" (? to leave it open, empty line to cancel):',
     },
     "init.correct_list": {
-        "it": 'Nuovi elementi per "{field}", uno per riga; una riga vuota conclude. Scrivi ? '
+        "it": "Nuovi elementi per «{field}», uno per riga; una riga vuota conclude. Scrivi ? "
         "per lasciarlo aperto, oppure subito una riga vuota per annullare.",
         "en": 'New items for "{field}", one per line; an empty line ends the list. Write ? to '
         "leave it open, or an empty line at once to cancel.",
@@ -512,7 +512,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "init.team_asks": {"it": "la chiede con {words}", "en": "asks for it with {words}"},
     "init.team_rules_out": {"it": "la esclude con {words}", "en": "rules it out with {words}"},
     "init.team_evidence": {"it": "{terms} in {fields}", "en": "{terms} in {fields}"},
-    "init.team_term": {"it": "«{term}»", "en": "«{term}»"},
+    "init.team_term": {"it": "«{term}»", "en": '"{term}"'},
     "init.standing_always": {"it": "Sempre applicata", "en": "Always applied"},
     "init.standing_required": {"it": "La chiede il brief", "en": "The brief asks for it"},
     "init.standing_optional": {"it": "A scelta", "en": "Your choice"},
@@ -522,7 +522,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "init.standing_always_missing": {
         "it": "Questa versione è stata preparata prima che questa prospettiva diventasse sempre "
-        "applicata: prepara di nuovo le prospettive nel web.",
+        "applicata: prepara di nuovo le prospettive nello Studio web.",
         "en": "This version was prepared before this perspective became always applied: prepare "
         "the perspectives again in the web Studio.",
     },
@@ -726,10 +726,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Write in your own words what you want to change in the requirements (to "
         "cancel, an empty line at once).",
     },
-    "init.change_cancelled": {"it": "Nessuna modifica chiesta.", "en": "No change asked."},
+    "init.change_cancelled": {"it": "Nessuna modifica chiesta.", "en": "No change requested."},
     "init.change_scripted": {
         "it": "Modifica chiesta dal file: {request}",
-        "en": "Change asked by the file: {request}",
+        "en": "Change requested by the file: {request}",
     },
     "init.change_label": {
         "it": "Preparo la modifica dei requisiti",
@@ -775,7 +775,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "init.change_apply": {"it": "Applichi questa modifica?", "en": "Do you apply this change?"},
     "init.change_reason": {
-        "it": "Scartata dal titolare del progetto con ut init.",
+        "it": "Scartata dal proprietario del progetto con ut init.",
         "en": "Discarded by the owner of the project with ut init.",
     },
     "init.change_applied": {
@@ -862,7 +862,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "{label}: la generazione non è riuscita ({code}). Quello che hai approvato è "
         "salvato: rilancia `ut init` per riprovare, sapendo che è una nuova spesa.",
         "en": "{label}: the generation did not succeed ({code}). What you approved is saved: "
-        "launch `ut init` again to try once more, knowing that it is a new spending.",
+        "launch `ut init` again to try once more, knowing that it is a new expense.",
     },
     "init.errors.GENERATION_LOST": {
         "it": "{label}: la generazione si è persa, forse perché lo Studio è ripartito. Quello "
@@ -870,7 +870,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "nuova generazione è una nuova spesa).",
         "en": "{label}: the generation was lost, perhaps because the Studio restarted. What "
         "you approved is saved: launch `ut init` again, and it resumes from this step (a new "
-        "generation is a new spending).",
+        "generation is a new expense).",
     },
     "init.errors.GENERATION_STILL_RUNNING": {
         "it": "{label}: la generazione continua nello Studio. Rilancia `ut init` più tardi: "
@@ -891,7 +891,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "the web interface too. Finish the changes there, then launch `ut init` again.",
     },
     "init.errors.GATE_REFUSED": {
-        "it": 'Lo Studio non accetta l\'approvazione del passo "{step}" ({code}). Apri il '
+        "it": "Lo Studio non accetta l'approvazione del passo «{step}» ({code}). Apri il "
         "progetto nell'interfaccia web per vedere perché.",
         "en": 'The Studio does not accept the approval of the step "{step}" ({code}). Open the '
         "project in the web interface to see why.",
@@ -917,7 +917,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The idea must have from 1 to {limit} characters.",
     },
     "init.errors.PROJECT_ID_INVALID": {
-        "it": "\"{value}\" non è l'identificativo di un progetto: lo trovi nell'indirizzo "
+        "it": "«{value}» non è l'identificativo di un progetto: lo trovi nell'indirizzo "
         "della pagina del progetto nell'interfaccia web.",
         "en": '"{value}" is not the identifier of a project: you find it in the address of '
         "the page of the project in the web interface.",
@@ -927,14 +927,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "{names}.{details} Correggi il brief nello Studio web (passo Brief, «Modifica il brief "
         "di persona»), poi rilancia `ut init`.",
         "en": "The perspectives cannot be prepared: the brief both asks for and rules out "
-        "{names}.{details} Correct the brief in the web Studio (step Brief, «Edit the brief "
-        "yourself»), then launch `ut init` again.",
+        '{names}.{details} Correct the brief in the web Studio (step Brief, "Edit the brief '
+        'yourself"), then launch `ut init` again.',
     },
     "init.errors.NO_PROFILE_CONFIRMED": {
-        "it": "Nessun profilo degli utenti è confermato, quindi gli User Twin non si possono "
-        "creare. Apri il progetto nell'interfaccia web per rivedere i profili.",
-        "en": "No user profile is confirmed, so the User Twins cannot be created. Open the "
-        "project in the web interface to review the profiles.",
+        "it": "Nessun archetipo è confermato, quindi gli User Twin non si possono "
+        "creare. Apri il progetto nell'interfaccia web per rivedere gli archetipi.",
+        "en": "No archetype is confirmed, so the User Twins cannot be created. Open the "
+        "project in the web interface to review the archetypes.",
     },
     "init.errors.ANSWERS_FILE_INVALID": {
         "it": "Il file delle risposte {path} non è valido (`{entry}`).",

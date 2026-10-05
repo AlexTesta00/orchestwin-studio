@@ -411,7 +411,7 @@ describe("ProjectTwinLearningBlock", () => {
     [
       "en",
       "What the twins learned",
-      "Everything happens in the terminal: ut twins update has the twins propose what they learned, ut twins learn writes an observation yourself, ut twins forget retires one.",
+      "Everything happens in the terminal: ut twins update has the twins propose what they learned, ut twins learn writes an observation of your own, ut twins forget retires one.",
     ],
     [
       "it",

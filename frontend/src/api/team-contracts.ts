@@ -173,7 +173,7 @@ export interface ProposedTeamMemberResponse {
   readonly justifications: readonly TeamProposalJustificationResponse[];
 }
 
-export type TeamProposalRevisionKind = "PROPOSER_GENERATED" | "OWNER_EDITED";
+export type TeamProposalRevisionKind = "PROPOSER_GENERATED" | "OWNER_EDITED" | "OWNER_PROVIDED";
 
 export interface TeamProposalVersionResponse {
   readonly id: string;

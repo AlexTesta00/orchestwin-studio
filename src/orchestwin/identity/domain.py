@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 from email_validator import EmailNotValidError, validate_email
@@ -11,6 +12,11 @@ from email_validator import EmailNotValidError, validate_email
 
 class InvalidEmailAddress(ValueError):
     """Raised when an email address cannot identify a local account."""
+
+
+class GuidanceMode(StrEnum):
+    GUIDED = "GUIDED"
+    EXPERT = "EXPERT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +58,7 @@ class UserAccount:
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    guidance_mode: GuidanceMode | None = None
 
     def __post_init__(self) -> None:
         """Protect account invariants at the domain boundary."""

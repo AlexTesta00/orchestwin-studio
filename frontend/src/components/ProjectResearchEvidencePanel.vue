@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, reactive, ref, watch } from "vue";
+import { computed, nextTick, provide, reactive, ref, watch } from "vue";
 import UiButton from "./UiButton.vue";
 import ResearchEvidenceCitation from "./ResearchEvidenceCitation.vue";
 import GenerationJobNotice from "./GenerationJobNotice.vue";
@@ -20,6 +20,7 @@ import type {
   ResearchEvidencePayload,
 } from "../types/researchEvidence";
 import type { TwinUpdatePayload } from "../types/twinLearning";
+import type { EvidenceFocus } from "../types/humanValidation";
 import type { EvidenceSourceKind } from "../types/userModeling";
 
 const props = withDefaults(
@@ -33,6 +34,7 @@ const props = withDefaults(
     api?: ResearchEvidenceApi | undefined;
     learningApi?: TwinLearningApi | undefined;
     generationApi?: GenerationJobsApi | undefined;
+    focusSource?: EvidenceFocus | null;
   }>(),
   {
     ready: false,
@@ -41,6 +43,7 @@ const props = withDefaults(
     api: undefined,
     learningApi: undefined,
     generationApi: undefined,
+    focusSource: null,
   },
 );
 const emit = defineEmits<{ changed: [] }>();
@@ -72,6 +75,7 @@ const originalTexts = reactive<Record<string, string>>({});
 const retireTarget = ref<ResearchEvidencePayload | null>(null);
 const retireReason = ref("");
 const deleteTarget = ref<ResearchEvidencePayload | null>(null);
+const root = ref<HTMLElement | null>(null);
 const deletionAcknowledged = ref(false);
 const form = reactive({
   title: "",
@@ -414,6 +418,7 @@ async function deleteText(): Promise<void> {
       delete originalTexts[key(item)];
     deleteTarget.value = null;
     notice.value = copy.value.deletedDone;
+    emit("changed");
     await load();
   });
 }
@@ -475,10 +480,29 @@ watch(
     form.empirical = false;
   },
 );
+watch(
+  () => [props.focusSource, props.active, sources.value] as const,
+  async () => {
+    if (!props.focusSource || !props.active) return;
+    await nextTick();
+    const target = [
+      ...(root.value?.querySelectorAll<HTMLElement>('[data-testid="evidence-source"]') ?? []),
+    ].find(
+      (element) =>
+        element.dataset.sourceKey === `${props.focusSource?.id}:${props.focusSource?.version}`,
+    );
+    if (!target) return;
+    const details = target.querySelector<HTMLDetailsElement>("details");
+    if (details) details.open = true;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  },
+);
 </script>
 
 <template>
   <section
+    ref="root"
     class="mt-7 grid gap-4 rounded-panel border border-night-line bg-night-raised p-5 text-on-night sm:p-7"
     aria-labelledby="research-evidence-title"
     data-testid="research-evidence-panel"
@@ -628,6 +652,8 @@ watch(
       :key="key(source)"
       class="grid gap-3 rounded-field border border-night-line bg-night-panel p-4"
       data-testid="evidence-source"
+      :data-source-key="key(source)"
+      tabindex="-1"
     >
       <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 class="m-0 text-base font-semibold wrap-anywhere">{{ source.title }}</h3>

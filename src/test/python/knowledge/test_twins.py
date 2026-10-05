@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from dataclasses import replace
 
 import pytest
 
@@ -10,6 +11,14 @@ from orchestwin.knowledge.folder import build_knowledge_folder
 from orchestwin.knowledge.layout import TWIN_DOCUMENT_KIND, twin_slug
 from orchestwin.knowledge.stage_documents import modeling_version_from_document
 from orchestwin.knowledge.twins import PortableTwin, portable_twins
+from orchestwin.twins.epistemics import (
+    EpistemicStatus,
+    EvidenceReference,
+    EvidenceSourceKind,
+    ObservationProvenance,
+)
+from orchestwin.twins.persistence.snapshots import user_twin_version_from_snapshot
+from orchestwin.twins.user_twins import UserTwinField
 
 from .knowledge_fixtures import PROJECT_NAME, PUBLISHED_AT, partial_sources, sources
 
@@ -198,6 +207,68 @@ def test_portable_text_localizes_declarations_persona_and_why_without_mutating_j
     assert "PERSONA_PROFILE" in text or "PROJECT_BRIEF" in text or "OWNER_INPUT" in text
     assert document == original
     assert "view" not in document["twin"]
+
+
+@pytest.mark.parametrize(
+    "language,paragraph",
+    [
+        (
+            "en",
+            "A user twin is a model of a kind of user, not a person: its observations are "
+            "assumptions with a declared epistemic status and confidence. `twin.json` next to this "
+            "document is a self-contained copy that another OrchesTwin project can import.",
+        ),
+        (
+            "it",
+            "Uno User Twin è un modello di un tipo di utente, non una persona: le sue "
+            "osservazioni sono ipotesi con stato epistemico e confidenza dichiarati. "
+            "`twin.json` accanto a questo documento è una copia autonoma che un altro "
+            "progetto OrchesTwin può importare.",
+        ),
+    ],
+)
+def test_portable_text_says_in_both_languages_that_a_twin_is_not_a_person(language, paragraph):
+    text = twin_markdown(portable_twins(sources())[0].document, language=language)
+
+    assert paragraph in text.splitlines()
+
+
+@pytest.mark.parametrize(
+    "language,goals,status",
+    [("en", "Goals", "Evidenced"), ("it", "Obiettivi", "Documentato")],
+)
+def test_portable_text_names_a_claim_backed_by_empirical_research_in_both_languages(
+    language, goals, status
+):
+    document = portable_twins(sources())[0].document
+    version = user_twin_version_from_snapshot(document["twin"])
+    observed = version.profile.observation_for(UserTwinField.GOALS)
+    supported = replace(
+        observed,
+        epistemic_status=EpistemicStatus.EMPIRICALLY_SUPPORTED,
+        provenance=ObservationProvenance.from_references(
+            (
+                EvidenceReference(
+                    source_kind=EvidenceSourceKind.EMPIRICAL_RESEARCH,
+                    source_id="research-session-12",
+                    locator=observed.observation_key,
+                ),
+            )
+        ),
+    )
+    profile = replace(
+        version.profile,
+        observations=tuple(
+            supported if item is observed else item for item in version.profile.observations
+        ),
+    )
+    twin = replace(version, profile=profile, content_hash=profile.content_hash)
+
+    text = twin_markdown({**document, "twin": twin.to_snapshot()}, language=language)
+
+    line = next(item for item in text.splitlines() if item.startswith(f"- **{goals}**: "))
+    assert line.endswith(f" [{status}]")
+    assert "Evidenziato" not in text
 
 
 def test_derived_api_view_is_ignored_when_reading_canonical_modeling_stage():

@@ -25,7 +25,7 @@ const messages: Record<string, [string, string]> = {
   ],
   SOURCE_JAVASCRIPT_PARSER_UNAVAILABLE: [
     "The application checker is unavailable. Ask whoever manages this installation to restore it before trying again.",
-    "Il controllo dell’applicazione non è disponibile. Chi gestisce questa installazione deve ripristinarlo prima di un nuovo tentativo.",
+    "Il controllo dell'applicazione non è disponibile. Chi gestisce questa installazione deve ripristinarlo prima di un nuovo tentativo.",
   ],
   INVALID_PROVIDER_OUTPUT: [
     "The model returned an invalid proposal. Your project is unchanged. You can try again.",
@@ -53,7 +53,7 @@ const messages: Record<string, [string, string]> = {
   ],
   CONTEXT_BUDGET_EXCEEDED: [
     "The project exceeds the model context window. Reduce the scope or configure a larger context.",
-    "Il progetto supera il contesto del modello. Riduci l’ambito o configura un contesto maggiore.",
+    "Il progetto supera il contesto del modello. Riduci l'ambito o configura un contesto maggiore.",
   ],
   PROVIDER_UNAVAILABLE: [
     "The model cannot be reached. Check its availability in Project details before retrying.",
@@ -64,8 +64,8 @@ const messages: Record<string, [string, string]> = {
     "La generazione ha superato il tempo disponibile. Controlla lo stato dei modelli prima di riprovare.",
   ],
   INVALID_API_RESPONSE: [
-    "The server could not complete this operation. Refresh the stage and retry.",
-    "Il server non ha completato l’operazione. Aggiorna la fase e riprova.",
+    "The server could not complete this operation. Refresh the step and retry.",
+    "Il server non ha completato l'operazione. Aggiorna la fase e riprova.",
   ],
   SOURCE_CONTEXT_LIMIT_EXCEEDED: [
     "The approved project is too large for the configured generation context. Its content has been preserved.",

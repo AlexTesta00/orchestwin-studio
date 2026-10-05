@@ -195,6 +195,33 @@ describe("design observation list", () => {
     );
   });
 
+  it.each([
+    ["it", "La tua conferma è una decisione di progetto: non è una verifica con persone reali."],
+    ["en", "Your confirmation is a project decision: it is not a check with real people."],
+  ] as const)(
+    "says next to a confirmed finding, in %s, that the confirmation is no check with real people",
+    async (locale, notice) => {
+      const first = findings[0] as ObservationFinding;
+      const second = findings[1] as ObservationFinding;
+      const validations = {
+        [key(first)]: { decision: "OWNER_CONFIRMED" as const },
+        [key(second)]: { decision: "OWNER_DISMISSED" as const },
+      };
+      const wrapper = mountList({ locale, validations });
+      const [confirmed, dismissed, open] = cards(wrapper);
+      const shown = confirmed?.get("[data-testid='finding-confirmation-notice']");
+      expect(shown?.text()).toBe(notice);
+      expect(shown?.classes()).toEqual(expect.arrayContaining(["text-xs", "text-on-night-3"]));
+      expect(confirmed?.findAll("[data-testid='finding-confirmation-notice']")).toHaveLength(1);
+      expect(dismissed?.find("[data-testid='finding-confirmation-notice']").exists()).toBe(false);
+      expect(open?.find("[data-testid='finding-confirmation-notice']").exists()).toBe(false);
+      await wrapper.setProps({ applied: { "run:run-1:twin-vb:UTF-001": "REQUIREMENTS" } });
+      const applied = cards(wrapper)[0];
+      expect(applied?.find("[data-testid='design-observation-bring']").exists()).toBe(false);
+      expect(applied?.get("[data-testid='finding-confirmation-notice']").text()).toBe(notice);
+    },
+  );
+
   it("dims a finding set aside and lets the person confirm it after all", async () => {
     const second = findings[1] as ObservationFinding;
     const wrapper = mountList({ validations: { [key(second)]: { decision: "OWNER_DISMISSED" } } });

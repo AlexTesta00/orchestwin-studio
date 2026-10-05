@@ -11,6 +11,9 @@ import GeneratedMockupDialog, {
 } from "./GeneratedMockupDialog.vue";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
 import source from "./GeneratedMockupDialog.vue?raw";
+import { whyContextKey } from "./whyContext";
+import { activitySignalKey } from "../stores/activityJournal";
+import { whyDocument, whyNode } from "../test/whyFixtures";
 
 function documentFor(entry: string): MockupDocument {
   return {
@@ -143,6 +146,60 @@ describe("generated mockup dialog", () => {
     expect(document.querySelector(".mockup-marker")).toBeNull();
     expect(all("[data-testid='mockup-dialog'] iframe")).toHaveLength(1);
     expect(source).not.toMatch(/v-html|innerHTML|allow-/);
+  });
+
+  it("adds precise Studio element controls without changing generated HTML or sandbox permissions", async () => {
+    const mockup = documentFor("SCR-001");
+    const node = whyNode({
+      key: "exact-element",
+      kind: "PROTOTYPE_ELEMENT",
+      code: "ELM-014",
+      title: "Ricerca",
+      declared_context: {
+        perspectives: [],
+        mockup: {
+          alternative_id: mockup.alternative_id,
+          prototype_id: "prototype",
+          screen_code: "SCR-001",
+          source: "LATEST",
+          document_hashes: { "SCR-001": mockup.content_hash },
+        },
+      },
+    });
+    const api = { document: vi.fn().mockResolvedValue(whyDocument([node])), explain: vi.fn() };
+    wrapper = mount(GeneratedMockupDialog, {
+      props: { title: "Prestiti", document: mockup, locale: "it" },
+      global: {
+        plugins: [createAppI18n("it")],
+        provide: {
+          [whyContextKey as symbol]: {
+            projectId: () => "project",
+            api,
+            authorize: <T>(request: (token: string) => Promise<T>) => request("token"),
+          },
+        },
+      },
+      attachTo: document.body,
+    });
+    const frame = query<HTMLIFrameElement>("iframe");
+    const html = frame.getAttribute("srcdoc");
+    const picker = query<HTMLDetailsElement>('[data-testid="mockup-why-elements"]');
+    query('[data-focus-guard="start"]').focus();
+    const walkthrough = query<HTMLDetailsElement>('[data-testid="mockup-scenario-walkthrough"]');
+    expect(document.activeElement).toBe(walkthrough.querySelector("summary"));
+    picker.open = true;
+    picker.dispatchEvent(new Event("toggle"));
+    await flushPromises();
+    expect(query('[data-testid="mockup-why-element"]').textContent).toContain("Ricerca");
+    expect(query('[data-testid="mockup-element-why"]').getAttribute("data-why-code")).toBe(
+      node.key,
+    );
+    expect(frame.getAttribute("srcdoc")).toBe(html);
+    expect(frame.getAttribute("sandbox")).toBe("");
+    expect(wrapper.getComponent(GeneratedMockupFrame).props("html")).toBe(mockup.html);
+    expect(api.explain).not.toHaveBeenCalled();
+    query('[data-focus-guard="start"]').focus();
+    expect(document.activeElement).toBe(walkthrough.querySelector("summary"));
   });
 
   it("closes with Escape, with its button and with a click outside the window", () => {
@@ -398,14 +455,27 @@ describe("generated mockup dialog", () => {
     expect(onClose).toHaveBeenCalledTimes(3);
   });
 
-  it("wraps the tabs on more lines and cuts a long title, keeping the whole title in its name", () => {
+  it("wraps the tabs on more lines and a long title between its words, without cutting it", () => {
     const long: MockupDocument = {
       ...documentFor("SCR-001"),
-      screens: Array.from({ length: 6 }, (_item, index) => ({
-        code: `SCR-00${index + 1}`,
-        title: `Schermata ${index + 1} con un titolo davvero molto lungo da tagliare`,
-        state: "DEFAULT",
-      })),
+      screens: [
+        {
+          code: "SCR-001",
+          title: "Beverly Hills, palestra indipendente a Riccione",
+          state: "DEFAULT",
+        },
+        { code: "SCR-002", title: "Chiamata avviata", state: "SUCCESS" },
+        {
+          code: "SCR-003",
+          title: "Chiamata non disponibile su questo dispositivo",
+          state: "ERROR",
+        },
+        ...Array.from({ length: 3 }, (_item, index) => ({
+          code: `SCR-00${index + 4}`,
+          title: `Schermata ${index + 4} con un titolo davvero molto lungo da leggere intero`,
+          state: "DEFAULT",
+        })),
+      ],
     };
     open({ document: long, observations: [], pins: [], unanchored: [] });
     const list = query("[role='tablist']");
@@ -415,14 +485,24 @@ describe("generated mockup dialog", () => {
     expect(tabs).toHaveLength(6);
     for (const [index, tab] of tabs.entries()) {
       const title = long.screens[index]?.title ?? "";
+      const label = tab.querySelector("[data-testid='mockup-dialog-screen-title']");
       expect(tab.getAttribute("title")).toBe(title);
       expect(tab.textContent?.trim()).toBe(title);
+      expect(label?.textContent).toBe(title);
       expect(tab.className).toContain("max-w-[calc(28ch+1.75rem)]");
-      expect(tab.className).not.toContain("whitespace-nowrap");
-      expect(tab.querySelector("[data-testid='mockup-dialog-screen-title']")?.className).toContain(
-        "truncate",
-      );
+      expect(tab.className).not.toMatch(/\b(?:truncate|whitespace-nowrap|line-clamp-\d)\b/);
+      expect(label?.className.split(" ")).toEqual(["min-w-0", "break-words"]);
     }
+    expect(tabs.map((tab) => tab.getAttribute("aria-selected"))).toEqual([
+      "true",
+      "false",
+      "false",
+      "false",
+      "false",
+      "false",
+    ]);
+    expect(tabs[0]?.className).toContain("bg-on-night text-ink");
+    expect(tabs[0]?.getAttribute("tabindex")).toBe("0");
   });
 
   it("names screens and elements by their titles in the texts of the observations", () => {
@@ -462,5 +542,31 @@ describe("generated mockup dialog", () => {
     wrapper?.unmount();
     open({ observations: [], document: null, busy: true });
     await expectAccessible(query("[data-testid='mockup-dialog']"), { iframes: false });
+  });
+
+  it("tells the study session the code of the opened alternative and nothing of its title", async () => {
+    const signal = { whyOpened: vi.fn(), mockupOpened: vi.fn() };
+    const openTitled = (title: string) =>
+      mount(GeneratedMockupDialog, {
+        props: { title, document: documentFor("SCR-001") },
+        global: {
+          plugins: [createAppI18n("it")],
+          provide: { [activitySignalKey as symbol]: signal },
+        },
+        attachTo: document.body,
+      });
+
+    wrapper = openTitled("DES-002 · Registro con tabella");
+    await flushPromises();
+    all("[data-testid='mockup-dialog-screen']")[1]?.click();
+    await flushPromises();
+    expect(signal.mockupOpened).toHaveBeenCalledExactlyOnceWith("DES-002");
+
+    wrapper.unmount();
+    wrapper = openTitled("Registro con tabella");
+    await flushPromises();
+    expect(signal.mockupOpened).toHaveBeenCalledTimes(2);
+    expect(signal.mockupOpened).toHaveBeenLastCalledWith(null);
+    expect(signal.whyOpened).not.toHaveBeenCalled();
   });
 });

@@ -66,7 +66,7 @@ from orchestwin.twins.epistemics import ConfidenceScore, ObservationProvenance
 
 TITLE_LENGTH: Final = 200
 TEXT_LENGTH: Final = 2000
-HOSTED_DESIGN_CONTRACT_VERSION: Final = 104
+HOSTED_DESIGN_CONTRACT_VERSION: Final = 107
 LANGUAGE_GROUPS: Final = ("requirements", "stories", "criteria", "scenarios")
 LANGUAGE_MIN_WORDS: Final = 4
 ALTERNATIVE_TEXT_LISTS: Final = (
@@ -537,12 +537,14 @@ def require_draft_language(draft, language):
         raise ValueError("the design is not written in the language of the requirements")
 
 
-def bind_design(draft, request, twins, model_reference):
+def bind_design(draft, request, twins, model_reference, *, directions=None, exploration=None):
     ids = requirement_code_map(request.requirements.version.specification)
     records = [*draft.alternatives, *draft.critiques, *draft.concerns]
     codes = [item.code for item in records]
     if len(set(codes)) != len(codes) or set(codes) & ids.keys():
         raise ValueError("duplicate design codes")
+    if directions is not None and {x.code for x in draft.alternatives} - set(directions):
+        raise ValueError("unknown design reference")
     ids.update({code: uuid4() for code in codes})
     draft = named_draft(draft, {key: twin.reference.name for key, twin in twins.items()})
     require_draft_language(
@@ -555,11 +557,13 @@ def bind_design(draft, request, twins, model_reference):
             product_name=x.visual.product_name,
             rationale=x.visual.visual_rationale,
             twin_fit=_twin_fit(x, twins),
+            direction=None if directions is None else directions[x.code],
         )
         for x in draft.alternatives
     }
     require_distinct_visual_choices([languages[x.code].choices for x in draft.alternatives])
-    exploration = visual_exploration(request.project_id)
+    if exploration is None:
+        exploration = visual_exploration(request.project_id)
     for x in draft.alternatives:
         require_explored_choices(x.code, languages[x.code].choices, exploration)
     for x in draft.alternatives:

@@ -95,6 +95,10 @@ def request_job_path(project_id: str, job_id: str) -> str:
     return f"/projects/{project_id}/generation-jobs/{job_id}"
 
 
+def distance_path(project_id: str) -> str:
+    return f"{design_path(project_id)}/distance"
+
+
 def readiness(client: StudioClient, project_id: str) -> Mapping[str, object]:
     document = client.get(f"{design_path(project_id)}/readiness")
     if not isinstance(document, dict):
@@ -262,6 +266,17 @@ def comparison(client: StudioClient, project_id: str) -> Mapping[str, object] | 
     if reply.status >= 400:
         return None
     document = payload(reply)
+    return document if isinstance(document, dict) else None
+
+
+def distance(client: StudioClient, project_id: str) -> Mapping[str, object] | None:
+    reply = client.request("GET", distance_path(project_id))
+    if reply.status >= 400 or not reply.content.strip():
+        return None
+    try:
+        document = reply.json()
+    except ApiFailure:
+        return None
     return document if isinstance(document, dict) else None
 
 

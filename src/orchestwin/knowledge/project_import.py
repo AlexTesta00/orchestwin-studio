@@ -75,10 +75,16 @@ class ProjectImportPlan:
     team: TeamProposalVersion
     modeling: UserModelingSnapshotVersion
     requirements: RequirementsSpecificationVersion
-    design: DesignPackageVersion
+    design: DesignPackageVersion | None
     identities: Mapping[str, str]
     hashes: Mapping[str, str]
     research_evidence: Mapping[str, object] | None = None
+    evaluations: tuple = ()
+    finding_decisions: tuple = ()
+    validation_records: Mapping[str, object] | None = None
+    workflow_inputs: Mapping[str, object] | None = None
+    omitted_sections: tuple[Mapping[str, object], ...] = ()
+    import_limits: tuple[str, ...] = ()
 
     @property
     def personas(self):
@@ -91,6 +97,12 @@ class ProjectImportPlan:
 
 def require_complete(folder: VerifiedFolder) -> None:
     if not folder.complete:
+        from orchestwin.knowledge.workflow_inputs import read_workflow_inputs
+
+        records = read_workflow_inputs(folder)
+        approved = folder.manifest.get("workflow_inputs", {}).get("approved_prototype")
+        if records["prototypes"] and approved and folder.present_stages == STAGES[:-1]:
+            return
         raise KnowledgeArchiveError(FOLDER_INCOMPLETE, folder.pending_stage)
 
 
@@ -330,7 +342,8 @@ def _plan(
 ) -> ProjectImportPlan:
     require_complete(folder)
     documents = folder.documents
-    if set(documents) != set(STAGES):
+    expected_stages = STAGES if folder.complete else STAGES[:-1]
+    if set(documents) != set(expected_stages):
         raise KnowledgeArchiveError("FOLDER_DOCUMENT_MISSING")
     old_project = str(documents["brief"]["project_id"])
     old_brief = str(documents["brief"]["id"])
@@ -365,7 +378,9 @@ def _plan(
         project_id=project_id,
         version_number=IMPORTED_VERSION_NUMBER,
         proposal=proposal,
-        revision_kind=TeamProposalRevisionKind.PROPOSER_GENERATED,
+        revision_kind=TeamProposalRevisionKind.OWNER_PROVIDED
+        if documents["team"].get("revision_kind") == "OWNER_PROVIDED"
+        else TeamProposalRevisionKind.PROPOSER_GENERATED,
         created_by_user_id=owner_user_id,
         created_at=created_at,
         based_on_version_number=None,
@@ -391,22 +406,25 @@ def _plan(
         created_at=created_at,
     )
 
-    prototype = _derived_prototype(rewriter, documents["design"]["package"])
-    design_document = rewriter.rewrite(documents["design"])
-    if prototype is not None:
-        design_document["package"]["prototype"] = prototype
-    package = _parsed("design", design_package_from_snapshot, design_document["package"])
-    rewriter.learn(documents["design"]["content_hash"], package.content_hash)
-    design = DesignPackageVersion(
-        id=UUID(design_document["id"]),
-        project_id=project_id,
-        version_number=IMPORTED_VERSION_NUMBER,
-        based_on_version_number=None,
-        package=package,
-        content_hash=package.content_hash,
-        created_by_user_id=owner_user_id,
-        created_at=created_at,
-    )
+    design = None
+    package = None
+    if "design" in documents:
+        prototype = _derived_prototype(rewriter, documents["design"]["package"])
+        design_document = rewriter.rewrite(documents["design"])
+        if prototype is not None:
+            design_document["package"]["prototype"] = prototype
+        package = _parsed("design", design_package_from_snapshot, design_document["package"])
+        rewriter.learn(documents["design"]["content_hash"], package.content_hash)
+        design = DesignPackageVersion(
+            id=UUID(design_document["id"]),
+            project_id=project_id,
+            version_number=IMPORTED_VERSION_NUMBER,
+            based_on_version_number=None,
+            package=package,
+            content_hash=package.content_hash,
+            created_by_user_id=owner_user_id,
+            created_at=created_at,
+        )
 
     issue = stage_consistency_issue(
         project_id,
@@ -420,18 +438,50 @@ def _plan(
             "team": team,
             "twins": modeling,
             "requirements": requirements,
-            "design": design,
+            **({"design": design} if design is not None else {}),
         },
         {
             "team": proposal.to_snapshot(),
             "twins": modeling.snapshot.to_snapshot(),
             "requirements": specification.to_snapshot(),
-            "design": package.to_snapshot(),
+            **({"design": package.to_snapshot()} if package is not None else {}),
         },
     )
     if issue is not None:
         raise KnowledgeArchiveError("FOLDER_INCONSISTENT", issue)
 
+    from orchestwin.knowledge.feedback_import import import_feedback
+
+    omitted_sections = []
+    evaluations, decisions, import_limits = import_feedback(
+        folder,
+        identities=rewriter.identities,
+        hashes=rewriter.hashes,
+        project_id=project_id,
+        owner_user_id=owner_user_id,
+        omitted_sections=omitted_sections,
+    )
+    from orchestwin.knowledge.validation_records import import_validation
+
+    validation = import_validation(
+        folder,
+        identities=rewriter.identities,
+        hashes=rewriter.hashes,
+        project_id=project_id,
+        owner_user_id=owner_user_id,
+    )
+    if validation:
+        omitted_sections.extend(validation.get("omitted_sections", ()))
+        import_limits = tuple(dict.fromkeys((*import_limits, *validation.get("limits", ()))))
+    if "twins/feedback/learned.json" in folder.files:
+        import_limits = (*import_limits, "LEARNED_PROJECTION_NOT_RESTORED")
+    from orchestwin.knowledge.workflow_inputs import import_workflow_inputs
+
+    workflow_inputs = import_workflow_inputs(
+        folder, project_id=project_id, identities=rewriter.identities, hashes=rewriter.hashes
+    )
+    if workflow_inputs:
+        import_limits = (*import_limits, "OWNER_WORKFLOW_APPROVALS_NOT_RESTORED")
     return ProjectImportPlan(
         origin=folder_origin(folder),
         project_id=project_id,
@@ -444,14 +494,32 @@ def _plan(
         design=design,
         identities=dict(rewriter.identities),
         hashes=dict(rewriter.hashes),
+        evaluations=evaluations,
+        finding_decisions=decisions,
+        validation_records=validation,
+        workflow_inputs=workflow_inputs,
+        omitted_sections=tuple(omitted_sections),
+        import_limits=import_limits,
         research_evidence=None
         if evidence is None
-        else imported_evidence(evidence, identities=rewriter.identities, project_id=project_id),
+        else imported_evidence(
+            evidence,
+            identities=rewriter.identities,
+            project_id=project_id,
+            original_twins={
+                item["twin_id"]: item["version_number"]
+                for item in documents["twins"]["snapshot"]["twin_versions"]
+            },
+        ),
     )
 
 
 def imported_evidence(
-    document: Mapping[str, object], *, identities: Mapping[str, str], project_id: UUID
+    document: Mapping[str, object],
+    *,
+    identities: Mapping[str, str],
+    project_id: UUID,
+    original_twins: Mapping[str, int] | None = None,
 ) -> dict[str, object]:
     return {
         "kind": document["kind"],
@@ -482,6 +550,12 @@ def imported_evidence(
                     "twin_id": item["twin_id"],
                     "twin_version": item["twin_version"],
                     "status": item["status"],
+                    **(
+                        {"mapped_twin_version": IMPORTED_VERSION_NUMBER}
+                        if original_twins
+                        and original_twins.get(item["twin_id"]) == item["twin_version"]
+                        else {}
+                    ),
                 },
                 "citation": {
                     **item["citation"],
@@ -534,11 +608,17 @@ def plan_documents(
             "specification",
             plan.requirements.specification.to_snapshot(),
         ),
-        "design": envelope(
-            plan.design.id,
-            plan.design.content_hash,
-            "package",
-            plan.design.package.to_snapshot(),
+        **(
+            {
+                "design": envelope(
+                    plan.design.id,
+                    plan.design.content_hash,
+                    "package",
+                    plan.design.package.to_snapshot(),
+                )
+            }
+            if plan.design is not None
+            else {}
         ),
     }
 

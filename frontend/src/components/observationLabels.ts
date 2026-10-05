@@ -12,7 +12,7 @@ const LABELS: ReadonlyMap<string, readonly [string, string]> = new Map([
   ["decision_criteria", ["Decision criteria", "Criteri decisionali"]],
   ["preferred_vocabulary", ["Preferred vocabulary", "Vocabolario preferito"]],
   ["frustrations", ["Frustrations", "Frustrazioni"]],
-  ["pain_points", ["Pain points", "Pain point"]],
+  ["pain_points", ["Pain points", "Difficoltà"]],
   ["trust_concerns", ["Trust concerns", "Preoccupazioni sulla fiducia"]],
   ["accessibility_needs", ["Accessibility needs", "Esigenze di accessibilità"]],
   ["operational_constraints", ["Operational constraints", "Vincoli operativi"]],

@@ -8,6 +8,8 @@ const { ARGUMENTS, commandLine } = require("./src/commands");
 const { languageOf, text } = require("./src/messages");
 const { KNOWLEDGE_FOLDER, readProject } = require("./src/project");
 const { renderPanel } = require("./src/view");
+const { readWhyAnswer, validSelector } = require("./src/why");
+const { readValidation, readWalkthrough } = require("./src/validation");
 
 const VIEW_ID = "orchestwin.panel";
 const TERMINAL_NAME = "OrchesTwin";
@@ -63,6 +65,29 @@ function createExtension(vscode, options = {}) {
   let rendered = null;
   let status = "";
   let disposed = false;
+  let why = {};
+  let whyRoot = null;
+  let whyRequest = 0;
+  let validation = {};
+  let walkthrough = {};
+  let validationRequest = 0;
+  let walkthroughRequest = 0;
+
+  function clearValidation() {
+    validation = {};
+    walkthrough = {};
+    validationRequest += 1;
+    walkthroughRequest += 1;
+  }
+
+  function scopeTo(root) {
+    if (whyRoot !== root) {
+      why = {};
+      whyRoot = root;
+      whyRequest += 1;
+      clearValidation();
+    }
+  }
 
   function language() {
     return languageOf(vscode.env.language);
@@ -83,7 +108,11 @@ function createExtension(vscode, options = {}) {
 
   function projectRoot() {
     const roots = folders().map((folder) => folder.uri.fsPath);
-    return roots.find((root) => isFile(path.join(root, ...LINK_PATH))) ?? roots[0] ?? null;
+    return (
+      roots.find((root) => isFile(path.join(root, ...LINK_PATH))) ??
+      roots[0] ??
+      null
+    );
   }
 
   function disposeWatchers() {
@@ -115,7 +144,7 @@ function createExtension(vscode, options = {}) {
   }
 
   function keyOf(current) {
-    return JSON.stringify([current, language(), status]);
+    return JSON.stringify([current, language(), status, why, validation, walkthrough]);
   }
 
   function render(force = false) {
@@ -123,6 +152,7 @@ function createExtension(vscode, options = {}) {
       return;
     }
     const current = readProject(projectRoot());
+    scopeTo(current.root);
     watch(current);
     if (view === null) {
       return;
@@ -138,6 +168,9 @@ function createExtension(vscode, options = {}) {
       nonce: newNonce(),
       cspSource: view.webview.cspSource,
       status,
+      why,
+      validation,
+      walkthrough,
     });
   }
 
@@ -145,6 +178,9 @@ function createExtension(vscode, options = {}) {
     if (disposed) {
       return;
     }
+    why = {};
+    whyRequest += 1;
+    clearValidation();
     if (timer !== null) {
       clearTimer(timer);
     }
@@ -223,7 +259,172 @@ function createExtension(vscode, options = {}) {
   }
 
   function refresh() {
+    why = {};
+    whyRequest += 1;
+    clearValidation();
     render(true);
+  }
+
+  async function openValidation(mode = "offline") {
+    const root = projectRoot();
+    const current = readProject(root);
+    if (root === null || current.project === null || current.project.id === null) {
+      say(text(language(), "status.noFolder"));
+      return;
+    }
+    if (!["offline", "studio"].includes(mode) || disposed) {
+      return;
+    }
+    scopeTo(root);
+    const request = ++validationRequest;
+    validation = { status: "LOADING", mode };
+    render(true);
+    const result = await readValidation(root, program(), current.project.id, { offline: mode === "offline" }, options.execFile);
+    if (disposed || request !== validationRequest || root !== projectRoot()) {
+      return;
+    }
+    validation = { ...result, mode };
+    render(true);
+  }
+
+  async function openWalkthrough(code, values = {}) {
+    const root = projectRoot();
+    const current = readProject(root);
+    if (root === null || current.project === null || current.project.id === null) {
+      say(text(language(), "status.noFolder"));
+      return;
+    }
+    let selected = code;
+    if (selected === undefined) {
+      const scenarios = current.why.items.filter((item) => item.kind === "SCENARIO");
+      if (scenarios.length > 0 && typeof vscode.window.showQuickPick === "function") {
+        const choice = await vscode.window.showQuickPick(scenarios.map((node) => ({ label: node.title || node.code, description: `${node.code} · v${node.reference.version_number ?? "—"}`, detail: node.key, key: node.key })), { placeHolder: text(language(), "validation.scenarioSelect"), matchOnDescription: true, matchOnDetail: true });
+        selected = choice && choice.key;
+      } else if (typeof vscode.window.showInputBox === "function") {
+        selected = await vscode.window.showInputBox({ prompt: text(language(), "validation.scenarioKey"), validateInput: (value) => validSelector(value) && !value.startsWith("-") ? undefined : text(language(), "validation.invalid") });
+      }
+      if (selected === undefined) {
+        return;
+      }
+    }
+    const mode = values.mode ?? "offline";
+    if (!["offline", "studio"].includes(mode) || disposed || root !== projectRoot()) {
+      return;
+    }
+    const alternative = values.alternative ?? "";
+    const documentHash = values.documentHash ?? "";
+    scopeTo(root);
+    const request = ++walkthroughRequest;
+    walkthrough = { status: "LOADING", code: selected, alternative, documentHash, mode };
+    render(true);
+    const result = await readWalkthrough(root, program(), selected, current.project.id, { offline: mode === "offline", alternative, documentHash }, options.execFile);
+    if (disposed || request !== walkthroughRequest || root !== projectRoot()) {
+      return;
+    }
+    walkthrough = { ...result, code: selected, alternative, documentHash, mode };
+    render(true);
+  }
+
+  async function focusValidation() {
+    if (typeof vscode.commands.executeCommand === "function") {
+      await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
+    }
+    return openValidation();
+  }
+
+  async function focusWalkthrough(code) {
+    if (typeof vscode.commands.executeCommand === "function") {
+      await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
+    }
+    return openWalkthrough(code);
+  }
+
+  async function openWhy(code) {
+    const root = projectRoot();
+    const current = readProject(root);
+    if (
+      root === null ||
+      current.project === null ||
+      current.project.id === null
+    ) {
+      say(text(language(), "status.noFolder"));
+      return;
+    }
+    let selected = code;
+    if (selected === undefined) {
+      if (
+        current.why.items.length > 0 &&
+        typeof vscode.window.showQuickPick === "function"
+      ) {
+        const choice = await vscode.window.showQuickPick(
+          current.why.items.map((node) => ({
+            label: node.title || node.code,
+            description: `${node.code} · v${node.reference.version_number ?? "—"}`,
+            detail: node.key,
+            key: node.key,
+          })),
+          {
+            placeHolder: text(language(), "why.select"),
+            matchOnDescription: true,
+            matchOnDetail: true,
+          },
+        );
+        selected = choice && choice.key;
+      } else if (typeof vscode.window.showInputBox === "function") {
+        selected = await vscode.window.showInputBox({
+          prompt: text(language(), "why.code"),
+          validateInput: (value) =>
+            validSelector(value) ? undefined : text(language(), "why.invalid"),
+        });
+      }
+      if (selected === undefined) {
+        return;
+      }
+    }
+    if (!validSelector(selected)) {
+      say(text(language(), "why.invalid"));
+      return;
+    }
+    if (disposed || root !== projectRoot()) {
+      return;
+    }
+    scopeTo(root);
+    const request = ++whyRequest;
+    why = { code: selected };
+    status = text(language(), "why.loading");
+    render(true);
+    const result = await readWhyAnswer(
+      root,
+      program(),
+      selected,
+      current.project.id,
+      options.execFile,
+    );
+    if (disposed || request !== whyRequest || root !== projectRoot()) {
+      return;
+    }
+    why = { ...result, code: selected };
+    const message =
+      result.status === "OK"
+        ? "why.offline"
+        : result.status === "UNAVAILABLE"
+          ? "why.unavailable"
+          : result.status === "WHY_CODE_AMBIGUOUS"
+            ? "why.ambiguous"
+            : ["INVALID", "WHY_CODE_INVALID", "WHY_CODE_NOT_FOUND"].includes(
+                  result.status,
+                )
+              ? "why.invalid"
+              : "why.failed";
+    status = text(language(), message);
+    render(true);
+  }
+
+  async function focusWhy(code) {
+    if (typeof vscode.commands.executeCommand === "function") {
+      await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
+    }
+    return openWhy(code);
   }
 
   function receive(message) {
@@ -231,6 +432,15 @@ function createExtension(vscode, options = {}) {
       return undefined;
     }
     const id = message.command;
+    if (id === "why") {
+      return openWhy(message.code);
+    }
+    if (id === "validation") {
+      return openValidation(message.mode);
+    }
+    if (id === "validationWalkthrough") {
+      return openWalkthrough(message.code, message);
+    }
     if (Object.hasOwn(ARGUMENTS, id)) {
       return runInTerminal(id);
     }
@@ -269,6 +479,9 @@ function createExtension(vscode, options = {}) {
 
   function dispose() {
     disposed = true;
+    whyRequest += 1;
+    why = {};
+    clearValidation();
     if (timer !== null) {
       clearTimer(timer);
       timer = null;
@@ -285,6 +498,9 @@ function createExtension(vscode, options = {}) {
       "orchestwin.refresh": refresh,
       "orchestwin.openReport": openReport,
       "orchestwin.connectAgents": connect,
+      "orchestwin.why": focusWhy,
+      "orchestwin.validation": focusValidation,
+      "orchestwin.scenarioWalkthrough": focusWalkthrough,
     };
     for (const [command, id] of Object.entries(TERMINAL_COMMANDS)) {
       handlers[command] = () => runInTerminal(id);

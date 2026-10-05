@@ -103,6 +103,8 @@ describe("renderPanel", () => {
       "tasks.title",
       "tests.title",
       "twins.title",
+      "why.title",
+      "validation.title",
       "agents.title",
     ];
     for (const language of LANGUAGES) {
@@ -114,7 +116,14 @@ describe("renderPanel", () => {
       assert.deepEqual(titles(render(states.broken, language)), sectionTitles(language, complete));
       assert.deepEqual(
         titles(render(states.partial, language)),
-        sectionTitles(language, ["next.title", "development.title", "twins.title", "agents.title"]),
+        sectionTitles(language, [
+          "next.title",
+          "development.title",
+          "twins.title",
+          "why.title",
+          "validation.title",
+          "agents.title",
+        ]),
       );
       assert.deepEqual(titles(render(states.unlinked, language)), [text(language, "next.title")]);
       assert.deepEqual(titles(render(states.none, language)), [text(language, "next.title")]);
@@ -172,6 +181,28 @@ describe("renderPanel", () => {
       }
       assert.ok(!page.includes("OBS-001"), "only the three newest observations");
       assert.ok(!page.includes(sentence(language, "tests.local")));
+    }
+  });
+
+  it("names the visual direction of the chosen alternative only when it has one", () => {
+    const state = structuredClone(states.complete);
+    state.reference.direction = "Printed <register>";
+    assert.equal(text("en", "development.direction"), "Visual direction");
+    assert.equal(text("it", "development.direction"), "Direzione visiva");
+    for (const language of LANGUAGES) {
+      const html = render(state, language);
+      const reference = [
+        text(language, "development.reference"),
+        text(language, "development.referenceValue", { requirements: 1, design: 5 }),
+        "(DES-002)",
+      ].join(" ");
+      assert.ok(
+        plain(html).includes(`${reference} ${text(language, "development.direction")} Printed <register>`),
+      );
+      assert.ok(html.includes("<dd>Printed &lt;register&gt;</dd>"));
+      const without = plain(render(states.complete, language));
+      assert.ok(without.includes(reference));
+      assert.ok(!without.includes(text(language, "development.direction")));
     }
   });
 
@@ -387,7 +418,10 @@ describe("renderPanel", () => {
           found.filter((button) => button.primary).length,
           commands.length === 0 ? 0 : 1,
         );
-        assert.equal(html.match(/<button/g)?.length ?? 0, commands.length);
+        assert.equal(
+          html.match(/<button/g)?.length ?? 0,
+          commands.length + (states[name].linked ? 4 : 0),
+        );
       }
     }
   });
@@ -483,11 +517,18 @@ describe("renderPanel", () => {
     );
   });
 
-  it("sends only the command of the pressed button from its script", () => {
+  it("sends commands and exact why selectors from accessible controls", () => {
     const html = render(states.complete, "en");
     const script = html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)[1];
     assert.ok(script.includes('closest("button[data-command]")'));
-    assert.ok(script.includes('api.postMessage({ command: target.getAttribute("data-command") })'));
+    assert.ok(script.includes('const code = target.getAttribute("data-code")'));
+    assert.ok(
+      script.includes('if (code !== null) message.code = code'),
+    );
+    assert.ok(script.includes('event.target.id === "why-form"'));
+    assert.ok(
+      script.includes('api.postMessage({ command: "why", code: input.value })'),
+    );
     assert.ok(script.includes('typeof acquireVsCodeApi === "function"'));
   });
 
@@ -501,6 +542,109 @@ describe("renderPanel", () => {
     }
     const broken = render({ root: "x", linked: true, folder: { available: true } }, "en");
     assert.ok(plain(broken).includes(sentence("en", "panel.error")));
+  });
+
+  function whyAnswer(extra = {}) {
+    return {
+      target: { key: "REQ:target:1:hash:context", code: "REQ-001", title: "Requested requirement", display_status: "UNKNOWN", current: true, reference: { artifact_id: "target", version_number: 1, content_hash: "hash" }, rationale: null, citations: [], declared_context: {} },
+      summary: { upstream_count: 0, downstream_count: 0, complete_to_twin: false, complete_to_evidence: false, all_paths_complete: false, stop_reasons: [] },
+      upstream: [], downstream: [], links: [], gaps: [], human_validation: [], limits: [], declared_context: {},
+      ...extra,
+    };
+  }
+
+  it("previews three human validation titles and statuses and keeps all rationales and quotes in closed details", () => {
+    const nodes = Array.from({ length: 5 }, (_, index) => ({
+      key: `CLAIM:claim-${index}:1:hash:context`, code: `UT-${index}`, title: `Validation title <${index}>`, kind: "USER_TWIN_CLAIM", display_status: index === 1 ? "CONTESTED" : "HYPOTHESIZED", current: true,
+      reference: { artifact_id: `claim-${index}`, version_number: 1, content_hash: "exact-claim-hash" },
+      rationale: { text: `Validation rationale ${index}`, origin: "MODEL", version_number: 1, content_hash: "exact-rationale-hash" },
+      citations: [{ citation: { quote: `Validation quote <${index}>`, source_id: "source", source_version: 2, content_hash: "exact-source-hash", start_line: 2, end_line: 3 } }],
+      declared_context: {},
+    }));
+    const answer = whyAnswer({ human_validation: nodes });
+    const original = structuredClone(answer);
+    for (const language of LANGUAGES) {
+      const html = render(states.complete, language, { why: { answer } });
+      const preview = html.match(/<ul class="why-validation-preview">([\s\S]*?)<\/ul>/)[1];
+      assert.equal((preview.match(/<li>/g) ?? []).length, 3);
+      assert.ok(preview.includes("Validation title &lt;0&gt;"));
+      assert.ok(preview.includes(text(language, "why.CONTESTED")));
+      assert.ok(!preview.includes("Validation title &lt;3&gt;"));
+      assert.ok(!preview.includes("Validation rationale"));
+      assert.ok(!preview.includes("Validation quote"));
+      assert.ok(html.includes(`<h3>${text(language, "why.validation")} (5)</h3>`));
+      assert.ok(html.includes("<p>3 / 5</p>"));
+      assert.ok(html.includes('<details id="why-validation-details">'));
+      assert.ok(!html.includes('<details id="why-validation-details" open'));
+      const details = html.slice(html.indexOf('<details id="why-validation-details">'));
+      for (const expected of ["Validation title &lt;4&gt;", "Validation rationale 4", "Validation quote &lt;4&gt;", "exact-rationale-hash", "exact-source-hash"]) {
+        assert.ok(details.includes(expected), expected);
+      }
+      assert.ok(!html.includes("Validation title <4>"));
+    }
+    assert.deepEqual(answer, original);
+  });
+
+  it("groups gaps by code with counts and puts exact node keys and stages in closed details", () => {
+    const gaps = [
+      { code: "MISSING_SOURCE", node_key: "claim-gap-one", related_code: "EVD-001", stage: "evidence" },
+      { code: "MISSING_SOURCE", node_key: "claim-gap-two", related_code: "EVD-002", stage: "evidence" },
+      { code: "MISSING_NEED", node_key: "requirement-gap-three", related_code: "NED-001", stage: "requirements" },
+    ];
+    const answer = whyAnswer({ gaps, summary: { stop_reasons: ["MISSING_SOURCE", "MISSING_NEED"] } });
+    const original = structuredClone(answer);
+    for (const language of LANGUAGES) {
+      const html = render(states.complete, language, { why: { answer } });
+      const preview = html.match(/<ul class="why-gaps-preview">([\s\S]*?)<\/ul>/)[1];
+      assert.equal((preview.match(/<li>/g) ?? []).length, 2);
+      assert.ok(preview.includes("<code>MISSING_SOURCE</code> (2)"));
+      assert.ok(preview.includes("<code>MISSING_NEED</code> (1)"));
+      assert.ok(preview.includes(text(language, "why.gap.MISSING_SOURCE")));
+      assert.ok(!preview.includes("claim-gap-one"));
+      assert.ok(!preview.includes("EVD-001"));
+      assert.ok(!preview.includes("requirements"));
+      assert.ok(html.includes('<details id="why-gaps-details">'));
+      assert.ok(!html.includes('<details id="why-gaps-details" open'));
+      const details = html.slice(html.indexOf('<details id="why-gaps-details">'), html.indexOf('<h3>' + text(language, "why.validation")));
+      for (const gap of gaps) {
+        assert.ok(details.includes(gap.node_key));
+        assert.ok(details.includes(gap.related_code));
+        assert.ok(details.includes(gap.stage));
+      }
+    }
+    assert.deepEqual(answer, original);
+  });
+
+  it("localizes technical stage title placeholders and preserves authentic titles and exact payloads", () => {
+    const names = {
+      AGENT_TEAM: { it: "Prospettive", en: "Perspectives" },
+      PROJECT_BRIEF: { it: "Brief del progetto", en: "Project brief" },
+      USER_MODELING: { it: "User Twin", en: "User Twin" },
+      REQUIREMENTS_SPECIFICATION: { it: "Definizione", en: "Definition" },
+      DESIGN_PACKAGE: { it: "Design e valutazione", en: "Design &amp; Evaluation" },
+    };
+    for (const [kind, titles] of Object.entries(names)) {
+      const target = { ...whyAnswer().target, kind, title: kind, reference: { artifact_id: "exact-stage-id", version_number: 3, content_hash: "exact-stage-hash" }, citations: [{ citation: { source_id: "source", source_version: 2, content_hash: "exact-source-hash", quote: "Preserved <quote>\nsecond line", start_line: 2, end_line: 3 } }] };
+      const answer = whyAnswer({ target, upstream: [{ ...target, key: "other:stage:1:hash:context" }], human_validation: [target], links: [{ source: target.key, target: "other:stage:1:hash:context", kind: "CONTEXT" }] });
+      const original = structuredClone(answer);
+      const state = structuredClone(states.complete);
+      state.why = { available: true, items: [target] };
+      for (const language of LANGUAGES) {
+        const html = render(state, language, { why: { answer } });
+        assert.ok(html.includes(`<h3>${titles[language]}</h3>`));
+        assert.ok(html.includes(`<strong>${titles[language]}</strong>`));
+        assert.ok(!html.includes(`<h3>${kind}</h3>`));
+        assert.ok(!html.includes(`<strong>${kind}</strong>`));
+        assert.ok(html.includes(`>${titles[language]} · REQ-001`));
+        assert.ok(html.includes(`${titles[language]} → ${titles[language]}`));
+        for (const exact of ["exact-stage-id", "exact-stage-hash", "exact-source-hash", "Preserved &lt;quote&gt;\nsecond line"]) {
+          assert.ok(html.includes(exact));
+        }
+        const authentic = render(state, language, { why: { answer: { ...answer, target: { ...target, title: `Owner title <${kind}>` } } } });
+        assert.ok(authentic.includes(`<h3>Owner title &lt;${kind}&gt;</h3>`));
+      }
+      assert.deepEqual(answer, original);
+    }
   });
 });
 

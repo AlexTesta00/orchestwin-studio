@@ -16,6 +16,7 @@ from orchestwin.artifacts.generated_mockups import (
     screen_trees,
     serialize_markup,
 )
+from orchestwin.artifacts.visual_fonts import font_faces
 from orchestwin.artifacts.visual_language import _TOKEN_NAME, _plain_css_value
 
 CONTENT_SECURITY_POLICY: Final = (
@@ -177,7 +178,7 @@ def mockup_document(
             f'<section class="ot-screen" id="{screen.code}" data-state="{screen.state.value}" '
             f'aria-label="{_escape_attribute(screen.title)}"{marker}>{body}</section>'
         )
-    style = root + BASE_RULES + mockup.styles
+    style = font_faces(tokens) + root + BASE_RULES + mockup.styles
     if "<" in style:
         raise _fail("DOCUMENT_UNSAFE", "the style element would contain a tag")
     document = (

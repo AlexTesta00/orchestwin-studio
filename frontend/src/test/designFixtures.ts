@@ -1,10 +1,17 @@
 import { buildSelectedDesignPackage } from "./prototypeFixtures";
 import type {
+  DesignAlternativePayload,
   DesignPackageDiffPayload,
   DesignPackagePayload,
   DesignPackageVersionPayload,
   HumanGatePayload,
+  LayoutArchetype,
+  VisualDirection,
 } from "../types/design";
+import type {
+  DesignDistancePairPayload,
+  DesignDistanceReportPayload,
+} from "../types/designDistance";
 
 export const DESIGN_PROJECT_ID = "00000000-0000-4000-8000-000000000101";
 export const DESIGN_OWNER_ID = "00000000-0000-4000-8000-000000000102";
@@ -341,3 +348,144 @@ export const PENDING_DESIGN_GATE: HumanGatePayload = {
   event_sequence: 1,
   resume_status: null,
 };
+
+export const TIMETABLE_DIRECTION: VisualDirection = {
+  name: "Printed timetable",
+  concept:
+    "The desk reads like the timetable printed on the wall of a station. A receptionist in a hurry finds the next arrival at a glance.",
+  rules: [
+    "The title of every screen is very large and stands alone above a thin rule.",
+    "Groups of content are separated by thin rules and white space, never by boxes.",
+    "The main action is the only filled button, at the end of the main column.",
+  ],
+  axes: {
+    layout: "EDITORIAL",
+    shape: "SQUARE_RULES",
+    type: "DISPLAY",
+    colour: "INK",
+    density: "SPACIOUS",
+  },
+  typicality: 12,
+  candidates: 5,
+  vocabulary_version: 1,
+};
+
+export const LEDGER_DIRECTION: VisualDirection = {
+  name: "Front desk ledger",
+  concept:
+    "The desk works like the ledger of a hotel: every arrival is a row of a wide table. Tinted groups keep the shift readable for hours.",
+  rules: [
+    "Arrivals are rows of one table that uses the whole width of the window.",
+    "Every value has a small upper-case label above it.",
+    "Groups sit on soft tints instead of white panels.",
+    "The main action stays in the slim bar at the top.",
+  ],
+  axes: {
+    layout: "WORKBENCH",
+    shape: "ROUNDED_OUTLINE",
+    type: "CAPS_LABELS",
+    colour: "TINTED",
+    density: "SPACIOUS",
+  },
+  typicality: 8,
+  candidates: 5,
+  vocabulary_version: 1,
+};
+
+function directedAlternative(
+  alternative: DesignAlternativePayload | undefined,
+  direction: VisualDirection,
+  archetype: LayoutArchetype,
+): DesignAlternativePayload {
+  const visual = BASE_DESIGN_PACKAGE.alternatives[1]?.visual_language ?? null;
+  if (alternative === undefined || visual === null) {
+    throw new Error("The base design fixture has no alternative with a visual language");
+  }
+  return {
+    ...alternative,
+    approach: null,
+    visual_language: {
+      ...visual,
+      choices: { ...visual.choices, archetype, density: direction.axes.density },
+      direction,
+    },
+  };
+}
+
+export const DIRECTED_DESIGN_PACKAGE: DesignPackagePayload = {
+  ...BASE_DESIGN_PACKAGE,
+  alternatives: [
+    directedAlternative(BASE_DESIGN_PACKAGE.alternatives[0], TIMETABLE_DIRECTION, "GUIDED_STEPS"),
+    directedAlternative(BASE_DESIGN_PACKAGE.alternatives[1], LEDGER_DIRECTION, "TABLE_FIRST"),
+  ],
+};
+
+export const DIRECTED_DESIGN_VERSION: DesignPackageVersionPayload = {
+  ...UNSELECTED_DESIGN_VERSION,
+  id: "00000000-0000-4000-8000-0000000001b0",
+  content_hash: "5".repeat(64),
+  package: DIRECTED_DESIGN_PACKAGE,
+};
+
+export function designDistanceReport(
+  version: DesignPackageVersionPayload = DIRECTED_DESIGN_VERSION,
+  pair: Partial<DesignDistancePairPayload> = {},
+): DesignDistanceReportPayload {
+  return {
+    distance_version: 1,
+    design_version_id: version.id,
+    design_content_hash: version.content_hash,
+    pairs: [
+      {
+        first: "DES-001",
+        second: "DES-002",
+        declared: {
+          score: 80,
+          axes_different: 4,
+          axes: ["layout", "shape", "type", "colour"],
+          choices_different: 17,
+          choices_total: 22,
+          primary_colour_distance: 0.31,
+        },
+        styles: {
+          available: true,
+          score: 64,
+          differences: ["RADIUS", "BORDER", "TYPE_SCALE", "COLOUR_FIELDS", "CONTAINER"],
+        },
+        structure: { available: true, score: 41, differences: ["OUTLINE", "TABLE", "CARDS"] },
+        verdict: "FAR",
+        ...pair,
+      },
+    ],
+    alternatives: [
+      {
+        code: "DES-001",
+        direction: TIMETABLE_DIRECTION.name,
+        adherence: {
+          available: true,
+          axes: {
+            layout: "FOLLOWED",
+            shape: "FOLLOWED",
+            type: "FOLLOWED",
+            colour: "FOLLOWED",
+            density: "NOT_CHECKED",
+          },
+        },
+      },
+      {
+        code: "DES-002",
+        direction: LEDGER_DIRECTION.name,
+        adherence: {
+          available: true,
+          axes: {
+            layout: "FOLLOWED",
+            shape: "FOLLOWED",
+            type: "FOLLOWED",
+            colour: "FOLLOWED",
+            density: "NOT_CHECKED",
+          },
+        },
+      },
+    ],
+  };
+}

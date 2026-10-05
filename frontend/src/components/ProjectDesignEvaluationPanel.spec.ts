@@ -10,6 +10,8 @@ import {
   generationJobsApi,
   type GenerationRequestJob,
 } from "@/api/generationJobs";
+import type { GuidanceMode, UserResponse } from "@/api/contracts";
+import { useAuthStore } from "@/stores/auth";
 import { useDesignLoopStore } from "@/stores/designLoop";
 import { expectAccessible } from "@/test/axe";
 import type {
@@ -23,6 +25,20 @@ import ProjectDesignEvaluationPanel from "./ProjectDesignEvaluationPanel.vue";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("token");
 const TWIN_REVIEW = "proposer-design-twin-review";
+
+function owner(guidanceMode: GuidanceMode): UserResponse {
+  return {
+    id: "owner-1",
+    email: "owner@example.com",
+    is_active: true,
+    created_at: "2026-10-05T08:00:00Z",
+    guidance_mode: guidanceMode,
+  };
+}
+const INTRO = {
+  en: "Each twin reads the mockup and reports simulated findings: they are design hypotheses to weigh, not evidence from real users. Bring a finding into the brief, the requirements or the design, bring the design up to date and evaluate again.",
+  it: "Ogni twin legge il mockup e riporta osservazioni simulate: sono ipotesi di design da pesare, non evidenze di utenti reali. Porta un'osservazione nel brief, nei requisiti o nel design, aggiorna il design e valuta di nuovo.",
+} as const;
 
 function finding(id: string, summary: string): SyntheticFindingPayload {
   return {
@@ -189,6 +205,7 @@ const AUTOMATIC_REVIEW = {
 describe("ProjectDesignEvaluationPanel", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
   });
 
   it("lists the twins' findings with apply menus and evaluates on demand", async () => {
@@ -240,27 +257,41 @@ describe("ProjectDesignEvaluationPanel", () => {
     ]);
   });
 
-  it.each([
-    [
-      "en",
-      "Each twin reads the mockup and reports simulated findings: they are design hypotheses to weigh, not evidence from real users. Bring a finding into the brief, the requirements or the design, bring the design up to date and evaluate again.",
-    ],
-    [
-      "it",
-      "Ogni twin legge il mockup e riporta osservazioni simulate: sono ipotesi di design da pesare, non evidenze di utenti reali. Porta un'osservazione nel brief, nei requisiti o nel design, aggiorna il design e valuta di nuovo.",
-    ],
-  ] as const)(
-    "introduces the reviews in %s without asking to regenerate the design",
-    async (locale, intro) => {
+  it.each(["en", "it"] as const)(
+    "introduces the reviews in %s under the title, once, without opening the history",
+    async (locale) => {
       const api = fakeApi([run("run-1", [finding("UTF-001", "The guest name lacks a hint.")])]);
       const wrapper = mountPanel(api, locale);
       await flushPromises();
 
+      const intro = wrapper.get('[data-testid="design-evaluation-intro"]');
       const history = wrapper.get('[data-testid="design-evaluation-history"]');
-      expect(history.get("p").text()).toBe(intro);
-      expect(history.text()).not.toMatch(/rigenera|regenerate/i);
+      expect(intro.text()).toBe(INTRO[locale]);
+      expect(wrapper.get("h3").element.nextElementSibling).toBe(intro.element);
+      expect(history.attributes("open")).toBeUndefined();
+      expect(wrapper.get('[data-testid="design-finding"]').isVisible()).toBe(false);
+      expect(intro.isVisible()).toBe(true);
+      expect(intro.element.closest("details")).toBeNull();
+      expect(history.text()).not.toContain(INTRO[locale]);
+      expect(wrapper.text().split(INTRO[locale])).toHaveLength(2);
+      expect(`${intro.text()} ${history.text()}`).not.toMatch(/rigenera|regenerate/i);
     },
   );
+
+  it("keeps the introduction visible before any review and in the expert mode", async () => {
+    useAuthStore().user = owner("EXPERT");
+    const wrapper = mountPanel(fakeApi([]), "it");
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="design-evaluation-history"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="design-evaluate-auto"]').exists()).toBe(false);
+    const intro = wrapper.get('[data-testid="design-evaluation-intro"]');
+    expect(intro.text()).toBe(INTRO.it);
+    expect(intro.isVisible()).toBe(true);
+    await wrapper.setProps({ locale: "en" });
+    expect(wrapper.get('[data-testid="design-evaluation-intro"]').text()).toBe(INTRO.en);
+    wrapper.unmount();
+  });
 
   it("runs the static accessibility check and labels every run with its kind", async () => {
     const api = fakeApi([run("run-1", [finding("UTF-001", "The guest name lacks a hint.")])]);
@@ -301,7 +332,7 @@ describe("ProjectDesignEvaluationPanel", () => {
     expect(panel.text()).toContain("1 resolved");
     expect(panel.text()).toContain("2 marked not relevant by you");
     expect(panel.text()).toContain("The guest name lacks a format hint.");
-    expect(wrapper.text()).toContain("No findings: the twin had nothing to object.");
+    expect(wrapper.text()).toContain("No findings: the twin had nothing to object to.");
     await wrapper.get('[data-testid="design-static-check"]').trigger("click");
     await flushPromises();
     expect(wrapper.get('[data-testid="design-evaluator-unavailable"]').text()).toBe(
@@ -560,6 +591,46 @@ describe("ProjectDesignEvaluationPanel", () => {
     await expectAccessible(wrapper.element);
   });
 
+  it("starts no expert review on mount or mode change and requires the review button", async () => {
+    const auth = useAuthStore();
+    auth.user = owner("EXPERT");
+    const api = fakeApi([]);
+    const wrapper = mountPanel(api, "en", "version-1");
+    await flushPromises();
+    expect(api.evaluate).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="design-evaluate-auto"]').exists()).toBe(false);
+    auth.user = owner("GUIDED");
+    await flushPromises();
+    expect(api.evaluate).not.toHaveBeenCalled();
+    await wrapper.get('[data-testid="design-evaluate"]').trigger("click");
+    await flushPromises();
+    expect(api.evaluate).toHaveBeenCalledTimes(1);
+    expect(api.evaluate).toHaveBeenCalledWith(
+      "project-1",
+      { ...AUTOMATIC_REVIEW, locale: "en-US" },
+      "token",
+    );
+    wrapper.unmount();
+  });
+
+  it("starts no review by itself while the access of an expert owner is renewed", async () => {
+    const auth = useAuthStore();
+    auth.user = owner("EXPERT");
+    const api = fakeApi([]);
+    const wrapper = mountPanel(api, "en", "version-1");
+    await flushPromises();
+
+    auth.user = null;
+    await flushPromises();
+    expect(api.evaluate).not.toHaveBeenCalled();
+    auth.user = owner("EXPERT");
+    await flushPromises();
+
+    expect(api.evaluate).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="design-evaluate-auto"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("never repeats a failed automatic review but keeps the manual button working", async () => {
     const api = fakeApi([]);
     vi.mocked(api.evaluate).mockRejectedValueOnce(apiError(502, "DESIGN_EVALUATION_FAILED"));
@@ -587,6 +658,7 @@ describe("ProjectDesignEvaluationPanel", () => {
     ];
     for (const [runs, autoEvaluateVersionId, started] of cases) {
       setActivePinia(createPinia());
+      useAuthStore().user = owner("GUIDED");
       const api = fakeApi(runs);
       const wrapper = mountPanel(api, "en", autoEvaluateVersionId);
       await flushPromises();
@@ -632,6 +704,7 @@ describe("ProjectDesignEvaluationPanel and a review still running", () => {
 
   beforeEach(() => {
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
     clearFollowedGenerations();
     vi.useFakeTimers();
   });

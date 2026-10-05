@@ -81,7 +81,7 @@ const messages = {
     },
     sourceTwins: { one: "Twin: {names}", other: "Twins: {names}" },
     showTwins: "Show its twins",
-    fileAlternative: "or load the twin file of a knowledge folder",
+    fileAlternative: "or upload the twin file of a knowledge folder",
     fileLabel: "Twin file (twin.json)",
     noSources:
       "None of your other projects has approved twins. You can still upload the file of a twin.",

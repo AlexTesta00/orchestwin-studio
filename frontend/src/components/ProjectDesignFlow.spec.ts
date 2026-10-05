@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, vShow, withDirectives } from "vue";
 
 import { createAppI18n } from "@/i18n";
-import { createDesignApi, type DesignApi } from "../api/design";
+import {
+  createDesignApi,
+  DesignApiError,
+  type DesignApi,
+  type DesignDistanceApi,
+} from "../api/design";
 import {
   DesignAlignmentApiError,
   type DesignAlignmentApi,
@@ -19,8 +24,10 @@ import {
   generationJobsApi,
   type GenerationRequestJob,
 } from "../api/generationJobs";
+import type { GuidanceMode, UserResponse } from "../api/contracts";
 import type { ModelUsageApi } from "../api/modelUsage";
 import { useInsightTrayStore } from "../stores/insightTray";
+import { useAuthStore } from "../stores/auth";
 import { expectAccessible } from "../test/axe";
 import {
   BASE_DESIGN_PACKAGE,
@@ -28,12 +35,14 @@ import {
   DESIGN_CREATED_AT,
   DESIGN_OWNER_ID,
   DESIGN_PROJECT_ID,
+  DIRECTED_DESIGN_VERSION,
   PENDING_DESIGN_GATE,
   PROPOSED_DESIGN_DIFF,
   SECOND_DESIGN_ALTERNATIVE_ID,
   SELECTED_DESIGN_PACKAGE,
   SELECTED_DESIGN_VERSION,
   UNSELECTED_DESIGN_VERSION,
+  designDistanceReport,
 } from "../test/designFixtures";
 import { buildSelectedDesignPackage } from "../test/prototypeFixtures";
 import type {
@@ -48,6 +57,7 @@ import type {
   DesignReadinessPayload,
   SyntheticDesignCritiquePayload,
 } from "../types/design";
+import type { DesignDistanceReportPayload } from "../types/designDistance";
 import type {
   DesignEvaluationRunPayload,
   InsightApplicationPayload,
@@ -429,6 +439,25 @@ function fakeUsageApi(cost = 412000) {
   } satisfies ModelUsageApi;
 }
 
+function distanceMissing(): DesignApiError {
+  return new DesignApiError("DESIGN_PACKAGE_NOT_FOUND", {
+    status: 404,
+    code: "DESIGN_PACKAGE_NOT_FOUND",
+    payload: { detail: { code: "DESIGN_PACKAGE_NOT_FOUND" } },
+  });
+}
+
+function fakeDistanceApi(answer: DesignDistanceReportPayload | Error = distanceMissing()) {
+  return {
+    distance: vi.fn(async (): Promise<DesignDistanceReportPayload> => {
+      if (answer instanceof Error) {
+        throw answer;
+      }
+      return answer;
+    }),
+  } satisfies DesignDistanceApi;
+}
+
 function fakeSubscriptionUsageApi() {
   const paid = fakeUsageApi(412000);
   return {
@@ -446,6 +475,33 @@ function fakeSubscriptionUsageApi() {
           ...report.items,
         ],
         totals: { ...report.totals, generations: 2 },
+      };
+    }),
+  } satisfies ModelUsageApi;
+}
+
+function fakeDirectionsUsageApi() {
+  const paid = fakeUsageApi(412000);
+  return {
+    ...paid,
+    usage: vi.fn(async () => {
+      const report = await paid.usage();
+      const subscription = {
+        ...report.items[0]!,
+        provider_kind: "CLAUDE_CODE_CLI" as const,
+        cost_microusd: null,
+      };
+      return {
+        items: [
+          {
+            ...subscription,
+            generation_id: "generation-usage-3",
+            purpose: "DESIGN_ALTERNATIVES_HOSTED",
+          },
+          { ...subscription, generation_id: "generation-usage-2", purpose: "DESIGN_DIRECTIONS" },
+          { ...subscription, generation_id: "generation-usage-1", purpose: "DESIGN_DIRECTIONS" },
+        ],
+        totals: { ...report.totals, generations: 3, cost_microusd: 0 },
       };
     }),
   } satisfies ModelUsageApi;
@@ -860,6 +916,8 @@ interface MountOptions {
   iterationsApi?: DesignIterationsApi;
   pinsApi?: DesignReviewPinsApi;
   usageApi?: ModelUsageApi;
+  distanceApi?: DesignDistanceApi;
+  active?: boolean;
   attach?: boolean;
   pinia?: Pinia;
   stubs?: Record<string, boolean>;
@@ -884,10 +942,12 @@ function mountFlow(api: FakeDesignApi, options: MountOptions = {}) {
       ...(options.iterationsApi === undefined ? {} : { iterationsApi: options.iterationsApi }),
       ...(options.pinsApi === undefined ? {} : { pinsApi: options.pinsApi }),
       usageApi: options.usageApi ?? fakeUsageApi(),
+      distanceApi: options.distanceApi ?? fakeDistanceApi(),
+      ...(options.active === undefined ? {} : { active: options.active }),
     },
     global: {
       plugins: [...(options.pinia === undefined ? [] : [options.pinia]), createAppI18n(locale)],
-      ...(options.stubs === undefined ? {} : { stubs: options.stubs }),
+      stubs: { ProjectHumanValidationPanel: true, ...options.stubs },
     },
     ...(options.attach === true ? { attachTo: document.body } : {}),
   });
@@ -903,10 +963,21 @@ function barOf(wrapper: VueWrapper) {
   return wrapper.get('[data-testid="decision-bar"]');
 }
 
+function owner(guidanceMode: GuidanceMode): UserResponse {
+  return {
+    id: DESIGN_OWNER_ID,
+    email: "owner@example.com",
+    is_active: true,
+    created_at: DESIGN_CREATED_AT,
+    guidance_mode: guidanceMode,
+  };
+}
+
 describe("ProjectDesignFlow", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
   });
 
   afterEach(() => {
@@ -1024,6 +1095,137 @@ describe("ProjectDesignFlow", () => {
     expect(wrapper.find('[data-testid="design-error"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="design-pending-changes"]').exists()).toBe(false);
   });
+
+  it.each(
+    (["it", "en"] as const).flatMap((locale) =>
+      [UNSELECTED_DESIGN_VERSION, SELECTED_DESIGN_VERSION].flatMap((version) =>
+        (["proposal", "decision"] as const).map((operation) => ({ locale, version, operation })),
+      ),
+    ),
+  )(
+    "explains an outdated upstream step in $locale during $operation and preserves the current choice",
+    async ({ locale, version, operation }) => {
+      const api = new FakeDesignApi(version);
+      const loop = reviewingLoopApi();
+      const rejected = new DesignApiError("The design request failed", {
+        status: 409,
+        code: "DESIGN_CONTEXT_CHANGED",
+        payload: null,
+      });
+      if (operation === "proposal") api.proposeRevision.mockRejectedValueOnce(rejected);
+      else {
+        api.diffsResult = [
+          {
+            ...PROPOSED_DESIGN_DIFF,
+            proposed_package: buildSelectedDesignPackage(
+              version.package,
+              SECOND_DESIGN_ALTERNATIVE_ID,
+            ),
+          },
+        ];
+        api.decideRevision.mockRejectedValueOnce(rejected);
+      }
+      api.savedMockups[SECOND_DESIGN_ALTERNATIVE_ID] = {
+        status: "MOCKUP_GENERATED",
+        generation_id: "saved-generation",
+        design_version_id: version.id,
+        design_content_hash: version.content_hash,
+        package: buildSelectedDesignPackage(version.package, SECOND_DESIGN_ALTERNATIVE_ID),
+      };
+      const wrapper = mountFlow(api, { locale, loop });
+      await flushPromises();
+      await card(wrapper, "DES-002").get('[data-testid="alternative-choose"]').trigger("click");
+      await flushPromises();
+      expect(wrapper.get('[data-testid="design-error"]').text()).toBe(
+        locale === "it"
+          ? "Un passo precedente è da aggiornare. Rivedi quel passo prima di scegliere un'alternativa di design. La scelta attuale non è cambiata."
+          : "An earlier step needs updating. Review that step before choosing a design alternative. Your current choice is unchanged.",
+      );
+      expect(wrapper.get('[data-testid="design-error"]').text()).not.toMatch(
+        /DESIGN_CONTEXT_CHANGED|Riprova|Try again|Premi di nuovo|Press .*again/,
+      );
+      expect(api.proposeRevision).toHaveBeenCalledTimes(operation === "proposal" ? 1 : 0);
+      expect(api.decideRevision).toHaveBeenCalledTimes(operation === "decision" ? 1 : 0);
+      expect(api.readinessResult.version).toBe(version);
+      expect(api.historyResult).toEqual([version]);
+      expect(api.readinessResult.version?.package.owner_selected_alternative_id).toBe(
+        version.package.owner_selected_alternative_id,
+      );
+      expect(card(wrapper, "DES-001").attributes("data-chosen")).toBe(
+        version.package.owner_selected_alternative_id === DESIGN_ALTERNATIVE_ID ? "true" : "false",
+      );
+      expect(card(wrapper, "DES-002").attributes("data-chosen")).toBe("false");
+      expect(api.submissions).toBe(0);
+      expect(api.gateActions).toEqual([]);
+      expect(api.generateMockup).not.toHaveBeenCalled();
+      expect(loop.evaluate).not.toHaveBeenCalled();
+      expect(loop.regenerate).not.toHaveBeenCalled();
+      expect(wrapper.emitted("sections-changed")).toBeUndefined();
+      await flushPromises();
+      expect(api.proposeRevision).toHaveBeenCalledTimes(operation === "proposal" ? 1 : 0);
+      expect(api.decideRevision).toHaveBeenCalledTimes(operation === "decision" ? 1 : 0);
+    },
+  );
+
+  it.each(["it", "en"] as const)(
+    "keeps the retry message for a transient choice proposal failure in %s",
+    async (locale) => {
+      const api = new FakeDesignApi();
+      api.proposeRevision.mockRejectedValueOnce(
+        new DesignApiError("The design request failed", { status: 503, code: null, payload: null }),
+      );
+      api.savedMockups[SECOND_DESIGN_ALTERNATIVE_ID] = {
+        status: "MOCKUP_GENERATED",
+        generation_id: "saved-generation",
+        design_version_id: UNSELECTED_DESIGN_VERSION.id,
+        design_content_hash: UNSELECTED_DESIGN_VERSION.content_hash,
+        package: buildSelectedDesignPackage(BASE_DESIGN_PACKAGE, SECOND_DESIGN_ALTERNATIVE_ID),
+      };
+      const wrapper = mountFlow(api, { locale });
+      await flushPromises();
+      await card(wrapper, "DES-002").get('[data-testid="alternative-choose"]').trigger("click");
+      await flushPromises();
+      expect(wrapper.get('[data-testid="design-error"]').text()).toBe(
+        locale === "it"
+          ? "Non è stato possibile registrare la tua scelta: non è cambiato nulla. Riprova tra poco."
+          : "Your choice could not be recorded, so nothing changed. Try again in a moment.",
+      );
+      expect(api.proposeRevision).toHaveBeenCalledTimes(1);
+      expect(api.decideRevision).not.toHaveBeenCalled();
+      expect(api.submissions).toBe(0);
+    },
+  );
+
+  it.each([
+    { locale: "it", status: 502, code: null },
+    { locale: "en", status: 502, code: null },
+    { locale: "it", status: 404, code: "PROJECT_NOT_FOUND" },
+    { locale: "en", status: 404, code: "PROJECT_NOT_FOUND" },
+  ] as const)(
+    "says in $locale that the design could not be read when the Studio answers $status",
+    async ({ locale, status, code }) => {
+      const api = new FakeDesignApi();
+      const failing = createDesignApi({
+        fetchImpl: async () =>
+          new Response(code === null ? "" : JSON.stringify({ detail: { code } }), { status }),
+      });
+      vi.spyOn(api, "readiness").mockImplementation(() =>
+        failing.readiness(DESIGN_PROJECT_ID, "access-token"),
+      );
+      const wrapper = mountFlow(api, { locale });
+      await flushPromises();
+
+      const error = wrapper.get('[data-testid="design-error"]').text();
+      expect(error).toBe(
+        locale === "it"
+          ? "Non è stato possibile completare la richiesta. Puoi riprovare."
+          : "The request could not be completed. You can try again.",
+      );
+      expect(wrapper.text()).not.toContain(code ?? "Design API request failed");
+      expect(error).not.toContain(String(status));
+      expect(error).not.toMatch(/[A-Z]+_[A-Z_]+/);
+    },
+  );
 
   it("does not confuse the provider recommendation with owner selection", async () => {
     const api = new FakeDesignApi();
@@ -1306,6 +1508,7 @@ describe("ProjectDesignFlow", () => {
     const mockupsApi = fakeMockupsApi({ capabilities: GENERATED });
     const pinia = createPinia();
     setActivePinia(pinia);
+    useAuthStore().user = owner("GUIDED");
     const first = mountFlow(api, { mockupsApi, pinia });
     await flushPromises();
     await first.get('[data-testid="generate-design"]').trigger("click");
@@ -1337,6 +1540,7 @@ describe("ProjectDesignFlow", () => {
 
     const reloaded = createPinia();
     setActivePinia(reloaded);
+    useAuthStore().user = owner("GUIDED");
     vi.mocked(mockupsApi.job).mockImplementation(async (_project, jobId) => ({
       ...job(DESIGN_ALTERNATIVE_ID),
       job_id: jobId,
@@ -1541,6 +1745,29 @@ describe("ProjectDesignFlow", () => {
     expect(wrapper.findAll('[data-testid="alternative-drawing"]')).toHaveLength(2);
   });
 
+  it("requires an expert gesture for each mockup and never draws skipped mockups on a mode change", async () => {
+    const auth = useAuthStore();
+    auth.user = owner("EXPERT");
+    const api = designToPrepare(GENERATED_UNSELECTED);
+    const mockupsApi = fakeMockupsApi({ capabilities: GENERATED });
+    const wrapper = mountFlow(api, { mockupsApi });
+    await flushPromises();
+    await wrapper.get('[data-testid="generate-design"]').trigger("click");
+    await flushPromises();
+    expect(api.generate).toHaveBeenCalledTimes(1);
+    expect(mockupsApi.startJob).not.toHaveBeenCalled();
+    auth.user = owner("GUIDED");
+    await flushPromises();
+    expect(mockupsApi.startJob).not.toHaveBeenCalled();
+    auth.user = owner("EXPERT");
+    await flushPromises();
+    await wrapper.get('[data-testid="generate-mockup-DES-001"]').trigger("click");
+    await flushPromises();
+    expect(mockupsApi.startJob).toHaveBeenCalledTimes(1);
+    expect(mockupsApi.startJob.mock.calls[0]?.[1].alternative_id).toBe(DESIGN_ALTERNATIVE_ID);
+    expect(wrapper.find('[data-testid="generate-mockup-DES-002"]').exists()).toBe(true);
+  });
+
   it("resumes the drawings after a reload in the middle and starts nothing", async () => {
     const api = designToPrepare(GENERATED_UNSELECTED);
     const mockupsApi = fakeMockupsApi({ capabilities: GENERATED });
@@ -1553,6 +1780,7 @@ describe("ProjectDesignFlow", () => {
     mounted.splice(mounted.indexOf(first), 1);
 
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
     vi.mocked(mockupsApi.job).mockImplementation(async (_project, jobId) => ({
       ...job(DESIGN_ALTERNATIVE_ID),
       job_id: jobId,
@@ -1803,6 +2031,137 @@ describe("ProjectDesignFlow", () => {
     await flushPromises();
     expect(api.proposals).toEqual([results[SECOND_DESIGN_ALTERNATIVE_ID]!.package]);
     expect(api.decisions).toEqual(["APPROVE"]);
+  });
+
+  it("reads the distance once the mockups are known, again when one becomes ready and when the design changes", async () => {
+    const api = new FakeDesignApi(DIRECTED_DESIGN_VERSION);
+    const documents: Record<string, MockupDocumentPayload> = {
+      [`${DESIGN_ALTERNATIVE_ID}|latest`]: mockupDocument(DESIGN_ALTERNATIVE_ID, "latest"),
+    };
+    const mockupsApi = fakeMockupsApi({
+      capabilities: GENERATED,
+      latest: {
+        [DESIGN_ALTERNATIVE_ID]: mockupResult(DESIGN_ALTERNATIVE_ID, DIRECTED_DESIGN_VERSION),
+      },
+      documents,
+      started: (alternativeId) =>
+        job(alternativeId, "SUCCEEDED", {
+          result: mockupResult(alternativeId, DIRECTED_DESIGN_VERSION),
+        }),
+    });
+    const report = designDistanceReport(DIRECTED_DESIGN_VERSION, {
+      styles: { available: false, score: null, differences: [] },
+      structure: { available: false, score: null, differences: [] },
+      verdict: "UNKNOWN",
+    });
+    const distanceApi = fakeDistanceApi(report);
+    const wrapper = mountFlow(api, { mockupsApi, distanceApi });
+    await flushPromises();
+
+    expect(distanceApi.distance).toHaveBeenCalledTimes(1);
+    expect(distanceApi.distance).toHaveBeenCalledWith(DESIGN_PROJECT_ID, "access-token");
+    expect(wrapper.getComponent(DesignAlternativeComparison).props("distance")).toEqual(report);
+    expect(wrapper.get('[data-testid="design-distance-verdict"]').text()).toBe(
+      "Complete measure when both mockups are ready",
+    );
+    expect(card(wrapper, "DES-001").get('[data-testid="alternative-direction"] p').text()).toBe(
+      "Visual direction: Printed timetable",
+    );
+    expect(card(wrapper, "DES-002").attributes("data-preview")).toBe("missing");
+
+    documents[`${SECOND_DESIGN_ALTERNATIVE_ID}|latest`] = mockupDocument(
+      SECOND_DESIGN_ALTERNATIVE_ID,
+      "latest",
+    );
+    await card(wrapper, "DES-002").get('[data-testid="alternative-draw"]').trigger("click");
+    await flushPromises();
+    expect(mockupsApi.startJob).toHaveBeenCalledTimes(1);
+    expect(card(wrapper, "DES-002").attributes("data-preview")).toBe("document");
+    expect(distanceApi.distance).toHaveBeenCalledTimes(2);
+
+    await card(wrapper, "DES-002").get('[data-testid="alternative-choose"]').trigger("click");
+    await flushPromises();
+    expect(api.decisions).toEqual(["APPROVE"]);
+    expect(distanceApi.distance).toHaveBeenCalledTimes(3);
+    expect(wrapper.getComponent(DesignAlternativeComparison).props("distance")).toBeNull();
+    expect(wrapper.find('[data-testid="design-distance"]').exists()).toBe(false);
+    expect(mockupsApi.startJob).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["the Studio has no report for the design", () => distanceMissing()],
+    ["the request fails", () => new Error("Design API request failed with status 503")],
+  ])("shows no distance and blocks nothing when %s", async (_case, failure) => {
+    const api = new FakeDesignApi(DIRECTED_DESIGN_VERSION);
+    const mockupsApi = fakeMockupsApi({
+      capabilities: GENERATED,
+      latest: {
+        [DESIGN_ALTERNATIVE_ID]: mockupResult(DESIGN_ALTERNATIVE_ID, DIRECTED_DESIGN_VERSION),
+        [SECOND_DESIGN_ALTERNATIVE_ID]: mockupResult(
+          SECOND_DESIGN_ALTERNATIVE_ID,
+          DIRECTED_DESIGN_VERSION,
+        ),
+      },
+      documents: {
+        [`${DESIGN_ALTERNATIVE_ID}|latest`]: mockupDocument(DESIGN_ALTERNATIVE_ID, "latest"),
+        [`${SECOND_DESIGN_ALTERNATIVE_ID}|latest`]: mockupDocument(
+          SECOND_DESIGN_ALTERNATIVE_ID,
+          "latest",
+        ),
+      },
+    });
+    const distanceApi = fakeDistanceApi(failure());
+    const wrapper = mountFlow(api, { mockupsApi, distanceApi, locale: "it" });
+    await flushPromises();
+
+    expect(distanceApi.distance).toHaveBeenCalledTimes(1);
+    expect(wrapper.getComponent(DesignAlternativeComparison).props("distance")).toBeNull();
+    expect(wrapper.find('[data-testid="design-distance"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="design-error"]').exists()).toBe(false);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(card(wrapper, "DES-002").get('[data-testid="alternative-direction"] p').text()).toBe(
+      "Direzione visiva: Front desk ledger",
+    );
+
+    await card(wrapper, "DES-002").get('[data-testid="alternative-choose"]').trigger("click");
+    await flushPromises();
+    expect(api.decisions).toEqual(["APPROVE"]);
+  });
+
+  it("reads the distance only once the step is shown, and not again when it is shown again", async () => {
+    const api = new FakeDesignApi(DIRECTED_DESIGN_VERSION);
+    const mockupsApi = fakeMockupsApi({ capabilities: GENERATED });
+    const distanceApi = fakeDistanceApi(designDistanceReport(DIRECTED_DESIGN_VERSION));
+    const wrapper = mountFlow(api, { mockupsApi, distanceApi, active: false });
+    await flushPromises();
+
+    expect(mockupsApi.capabilities).not.toHaveBeenCalled();
+    expect(distanceApi.distance).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="design-distance"]').exists()).toBe(false);
+
+    await wrapper.setProps({ active: true });
+    await flushPromises();
+    expect(distanceApi.distance).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="design-distance-verdict"]').text()).toBe("They differ");
+
+    await wrapper.setProps({ active: false });
+    await flushPromises();
+    await wrapper.setProps({ active: true });
+    await flushPromises();
+    expect(distanceApi.distance).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not read the distance on the declarative preview, where no mockup is drawn", async () => {
+    const api = new FakeDesignApi(DIRECTED_DESIGN_VERSION);
+    const distanceApi = fakeDistanceApi(designDistanceReport(DIRECTED_DESIGN_VERSION));
+    const wrapper = mountFlow(api, { distanceApi });
+    await flushPromises();
+
+    expect(distanceApi.distance).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="design-distance"]').exists()).toBe(false);
+    expect(card(wrapper, "DES-001").find('[data-testid="alternative-direction"]').exists()).toBe(
+      true,
+    );
   });
 
   it("chooses a mockup drawn for an earlier version on top of the current design", async () => {
@@ -2664,6 +3023,34 @@ describe("ProjectDesignFlow", () => {
   );
 
   it.each([
+    ["en", "subscription"],
+    ["it", "abbonamento"],
+  ] as const)(
+    "lists the generations that proposed the visual directions with their purpose code, like the others (%s)",
+    async (locale, subscription) => {
+      const api = new FakeDesignApi(GENERATED_UNSELECTED);
+      const wrapper = mountFlow(api, {
+        locale,
+        usageApi: fakeDirectionsUsageApi(),
+        mockupsApi: fakeMockupsApi({ capabilities: GENERATED }),
+      });
+      await flushPromises();
+
+      await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
+      const details = wrapper.get('[data-testid="step-technical-details-content"]');
+      const lines = details
+        .findAll("li")
+        .map((item) => item.text())
+        .filter((text) => text.includes("generation-usage-"));
+      expect(lines.map((text) => text.slice(text.indexOf(" · ") + 3))).toEqual([
+        `DESIGN_ALTERNATIVES_HOSTED · claude-opus-5-5 · SUCCEEDED · ${subscription} · generation-usage-3`,
+        `DESIGN_DIRECTIONS · claude-opus-5-5 · SUCCEEDED · ${subscription} · generation-usage-2`,
+        `DESIGN_DIRECTIONS · claude-opus-5-5 · SUCCEEDED · ${subscription} · generation-usage-1`,
+      ]);
+    },
+  );
+
+  it.each([
     ["en", "Approved · Decision no. 1"],
     ["it", "Approvato · Decisione n. 1"],
   ] as const)(
@@ -2770,6 +3157,7 @@ describe("ProjectDesignFlow in sections mode", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
   });
 
   afterEach(() => {
@@ -2943,7 +3331,7 @@ describe("ProjectDesignFlow in sections mode", () => {
     ],
     [
       "en",
-      "The design is anchored to Definition v1; now there is v2. The alternatives stay: use «Update and confirm» above to re-anchor it.",
+      "The design is anchored to Definition v1; now there is v2. The alternatives stay: use “Update and confirm” above to re-anchor it.",
     ],
   ] as const)(
     "tells in %s to re-anchor an approved design above instead of regenerating it",
@@ -3200,6 +3588,7 @@ describe("ProjectDesignFlow and a long generation", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
     clearFollowedGenerations();
     vi.useFakeTimers();
   });
@@ -3423,6 +3812,7 @@ describe("ProjectDesignFlow and a refused first proposal", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
     clearFollowedGenerations();
     vi.useFakeTimers();
     vi.spyOn(generationJobsApi, "list").mockResolvedValue([]);

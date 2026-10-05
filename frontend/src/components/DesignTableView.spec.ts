@@ -371,4 +371,14 @@ describe("DesignTableView", () => {
 
     await expectAccessible(wrapper.element);
   });
+
+  it("gives every alternative of the visual choices room for its code and a title on two lines", () => {
+    const wrapper = mounted(BASE_DESIGN_PACKAGE, REQUIREMENTS, "it");
+    const visual = section(wrapper, "visual");
+
+    for (const code of ["DES-001", "DES-002"]) {
+      const column = visual.get(`[data-testid="design-column-${code}"]`);
+      expect(column.classes()).toContain("min-w-80");
+    }
+  });
 });

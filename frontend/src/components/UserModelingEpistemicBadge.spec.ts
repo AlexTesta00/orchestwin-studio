@@ -36,7 +36,7 @@ describe("UserModelingEpistemicBadge", () => {
     expect(wrapper.get('[data-testid="epistemic-status"]').text()).toBe("Ipotizzato");
     expect(wrapper.text()).toContain("Confidenza 100%");
     expect(wrapper.get('[data-testid="human-validation"]').text()).toBe(
-      "Nessuna validazione aggiuntiva richiesta",
+      "Nessuna validazione umana aggiuntiva richiesta",
     );
   });
 

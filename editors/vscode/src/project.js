@@ -3,6 +3,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { agentsState } = require("./agents");
+const { readWhyCatalog } = require("./why");
+const { readWorkflowInputs } = require("./workflow-inputs");
 
 const LOCAL_FOLDER = ".orchestwin";
 const KNOWLEDGE_FOLDER = "orchestwin";
@@ -46,6 +48,7 @@ const FOLDER_FILES = Object.freeze({
   tests: "twins/feedback/tests.json",
   learned: "twins/feedback/learned.json",
   requirements: "requirements/requirements.json",
+  design: "design/design.json",
   evidence: "twins/evidence.json",
 });
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -189,6 +192,7 @@ function emptyState(root) {
     twins: emptyTwins("MISSING"),
     code: null,
     agents: agentsState(root),
+    why: { available: false, problem: "MISSING", items: [] },
   };
 }
 
@@ -235,6 +239,23 @@ function referenceOf(stateDocument) {
     design: countOf(design.version_number),
     alternative: textOf(design.alternative_code),
   };
+}
+
+function directionOf(designDocument, reference) {
+  if (designDocument.status !== "OK") {
+    return null;
+  }
+  const document = designDocument.value;
+  if (countOf(document.version_number) !== reference.design) {
+    return null;
+  }
+  const alternative = listOf(objectOf(document.package).alternatives)
+    .filter(isObject)
+    .find((item) => item.code === reference.alternative);
+  if (alternative === undefined) {
+    return null;
+  }
+  return textOf(objectOf(objectOf(alternative.visual_language).direction).name);
 }
 
 function currentReference(reference) {
@@ -734,6 +755,14 @@ function readLinkedProject(root) {
   const manifest = reader.read(inFolder(FOLDER_FILES.manifest));
   state.folder = folderOf(manifest, knowledge);
   if (state.folder.available) {
+    const workflowInputs = readWorkflowInputs(root, knowledge, manifest.value, state.project.id);
+    if (workflowInputs !== null) state.workflowInputs = workflowInputs;
+    state.why = readWhyCatalog(
+      root,
+      knowledge,
+      manifest.value,
+      state.project.id,
+    );
     const documents = {
       state: reader.read(inFolder(FOLDER_FILES.state)),
       twins: reader.read(inFolder(FOLDER_FILES.twins)),
@@ -746,6 +775,15 @@ function readLinkedProject(root) {
       documents.evidence = reader.read(inFolder(FOLDER_FILES.evidence));
     }
     state.reference = referenceOf(documents.state);
+    if (state.reference.design !== null && state.reference.alternative !== null) {
+      const direction = directionOf(
+        reader.read(inFolder(FOLDER_FILES.design)),
+        state.reference,
+      );
+      if (direction !== null) {
+        state.reference.direction = direction;
+      }
+    }
     state.development = developmentOf(documents.state, manifest.value);
     state.tasks = tasksOf(documents.state);
     state.tests = testsOf(

@@ -8,6 +8,7 @@ from typing import Protocol
 from uuid import UUID
 
 from orchestwin.agents.catalog import AgentIdentifier
+from orchestwin.agents.owner_inputs import OwnerTeamInputService
 from orchestwin.agents.persistence import (
     SqlAlchemyAgentTeamUnitOfWorkFactory,
     SqlAlchemyTeamProposalUnitOfWorkFactory,
@@ -26,6 +27,8 @@ from orchestwin.agents.team_gate import (
     ProjectWorkflowReadiness,
     TeamEditResult,
 )
+from orchestwin.api.activity import ProjectActivityService
+from orchestwin.api.artifact_why import WhyQueryService
 from orchestwin.api.artifacts import ArtifactGraphQueryService
 from orchestwin.api.design import (
     DesignGateService,
@@ -33,10 +36,14 @@ from orchestwin.api.design import (
     DesignQueryService,
     DesignRevisionService,
 )
+from orchestwin.api.human_validation import HumanValidationService
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.sections import build_sections_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
+from orchestwin.artifacts.human_validation_runtime import SqlAlchemyHumanValidationService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
+from orchestwin.artifacts.why_runtime import SqlAlchemyWhyQueryService
+from orchestwin.artifacts.workflow_inputs_runtime import SqlAlchemyWorkflowInputsService
 from orchestwin.config import (
     ApplicationSettings,
     ModelRuntimeMode,
@@ -75,6 +82,7 @@ from orchestwin.models.runtime import (
 )
 from orchestwin.persistence import DatabaseRuntime, create_database_runtime
 from orchestwin.projects import design_runtime
+from orchestwin.projects.activity_runtime import SqlAlchemyProjectActivityService
 from orchestwin.projects.application import (
     LocalProjectApplicationService,
     ProjectApplicationService,
@@ -90,6 +98,7 @@ from orchestwin.projects.clarification_application import (
 from orchestwin.projects.code_change_state import SqlAlchemyProjectStateQueryService
 from orchestwin.projects.design_realignment_service import DesignRealignmentService
 from orchestwin.projects.design_runtime import build_design_services
+from orchestwin.projects.owner_requirements import OwnerRequirementsService
 from orchestwin.projects.persistence import (
     SqlAlchemyProjectBriefGateUnitOfWorkFactory,
     SqlAlchemyProjectClarificationUnitOfWorkFactory,
@@ -108,12 +117,14 @@ from orchestwin.projects.requirements_revision_application import (
 )
 from orchestwin.projects.requirements_runtime import (
     ManagedRequirementsUnitOfWorkFactory,
+    SqlAlchemyRequirementsGovernanceAdapter,
     SqlAlchemyRequirementsQueryService,
     build_requirements_services,
 )
 from orchestwin.projects.sections_service import SectionsService
 from orchestwin.training.adapter_artifacts import ContentAddressedAdapterRegistry
 from orchestwin.twins.archetypes import ArchetypeService
+from orchestwin.twins.owner_inputs import OwnerUserModelingService
 from orchestwin.twins.realignment_service import UserModelingRealignmentService
 from orchestwin.twins.runtime import (
     ManagedUserModelingUnitOfWorkFactory,
@@ -211,6 +222,13 @@ class ApplicationRuntime:
     design_query_service: DesignQueryService | None = None
     design_gate_service: DesignGateService | None = None
     artifact_graph_query_service: ArtifactGraphQueryService | None = None
+    why_query_service: WhyQueryService | None = None
+    human_validation_service: HumanValidationService | None = None
+    activity_service: ProjectActivityService | None = None
+    workflow_inputs_service: SqlAlchemyWorkflowInputsService | None = None
+    owner_team_inputs: OwnerTeamInputService | None = None
+    owner_user_modeling: OwnerUserModelingService | None = None
+    owner_requirements: OwnerRequirementsService | None = None
     project_diagram_service: ProjectDiagramService | None = None
     knowledge_package_service: KnowledgePackageService | None = None
     twin_import_service: TwinImportService | None = None
@@ -310,11 +328,31 @@ def create_default_runtime(
     artifact_graph_query_service = SqlAlchemyArtifactGraphQueryService(
         database_runtime.session_factory
     )
+    why_query_service = SqlAlchemyWhyQueryService(database_runtime.session_factory)
+    human_validation_service = SqlAlchemyHumanValidationService(
+        database_runtime.session_factory, why_query_service=why_query_service
+    )
+    activity_service = SqlAlchemyProjectActivityService(database_runtime.session_factory)
+    workflow_inputs_service = SqlAlchemyWorkflowInputsService(database_runtime.session_factory)
+    owner_team_inputs = OwnerTeamInputService(
+        unit_of_work_factory=SqlAlchemyTeamProposalUnitOfWorkFactory(
+            database_runtime.session_factory
+        )
+    )
+    owner_user_modeling = OwnerUserModelingService(
+        governance_port=SqlAlchemyUserModelingGovernanceAdapter(database_runtime.session_factory),
+        uow_factory=ManagedUserModelingUnitOfWorkFactory(database_runtime.session_factory),
+    )
+    owner_requirements = OwnerRequirementsService(
+        governance_port=SqlAlchemyRequirementsGovernanceAdapter(database_runtime.session_factory),
+        uow_factory=ManagedRequirementsUnitOfWorkFactory(database_runtime.session_factory),
+    )
     project_diagram_service = ProjectDiagramService(
         project_service=project_service,
         requirements_query_service=requirements.queries,
         design_query_service=design.queries,
     )
+    project_import_service = ProjectImportService(session_factory=database_runtime.session_factory)
     knowledge_package_service = KnowledgePackageService(
         source_loader=KnowledgeSourceLoader(
             project_service=project_service,
@@ -335,6 +373,9 @@ def create_default_runtime(
             evidence_query_service=SqlAlchemyKnowledgeEvidenceQueryService(
                 database_runtime.session_factory
             ),
+            validation_query_service=human_validation_service,
+            workflow_query_service=workflow_inputs_service,
+            import_origin_query_service=project_import_service,
         ),
         store=SqlAlchemyKnowledgePackageStore(database_runtime.session_factory),
     )
@@ -376,7 +417,6 @@ def create_default_runtime(
         real_model_runtime=real_models,
         proposal_evidence_store=proposal_evidence_store,
     )
-    project_import_service = ProjectImportService(session_factory=database_runtime.session_factory)
 
     return ApplicationRuntime(
         real_model_runtime=real_models,
@@ -401,6 +441,13 @@ def create_default_runtime(
         design_query_service=design.queries,
         design_gate_service=design.gate,
         artifact_graph_query_service=artifact_graph_query_service,
+        why_query_service=why_query_service,
+        human_validation_service=human_validation_service,
+        activity_service=activity_service,
+        workflow_inputs_service=workflow_inputs_service,
+        owner_team_inputs=owner_team_inputs,
+        owner_user_modeling=owner_user_modeling,
+        owner_requirements=owner_requirements,
         project_diagram_service=project_diagram_service,
         knowledge_package_service=knowledge_package_service,
         twin_import_service=twin_import_service,

@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, useId, watch } from "vue";
 
 import GenerationJobNotice from "./GenerationJobNotice.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
 import InsightApplyMenu from "./InsightApplyMenu.vue";
 import UiButton from "./UiButton.vue";
 import {
@@ -17,6 +18,7 @@ import { apiClient } from "@/api/client";
 import { designLoopApi, type DesignLoopApi } from "@/api/designLoop";
 import { isGenerationInterrupted } from "@/api/generationJobs";
 import { useAuthStore } from "@/stores/auth";
+import { useGuidanceStore } from "@/stores/guidance";
 import {
   type AuthorizedDesignLoopRequest,
   EVALUATOR_NOT_CONFIGURED,
@@ -83,7 +85,7 @@ const emit = defineEmits<{
 
 const messages = {
   en: {
-    title: "The twins' review of the chosen design",
+    title: "Synthetic pre-validation",
     intro:
       "Each twin reads the mockup and reports simulated findings: they are design hypotheses to weigh, not evidence from real users. Bring a finding into the brief, the requirements or the design, bring the design up to date and evaluate again.",
     history: "All the reviews ({n})",
@@ -110,7 +112,7 @@ const messages = {
     },
     version: "design version {n}, {code}",
     findings: "{n} findings",
-    noFindings: "No findings: the twin had nothing to object.",
+    noFindings: "No findings: the twin had nothing to object to.",
     summary: "Summary",
     gaps: "Evidence gaps",
     recommended: "Suggested action",
@@ -162,7 +164,7 @@ const messages = {
     loadError: "The evaluations could not be loaded.",
   },
   it: {
-    title: "La revisione dei twin sul design scelto",
+    title: "Pre-validazione sintetica",
     intro:
       "Ogni twin legge il mockup e riporta osservazioni simulate: sono ipotesi di design da pesare, non evidenze di utenti reali. Porta un'osservazione nel brief, nei requisiti o nel design, aggiorna il design e valuta di nuovo.",
     history: "Tutte le revisioni ({n})",
@@ -260,6 +262,15 @@ const decisionFailure = ref<{ key: string; code: string } | null>(null);
 const notes = reactive<Record<string, string>>({});
 const runsLoaded = ref(false);
 const autoStarted = new Set<string>();
+const guidance = useGuidanceStore();
+
+watch(
+  () => [props.projectId, props.designVersionId, guidance.expert] as const,
+  ([projectId, versionId, expert]) => {
+    if (expert) guidance.suppressAutomatic(`${projectId}:review:${versionId}`);
+  },
+  { immediate: true, flush: "sync" },
+);
 
 const {
   job: reviewJob,
@@ -285,6 +296,7 @@ watch(reviewJob, (running) => {
 
 const autoReviewDue = computed(
   () =>
+    guidance.automaticAllowed(`${props.projectId}:review:${props.designVersionId}`) &&
     props.autoEvaluateVersionId !== null &&
     props.autoEvaluateVersionId === props.designVersionId &&
     runsLoaded.value &&
@@ -525,10 +537,17 @@ watch(autoReviewDue, (due) => {
     :aria-labelledby="titleId"
     data-testid="design-evaluation-panel"
   >
-    <header class="flex flex-wrap items-center gap-x-4 gap-y-3">
+    <header class="flex flex-wrap items-start gap-x-4 gap-y-3">
       <div class="grid min-w-[min(100%,16rem)] flex-1 gap-1">
         <h3 :id="titleId" class="m-0 text-base font-semibold">{{ copy.title }}</h3>
-        <p class="m-0 text-sm text-on-night-3" data-testid="design-evaluate-auto">
+        <p class="m-0 text-sm leading-normal text-on-night-2" data-testid="design-evaluation-intro">
+          {{ copy.intro }}
+        </p>
+        <p
+          v-if="!guidance.expert"
+          class="m-0 text-sm text-on-night-3"
+          data-testid="design-evaluate-auto"
+        >
           {{ copy.autoEvaluate }}
         </p>
       </div>
@@ -668,7 +687,6 @@ watch(autoReviewDue, (due) => {
         {{ fill(copy.history, { n: runViews.length }) }}
       </summary>
       <div class="grid gap-3 border-t border-night-line p-3 sm:p-4">
-        <p class="m-0 text-[13px] leading-normal text-on-night-3">{{ copy.intro }}</p>
         <article
           v-for="view in runViews"
           :key="view.run.id"
@@ -748,6 +766,16 @@ watch(autoReviewDue, (due) => {
                 <p class="m-0 text-[15px] leading-[1.4] font-semibold">
                   {{ entry.summary }}
                 </p>
+                <ArtifactWhy
+                  :code="entry.finding.finding_id"
+                  :title="entry.summary"
+                  kind="SYNTHETIC_FINDING"
+                  :version-number="entry.finding.artifact_version"
+                  :content-hash="entry.finding.content_hash"
+                  :contexts="[view.run.id, entry.finding.twin_id]"
+                  :locale="locale"
+                  test-id="finding-why"
+                />
                 <p class="m-0 text-[13px] text-on-night-3">
                   {{ copy.location }}: {{ entry.location }}
                 </p>

@@ -2,6 +2,7 @@
 
 from orchestwin.identity.persistence.models import (
     AuthSessionRecord,
+    UserGuidanceChoiceRecord,
     UserRecord,
 )
 from orchestwin.identity.persistence.repositories import (
@@ -19,5 +20,6 @@ __all__ = [
     "SqlAlchemyIdentityUnitOfWorkFactory",
     "SqlAlchemyRefreshSessionRepository",
     "SqlAlchemyUserRepository",
+    "UserGuidanceChoiceRecord",
     "UserRecord",
 ]

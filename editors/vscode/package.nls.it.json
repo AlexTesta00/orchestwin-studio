@@ -12,6 +12,9 @@
   "command.twinsUpdate": "Fai imparare i twin dallo sviluppo (ut twins update, può spendere)",
   "command.openReport": "Apri il rapporto dell'ultima verifica",
   "command.connectAgents": "Collega i twin agli agenti dell'editor",
+  "command.why": "Perché? Leggi la catena dell'artefatto dal Dossier locale (ut why --offline)",
+  "command.validation": "Leggi ipotesi ed esiti dal Dossier locale verificato (ut validation --offline)",
+  "command.scenarioWalkthrough": "Leggi il percorso di uno scenario dal Dossier locale verificato (ut validation walkthrough --offline)",
   "configuration.title": "OrchesTwin",
-  "configuration.utCommand": "Il programma che i pulsanti del pannello avviano nel terminale: ut, o il suo percorso completo."
+  "configuration.utCommand": "Il programma usato dal pannello: ut, o il suo percorso completo. Perché? legge offline; la validazione offre letture esplicite locali o dallo Studio; i comandi di sviluppo si avviano nel terminale."
 }

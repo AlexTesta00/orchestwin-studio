@@ -27,6 +27,7 @@ from orchestwin.models.requirements import (
     MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH,
     RequirementsProposalIssueCode,
 )
+from orchestwin.projects.owner_requirements import OwnerRequirementsService
 from orchestwin.projects.requirements import (
     Requirement,
     RequirementKind,
@@ -1395,6 +1396,14 @@ def requirements_generation_service_dependency(
     )
 
 
+def owner_requirements_dependency(request: Request) -> OwnerRequirementsService:
+    return _state_service(
+        request,
+        attribute="owner_requirements",
+        unavailable_detail="OWNER_REQUIREMENTS_UNAVAILABLE",
+    )
+
+
 def requirements_revision_service_dependency(
     request: Request,
 ) -> RequirementsRevisionService:
@@ -1444,6 +1453,32 @@ def create_requirements_router() -> APIRouter:
         prefix=REQUIREMENTS_API_PREFIX,
         tags=["requirements"],
     )
+
+    @router.post(
+        "/owner-specifications",
+        response_model=RequirementsGenerationPayload,
+        status_code=status.HTTP_201_CREATED,
+        operation_id="createOwnerProvidedRequirementsSpecification",
+    )
+    async def create_owner_specification_endpoint(
+        project_id: UUID,
+        payload: RequirementsRevisionRequest,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[OwnerRequirementsService, Depends(owner_requirements_dependency)],
+    ) -> RequirementsGenerationPayload:
+        if payload.specification.project_id != project_id:
+            raise _unprocessable("REQUIREMENTS_PROJECT_MISMATCH")
+        if payload.specification.schema_version != 2:
+            raise _unprocessable("OWNER_SPECIFICATION_SCHEMA_2_REQUIRED")
+        try:
+            specification = payload.specification.to_domain()
+            result = await service.create(
+                owner_user_id=user.id, project_id=project_id, specification=specification
+            )
+        except (TypeError, ValueError) as error:
+            raise _unprocessable("INVALID_REQUIREMENTS_SPECIFICATION") from error
+        _raise_generation_failure(result)
+        return RequirementsGenerationPayload.from_domain(result)
 
     @router.post(
         "/proposals",

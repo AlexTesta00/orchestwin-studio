@@ -44,10 +44,24 @@ export interface MockupObservation {
 </script>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, provide, ref, useId, watch } from "vue";
+import {
+  computed,
+  inject,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  provide,
+  ref,
+  useId,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 
+import { activitySignalKey } from "../stores/activityJournal";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
+import MockupWhyElements from "./MockupWhyElements.vue";
+import MockupScenarioWalkthrough from "./MockupScenarioWalkthrough.vue";
+import { whyContextKey } from "./whyContext";
 import UiSegmented from "./UiSegmented.vue";
 import UiStateBlock from "./UiStateBlock.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
@@ -150,7 +164,9 @@ const SEVERITY_STYLES: Record<MockupSeverity, string> = {
 };
 
 const FOCUSABLE =
-  "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]";
+  "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, summary, [tabindex]";
+
+const ALTERNATIVE_CODE = /^([A-Z]{2,8}-[0-9]{1,6}) · /;
 
 provide(
   surfaceKey,
@@ -161,6 +177,11 @@ const { locale: appLocale } = useI18n({ useScope: "global" });
 
 const lang = computed<Locale>(() => props.locale ?? (appLocale.value === "it" ? "it" : "en"));
 const copy = computed(() => messages[lang.value]);
+const whyContext = inject(whyContextKey, null);
+const activity = inject(activitySignalKey, null);
+const hasSidecar = computed(
+  () => items.value.length > 0 || (whyContext !== null && props.document !== null),
+);
 
 const overlay = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
@@ -353,8 +374,20 @@ function focusables(): HTMLElement[] {
     return [];
   }
   return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
-    (element) => element.tabIndex >= 0 && element.closest("[inert], [hidden]") === null,
+    (element) =>
+      element.tabIndex >= 0 &&
+      element.closest("[inert], [hidden]") === null &&
+      visibleInDetails(element),
   );
+}
+
+function visibleInDetails(element: HTMLElement): boolean {
+  let details = element.parentElement?.closest("details:not([open])") ?? null;
+  while (details !== null) {
+    if (!details.querySelector(":scope > summary")?.contains(element)) return false;
+    details = details.parentElement?.closest("details:not([open])") ?? null;
+  }
+  return true;
 }
 
 function focusFirst(): void {
@@ -405,6 +438,7 @@ watch(
 );
 
 onMounted(async () => {
+  activity?.mockupOpened(ALTERNATIVE_CODE.exec(props.title)?.[1] ?? null);
   opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.addEventListener("keydown", onDocumentKeydown);
   document.addEventListener("focusin", onDocumentFocus);
@@ -491,7 +525,7 @@ onUnmounted(() => {
                 :aria-controls="regionId"
                 :tabindex="index === focusIndex ? 0 : -1"
                 :class="[
-                  'inline-flex min-h-11 max-w-[calc(28ch+1.75rem)] min-w-0 items-center rounded-pill px-3.5 text-[13px] font-medium transition-colors duration-150',
+                  'inline-flex min-h-11 max-w-[calc(28ch+1.75rem)] min-w-0 items-center rounded-pill px-3.5 py-1 text-[13px] leading-snug font-medium transition-colors duration-150',
                   screen.code === selectedScreen
                     ? 'bg-on-night text-ink'
                     : 'text-on-night hover:bg-night-hover',
@@ -500,7 +534,7 @@ onUnmounted(() => {
                 data-testid="mockup-dialog-screen"
                 @click="requestScreen(screen.code)"
               >
-                <span class="truncate" data-testid="mockup-dialog-screen-title">{{
+                <span class="min-w-0 break-words" data-testid="mockup-dialog-screen-title">{{
                   screen.title
                 }}</span>
               </button>
@@ -517,7 +551,7 @@ onUnmounted(() => {
         <div
           :class="[
             'min-h-0 flex-1 overflow-y-auto overscroll-contain',
-            items.length > 0
+            hasSidecar
               ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden'
               : 'flex flex-col',
           ]"
@@ -529,9 +563,7 @@ onUnmounted(() => {
             :aria-busy="busy ? 'true' : undefined"
             :class="[
               'relative bg-night-deep',
-              items.length > 0
-                ? 'h-[70dvh] min-h-[360px] xl:h-full xl:min-h-0'
-                : 'min-h-[360px] flex-1',
+              hasSidecar ? 'h-[70dvh] min-h-[360px] xl:h-full xl:min-h-0' : 'min-h-[360px] flex-1',
             ]"
             data-testid="mockup-dialog-stage"
           >
@@ -561,87 +593,108 @@ onUnmounted(() => {
               {{ copy.opening }}
             </p>
           </div>
-          <aside
-            v-if="items.length > 0"
-            class="flex min-h-0 flex-col border-t border-night-line xl:border-t-0 xl:border-l"
-            :aria-labelledby="listTitleId"
-            data-testid="mockup-dialog-observations"
+          <div
+            v-if="hasSidecar"
+            class="min-h-0 min-w-0 xl:overflow-y-auto"
+            data-testid="mockup-dialog-sidecar"
           >
-            <div class="grid gap-2 border-b border-night-line px-4 pt-4 pb-3">
-              <div class="flex items-baseline gap-2">
-                <h3 :id="listTitleId" class="flex-1 text-[17px] font-semibold">
-                  {{ copy.observations }}
-                </h3>
-                <span class="text-[13px] text-on-night-3">{{ countLabel }}</span>
-              </div>
-              <p :id="noteId" class="text-xs leading-normal text-violet-on-night-2">
-                {{ copy.note }}
-              </p>
-            </div>
-            <ol
-              class="grid list-none content-start gap-2.5 p-3 md:grid-cols-2 xl:min-h-0 xl:flex-1 xl:grid-cols-1 xl:overflow-y-auto"
-              :aria-describedby="noteId"
+            <MockupWhyElements
+              v-if="document !== null"
+              :alternative-id="document.alternative_id"
+              :document-hash="document.content_hash"
+              :screen-code="selectedScreen ?? ''"
+              :locale="lang"
+            />
+            <MockupScenarioWalkthrough
+              v-if="document !== null"
+              :alternative-id="document.alternative_id"
+              :document-hash="document.content_hash"
+              :screen-codes="screens.map((screen) => screen.code)"
+              :locale="lang"
+              @screen="requestScreen"
+            />
+            <aside
+              v-if="items.length > 0"
+              class="flex min-h-0 flex-col border-t border-night-line xl:border-t-0 xl:border-l"
+              :aria-labelledby="listTitleId"
+              data-testid="mockup-dialog-observations"
             >
-              <li
-                v-for="item in items"
-                :key="item.observation.number"
-                class="grid gap-[7px] rounded-[14px] border-[1.5px] border-dashed border-violet-on-night/70 bg-on-night/3 p-3.5"
-                :data-number="item.observation.number"
-                :data-anchored="item.anchored ? 'true' : 'false'"
-                data-testid="mockup-dialog-observation"
-              >
-                <div class="flex flex-wrap items-center gap-2">
-                  <span
-                    :class="[
-                      'inline-flex h-6 min-w-6 items-center justify-center rounded-xl px-1.5 text-xs font-bold',
-                      item.anchored
-                        ? 'bg-violet-on-night text-night'
-                        : 'border border-violet-on-night text-violet-on-night-2',
-                    ]"
-                    data-testid="mockup-dialog-number"
-                  >
-                    {{ item.observation.number }}
-                  </span>
-                  <span
-                    :class="[
-                      'inline-flex min-h-6 items-center rounded-pill px-[9px] text-xs font-semibold',
-                      SEVERITY_STYLES[item.observation.severity],
-                    ]"
-                  >
-                    {{ copy.severity[item.observation.severity] }}
-                  </span>
-                  <span class="ml-auto text-xs text-on-night-3">
-                    {{ item.observation.twin_name }}
-                  </span>
+              <div class="grid gap-2 border-b border-night-line px-4 pt-4 pb-3">
+                <div class="flex items-baseline gap-2">
+                  <h3 :id="listTitleId" class="flex-1 text-[17px] font-semibold">
+                    {{ copy.observations }}
+                  </h3>
+                  <span class="text-[13px] text-on-night-3">{{ countLabel }}</span>
                 </div>
-                <p class="text-[15px] leading-[1.4] font-semibold text-on-night">
-                  {{ item.text }}
+                <p :id="noteId" class="text-xs leading-normal text-violet-on-night-2">
+                  {{ copy.note }}
                 </p>
-                <p v-if="item.place" class="text-[13px] text-on-night-3">
-                  {{ copy.where }}: {{ item.place }}
-                </p>
-                <p v-if="item.screenTitle !== null" class="text-[13px] text-on-night-3">
-                  {{ fill(copy.screen, { title: item.screenTitle }) }}
-                </p>
-                <p v-if="!item.anchored" class="text-xs leading-normal text-violet-on-night-2">
-                  {{ copy.unanchored }}
-                </p>
-                <button
-                  v-if="
-                    item.screen !== null &&
-                    item.screenTitle !== null &&
-                    item.screen !== selectedScreen
-                  "
-                  type="button"
-                  class="inline-flex min-h-11 items-center self-start text-left text-[13px] font-medium text-petrol-on-night-2 underline underline-offset-4 transition-colors duration-150 hover:text-on-night"
-                  data-testid="mockup-dialog-show-screen"
-                  @click="requestScreen(item.screen)"
+              </div>
+              <ol
+                class="grid list-none content-start gap-2.5 p-3 md:grid-cols-2 xl:min-h-0 xl:flex-1 xl:grid-cols-1 xl:overflow-y-auto"
+                :aria-describedby="noteId"
+              >
+                <li
+                  v-for="item in items"
+                  :key="item.observation.number"
+                  class="grid gap-[7px] rounded-[14px] border-[1.5px] border-dashed border-violet-on-night/70 bg-on-night/3 p-3.5"
+                  :data-number="item.observation.number"
+                  :data-anchored="item.anchored ? 'true' : 'false'"
+                  data-testid="mockup-dialog-observation"
                 >
-                  {{ fill(copy.show, { title: item.screenTitle }) }}
-                </button>
-              </li>
-            </ol>
-          </aside>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span
+                      :class="[
+                        'inline-flex h-6 min-w-6 items-center justify-center rounded-xl px-1.5 text-xs font-bold',
+                        item.anchored
+                          ? 'bg-violet-on-night text-night'
+                          : 'border border-violet-on-night text-violet-on-night-2',
+                      ]"
+                      data-testid="mockup-dialog-number"
+                    >
+                      {{ item.observation.number }}
+                    </span>
+                    <span
+                      :class="[
+                        'inline-flex min-h-6 items-center rounded-pill px-[9px] text-xs font-semibold',
+                        SEVERITY_STYLES[item.observation.severity],
+                      ]"
+                    >
+                      {{ copy.severity[item.observation.severity] }}
+                    </span>
+                    <span class="ml-auto text-xs text-on-night-3">
+                      {{ item.observation.twin_name }}
+                    </span>
+                  </div>
+                  <p class="text-[15px] leading-[1.4] font-semibold text-on-night">
+                    {{ item.text }}
+                  </p>
+                  <p v-if="item.place" class="text-[13px] text-on-night-3">
+                    {{ copy.where }}: {{ item.place }}
+                  </p>
+                  <p v-if="item.screenTitle !== null" class="text-[13px] text-on-night-3">
+                    {{ fill(copy.screen, { title: item.screenTitle }) }}
+                  </p>
+                  <p v-if="!item.anchored" class="text-xs leading-normal text-violet-on-night-2">
+                    {{ copy.unanchored }}
+                  </p>
+                  <button
+                    v-if="
+                      item.screen !== null &&
+                      item.screenTitle !== null &&
+                      item.screen !== selectedScreen
+                    "
+                    type="button"
+                    class="inline-flex min-h-11 items-center self-start text-left text-[13px] font-medium text-petrol-on-night-2 underline underline-offset-4 transition-colors duration-150 hover:text-on-night"
+                    data-testid="mockup-dialog-show-screen"
+                    @click="requestScreen(item.screen)"
+                  >
+                    {{ fill(copy.show, { title: item.screenTitle }) }}
+                  </button>
+                </li>
+              </ol>
+            </aside>
+          </div>
         </div>
       </section>
       <span

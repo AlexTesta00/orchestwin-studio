@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 import traceback
 from collections.abc import Sequence
@@ -9,7 +10,7 @@ from types import ModuleType
 from typing import Final, TextIO
 
 from orchestwin import __version__
-from orchestwin.cli.commands import COMMANDS
+from orchestwin.cli.commands import COMMANDS, activity
 from orchestwin.cli.console import Console, plain, stream_encoding, terminal_width
 from orchestwin.cli.context import CommandContext
 from orchestwin.cli.environment import Environment, real_environment
@@ -81,7 +82,13 @@ def _main(arguments: list[str], environment: Environment, language: str) -> int:
         directory=project_directory(environment, namespace.project_dir),
     )
     module = next(module for module in COMMANDS if namespace.command == module.NAME)
-    return execute(module, context, namespace)
+    started_at, started = environment.now(), environment.monotonic()
+    status = execute(module, context, namespace)
+    with contextlib.suppress(BaseException):
+        activity.record_command(
+            context, module.NAME, started_at, environment.monotonic() - started, status
+        )
+    return status
 
 
 def execute(module: ModuleType, context: CommandContext, namespace: argparse.Namespace) -> int:

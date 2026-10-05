@@ -360,7 +360,7 @@ NAMED_COLOURS: Final = frozenset(
     }
 )
 _GENERIC_FAMILIES: Final = frozenset({"monospace", "serif", "sans-serif", "system-ui"})
-_FONT_TOKENS: Final = frozenset({"--vl-font-heading", "--vl-font-body"})
+_FONT_TOKENS: Final = frozenset({"--vl-font-heading", "--vl-font-body", "--vl-font-mono"})
 _FONT_KEYWORDS: Final = frozenset(
     {
         "inherit",

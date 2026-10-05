@@ -43,6 +43,7 @@ from orchestwin.knowledge.schema import (
     validate_files,
 )
 from orchestwin.knowledge.tables import CRITIQUE_VERDICT_COLUMNS, TABLE_COLUMNS
+from orchestwin.knowledge.why import WHY_DOCUMENT
 
 from .knowledge_fixtures import PUBLISHED_AT, real_sources
 from .test_knowledge_generated_mockup_support import (
@@ -66,6 +67,7 @@ TAG = re.compile(r"<[a-zA-Z][^>]*>")
 HANDLER = re.compile(r"\son[a-z]+\s*=", re.IGNORECASE)
 LINK = re.compile(r'href="([^"]*)"')
 SECTION = re.compile(r'<section class="ot-screen" id="(SCR-[0-9]{3})"([^>]*)>')
+WHY_FOLDER_CONTENT_HASH = "486ec5baec7ecdaa13c17b55764ff6d7b75024abadf0613f3382bb29a991f881"
 
 
 def digest(text: str) -> str:
@@ -93,7 +95,7 @@ def test_a_folder_without_design_additions_keeps_the_expected_base_files() -> No
     design = folder.files[schema_document("design")]
 
     assert not has_design_additions(sources.payload("design"))
-    assert folder.content_hash == REAL_FOLDER_CONTENT_HASH
+    assert folder.content_hash == WHY_FOLDER_CONTENT_HASH != REAL_FOLDER_CONTENT_HASH
     assert digest(design) == REAL_DESIGN_SCHEMA_DIGEST
     assert {path: folder.files[path] for path in schema_files()} == schema_files()
     assert ADDITION_DEFINITIONS.isdisjoint(json.loads(design)["$defs"])
@@ -340,7 +342,20 @@ def test_a_folder_with_two_hundred_fifty_derived_elements_stays_within_the_archi
     assert derived_elements(LARGE) == 250
     assert len(folder.files) < MAX_ARCHIVE_ENTRIES
     assert len(archive.content) < MAX_ARCHIVE_SIZE
-    assert max(len(text.encode("utf-8")) for text in folder.files.values()) < MAX_ENTRY_SIZE // 16
+    assert (
+        max(
+            len(text.encode("utf-8")) for path, text in folder.files.items() if path != WHY_DOCUMENT
+        )
+        < MAX_ENTRY_SIZE // 16
+    )
+    assert len(folder.files[WHY_DOCUMENT].encode("utf-8")) < MAX_ENTRY_SIZE // 8
+    assert (
+        sum(
+            node["kind"] == "PROTOTYPE_ELEMENT"
+            for node in json.loads(folder.files[WHY_DOCUMENT])["nodes"]
+        )
+        == 250
+    )
     assert verified.content_hash == folder.content_hash
     assert (
         verified.documents["design"]["package"]["generated_mockup"]

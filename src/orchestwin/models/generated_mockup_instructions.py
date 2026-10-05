@@ -17,6 +17,8 @@ from orchestwin.artifacts.generated_mockups import (
 )
 from orchestwin.artifacts.visual_catalog import (
     ARCHETYPES,
+    RETIRED_VISUAL_VALUES,
+    BackgroundTreatment,
     BorderWeight,
     ButtonStyle,
     CornerStyle,
@@ -26,6 +28,12 @@ from orchestwin.artifacts.visual_catalog import (
     HeaderStyle,
     InputStyle,
     NavigationPattern,
+)
+from orchestwin.artifacts.visual_directions import (
+    DirectionColour,
+    DirectionLayout,
+    DirectionShape,
+    DirectionType,
 )
 from orchestwin.models.design_drafts import requirements_view
 from orchestwin.models.generated_mockup_drafts import (
@@ -249,6 +257,63 @@ CONSTANT_SECTIONS: Final = (
     TECHNICAL_CONTRACT,
     BEFORE_YOU_ANSWER,
 )
+DIRECTED_INTERFACE: Final = (
+    "A finished interface",
+    (
+        FINISHED_INTERFACE[1][0],
+        "- The art direction of this design, described below, decides how every screen is "
+        "composed, its shapes, its type and its use of colour. Follow it on every screen, in "
+        "every state and at every width. Do not fall back on the usual application layout (a "
+        "header bar, a title row, rounded cards with a thin border in a grid) unless the "
+        "direction asks for it.",
+        "- One primary action for each screen, visually dominant. Secondary actions are quieter.",
+        FINISHED_INTERFACE[1][3],
+        "- Spacing follows multiples of the spacing token. Success and danger colours carry "
+        "meaning only: a state, a result, a warning.",
+        *FINISHED_INTERFACE[1][6:10],
+        '- Icons are small inline SVG drawings with `stroke="currentColor"`, next to a text, '
+        "never instead of it.",
+        *FINISHED_INTERFACE[1][11:15],
+    ),
+)
+DIRECTED_PATTERNS_TO_AVOID: Final = (
+    "Patterns to avoid",
+    (
+        "- Decorative page backgrounds: stripes, grids, dots, repeating or conic gradients.",
+        "- Headings in italics.",
+        "- A screen that looks unfinished: a small form or a single card at the top of an "
+        "otherwise empty page, without the composition that the direction asks for.",
+        "- Tiles without numbers, tables with two rows, lists written on one line, labels "
+        "repeated as text and again as field labels.",
+        "- Success or danger colours used as decoration.",
+        "- More than one primary button in a view, links that look like body text, centred body "
+        "text in long paragraphs.",
+        "- Placeholder copy of any kind, emoji used as icons, long texts in upper case.",
+        "- The same composition for every design: screens that would look the same under the "
+        "direction of the other alternative do not follow their direction.",
+    ),
+)
+DIRECTED_BEFORE_YOU_ANSWER: Final = (
+    "Before you answer",
+    (
+        "Read your screens as the person who will use them, at 1280 pixels of width and at 390: "
+        "nothing overflows or scrolls sideways, every table fits its container at 1280 and is a "
+        "list of cards at 390, no text sits on a background where it is hard to read, every "
+        "group has a purpose, the numbers agree across the screens, every link leads to the "
+        "screen that shows its result. Then look at the screens from a distance, without reading "
+        "them: the composition, the shapes, the type and the colour are those of the art "
+        "direction on every screen, and nobody would mistake them for a generic application. "
+        "Correct what fails, then answer. Plan briefly: the answer itself is the place where the "
+        "screens are written, do not draft them twice.",
+    ),
+)
+DIRECTED_SECTIONS: Final = (
+    ROLE_AND_RESULT,
+    DIRECTED_INTERFACE,
+    DIRECTED_PATTERNS_TO_AVOID,
+    TECHNICAL_CONTRACT,
+    DIRECTED_BEFORE_YOU_ANSWER,
+)
 
 VISUAL_CHOICE_SENTENCES: Final = MappingProxyType(
     {
@@ -346,6 +411,147 @@ VISUAL_CHOICE_SENTENCES: Final = MappingProxyType(
     }
 )
 DESCRIBED_DIMENSIONS: Final = tuple(VISUAL_CHOICE_SENTENCES)
+DIRECTED_CHOICE_DIMENSIONS: Final = ("header", "navigation", "density", "buttons", "inputs")
+DIRECTION_AXIS_SENTENCES: Final = MappingProxyType(
+    {
+        "layout": MappingProxyType(
+            {
+                DirectionLayout.PANELS: "Layout: the page is composed of panels. A header "
+                "carries the product name and the navigation with the current item marked, a "
+                "title row carries the title of the screen and a one line description, then the "
+                "content is grouped in panels arranged in columns, at most var(--vl-content-width) "
+                "wide.",
+                DirectionLayout.BANDS: "Layout: the page is a stack of horizontal bands that span "
+                "the whole width of the window. Each band has one purpose and its own background "
+                "(the page background, a surface, the soft primary tint or the primary colour); "
+                "inside every band the content is centred, at most var(--vl-content-width) wide, "
+                "and starts at the same left edge in all the bands. "
+                "There are no cards and no outer frame: the change of background separates one "
+                "group from the next. The first band carries the product name, the navigation and "
+                "the title of the screen.",
+                DirectionLayout.EDITORIAL: "Layout: the page is set like a printed page. A "
+                "masthead with the product name and the navigation in small text sits on a thin "
+                "rule; below it the title of the screen stands alone. The content is an "
+                "asymmetric grid, at most var(--vl-content-width) wide: one wide column for the "
+                "main content and one narrow column for notes, summaries and secondary actions, "
+                "about two thirds and one third; below 720 pixels the narrow column follows the "
+                "wide one. Groups are separated by thin rules and by white space, never enclosed "
+                "in cards.",
+                DirectionLayout.STAGE: "Layout: every screen is a stage for one thing. A single "
+                "centred column, at most var(--vl-content-width) wide, holds the one task or "
+                "object of the screen, large. The product name and the navigation are small and "
+                "stay at the top edge; secondary information sits below the main object as short "
+                "lines, never beside it. Lists and tables are a stack of large rows in the same "
+                "column. The empty space around the column is part of the design: keep it empty, "
+                "and make the main object large enough that the screen does not look unfinished.",
+                DirectionLayout.WORKBENCH: "Layout: the screen is a tool. A slim bar at the top "
+                "holds the product name, the navigation and the search or the main action. The "
+                "work area uses the whole width of the window up to var(--vl-content-width): rows "
+                "or a table run from edge to edge, with filters, totals or the details of the "
+                "selected row in a side column; below 720 pixels the side column moves above the "
+                "rows. There is no hero and no large title: the title of the screen is a label in "
+                "the bar or above the rows.",
+                DirectionLayout.MOSAIC: "Layout: the content is a mosaic, a grid of tiles of "
+                "clearly different sizes, at most var(--vl-content-width) wide. The largest tile "
+                "holds what matters most on the screen (the main number, the next thing to do, the "
+                "selected item) and the smaller tiles hold the rest; tiles span two or more "
+                "columns or rows of the grid, and neighbouring tiles differ in size. Below 720 "
+                "pixels the tiles stack in order of importance. The product name and the "
+                "navigation sit in a slim line above the grid.",
+            }
+        ),
+        "shape": MappingProxyType(
+            {
+                DirectionShape.ROUNDED_OUTLINE: "Shape: panels and controls have rounded corners "
+                "(the radius tokens) and a thin outline (the border width token in the border "
+                "colour); panels share one radius, one border and one shadow.",
+                DirectionShape.SQUARE_RULES: "Shape: every corner is square, the radius tokens "
+                "are zero. Nothing is boxed: groups are separated by a thin rule above or below "
+                "them (the border width token, in the text colour for the main rules and in the "
+                "border colour for the minor ones) and by space. Tables have rules between the "
+                "rows and no outer frame.",
+                DirectionShape.HEAVY_FRAME: "Shape: shapes are bold and graphic. Panels, buttons, "
+                "fields and tiles have a thick frame in the text colour (the border width token) "
+                "and the hard offset shadow of the shadow token, without blur; an element that is "
+                "current or pressed drops its shadow. Use the frame on the few elements that "
+                "matter, not on every nested group.",
+                DirectionShape.SOFT_FILL: "Shape: surfaces are filled and have no outline. "
+                "Panels, tiles and rows are blocks of a surface colour or of the soft primary "
+                "tint on the page background, with the panel radius, without borders and without "
+                "shadows; groups are told apart by their tone and by the space between them. "
+                "Fields and outlined buttons keep the visible outline required above.",
+                DirectionShape.PILL: "Shape: shapes are soft and round. Buttons, fields, tags and "
+                "navigation items are pills (the control radius token), panels have the large "
+                "panel radius and float on the page with the shadow token; the rows of a list are "
+                "separate rounded blocks rather than the lines of a table. Nothing has a square "
+                "corner.",
+            }
+        ),
+        "type": MappingProxyType(
+            {
+                DirectionType.EVEN: "Type: the scale is restrained. The title of the screen uses "
+                "var(--vl-size-display), the titles of the groups var(--vl-size-title), and "
+                "hierarchy comes from weight and from the muted text colour more than from size.",
+                DirectionType.DISPLAY: "Type: type is the main graphic element. The title of "
+                "every screen is very large, var(--vl-size-display) on a wide screen and "
+                "var(--vl-size-display-narrow) below 720 pixels, with the line height of "
+                "var(--vl-line-height-heading), the heading weight and the heading tracking; it "
+                "is short, or it wraps on two or three lines. The key figure of a screen may use "
+                "the same size. Everything else stays at the body size or smaller: the contrast "
+                "between the large title and the small text is the hierarchy, so the titles of "
+                "the groups are small labels at var(--vl-size-title), not a second large size.",
+                DirectionType.CAPS_LABELS: "Type: labels carry the hierarchy. Every group, column "
+                "and value has a small label in upper case, at var(--vl-size-label) with the "
+                "tracking of var(--vl-label-tracking), in the muted text colour, above or before "
+                "its value. Numbers, codes, dates and times are set in var(--vl-font-mono) with "
+                "tabular figures and aligned in columns. The title of the screen is modest, at "
+                "var(--vl-size-title).",
+                DirectionType.READING: "Type: the screen reads like a well set text. The body "
+                "size is larger (var(--vl-size-body)), lines are at most var(--vl-measure) long "
+                "and the line height is generous. The title of the screen uses "
+                "var(--vl-size-display) and the titles of the groups var(--vl-size-title) in the "
+                "heading font. Instructions and descriptions are short sentences rather than "
+                "labels.",
+            }
+        ),
+        "colour": MappingProxyType(
+            {
+                DirectionColour.ACCENT_ONLY: "Colour: colour is restrained. Surfaces are neutral, "
+                "the primary colour marks the main action and the current navigation item, and "
+                "the accent colour is used sparingly.",
+                DirectionColour.FIELDS: "Colour: colour is used in large flat fields. The band or "
+                "the tile that matters most on every screen (the header band, the main tile, the "
+                "summary) is filled with the primary colour with its text in on-primary; a second "
+                "field may use the accent colour with on-accent. The fields are large and few, "
+                "without gradients; the rest of the screen stays on the page background so that "
+                "the fields stand out.",
+                DirectionColour.INK: "Colour: the screen is almost monochrome. The text colour on "
+                "the page background does the work, in type, rules and frames. The primary colour "
+                "appears on the main action and, besides it, only as a small mark: an underline "
+                "under the current item, a dot before a status. No panel is filled with colour, "
+                "no background is tinted, there is no gradient.",
+                DirectionColour.TINTED: "Colour: surfaces are tinted. Groups sit on the soft "
+                "primary tint and on the alternate surface instead of white panels, so that a "
+                "screen has two or three soft tones and few borders; the primary colour is for "
+                "the main action and for the current item.",
+            }
+        ),
+    }
+)
+_PLAIN_BACKGROUND_SENTENCE: Final = "The page background is plain."
+BACKGROUND_SENTENCES: Final = MappingProxyType(
+    {
+        BackgroundTreatment.PLAIN: _PLAIN_BACKGROUND_SENTENCE,
+        BackgroundTreatment.TINTED: "The page background is the alternate surface or the soft "
+        "primary tint rather than the plain background.",
+        BackgroundTreatment.GRADIENT: "A sober gradient between two tokens at the top of the page "
+        "is welcome.",
+        **dict.fromkeys(
+            (item for item in BackgroundTreatment if item in RETIRED_VISUAL_VALUES["background"]),
+            _PLAIN_BACKGROUND_SENTENCE,
+        ),
+    }
+)
 ELEMENT_KINDS_SENTENCE: Final = (
     "In the recipe a HEADING is a heading, a TEXT_INPUT is a field, a SELECT is a select or a "
     "group of choices, a BUTTON is a button or a link with role button, a LINK is a link, a LIST "
@@ -358,12 +564,31 @@ TOKENS_SENTENCE: Final = (
     "`--vl-heading-weight`, `--vl-heading-transform`, `--vl-heading-variant` and "
     "`--vl-heading-tracking`."
 )
+DIRECTED_TOKENS_SENTENCE: Final = TOKENS_SENTENCE + (
+    " The tokens of this design also carry --vl-content-width, --vl-section-gap, "
+    "--vl-line-height-heading, --vl-font-mono and, when the direction needs them, "
+    "--vl-size-display-narrow, --vl-size-label, --vl-label-tracking and --vl-measure."
+)
+DIRECTED_ARCHETYPE_SENTENCE: Final = (
+    "The archetype decides the flow, the order and the states of the screens; the art direction "
+    "decides how they look: where the recipe names a layout, a card or a panel, draw it in the "
+    "way of the direction."
+)
+DIRECTION_SENTENCE: Final = (
+    "Art direction of this design, chosen for this project and different from the other "
+    "alternative: direction in the alternative of the context gives its name, its concept and its "
+    "rules, written for this product. They are part of the design, like the tokens, and never "
+    "change the technical contract. Its position on the axes fixes what follows; where a later "
+    "sentence about the header or the navigation disagrees with the layout of the direction, the "
+    "layout prevails."
+)
 CONTEXT_SENTENCE: Final = (
     "The context also carries the alternative, the requirements with their user stories and "
     "acceptance criteria, the critiques of the user twins on this alternative, the observations "
     "of their last review that the owner confirmed and the concerns of the design with their "
     "mitigation: the screens answer them."
 )
+DIRECTED_APPROACH_SENTENCE: Final = "The approach of the answer is at most 500 characters long."
 ITERATION_SENTENCE: Final = (
     "This is an iteration on a mockup that the owner applied: `current_mockup` in the context is "
     "that mockup, `owner_request` is the change that the owner asks for and `assertions` are "
@@ -395,6 +620,7 @@ def _section(section: tuple[str, tuple[str, ...]]) -> str:
 
 
 CONSTANT_INSTRUCTION: Final = " ".join(_section(section) for section in CONSTANT_SECTIONS)
+DIRECTED_INSTRUCTION: Final = " ".join(_section(section) for section in DIRECTED_SECTIONS)
 
 
 def _language_name(language: Mapping[str, str] | None) -> str | None:
@@ -414,6 +640,23 @@ def visual_choice_sentences(choices) -> tuple[str, ...]:
     )
 
 
+def _direction_sentences(direction, choices) -> tuple[str, ...]:
+    return (
+        DIRECTION_SENTENCE,
+        *(
+            sentences[getattr(direction.axes, axis)]
+            for axis, sentences in DIRECTION_AXIS_SENTENCES.items()
+        ),
+        *(
+            VISUAL_CHOICE_SENTENCES[dimension][getattr(choices, dimension)]
+            for dimension in DIRECTED_CHOICE_DIMENSIONS
+        ),
+        BACKGROUND_SENTENCES[choices.background],
+        "Sections of a screen are separated by var(--vl-section-gap).",
+        DIRECTED_TOKENS_SENTENCE,
+    )
+
+
 def design_section(
     alternative,
     *,
@@ -422,11 +665,19 @@ def design_section(
     iteration: bool = False,
 ) -> str:
     visual = alternative.visual_language
+    direction = visual.direction
     minimum, maximum = screen_limits(alternative, iteration=iteration)
     spec = ARCHETYPES[visual.choices.archetype]
     name = _language_name(language)
     known = tuple(sorted(requirement_codes(requirements)))
     declared = declared_requirement_codes(alternative, requirements) or known
+    archetype_sentences = () if direction is None else (DIRECTED_ARCHETYPE_SENTENCE,)
+    approach_sentences = () if direction is None else (DIRECTED_APPROACH_SENTENCE,)
+    visual_sentences = (
+        (*visual_choice_sentences(visual.choices), TOKENS_SENTENCE)
+        if direction is None
+        else _direction_sentences(direction, visual.choices)
+    )
     parts = [
         "This design:",
         f"Write the copy of the interface in {name}."
@@ -437,15 +688,16 @@ def design_section(
         f"The layout follows the {spec.label} archetype: {spec.description}.",
         f"Recipe of the archetype, as a guide for the order and the states of the screens: "
         f"{spec.recipe}",
+        *archetype_sentences,
         ELEMENT_KINDS_SENTENCE,
         f"The mockup has between {minimum} and {maximum} screens."
         if iteration
         else f"Draw between {minimum} and {maximum} screens.",
-        *visual_choice_sentences(visual.choices),
-        TOKENS_SENTENCE,
+        *visual_sentences,
         f"The codes that `data-req` may name are {_codes(known)}; this alternative declares "
         f"{_codes(declared)}, and together the screens cover every one of them.",
         CONTEXT_SENTENCE,
+        *approach_sentences,
     ]
     return " ".join(" ".join(part.split()) for part in parts)
 
@@ -459,7 +711,9 @@ def mockup_instruction(
 ) -> str:
     iteration = "current_mockup" in context
     parts = [
-        CONSTANT_INSTRUCTION,
+        CONSTANT_INSTRUCTION
+        if alternative.visual_language.direction is None
+        else DIRECTED_INSTRUCTION,
         design_section(
             alternative, requirements=requirements, language=language, iteration=iteration
         ),
@@ -482,6 +736,11 @@ def alternative_view(alternative) -> dict[str, object]:
         view["visual_language"] = {
             key: visual[key] for key in ("choices", "product_name", "rationale")
         }
+        direction = visual.get("direction")
+        if direction is not None:
+            view["visual_language"]["direction"] = {
+                key: direction[key] for key in ("name", "concept", "rules", "axes")
+            }
     return view
 
 
@@ -595,12 +854,24 @@ def mockup_context(
 
 
 __all__ = [
+    "BACKGROUND_SENTENCES",
     "BEFORE_YOU_ANSWER",
     "CONSTANT_INSTRUCTION",
     "CONSTANT_SECTIONS",
     "DESCRIBED_DIMENSIONS",
     "DESIGN_ITERATION",
     "DESIGN_MOCKUP_HTML",
+    "DIRECTED_APPROACH_SENTENCE",
+    "DIRECTED_ARCHETYPE_SENTENCE",
+    "DIRECTED_BEFORE_YOU_ANSWER",
+    "DIRECTED_CHOICE_DIMENSIONS",
+    "DIRECTED_INSTRUCTION",
+    "DIRECTED_INTERFACE",
+    "DIRECTED_PATTERNS_TO_AVOID",
+    "DIRECTED_SECTIONS",
+    "DIRECTED_TOKENS_SENTENCE",
+    "DIRECTION_AXIS_SENTENCES",
+    "DIRECTION_SENTENCE",
     "FINISHED_INTERFACE",
     "GENERATED_MOCKUP_PURPOSES",
     "GLOBAL_ATTRIBUTE_ORDER",

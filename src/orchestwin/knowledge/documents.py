@@ -17,6 +17,14 @@ from orchestwin.agents.proposals import TeamProposalVersion
 from orchestwin.agents.selection_rules import RuleEvidence
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.visual_catalog import ARCHETYPES, LayoutArchetype
+from orchestwin.artifacts.visual_directions import (
+    DIRECTION_AXES,
+    DirectionColour,
+    DirectionDensity,
+    DirectionLayout,
+    DirectionShape,
+    DirectionType,
+)
 from orchestwin.knowledge.layout import (
     STAGE_LABELS,
     STAGES,
@@ -136,6 +144,51 @@ _STANDING_TEXTS: Final[dict[PerspectiveStanding, str]] = {
 _GUIDANCE_HEADINGS: Final = (
     (GuidanceStage.DEFINITION, "In the definition:"),
     (GuidanceStage.DESIGN, "In the design:"),
+)
+_VISUAL_AXIS_NAMES: Final = {
+    "layout": "Layout",
+    "shape": "Shapes",
+    "type": "Type",
+    "colour": "Colour",
+    "density": "Density",
+}
+_VISUAL_AXIS_VALUES: Final[dict[str, dict[str, str]]] = {
+    "layout": {
+        DirectionLayout.PANELS: "Panels",
+        DirectionLayout.BANDS: "Bands",
+        DirectionLayout.EDITORIAL: "Editorial page",
+        DirectionLayout.STAGE: "Stage",
+        DirectionLayout.WORKBENCH: "Workbench",
+        DirectionLayout.MOSAIC: "Mosaic",
+    },
+    "shape": {
+        DirectionShape.ROUNDED_OUTLINE: "Rounded outlines",
+        DirectionShape.SQUARE_RULES: "Square corners and rules",
+        DirectionShape.HEAVY_FRAME: "Heavy frames",
+        DirectionShape.SOFT_FILL: "Filled surfaces",
+        DirectionShape.PILL: "Pills",
+    },
+    "type": {
+        DirectionType.EVEN: "Restrained scale",
+        DirectionType.DISPLAY: "Very large titles",
+        DirectionType.CAPS_LABELS: "Upper-case labels",
+        DirectionType.READING: "Reading",
+    },
+    "colour": {
+        DirectionColour.ACCENT_ONLY: "Colour on the action only",
+        DirectionColour.FIELDS: "Fields of colour",
+        DirectionColour.INK: "Almost monochrome",
+        DirectionColour.TINTED: "Tinted surfaces",
+    },
+    "density": {
+        DirectionDensity.COMPACT: "Compact",
+        DirectionDensity.COMFORTABLE: "Comfortable",
+        DirectionDensity.SPACIOUS: "Spacious",
+    },
+}
+_VISUAL_DIRECTION_ORIGIN: Final = (
+    "Proposed by the model among {count} candidates; chosen by the Studio because it is far from "
+    "the other."
 )
 
 
@@ -679,7 +732,7 @@ def requirements_markdown(
         labels = {
             "PROJECT_BRIEF": "Brief di progetto" if language == "it" else "Project brief",
             "USER_TWIN": "Twin utente" if language == "it" else "User twin",
-            "OWNER_INPUT": "Indicazione del committente" if language == "it" else "Owner input",
+            "OWNER_INPUT": "Indicazione del proprietario" if language == "it" else "Owner input",
             "MODEL_PROPOSAL": "Proposta del modello" if language == "it" else "Model proposal",
             "SYSTEM_ARTIFACT": "Artefatto di sistema" if language == "it" else "System artifact",
         }
@@ -712,7 +765,7 @@ def requirements_markdown(
         f"# {text['definition']}",
         "",
         (
-            f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal committente il {gate.updated_at.isoformat()}."
+            f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal proprietario il {gate.updated_at.isoformat()}."
             if language == "it"
             else f"{version_word} {version.version_number}, content hash `{version.content_hash}`, approved by the owner on {gate.updated_at.isoformat()}."
         ),
@@ -998,6 +1051,28 @@ def _owner_assertion_lines(assertions: Sequence[str]) -> list[str]:
     ]
 
 
+def _visual_direction_lines(direction: Mapping[str, object] | None) -> list[str]:
+    if direction is None:
+        return []
+    axes = direction["axes"]
+    positions = " ".join(
+        f"{_VISUAL_AXIS_NAMES[axis]}: {_VISUAL_AXIS_VALUES[axis][axes[axis]]}."
+        for axis in DIRECTION_AXES
+    )
+    return [
+        f"Visual direction: {_sentence(direction['name'])}",
+        "",
+        str(direction["concept"]),
+        "",
+        positions,
+        "",
+        *markdown_bullets(direction["rules"]),
+        "",
+        _VISUAL_DIRECTION_ORIGIN.format(count=direction["candidates"]),
+        "",
+    ]
+
+
 def _visual_language_lines(visual: Mapping[str, object] | None) -> list[str]:
     if visual is None:
         return []
@@ -1009,6 +1084,7 @@ def _visual_language_lines(visual: Mapping[str, object] | None) -> list[str]:
         "",
         "#### Visual language",
         "",
+        *_visual_direction_lines(visual.get("direction")),
         f"Product name: {visual['product_name']}. Catalog version {visual['catalog_version']}. "
         f"{described}.",
         "",
@@ -1177,7 +1253,7 @@ def _twin_texts(language: str | None) -> dict[str, str]:
         "behaviours": ("Comportamenti", "Behaviours"),
         "pain_points": ("Difficoltà", "Pain points"),
         "constraints": ("Vincoli", "Constraints"),
-        "EVIDENCED": ("Evidenziato", "Evidenced"),
+        "EVIDENCED": ("Documentato", "Evidenced"),
         "INFERRED": ("Dedotto", "Inferred"),
         "HYPOTHESIZED": ("Ipotizzato", "Hypothesized"),
         "CONTESTED": ("Contestato", "Contested"),
@@ -1264,9 +1340,10 @@ def twin_markdown(document: Mapping[str, object], *, language: str | None = None
             "assumptions with a declared epistemic status and confidence. `twin.json` next to this "
             "document is a self-contained copy that another OrchesTwin project can import."
             if language != "it"
-            else "Uno User Twin è un modello di un tipo di utente: le sue osservazioni sono "
-            "ipotesi con stato epistemico e confidenza dichiarati. `twin.json` accanto a "
-            "questo documento è una copia autonoma che un altro progetto OrchesTwin può importare."
+            else "Uno User Twin è un modello di un tipo di utente, non una persona: le sue "
+            "osservazioni sono ipotesi con stato epistemico e confidenza dichiarati. "
+            "`twin.json` accanto a questo documento è una copia autonoma che un altro "
+            "progetto OrchesTwin può importare."
         ),
         "",
         f"## {texts['archetype']}",

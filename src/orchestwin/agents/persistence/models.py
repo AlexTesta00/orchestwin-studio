@@ -41,12 +41,12 @@ class TeamProposalVersionRecord(OrmBase):
             name="schema_version_positive",
         ),
         CheckConstraint(
-            "revision_kind IN ('PROPOSER_GENERATED', 'OWNER_EDITED')",
+            "revision_kind IN ('PROPOSER_GENERATED', 'OWNER_EDITED', 'OWNER_PROVIDED')",
             name="revision_kind_valid",
         ),
         CheckConstraint(
             "("
-            "revision_kind = 'PROPOSER_GENERATED' "
+            "revision_kind IN ('PROPOSER_GENERATED', 'OWNER_PROVIDED') "
             "AND based_on_version_number IS NULL"
             ") OR ("
             "revision_kind = 'OWNER_EDITED' "

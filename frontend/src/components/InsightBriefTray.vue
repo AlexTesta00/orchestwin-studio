@@ -55,11 +55,12 @@ const messages = {
     doneMany:
       "Aggiunti al brief {count} spunti, versione {version}. Brief, prospettive, twin, requisiti e design vanno approvati di nuovo.",
     alreadyApplied: "Uno spunto era già stato applicato: toglilo e riprova.",
-    dismissed: "Uno spunto viene da un'osservazione messa da parte: toglilo e riprova.",
+    dismissed:
+      "Uno spunto viene da un'osservazione segnata come non pertinente: toglilo e riprova.",
     failed: "Operazione non riuscita: {code}",
     conflicts: {
       INSIGHT_ALREADY_APPLIED: "Già applicato",
-      INSIGHT_SOURCE_DISMISSED: "Osservazione messa da parte",
+      INSIGHT_SOURCE_DISMISSED: "Osservazione non pertinente",
     },
   },
 } as const;

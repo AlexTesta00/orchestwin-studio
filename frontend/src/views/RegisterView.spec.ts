@@ -19,6 +19,7 @@ const AUTHENTICATED: AuthenticationResponse = {
     email: "owner@example.com",
     is_active: true,
     created_at: "2026-08-10T12:00:00Z",
+    guidance_mode: null,
   },
 };
 
@@ -73,7 +74,7 @@ describe("registration page", () => {
     wrapper.unmount();
   });
 
-  it("opens the projects once the account exists", async () => {
+  it("opens the choice of the working mode once the account exists", async () => {
     const create = vi.spyOn(apiClient, "register").mockResolvedValue(AUTHENTICATED);
     const { wrapper, replace } = await mountRegister();
 
@@ -83,7 +84,8 @@ describe("registration page", () => {
       email: "owner@example.com",
       password: "Test-password-not-real!",
     });
-    expect(replace).toHaveBeenCalledWith({ name: "projects" });
+    expect(replace).toHaveBeenCalledOnce();
+    expect(replace).toHaveBeenCalledWith({ name: "guidance-choice" });
     wrapper.unmount();
   });
 

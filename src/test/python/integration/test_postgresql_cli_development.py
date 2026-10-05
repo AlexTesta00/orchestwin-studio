@@ -205,7 +205,7 @@ def walk(scene: Scene, journey: Journey, flow: Flow) -> None:
         ("4 a new design version makes a review stale: status and --recheck", stale_reviews),
         ("5 ut twins learn, forget, list, show and update without a model", twins_that_learn),
         ("6 ut code --dry-run, then the agent of the test in a real run", code_with_an_agent),
-        ("7 ut mcp lists eleven tools and answers from the folder", serve_the_agent),
+        ("7 ut mcp lists thirteen tools and answers from the folder", serve_the_agent),
     )
     for name, action in steps:
         with journey.step(name):
@@ -939,7 +939,7 @@ def serve_the_agent(scene: Scene, flow: Flow) -> None:
     assert [answer.get("id") for answer in answers] == [1, 2, 3, 4, 5, 6, 7], run.transcript()
     assert all(answer.get("jsonrpc") == "2.0" and "result" in answer for answer in answers)
     names = [tool["name"] for tool in answers[1]["result"]["tools"]]
-    assert (len(names), names) == (12, list(MCP_TOOLS)), names
+    assert (len(names), names) == (15, list(MCP_TOOLS)), names
     state = read_json(scene.knowledge / "state" / "state.json")
     opened = [task for task in state["tasks"] if task["status"] == OPEN]
     assert opened == tasks_of(scene, every=False)

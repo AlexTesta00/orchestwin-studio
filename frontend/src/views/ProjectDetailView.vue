@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, provide, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
@@ -12,7 +12,14 @@ import {
   type ProjectStage,
 } from "@/api/contracts";
 import { projectImportsApi } from "@/api/projectImports";
+import { whyApi } from "@/api/why";
+import { whyContextKey } from "@/components/whyContext";
+import ActivitySessionControl from "@/components/ActivitySessionControl.vue";
+import ProjectImportVerification from "@/components/ProjectImportVerification.vue";
+import { projectImportResult } from "@/stores/projectImportResults";
 import GeneratedMockupFrame from "@/components/GeneratedMockupFrame.vue";
+import GuidanceModeNote from "@/components/GuidanceModeNote.vue";
+import ProjectWorkflowInputsPanel from "@/components/ProjectWorkflowInputsPanel.vue";
 import InsightBriefTray from "@/components/InsightBriefTray.vue";
 import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
 import ProjectBriefDialogue from "@/components/ProjectBriefDialogue.vue";
@@ -25,6 +32,7 @@ import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
 import ProjectSectionsNotice from "@/components/ProjectSectionsNotice.vue";
 import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
 import ProjectResearchEvidencePanel from "@/components/ProjectResearchEvidencePanel.vue";
+import type { EvidenceFocus } from "@/types/humanValidation";
 import TwinChatPanel from "@/components/TwinChatPanel.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import UiButton from "@/components/UiButton.vue";
@@ -44,13 +52,17 @@ import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
 import { useDesignMockupsStore } from "@/stores/designMockups";
 import { useAuthStore } from "@/stores/auth";
+import { useGuidanceStore } from "@/stores/guidance";
 import { useClarificationStore } from "@/stores/clarification";
 import { useInsightTrayStore } from "@/stores/insightTray";
 import { useKnowledgePackagesStore } from "@/stores/knowledgePackages";
 import { useSectionsStore } from "@/stores/sections";
+import { activitySignalKey, useActivityJournalStore } from "@/stores/activityJournal";
 import type { ProjectImportOriginPayload } from "@/types/projectImports";
 import type { SectionState, SectionsAlignmentPayload } from "@/types/sections";
 import type { UserTwinVersionPayload } from "@/types/userModeling";
+import type { HumanGatePayload as PrototypeGate } from "@/types/design";
+import type { ProvidedPrototype, WorkflowReference, WorkflowTarget } from "@/types/workflowInputs";
 
 const SECTION_STATUSES: Readonly<Record<SectionState, StepStatus>> = {
   NOT_STARTED: "pending",
@@ -75,6 +87,9 @@ const NO_SECTION: StepSection = { state: "NOT_STARTED", version: null };
 
 const route = useRoute();
 const auth = useAuthStore();
+const guidance = useGuidanceStore();
+const providedPrototype = ref<ProvidedPrototype | null>(null);
+const providedPrototypeGate = ref<PrototypeGate | null>(null);
 const team = useTeamStore();
 const modeling = useUserModelingStore();
 const requirements = useRequirementsStore();
@@ -84,6 +99,9 @@ const tray = useInsightTrayStore();
 const packages = useKnowledgePackagesStore();
 const mockups = useDesignMockupsStore();
 const sectionsStore = useSectionsStore();
+const journal = useActivityJournalStore();
+const activityRow = ref<HTMLElement | null>(null);
+provide(activitySignalKey, journal);
 const remounts = ref<readonly number[]>([0, 0, 0, 0, 0, 0]);
 // Reload downstream state when its approved inputs change on this page.
 const briefContext = computed(() =>
@@ -120,7 +138,7 @@ const { t, locale } = useI18n({
       detail: {
         loading: "Loading project…",
         loadError: "The project could not be loaded.",
-        saveError: "The Project Brief version could not be saved.",
+        saveError: "The version of the brief could not be saved.",
         allProjects: "All projects",
         principle: "AI proposes, you decide",
         readOnly:
@@ -130,7 +148,7 @@ const { t, locale } = useI18n({
         readOnlyTeam:
           "You already approved the perspectives: you can read them again. You can still switch on or off the ones left to your choice: every change you save makes a new version that you approve again.",
         readOnlyTwins:
-          "You already approved the user twins: you can read them again and talk to them. If you correct a twin or reuse one from another project, a new version is made that you approve again.",
+          "You already approved the User Twins: you can read them again and talk to them. If you correct a twin or reuse one from another project, a new version is made that you approve again.",
         readOnlyRequirements:
           "You already approved the requirements: you can read them again. If you change one, a new version is made that you approve again.",
         readOnlyDesign:
@@ -170,17 +188,17 @@ const { t, locale } = useI18n({
       detail: {
         loading: "Caricamento progetto…",
         loadError: "Non è stato possibile caricare il progetto.",
-        saveError: "Non è stato possibile salvare la versione del Project Brief.",
+        saveError: "Non è stato possibile salvare la versione del brief.",
         allProjects: "Tutti i progetti",
         principle: "L'AI propone, decidi tu",
         readOnly:
           "Hai già approvato questo passo: puoi rileggerlo. Ogni modifica crea una nuova versione da approvare di nuovo.",
         readOnlyBrief:
-          "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
+          "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi, nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
         readOnlyTeam:
           "Hai già approvato le prospettive: puoi rileggerle. Puoi ancora attivare o togliere quelle a tua scelta: ogni cambio che salvi crea una nuova versione da approvare di nuovo.",
         readOnlyTwins:
-          "Hai già approvato gli user twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
+          "Hai già approvato gli User Twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
         readOnlyRequirements:
           "Hai già approvato i requisiti: puoi rileggerli. Se ne modifichi uno, nasce una nuova versione da approvare di nuovo.",
         readOnlyDesign:
@@ -233,7 +251,7 @@ const errorDetail = ref<string | null>(null);
 const selectedStage = ref<number | null>(null);
 const briefMode = ref<"dialogue" | "form" | null>(null);
 const briefView = computed(
-  () => briefMode.value ?? (currentBrief.value === null ? "dialogue" : "form"),
+  () => briefMode.value ?? (currentBrief.value === null && !guidance.expert ? "dialogue" : "form"),
 );
 const stepsOpen = ref(false);
 const editorOpen = ref(false);
@@ -259,6 +277,8 @@ const projectId = computed(() => {
   return value ?? "";
 });
 const trayVisible = computed(() => tray.isVisible(projectId.value));
+const importResult = computed(() => projectImportResult(projectId.value));
+provide(whyContextKey, { projectId: () => projectId.value, authorize: authorized, api: whyApi });
 const briefKnown = computed(() => !loading.value && !reloading.value && project.value !== null);
 
 function settledOnPage(
@@ -315,11 +335,23 @@ function approved(
   );
 }
 
+const providedDesignApproved = computed(
+  () =>
+    providedPrototype.value?.project_id === projectId.value &&
+    requirements.isReadyForDesign &&
+    providedPrototype.value.definition_reference.artifact_id === requirements.current?.id &&
+    providedPrototype.value.definition_reference.version_number ===
+      requirements.current?.version_number &&
+    providedPrototype.value.definition_reference.content_hash ===
+      requirements.current?.content_hash &&
+    approved(providedPrototypeGate.value, providedPrototype.value),
+);
 const designApproved = computed(
   () =>
-    design.projectId === projectId.value &&
-    design.isReadyForArchitecture &&
-    approved(design.gate, design.current),
+    providedDesignApproved.value ||
+    (design.projectId === projectId.value &&
+      design.isReadyForArchitecture &&
+      approved(design.gate, design.current)),
 );
 const completedStages = computed(() => [
   clarification.projectId === projectId.value && approved(clarification.gate, currentBrief.value),
@@ -345,7 +377,9 @@ const packageOpen = computed(() => completedStages.value[0] === true);
 const sectionsData = computed(() =>
   sectionsStore.projectId === projectId.value ? sectionsStore.sections : null,
 );
-const sectionsMode = computed(() => sectionsData.value?.first_pass_complete === true);
+const sectionsMode = computed(
+  () => guidance.expert || sectionsData.value?.first_pass_complete === true,
+);
 const evidenceReviewSections = computed<ReadonlySet<ProjectStage>>(
   () =>
     new Set(
@@ -369,11 +403,12 @@ const sectionSteps = computed<StepSection[]>(() =>
   }),
 );
 const defaultSection = computed(() => {
+  if (sectionsData.value === null) return currentStage.value;
   const states = sectionSteps.value.map((section) => section.state);
   const waiting = states.indexOf("IN_PROGRESS");
   if (waiting >= 0) return waiting;
   const behind = states.indexOf("TO_UPDATE");
-  return behind >= 0 ? behind : 5;
+  return behind >= 0 ? behind : sectionsData.value.first_pass_complete ? 5 : currentStage.value;
 });
 const activeStage = computed(() => {
   if (sectionsMode.value) {
@@ -413,6 +448,38 @@ const stageDescriptions = computed(() =>
         "The folder with everything you approved.",
       ],
 );
+const workflowBaseContext = computed(() => {
+  const artifacts = [
+    currentBrief.value,
+    team.currentVersion,
+    modeling.currentSnapshot,
+    requirements.current,
+    providedPrototype.value ?? design.current,
+  ];
+  const keys: WorkflowTarget[] = ["BRIEF", "TEAM", "USER_TWINS", "REQUIREMENTS", "DESIGN"];
+  const context: Partial<Record<WorkflowTarget, WorkflowReference>> = {};
+  artifacts.forEach((artifact, index) => {
+    const key = keys[index];
+    if (artifact && key && artifact.project_id === projectId.value)
+      context[key] = {
+        artifact_id: artifact.id,
+        version_number: artifact.version_number,
+        content_hash: artifact.content_hash,
+      };
+  });
+  return context;
+});
+
+function onPrototypeChanged(prototype: ProvidedPrototype | null, gate: PrototypeGate | null): void {
+  providedPrototype.value = prototype;
+  providedPrototypeGate.value = gate;
+}
+
+async function onOwnerInputChanged(): Promise<void> {
+  remountFrom(1);
+  onSectionsChanged();
+}
+
 const stepItems = computed<StepItem[]>(() =>
   stageLabels.value.map((label, index) => {
     if (sectionsMode.value) {
@@ -509,8 +576,8 @@ const stageVersions = computed(() => [
   team.currentVersion?.version_number,
   modeling.currentSnapshot?.version_number,
   requirements.current?.version_number,
-  design.current?.version_number,
-  design.current?.version_number,
+  providedPrototype.value?.version_number ?? design.current?.version_number,
+  providedPrototype.value?.version_number ?? design.current?.version_number,
 ]);
 const activeVersion = computed(() => stageVersions.value[activeStage.value]);
 const stageSummaries = computed(() =>
@@ -522,7 +589,12 @@ const stageSummaries = computed(() =>
 );
 const stageArtifacts = computed(() => {
   const id = projectId.value;
-  const designVersion = design.projectId === id ? design.current : null;
+  const designVersion =
+    providedPrototype.value?.project_id === id
+      ? providedPrototype.value
+      : design.projectId === id
+        ? design.current
+        : null;
   return [
     currentBrief.value,
     team.projectId === id ? team.currentVersion : null,
@@ -802,7 +874,22 @@ async function onEvidenceChanged(): Promise<void> {
   const id = projectId.value;
   if (!id) return;
   await authorized((token) => modeling.load(id, token)).catch(() => null);
-  if (id === projectId.value) onSectionsChanged();
+  if (id === projectId.value) {
+    validationRefreshKey.value += 1;
+    onSectionsChanged();
+  }
+}
+
+const evidenceFocus = ref<EvidenceFocus | null>(null);
+const validationRefreshKey = ref(0);
+async function openValidationEvidence(source: EvidenceFocus | null): Promise<void> {
+  evidenceFocus.value = source;
+  selectedStage.value = 2;
+  await nextTick();
+  const target = window.document.querySelector<HTMLElement>(
+    '[data-testid="research-evidence-panel"]',
+  );
+  target?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 }
 
 async function alignSections(): Promise<void> {
@@ -878,13 +965,26 @@ watch(
   { immediate: true },
 );
 
+function onVisibilityChange(): void {
+  journal.visibilityChanged(document.visibilityState === "hidden");
+}
+
 watch(projectId, loadProject, { immediate: true });
 watch(projectId, loadImportOrigin, { immediate: true });
 watch(projectId, refreshSections, { immediate: true });
+watch(projectId, (id) => void journal.open(id, authorized), { immediate: true });
+watch(
+  [activeKey, () => guidance.mode, () => (locale.value === "it" ? "it" : "en")],
+  ([section, mode, language]) => journal.observe({ section, mode, locale: language }),
+  { immediate: true },
+);
+onMounted(() => document.addEventListener("visibilitychange", onVisibilityChange));
 onUnmounted(() => {
   projectEpoch++;
   originSequence++;
   stageDetailsObserver?.disconnect();
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+  journal.close();
 });
 </script>
 
@@ -893,6 +993,7 @@ onUnmounted(() => {
     class="relative mx-auto grid w-full gap-x-12 gap-y-6 rounded-stage bg-night px-5 pt-6 text-on-night sm:px-8 sm:pt-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:px-[clamp(24px,4vw,56px)]"
     data-surface="night"
     data-testid="project-workspace"
+    @toggle.capture="journal.detailToggled"
   >
     <aside v-if="project !== null" class="flex min-w-0 flex-col lg:sticky lg:top-24">
       <RouterLink
@@ -942,6 +1043,7 @@ onUnmounted(() => {
     </aside>
 
     <div class="min-w-0 pb-16 lg:pb-24" :class="{ 'lg:col-span-2': project === null }">
+      <div ref="activityRow" />
       <UiStateBlock v-if="loading" kind="loading" :title="t('detail.loading')" />
       <UiStateBlock
         v-else-if="errorDetail !== null"
@@ -950,13 +1052,25 @@ onUnmounted(() => {
       />
 
       <template v-else-if="project !== null">
+        <GuidanceModeNote class="mb-6" />
         <UiStepHeader
           :step="activeStage + 1"
           :total="6"
           :title="stageLabels[activeStage] ?? ''"
-          :description="stageDescriptions[activeStage]"
+          :description="guidance.expert ? undefined : stageDescriptions[activeStage]"
           :status="activeSectionShown ? undefined : headerStatus"
           :section="activeSectionShown ? activeSection : undefined"
+        />
+        <ProjectWorkflowInputsPanel
+          :project-id="projectId"
+          :stage="activeStage"
+          :expert="guidance.expert"
+          :locale="locale === 'it' ? 'it' : 'en'"
+          :authorize="authorized"
+          :base-context="workflowBaseContext"
+          :definition-ready="requirements.isReadyForDesign"
+          @changed="onOwnerInputChanged"
+          @prototype-changed="onPrototypeChanged"
         />
         <p
           v-if="importOrigin"
@@ -971,6 +1085,16 @@ onUnmounted(() => {
           }}
         </p>
 
+        <ProjectImportVerification
+          v-if="
+            importResult ||
+            importOrigin?.import_limits?.length ||
+            importOrigin?.omitted_sections?.length
+          "
+          :result="importResult"
+          :origin="importOrigin ?? undefined"
+          :locale="locale === 'it' ? 'it' : 'en'"
+        />
         <ProjectSectionsNotice
           v-if="(sectionsMode || evidenceReviewNotice) && sectionsData !== null"
           :sections="sectionsData"
@@ -1096,7 +1220,7 @@ onUnmounted(() => {
           <div id="studio-stage-1" v-show="activeStage === 1" data-testid="stage-team">
             <ProjectTeamSelectionFlow
               id="studio-team"
-              :key="`${projectId}:team`"
+              :key="`${projectId}:team:${remounts[1]}`"
               :project-id="projectId"
               :upstream="briefContext"
               :active="activeStage === 1"
@@ -1129,6 +1253,7 @@ onUnmounted(() => {
               "
               :ready="modeling.isCurrentSnapshotApproved"
               :active="activeStage === 2"
+              :focus-source="evidenceFocus"
               :locale="locale === 'it' ? 'it' : 'en'"
               @changed="onEvidenceChanged"
             />
@@ -1148,15 +1273,18 @@ onUnmounted(() => {
           </div>
           <div id="studio-stage-4" v-show="activeStage === 4" data-testid="stage-design">
             <ProjectDesignFlow
+              v-if="!providedDesignApproved"
               id="studio-design"
               :prerequisite-ready="requirements.isReadyForDesign"
               :key="`${projectId}:design:${remounts[4]}`"
               :project-id="projectId"
               :locale="locale === 'it' ? 'it' : 'en'"
               :upstream="requirementsContext"
+              :validation-refresh-key="validationRefreshKey"
               :active="activeStage === 4"
               :sections-mode="sectionsMode"
               @sections-changed="onSectionsChanged"
+              @open-evidence="openValidationEvidence"
             />
           </div>
           <div id="studio-stage-5" v-show="activeStage === 5" data-testid="stage-package">
@@ -1168,6 +1296,8 @@ onUnmounted(() => {
               :authorize="authorized"
               :locale="locale === 'it' ? 'it' : 'en'"
               :sections-mode="sectionsMode"
+              :provided-prototype="providedPrototype"
+              :provided-design-approved="providedDesignApproved"
               @sections-changed="onSectionsChanged"
             >
               <template v-if="packagePreview !== null" #preview>
@@ -1251,6 +1381,12 @@ onUnmounted(() => {
           </UiButton>
         </div>
       </UiTechnicalDetails>
+
+      <ActivitySessionControl
+        v-if="project !== null"
+        :locale="locale === 'it' ? 'it' : 'en'"
+        :row-target="activityRow"
+      />
     </div>
 
     <template v-if="project !== null">

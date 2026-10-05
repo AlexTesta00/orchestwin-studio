@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ArtifactGraphApi } from "../api/artifacts";
+import { createArtifactGraphApi, type ArtifactGraphApi } from "../api/artifacts";
 import type { CrossStageArtifactGraphPayload } from "../types/artifacts";
 import { ARTIFACT_GRAPH, ARTIFACT_GRAPH_PROJECT_ID } from "../test/artifactGraphFixtures";
 import ProjectArtifactGraph from "./ProjectArtifactGraph.vue";
@@ -277,4 +277,59 @@ describe("ProjectArtifactGraph", () => {
       `orchestwin-${ARTIFACT_GRAPH_PROJECT_ID}-artifact-graph.json`,
     );
   });
+
+  it.each([
+    ["it", 500, "", "Non è stato possibile caricare il grafo degli artefatti."],
+    ["en", 500, "", "The artifact graph could not be loaded."],
+    ["it", 200, "<html>", "Non è stato possibile caricare il grafo degli artefatti."],
+    ["en", 200, "<html>", "The artifact graph could not be loaded."],
+  ] as const)(
+    "says in %s that the graph could not be loaded when the Studio answers %i",
+    async (locale, status, body, sentence) => {
+      const wrapper = mountGraph({
+        locale,
+        api: createArtifactGraphApi({ fetchImpl: async () => new Response(body, { status }) }),
+      });
+
+      await flushPromises();
+
+      const alert = wrapper.get('[role="alert"]').text();
+      expect(alert).toBe(sentence);
+      expect(wrapper.text()).not.toMatch(/Artifact Graph (request failed|API returned)/);
+      expect(alert).not.toContain(String(status));
+      expect(alert).not.toMatch(/[A-Z]+_[A-Z_]+/);
+    },
+  );
+
+  it.each([
+    ["it", "Esporta grafo JSON", "Non è stato possibile scaricare l'esportazione del grafo."],
+    ["en", "Export JSON graph", "The graph export could not be downloaded."],
+  ] as const)(
+    "says in %s that the export could not be downloaded",
+    async (locale, label, sentence) => {
+      const failing = createArtifactGraphApi({
+        fetchImpl: async () => new Response("", { status: 503 }),
+      });
+      const saveExport = vi.fn<(blob: Blob, filename: string) => void>();
+      const wrapper = mountGraph({
+        locale,
+        saveExport,
+        api: { ...fakeApi(), exportCurrent: failing.exportCurrent },
+      });
+
+      await flushPromises();
+      await wrapper
+        .findAll("button")
+        .find((button) => button.text() === label)!
+        .trigger("click");
+      await flushPromises();
+
+      expect(saveExport).not.toHaveBeenCalled();
+      const alert = wrapper.get('[role="alert"]').text();
+      expect(alert).toBe(sentence);
+      expect(wrapper.text()).not.toContain("The Artifact Graph request failed");
+      expect(alert).not.toContain("503");
+      expect(alert).not.toMatch(/[A-Z]+_[A-Z_]+/);
+    },
+  );
 });

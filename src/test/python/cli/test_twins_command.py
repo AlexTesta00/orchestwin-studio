@@ -74,8 +74,8 @@ SIMULATED = {
 HINT = {
     "it": "Scrivi una domanda e premi Invio. Per finire scrivi /esci. Ogni risposta è una "
     "piccola spesa del modello.",
-    "en": "Write a question and press Enter. To finish write /quit. Each answer is a small "
-    "spending of the model.",
+    "en": "Write a question and press Enter. To finish write /quit. Each answer means a little "
+    "spending on the model.",
 }
 END = {
     "it": "Conversazione finita: domande e risposte restano salvate nello Studio.",
@@ -867,7 +867,7 @@ def test_a_failed_answer_can_be_asked_again_with_a_new_estimate(tmp_path: Path) 
     assert single.errors == (
         f"{name} could not answer: the model gave no valid answer or could not be reached "
         "(INVALID_TWIN_CHAT_OUTPUT). You can ask the question again by launching the command "
-        "again: it is a new spending, and the estimate is shown again first.\n"
+        "again: it means new spending, and the estimate is shown again first.\n"
     )
     assert talk.status == 0
     assert talk.errors == (

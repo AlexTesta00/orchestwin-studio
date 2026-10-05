@@ -41,6 +41,7 @@ class TeamProposalRevisionKind(StrEnum):
 
     PROPOSER_GENERATED = "PROPOSER_GENERATED"
     OWNER_EDITED = "OWNER_EDITED"
+    OWNER_PROVIDED = "OWNER_PROVIDED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +68,10 @@ class TeamProposalVersion:
         if self.created_at.tzinfo is None:
             raise ValueError("team-proposal version timestamp must be timezone-aware")
 
-        if self.revision_kind is TeamProposalRevisionKind.PROPOSER_GENERATED:
+        if self.revision_kind in {
+            TeamProposalRevisionKind.PROPOSER_GENERATED,
+            TeamProposalRevisionKind.OWNER_PROVIDED,
+        }:
             if self.based_on_version_number is not None:
                 raise ValueError(
                     "a generated proposal must not reference an earlier proposal version"
@@ -223,6 +227,14 @@ class TeamProposalVersionRepository(Protocol):
         proposal: AgentTeamProposal,
     ) -> TeamProposalVersionCreationResult:
         """Create or reuse an immutable generated proposal version."""
+
+    async def create_owner_provided_owned(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        proposal: AgentTeamProposal,
+    ) -> TeamProposalVersionCreationResult: ...
 
     async def get_current_owned(
         self,

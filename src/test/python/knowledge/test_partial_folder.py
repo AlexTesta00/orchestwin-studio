@@ -49,6 +49,7 @@ from orchestwin.knowledge.schema import (
 )
 from orchestwin.knowledge.tables import TABLE_COLUMNS
 from orchestwin.knowledge.twins import portable_twins
+from orchestwin.knowledge.why import WHY_DOCUMENT
 
 from .knowledge_fixtures import (
     PUBLISHED_AT,
@@ -75,6 +76,8 @@ COMMON_FILES = frozenset(
         STATE_TEXT,
         FEEDBACK_CHANGES,
         FEEDBACK_TESTS,
+        WHY_DOCUMENT,
+        schema_document("why"),
         *schema_files(),
     }
 )
@@ -170,6 +173,9 @@ def test_a_partial_folder_holds_only_the_approved_stages_and_the_state(through: 
 
     expected = set(COMMON_FILES).union(*(stage_files(stage) for stage in present))
     assert set(folder.files) == expected
+    assert json.loads(folder.files[WHY_DOCUMENT])["omitted_sections"] == sorted(
+        STAGES[len(present) :]
+    )
     assert not set(DESIGN_ONLY) & set(folder.files)
     for stage in STAGES[len(present) :]:
         assert [path for path in folder.files if path.startswith(f"{stage}/")] == (
@@ -226,7 +232,8 @@ def test_the_manifest_of_a_partial_folder_states_its_progress(through: str) -> N
         {"requirements"} if "requirements" in present else set()
     )
     assert manifest["project"]["language"] == "it"
-    assert manifest["schemas"] == {name: schema_document(name) for name in SCHEMA_NAMES}
+    assert manifest["schemas"] == {name: schema_document(name) for name in (*SCHEMA_NAMES, "why")}
+    assert manifest["why"] == {"document": WHY_DOCUMENT, "schema_version": 1}
 
 
 @pytest.mark.parametrize("through", PARTIAL)
@@ -501,7 +508,9 @@ def test_a_complete_folder_with_test_runs_imports_the_same_project_as_without_th
 
     assert json.loads(folder.files[FEEDBACK_TESTS])["runs"]
     assert tested.origin.package_content_hash != untested.origin.package_content_hash
-    assert replace(tested, origin=untested.origin) == untested
+    assert tested.import_limits == ("LEARNED_PROJECTION_NOT_RESTORED",)
+    assert untested.import_limits == ()
+    assert replace(tested, origin=untested.origin, import_limits=untested.import_limits) == untested
 
 
 def test_a_folder_that_announces_the_test_runs_needs_their_document() -> None:
@@ -617,7 +626,9 @@ def test_a_complete_folder_published_before_the_twins_learned_still_imports() ->
 
     assert json.loads(folder.files[FEEDBACK_LEARNING])["twins"][0]["observations"]
     assert learned.origin.package_content_hash != earlier.origin.package_content_hash
-    assert replace(learned, origin=earlier.origin) == earlier
+    assert learned.import_limits == ("LEARNED_PROJECTION_NOT_RESTORED",)
+    assert earlier.import_limits == ()
+    assert replace(learned, origin=earlier.origin, import_limits=earlier.import_limits) == earlier
     assert "learning" not in verify_folder(folder.files).documents
 
 

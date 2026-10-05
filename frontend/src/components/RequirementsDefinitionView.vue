@@ -7,12 +7,15 @@ import type {
   RequirementsSpecificationPayload,
 } from "../types/requirements";
 import { useSurface } from "./UiSurface.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
 
 const props = withDefaults(
   defineProps<{
     specification: RequirementsSpecificationPayload;
     locale?: "en" | "it";
     highlighted?: string | null;
+    versionNumber?: number;
+    contentHash?: string;
   }>(),
   { locale: "en" },
 );
@@ -80,7 +83,7 @@ const messages = {
     sourceKinds: {
       PROJECT_BRIEF: "Brief di progetto",
       USER_TWIN: "Twin utente",
-      OWNER_INPUT: "Indicazione del committente",
+      OWNER_INPUT: "Indicazione del proprietario",
       MODEL_PROPOSAL: "Proposta del modello",
       SYSTEM_ARTIFACT: "Artefatto di sistema",
     },
@@ -290,6 +293,15 @@ defineExpose({ openItem });
       >
         <summary class="cursor-pointer text-base font-semibold">{{ item.title }}</summary>
         <div class="mt-3 grid max-w-full min-w-0 gap-3 text-sm leading-normal">
+          <ArtifactWhy
+            :code="item.code"
+            :title="item.title"
+            :artifact-id="item.id"
+            :version-number="versionNumber"
+            :content-hash="contentHash"
+            :locale="locale"
+            test-id="definition-why"
+          />
           <template v-for="([label, value], index) in item.fields" :key="index">
             <p v-if="value" class="m-0 whitespace-pre-line">
               <strong>{{ label }}:</strong> {{ value }}

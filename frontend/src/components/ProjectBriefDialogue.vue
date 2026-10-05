@@ -589,20 +589,20 @@ onBeforeUnmount(() => {
 
         <form
           v-if="!active && !store.modelUnavailable && synthesizedVersion === null"
-          class="grid gap-2.5 border-t border-night-line px-4 pt-3 pb-4"
+          class="grid grid-cols-1 gap-2.5 border-t border-night-line px-4 pt-3 pb-4"
           novalidate
           @submit.prevent="start"
         >
           <label class="sr-only" for="brief-dialogue-statement">
             {{ t("briefDialogue.statementLabel") }}
           </label>
-          <div class="flex items-end gap-2">
+          <div class="flex flex-col items-end gap-2 sm:flex-row">
             <textarea
               id="brief-dialogue-statement"
               v-model="statement"
               data-testid="brief-dialogue-statement"
               rows="3"
-              class="min-w-0 flex-1 resize-none rounded-[14px] border border-on-night/18 bg-night-raised px-3.5 py-3 text-[15px] leading-[1.45] text-on-night placeholder:text-on-night-3"
+              class="w-full min-w-0 flex-1 resize-none rounded-[14px] border border-on-night/18 bg-night-raised px-3.5 py-3 text-[15px] leading-[1.45] text-on-night placeholder:text-on-night-3 max-sm:min-h-[116px]"
               :placeholder="t('briefDialogue.statementPlaceholder')"
               :disabled="busy"
             ></textarea>

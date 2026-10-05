@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli import costs
 from orchestwin.cli.api import design as design_api
 from orchestwin.cli.api import sections as sections_api
+from orchestwin.cli.api import workflow_inputs
 from orchestwin.cli.commands import sections as sections_command
 from orchestwin.cli.console import Choice
 from orchestwin.cli.errors import (
@@ -27,6 +28,7 @@ from orchestwin.cli.flows import (
     design_recovery,
     design_state,
     previews,
+    provided_design,
     review,
 )
 
@@ -97,6 +99,9 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         return USAGE_STATUS
     project = context.project()
     client = context.client()
+    source = workflow_inputs.state(client, project.link().project_id)
+    if source is not None and source["source"] == "PROVIDED_PROTOTYPE":
+        return provided_design.perform(context, client, project, source, action, value)
     if action is None:
         return guided(context, client, project)
     try:
@@ -173,6 +178,7 @@ def show(
     if kind == design_state.JOB_RUNNING:
         console.say("design.show_running", names=running_names(context, state))
     modelless = prices.modelless(state)
+    state = design_state.with_distance(client, state)
     describe(context, client, project, state, everything=True, modelless=modelless)
     recovery = design_recovery.read(client, project, state)
     if recovery.action is not None:

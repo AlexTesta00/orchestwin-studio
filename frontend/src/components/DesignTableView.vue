@@ -184,7 +184,7 @@ const messages = {
     visual: {
       title: "Scelte visive",
       description:
-        "L'aspetto scelto dal catalogo degli stili per ogni alternativa, una riga per scelta. I nomi restano quelli del catalogo, in inglese.",
+        "L'aspetto scelto dal catalogo degli stili per ogni alternativa, una riga per scelta.",
     },
     workflows: {
       title: "Flussi",
@@ -296,7 +296,7 @@ const transposedTables = computed<TransposedTable[]>(() => {
       ...text.visual,
       corner: text.choice,
       badges: false,
-      columnClass: "min-w-36",
+      columnClass: "min-w-80",
       rows: visualRows(),
     });
   }

@@ -44,6 +44,9 @@ GET_TEST_RESULTS: Final = "get_test_results"
 RUN_TESTS: Final = "run_tests"
 GET_TASKS: Final = "get_tasks"
 GET_EVIDENCE: Final = "get_evidence"
+GET_WHY: Final = "get_why"
+GET_VALIDATION: Final = "get_validation"
+GET_SCENARIO_WALKTHROUGH: Final = "get_scenario_walkthrough"
 TEXT: Final = "text"
 TWIN: Final = "twin"
 COUNT: Final = "count"
@@ -116,6 +119,7 @@ ITALIAN: Final = "it"
 ENGLISH: Final = "en"
 TEXT_VALUE: Final = "TEXT"
 ITEMS_VALUE: Final = "ITEMS"
+DIRECTION_FIELDS: Final = ("name", "concept", "rules", "axes")
 
 
 class ToolError(Exception):
@@ -518,6 +522,8 @@ def project_state(session: Session, values: Mapping[str, object]) -> dict[str, o
             raise
         return {**document, "next": text("mcp.next_no_folder", session.language)}
     state = found.state()
+    workflow = found.workflow_inputs()
+    extra = {"workflow_inputs": workflow} if workflow["decisions"] or workflow["prototypes"] else {}
     changes = [] if state is None else knowledge.mappings(state.get("changes"))
     aligned = None if state is None else _mapping_or_none(state.get("aligned"))
     pending = pending_changes(changes, aligned)
@@ -532,6 +538,7 @@ def project_state(session: Session, values: Mapping[str, object]) -> dict[str, o
     )
     return {
         **document,
+        **extra,
         "folder": {
             "schema_version": found.schema_version,
             "version_number": found.version_number,
@@ -696,6 +703,19 @@ def get_evidence(session: Session, values: Mapping[str, object]) -> dict[str, ob
     }
 
 
+def get_why(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    from orchestwin.why import WhyError, explain_why
+
+    folder = session.knowledge()
+    document = folder.why(project_id=session.link.project_id)
+    try:
+        answer = explain_why(document, values["code"])
+    except WhyError as error:
+        raise ToolError(error.code, extra={"candidates": list(error.candidates)}) from None
+    answer["limits"] = sorted({*answer["limits"], *folder.why_limits()})
+    return answer
+
+
 def get_requirements(session: Session, values: Mapping[str, object]) -> dict[str, object]:
     document = session.knowledge().stage("requirements")
     if document is None:
@@ -708,8 +728,53 @@ def get_requirements(session: Session, values: Mapping[str, object]) -> dict[str
     return {**selected, "unknown_codes": unknown}
 
 
+def get_validation(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    return session.knowledge().validation(project_id=session.link.project_id)
+
+
+def get_scenario_walkthrough(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    from orchestwin.validation import ValidationError
+
+    try:
+        return session.knowledge().walkthrough(
+            values["scenario_key"],
+            project_id=session.link.project_id,
+            alternative_id=values.get("alternative_id"),
+            document_hash=values.get("document_hash"),
+        )
+    except ValidationError as error:
+        key = (
+            "errors." + error.code
+            if error.code.startswith("PROVIDED_PROTOTYPE_")
+            else "validation.errors." + error.code
+        )
+        raise ToolError(error.code, key=key) from None
+
+
 def get_design(session: Session, values: Mapping[str, object]) -> dict[str, object]:
-    document = session.knowledge().stage("design")
+    folder = session.knowledge()
+    prototype = folder.approved_provided_prototype()
+    if prototype is not None:
+        screens = prototype["mockup"]["mockup"]["screens"]
+        wanted = values.get("screen")
+        if isinstance(wanted, str):
+            screens = [item for item in screens if item["code"].upper() == wanted.upper()]
+            if not screens:
+                raise ToolError(
+                    SCREEN_NOT_FOUND,
+                    screen=wanted,
+                    screens=", ".join(
+                        item["code"] for item in prototype["mockup"]["mockup"]["screens"]
+                    ),
+                )
+        return {
+            "source": "PROVIDED_PROTOTYPE",
+            "version_number": prototype["version_number"],
+            "prototype": prototype,
+            "screens": [{key: item[key] for key in ("code", "title", "state")} for item in screens],
+            "limits": folder.workflow_inputs()["limits"],
+        }
+    document = folder.stage("design")
     if document is None:
         raise stage_missing(session, "design")
     view = knowledge.design_view(document)
@@ -749,10 +814,21 @@ def get_design(session: Session, values: Mapping[str, object]) -> dict[str, obje
             "screens": listed,
         },
         "alternatives": [
-            {"code": item.get("code"), "title": item.get("title"), "chosen": item is chosen}
-            for item in view.alternatives
+            alternative_entry(item, chosen=item is chosen) for item in view.alternatives
         ],
     }
+
+
+def alternative_entry(item: Mapping[str, object], *, chosen: bool) -> dict[str, object]:
+    entry: dict[str, object] = {
+        "code": item.get("code"),
+        "title": item.get("title"),
+        "chosen": chosen,
+    }
+    direction = knowledge.alternative_direction(item)
+    if direction is not None:
+        entry["direction"] = {name: _plain(direction.get(name)) for name in DIRECTION_FIELDS}
+    return entry
 
 
 def get_feedback(session: Session, values: Mapping[str, object]) -> dict[str, object]:
@@ -1101,6 +1177,27 @@ TOOLS: Final = (
         "mcp.describe_get_evidence",
         get_evidence,
         (Parameter("code", TEXT, "mcp.parameter_evidence_code", maximum=CODE_LENGTH),),
+    ),
+    Tool(
+        GET_WHY,
+        "mcp.title_get_why",
+        "mcp.describe_get_why",
+        get_why,
+        (Parameter("code", TEXT, "mcp.parameter_why_code", required=True, maximum=2048),),
+    ),
+    Tool(GET_VALIDATION, "mcp.title_get_validation", "mcp.describe_get_validation", get_validation),
+    Tool(
+        GET_SCENARIO_WALKTHROUGH,
+        "mcp.title_get_scenario_walkthrough",
+        "mcp.describe_get_scenario_walkthrough",
+        get_scenario_walkthrough,
+        (
+            Parameter(
+                "scenario_key", TEXT, "mcp.parameter_scenario_key", required=True, maximum=2048
+            ),
+            Parameter("alternative_id", TEXT, "mcp.parameter_alternative_id", maximum=80),
+            Parameter("document_hash", TEXT, "mcp.parameter_document_hash", maximum=64),
+        ),
     ),
 )
 TOOLS_BY_NAME: Final[Mapping[str, Tool]] = MappingProxyType({tool.name: tool for tool in TOOLS})

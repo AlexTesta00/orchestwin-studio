@@ -1,8 +1,10 @@
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { expectAccessible } from "@/test/axe";
 import type { ReadableClaim, UserTwinVersionPayload } from "../types/userModeling";
 import TwinPersonaView from "./TwinPersonaView.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
+import { whyContextKey } from "./whyContext";
 
 const unknown: ReadableClaim = {
   observation_key: "user_twin.represents",
@@ -75,6 +77,45 @@ const twin: UserTwinVersionPayload = {
   },
 };
 describe("TwinPersonaView", () => {
+  it("links the seven Persona projections to the exact twin claims without duplicating identities", () => {
+    const api = { explain: vi.fn(), document: vi.fn() };
+    const wrapper = mount(TwinPersonaView, {
+      props: { twin },
+      global: {
+        provide: {
+          [whyContextKey as symbol]: {
+            projectId: () => "project",
+            api,
+            authorize: <T>(request: (token: string) => Promise<T>) => request("token"),
+          },
+        },
+      },
+    });
+    const personaClaims = wrapper
+      .findAllComponents(ArtifactWhy)
+      .filter((item) => (item.props("testId") ?? "").startsWith("persona-chain-why"));
+    expect(personaClaims.map((item) => item.props("code"))).toEqual(
+      [
+        "description",
+        "goals",
+        "information_needs",
+        "recurring_tasks",
+        "pain_points",
+        "operational_constraints",
+        "context_of_use",
+      ].map((field) => `UT-TWIN-v2:user_twin.${field}`),
+    );
+    expect(
+      personaClaims.every(
+        (item) =>
+          item.props("artifactId") === twin.twin_id &&
+          item.props("versionNumber") === twin.version_number &&
+          item.props("contentHash") === twin.content_hash,
+      ),
+    ).toBe(true);
+    expect(api.document).not.toHaveBeenCalled();
+    expect(api.explain).not.toHaveBeenCalled();
+  });
   it("shows the basis and summary while the Persona and Why details stay closed", async () => {
     const wrapper = mount(TwinPersonaView, { props: { twin } });
     expect(wrapper.get('[data-testid="twin-representation-twin"]').text()).toContain("Provisional");
@@ -86,7 +127,7 @@ describe("TwinPersonaView", () => {
     expect(persona.attributes("open")).toBeUndefined();
     const why = wrapper.get('[data-testid="persona-why-twin-description"]');
     expect(why.attributes("open")).toBeUndefined();
-    expect(why.get("summary").text()).toContain("Why? Description");
+    expect(why.get("summary").text()).toContain("Provenance Description");
     await why.get("summary").trigger("click");
     expect((why.element as HTMLDetailsElement).open).toBe(true);
     expect(why.text()).toContain("Contested");
@@ -103,7 +144,7 @@ describe("TwinPersonaView", () => {
     expect(wrapper.text()).toContain("Non rappresenta");
     expect(wrapper.text()).toContain("Sconosciuto");
     expect(wrapper.get('[data-testid="persona-why-twin-description"] summary').text()).toContain(
-      "Perché? Descrizione",
+      "Provenienza Descrizione",
     );
   });
 });

@@ -15,6 +15,7 @@ from orchestwin.artifacts.design_persistence import (
     SqlAlchemyDesignDiffRepository,
     SqlAlchemyDesignPackageRepository,
 )
+from orchestwin.artifacts.workflow_inputs_persistence import SqlAlchemyWorkflowInputsRepository
 from orchestwin.knowledge.package_persistence import SqlAlchemyKnowledgePackageRepository
 from orchestwin.knowledge.packages import KnowledgePackageVersion
 from orchestwin.projects.persistence.models import ProjectRecord
@@ -441,11 +442,7 @@ class SqlAlchemySectionReads:
                 if progress.requirements is None
                 else await self._requirements(session, progress.requirements_gate, **scope)
             )
-            design = (
-                None
-                if progress.design is None
-                else await self._design(session, progress.design_gate, **scope)
-            )
+            design = await self._design(session, progress.design_gate, **scope)
             folder = await SqlAlchemyKnowledgePackageRepository(
                 session, owner_user_id=owner_user_id
             ).latest(project_id=project_id)
@@ -526,6 +523,36 @@ class SqlAlchemySectionReads:
         version = await SqlAlchemyDesignPackageRepository(
             session, owner_user_id=owner_user_id
         ).current(project_id=project_id)
+        provided = await SqlAlchemyWorkflowInputsRepository(
+            session, owner_user_id=owner_user_id
+        ).current(project_id)
+        if provided is not None and (
+            version is None
+            or provided.created_at > version.created_at
+            or (gate is not None and gate.artifact.artifact_id == provided.id)
+        ):
+            definition = await SqlAlchemyRequirementsSpecificationRepository(
+                session, owner_user_id=owner_user_id
+            ).current(project_id=project_id)
+            if definition is not None:
+                specification = definition.specification
+                present = set(provided.mockup.requirement_codes)
+                return DesignFacts(
+                    version=_identity(provided),
+                    approved=_approved(gate, _identity(provided)),
+                    requirements=ArtifactVersion(
+                        UUID(provided.definition_reference["artifact_id"]),
+                        provided.definition_reference["version_number"],
+                        provided.definition_reference["content_hash"],
+                    ),
+                    team=_reference(specification.agent_team_reference),
+                    user_modeling=_reference(specification.user_modeling_reference),
+                    twins=_twins(specification.user_twin_references),
+                    uncovered_codes=tuple(
+                        item.code for item in specification.requirements if item.code not in present
+                    ),
+                    provided=True,
+                )
         if version is None:
             return None
         facts = design_facts(version, gate=gate)
@@ -650,7 +677,11 @@ class SectionsService:
                 owner_user_id=owner_user_id, project_id=project_id
             )
             facts = replace(facts, user_twins=replace(twins, learned=learned))
-        if facts.design is not None and _needs_design_alignment(facts, draft):
+        if (
+            facts.design is not None
+            and not facts.design.provided
+            and _needs_design_alignment(facts, draft)
+        ):
             alignment = await self._design_alignment.status(
                 owner_user_id=owner_user_id, project_id=project_id
             )

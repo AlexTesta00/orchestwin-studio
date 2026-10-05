@@ -9,6 +9,8 @@ import ProjectDesignPackagePanel from "./ProjectDesignPackagePanel.vue";
 import { createAppI18n } from "@/i18n";
 import { expectAccessible } from "@/test/axe";
 import { SELECTED_DESIGN_VERSION, UNSELECTED_DESIGN_VERSION } from "@/test/designFixtures";
+import { suppliedPrototype } from "@/test/workflowInputsFixtures";
+import type { ProvidedPrototype } from "@/types/workflowInputs";
 
 import { KnowledgePackagesApiError, type KnowledgePackagesApi } from "../api/knowledgePackages";
 import { useDesignStore } from "../stores/design";
@@ -149,6 +151,8 @@ interface MountOptions {
   preview?: (slot: PreviewSlot) => VNode;
   studioAddress?: string;
   sectionsMode?: boolean;
+  providedPrototype?: ProvidedPrototype;
+  providedDesignApproved?: boolean;
 }
 
 function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
@@ -167,6 +171,12 @@ function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
       saveExport,
       ...(options.studioAddress === undefined ? {} : { studioAddress: options.studioAddress }),
       ...(options.sectionsMode === undefined ? {} : { sectionsMode: options.sectionsMode }),
+      ...(options.providedPrototype === undefined
+        ? {}
+        : { providedPrototype: options.providedPrototype }),
+      ...(options.providedDesignApproved === undefined
+        ? {}
+        : { providedDesignApproved: options.providedDesignApproved }),
     },
     slots: options.preview === undefined ? {} : { preview: options.preview },
     attachTo: document.body,
@@ -211,6 +221,38 @@ describe("ProjectDesignPackagePanel", () => {
     expect(wrapper.findAll('[data-testid="package-step"]')).toHaveLength(4);
     wrapper.unmount();
   });
+
+  it.each(["it", "en"] as const)(
+    "exports the supplied Design with declared origin and %s limits without suggesting code generation",
+    async (locale) => {
+      const api = knowledgeApi();
+      const { wrapper } = mountPanel(api, {
+        locale,
+        providedPrototype: suppliedPrototype({ project_id: PROJECT_ID }),
+        providedDesignApproved: true,
+      });
+      await flushPromises();
+      const supplied = wrapper.get('[data-testid="package-provided-design"]');
+      expect(supplied.text()).toContain("Penpot");
+      expect(supplied.text()).toContain(
+        locale === "it"
+          ? "La valutazione dei twin sul prototipo fornito non è disponibile."
+          : "Twin evaluation of the supplied prototype is unavailable.",
+      );
+      expect(wrapper.find('[data-testid="package-no-design"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="package-development-steps"]').exists()).toBe(false);
+      expect(wrapper.findComponent({ name: "ProjectDevelopmentPanel" }).exists()).toBe(false);
+      expect(commands(wrapper, "package-cli-step")).toContain(
+        `ut init --project ${PROJECT_ID} --mode design`,
+      );
+      const limits = wrapper.get('[data-testid="package-provided-limits"]');
+      expect(
+        limits.findAll('[data-testid="command-text"]').map((command) => command.text()),
+      ).toEqual(["ut design show", "ut design open"]);
+      expect(api.publish).not.toHaveBeenCalled();
+      wrapper.unmount();
+    },
+  );
 
   it("puts the main action in the panel of the ready project, not in a decision bar", async () => {
     const { wrapper } = mountPanel(knowledgeApi(), { locale: "it" });
@@ -493,12 +535,12 @@ describe("ProjectDesignPackagePanel", () => {
     [
       "en",
       4,
-      "The folder holds 4 of 5 steps: Design & Evaluation is still to approve. Each step joins the folder when you approve it.",
+      "The folder holds 4 of 5 steps: Design & Evaluation is still to be approved. Each step joins the folder when you approve it.",
     ],
     [
       "en",
       3,
-      "The folder holds 3 of 5 steps: Definition and Design & Evaluation are still to approve. Each step joins the folder when you approve it.",
+      "The folder holds 3 of 5 steps: Definition and Design & Evaluation are still to be approved. Each step joins the folder when you approve it.",
     ],
     [
       "it",
@@ -716,42 +758,42 @@ describe("ProjectDesignPackagePanel", () => {
     [
       "it",
       "USER_TWINS_OUTDATED",
-      "User Twin è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi pubblica di nuovo.",
+      "La sezione User Twin è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi prepara di nuovo la cartella.",
     ],
     [
       "it",
       "REQUIREMENTS_OUTDATED",
-      "Definizione è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi pubblica di nuovo.",
+      "La sezione Definizione è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi prepara di nuovo la cartella.",
     ],
     [
       "it",
       "DESIGN_OUTDATED",
-      "Design e valutazione è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi pubblica di nuovo.",
+      "La sezione Design e valutazione è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi prepara di nuovo la cartella.",
     ],
     [
       "it",
       "TEAM_OUTDATED",
-      "Il brief è cambiato: prepara di nuovo le prospettive, poi pubblica di nuovo.",
+      "Il brief è cambiato: prepara di nuovo le prospettive, poi prepara di nuovo la cartella.",
     ],
     [
       "en",
       "USER_TWINS_OUTDATED",
-      "User Twin is behind: use «Update and confirm» at the top of the page, then publish again.",
+      "User Twin is behind: use “Update and confirm” at the top of the page, then prepare the folder again.",
     ],
     [
       "en",
       "REQUIREMENTS_OUTDATED",
-      "Definition is behind: use «Update and confirm» at the top of the page, then publish again.",
+      "Definition is behind: use “Update and confirm” at the top of the page, then prepare the folder again.",
     ],
     [
       "en",
       "DESIGN_OUTDATED",
-      "Design & Evaluation is behind: use «Update and confirm» at the top of the page, then publish again.",
+      "Design & Evaluation is behind: use “Update and confirm” at the top of the page, then prepare the folder again.",
     ],
     [
       "en",
       "TEAM_OUTDATED",
-      "The brief changed: prepare the perspectives again, then publish again.",
+      "The brief changed: prepare the perspectives again, then prepare the folder again.",
     ],
   ] as const)(
     "says in %s what to do in sections mode when the server reports %s, without regenerating",
@@ -775,22 +817,22 @@ describe("ProjectDesignPackagePanel", () => {
     [
       "it",
       "USER_TWINS_OUTDATED",
-      "Il passo User Twin è rimasto indietro: aprilo e aggiornalo, poi pubblica di nuovo.",
+      "Il passo User Twin è rimasto indietro: aprilo e aggiornalo, poi prepara di nuovo la cartella.",
     ],
     [
       "it",
       "DESIGN_OUTDATED",
-      "Il passo Design e valutazione è rimasto indietro: aprilo e aggiornalo, poi pubblica di nuovo.",
+      "Il passo Design e valutazione è rimasto indietro: aprilo e aggiornalo, poi prepara di nuovo la cartella.",
     ],
     [
       "en",
       "REQUIREMENTS_OUTDATED",
-      "The Definition step is behind: open it and bring it up to date, then publish again.",
+      "The Definition step is behind: open it and bring it up to date, then prepare the folder again.",
     ],
     [
       "en",
       "TEAM_OUTDATED",
-      "The brief changed: prepare the perspectives again, then publish again.",
+      "The brief changed: prepare the perspectives again, then prepare the folder again.",
     ],
   ] as const)(
     "says in %s what to do before the first pass is complete when the server reports %s",
@@ -855,7 +897,7 @@ describe("ProjectDesignPackagePanel", () => {
     ],
     [
       "en",
-      "The folder holds 3 of 5 sections: Definition and Design & Evaluation are still to approve. Each section joins the folder when you approve it.",
+      "The folder holds 3 of 5 sections: Definition and Design & Evaluation are still to be approved. Each section joins the folder when you approve it.",
     ],
   ] as const)(
     "says in %s which sections a partial folder still misses",
@@ -1246,6 +1288,49 @@ describe("ProjectDesignPackagePanel", () => {
     );
     wrapper.unmount();
   });
+
+  it.each([
+    { name: "the chosen design", options: {}, count: 10 },
+    {
+      name: "a supplied design",
+      options: {
+        providedPrototype: suppliedPrototype({ project_id: PROJECT_ID }),
+        providedDesignApproved: true,
+      },
+      count: 6,
+    },
+  ])(
+    "keeps every command of $name on one line that scrolls inside its box, beside the same copy button",
+    async ({ options, count }) => {
+      const { wrapper } = mountPanel(knowledgeApi(), { locale: "it", ...options });
+      await flushPromises();
+
+      const lines = wrapper.findAll('[data-testid="command-line"]');
+      expect(lines).toHaveLength(count);
+      for (const line of lines) {
+        const text = line.get('[data-testid="command-text"]');
+        expect(line.classes()).toEqual(
+          expect.arrayContaining([
+            "flex",
+            "items-start",
+            "[&>code]:overflow-x-auto",
+            "[&>code]:whitespace-pre",
+            "[&>code]:contain-inline-size",
+          ]),
+        );
+        expect(text.element.tagName).toBe("CODE");
+        expect(text.element.parentElement).toBe(line.element);
+        const button = line.get('[data-testid="command-copy"]');
+        expect(button.text()).toBe("Copia");
+        expect(button.attributes("aria-label")).toBe(`Copia: ${text.text()}`);
+        expect(button.classes()).toContain("shrink-0");
+      }
+      expect(lines[2]!.get('[data-testid="command-text"]').text()).toContain(
+        `ut init --project ${PROJECT_ID} --mode design`,
+      );
+      wrapper.unmount();
+    },
+  );
 
   it("has no axe violations", async () => {
     const { wrapper } = mountPanel(

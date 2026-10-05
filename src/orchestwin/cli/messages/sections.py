@@ -65,7 +65,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "sections.reason_requirement_no_longer_available": {
         "it": "il design cita {codes}, che la Definizione non contiene più: rigenera le "
-        "alternative nel passo Design e valutazione del web",
+        "alternative nel passo Design e valutazione dello Studio web",
         "en": "the design cites {codes}, which the Definition no longer contains: regenerate the "
         "alternatives in the Design & Evaluation step of the web Studio",
     },

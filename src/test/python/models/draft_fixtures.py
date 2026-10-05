@@ -49,11 +49,20 @@ def italian_requirements(request):
     return replace(request, requirements=replace(request.requirements, version=version))
 
 
-def explored_choices(project_id, code):
+def explored_choices(project_id, code, direction=None):
+    from orchestwin.artifacts.visual_directions import (
+        direction_exploration,
+        visual_direction_from_snapshot,
+    )
     from orchestwin.artifacts.visual_exploration import visual_exploration
 
+    exploration = visual_exploration(project_id)
+    if direction is not None:
+        exploration = direction_exploration(
+            exploration, {code: visual_direction_from_snapshot(direction)}
+        )
     chosen = {}
-    for name, values in visual_exploration(project_id).get(code, {}).items():
+    for name, values in exploration.get(code, {}).items():
         if name == "heading_family":
             chosen[name] = next(value for value in values if value != "SCRIPT")
         elif name == "color_mode":
@@ -170,7 +179,7 @@ def proposal_draft(stage, value, request):
             language = raw_alternatives[item["code"]]["visual_language"]
             item["visual"] = {
                 **language["choices"],
-                **explored_choices(request.project_id, item["code"]),
+                **explored_choices(request.project_id, item["code"], language.get("direction")),
                 "visual_rationale": language["rationale"],
                 "product_name": language["product_name"],
                 "twin_fit": [

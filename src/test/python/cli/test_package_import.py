@@ -80,6 +80,8 @@ def test_a_zip_imported_where_nothing_is_linked_links_the_folder(tmp_path: Path)
         "Importo nello Studio il progetto «Calcolo mancia»: fatto in 0 s.",
         "Nello Studio c'è il nuovo progetto «Calcolo mancia», creato dalla versione 1 della "
         "cartella di conoscenza di «Calcolo mancia».",
+        "La catena Perché? è stata ricalcolata dai dati importati e verificata.",
+        "La sintesi informativa learned.json non contiene snapshot completi e non ripristina osservazioni di sviluppo.",
         "Passi importati da approvare di nuovo prima di andare avanti: 5.",
         "Ho collegato questa cartella al nuovo progetto e ho messo la cartella di conoscenza in "
         "orchestwin/. Approva i passi importati con `ut init`, poi il design con `ut design`.",
@@ -126,9 +128,11 @@ def test_a_folder_imported_where_another_project_is_linked_keeps_the_link(
         bodies = [request.body for request in studio.requests if request.path.endswith(IMPORTS)]
 
     assert run.status == 0
-    assert run.output.splitlines()[-3:] == [
+    assert run.output.splitlines()[-5:] == [
         'The Studio has the new project "Copy of the list", created from version 1 of the '
         'knowledge folder of "Lista ospiti".',
+        "The Why? chain was rebuilt from imported data and verified.",
+        "The informative learned.json projection lacks complete snapshots and does not restore development observations.",
         "Imported steps to approve again before going on: 5.",
         'This folder stays linked to the project "Calcolo mancia" and was not touched: the new '
         'project "Copy of the list" is in the Studio, where you can open it.',

@@ -17,6 +17,7 @@ import type {
 import type { HumanGateResponse } from "@/api/workflow-contracts";
 import GeneratedMockupFrame from "@/components/GeneratedMockupFrame.vue";
 import { createAppI18n } from "@/i18n";
+import { useActivityJournalStore } from "@/stores/activityJournal";
 import { useDesignMockupsStore } from "@/stores/designMockups";
 import {
   BASE_DESIGN_PACKAGE,
@@ -75,6 +76,8 @@ import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
 import ProjectDetailView from "./ProjectDetailView.vue";
 import { expectAccessible } from "@/test/axe";
+import { validationOverview } from "@/test/humanValidationFixtures";
+import { whyDocument } from "@/test/whyFixtures";
 
 const state = vi.hoisted(() => {
   const shared = {
@@ -90,6 +93,13 @@ vi.mock("vue-router", () => ({ useRoute: () => state.route }));
 vi.mock("@/stores/auth", () => ({
   useAuthStore: () => ({
     accessToken: "token",
+    user: {
+      id: "00000000-0000-4000-8000-000000000001",
+      email: "owner@example.com",
+      is_active: true,
+      created_at: "2026-09-14T00:00:00Z",
+      guidance_mode: "GUIDED",
+    },
     withAccessToken: (_api: unknown, fn: (token: string) => unknown) => fn("token"),
   }),
 }));
@@ -705,9 +715,9 @@ describe("progressive project workspace", () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="step-read-only"]').exists()).toBe(false);
     const sentences = [
-      "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
+      "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi, nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
       "Hai già approvato le prospettive: puoi rileggerle. Puoi ancora attivare o togliere quelle a tua scelta: ogni cambio che salvi crea una nuova versione da approvare di nuovo.",
-      "Hai già approvato gli user twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
+      "Hai già approvato gli User Twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
       "Hai già approvato i requisiti: puoi rileggerli. Se ne modifichi uno, nasce una nuova versione da approvare di nuovo.",
       "Hai già approvato il design: puoi rileggerlo e provare il mockup. Se cambi la scelta o il design, nasce una nuova versione da approvare di nuovo.",
     ];
@@ -1608,7 +1618,7 @@ describe("sections after the first pass", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(notice.get('[data-kind="behind"]').text()).toBe(
-      "User Twin, Definition and Design & Evaluation to update: something upstream changed. The content you approved stays the same, it is only re-anchored to the new versions.",
+      "User Twin, Definition and Design & Evaluation to update: something upstream changed. The content you approved stays the same; it is only re-anchored to the new versions.",
     );
 
     await wrapper.get('[data-testid="sections-align"]').trigger("click");
@@ -1716,7 +1726,7 @@ describe("sections after the first pass", () => {
     await wrapper.get('[data-stage="0"]').trigger("click");
 
     expect(wrapper.get('[data-kind="blocked"]').text()).toBe(
-      "Prospettive non si aggiorna da sola: il brief è cambiato: prepara di nuovo le prospettive.",
+      "La sezione Prospettive non si aggiorna da sola: il brief è cambiato: prepara di nuovo le prospettive.",
     );
     await wrapper.get('[data-testid="sections-notice-open"]').trigger("click");
     expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
@@ -2571,6 +2581,17 @@ function fakeStudio(served: Served) {
       [base]: () => ok(OPEN_PROJECT),
       [`${base}/brief-versions`]: () => ok(served.briefs),
       [`${base}/import`]: () => missing("PROJECT_IMPORT_NOT_FOUND"),
+      [`${base}/workflow-inputs`]: () =>
+        ok({
+          kind: "orchestwin.workflow-inputs",
+          schema_version: 1,
+          project_id: OPEN,
+          decisions: [],
+          prototypes: [],
+          limits: [],
+        }),
+      [`${base}/provided-prototypes/current`]: () => missing("PROVIDED_PROTOTYPE_NOT_FOUND"),
+      [`${base}/provided-prototypes/gate/current`]: () => missing("HUMAN_GATE_NOT_FOUND"),
       [`${base}/brief-dialogue`]: () => missing("BRIEF_DIALOGUE_NOT_FOUND"),
       [`${base}/brief-assumptions`]: () => ok([]),
       [`${base}/gates/project-brief/current`]: () => ok(BRIEF_GATE),
@@ -2618,6 +2639,9 @@ function fakeStudio(served: Served) {
       [`${base}/code-tasks`]: () => ok({ items: [] }),
       [`${base}/twin-learning`]: () => ok(TWIN_LEARNING),
       [`${base}/evidence`]: () => ok({ project_id: OPEN, evidence: [], citations: [] }),
+      [`${base}/validation`]: () =>
+        ok(validationOverview({ project_id: OPEN, candidates: [], candidate_count: 0 })),
+      [`${base}/artifacts/why/document`]: () => ok({ ...whyDocument([]), project_id: OPEN }),
       [`${base}/acceptance-tests`]: () => ok(ACCEPTANCE_TESTS),
       [`${base}/design/mockups/capabilities`]: () => ok(CAPABILITIES),
       [`${base}/design/mockups`]: () =>
@@ -2888,6 +2912,9 @@ async function openInOrder(studio: Studio, order: readonly StoreGroup[], pinia =
 }
 
 const OPENING_READINGS: Record<string, number> = {
+  "…/workflow-inputs": 1,
+  "…/provided-prototypes/current": 1,
+  "…/provided-prototypes/gate/current": 1,
   "…": 1,
   "…/brief-versions": 1,
   "…/import": 1,
@@ -2977,10 +3004,13 @@ const APPROVED_DESIGN_READINGS: Record<string, number> = {
 };
 
 const FIRST_DESIGN_VIEW: Record<string, number> = {
+  "…/validation": 1,
+  "…/artifacts/why/document": 1,
   "…/design/mockups/capabilities": 1,
   [`…/design/mockups?alternative_id=${DESIGN_ALTERNATIVE_ID}`]: 1,
   [`…/design/mockups?alternative_id=${SECOND_DESIGN_ALTERNATIVE_ID}`]: 1,
   [`…/design/mockups/document?alternative_id=${SECOND_DESIGN_ALTERNATIVE_ID}&source=latest`]: 1,
+  "…/design/distance": 1,
   "…/design/iterations": 1,
   "…/model-usage": 1,
 };
@@ -3053,7 +3083,7 @@ describe("readings of the project page", () => {
     expect(studio.writes()).toEqual([]);
     expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="package-partial"]').text().replace(/\s+/g, " ")).toBe(
-      "The folder holds 1 of 5 steps: Perspectives, User Twin, Definition and Design & Evaluation are still to approve. Each step joins the folder when you approve it.",
+      "The folder holds 1 of 5 steps: Perspectives, User Twin, Definition and Design & Evaluation are still to be approved. Each step joins the folder when you approve it.",
     );
     expect(wrapper.get('[data-testid="download-package"]').attributes("disabled")).toBeUndefined();
     expect(wrapper.find('[data-testid="development-panel"]').exists()).toBe(false);
@@ -3324,5 +3354,232 @@ describe("readings of the project page", () => {
     expect(wrapper.get('[data-testid="stage-twins"]').isVisible()).toBe(true);
     await settle();
     expect(studio.writes(from)).toHaveLength(1);
+  });
+});
+
+interface ActivityCall {
+  method: string;
+  path: string;
+  body: { events?: { kind: string; section: string | null; target: string | null }[] } | null;
+  keepalive: boolean;
+}
+
+function withActivity(studio: Studio, active: boolean, hold: Promise<void> = Promise.resolve()) {
+  const base = `/projects/${OPEN}/activity`;
+  const session = { code: "SES-P01", started_at: AT };
+  const calls: ActivityCall[] = [];
+  async function fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const raw =
+      typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const path = new URL(raw, "http://studio.test").pathname.replace(/^\/api\/v1/, "");
+    if (!path.startsWith(base)) return studio.fetch(input, init);
+    const method = (init?.method ?? "GET").toUpperCase();
+    const body =
+      typeof init?.body === "string" ? (JSON.parse(init.body) as ActivityCall["body"]) : null;
+    const address = path.slice(base.length);
+    calls.push({ method, path: address, body, keepalive: init?.keepalive === true });
+    if (address === "/session") await hold;
+    const replies: Record<string, unknown> = {
+      "GET /session": { active, session: active ? session : null },
+      "POST /sessions": { status: "ACTIVITY_SESSION_STARTED", session },
+      "POST /events": { status: "ACTIVITY_EVENTS_RECORDED", recorded: body?.events?.length ?? 0 },
+      "POST /sessions/SES-P01/end": {
+        status: "ACTIVITY_SESSION_ENDED",
+        session: { ...session, ended_at: AT },
+      },
+    };
+    const reply = replies[`${method} ${address}`];
+    return new Response(JSON.stringify(reply ?? { detail: { code: "UNKNOWN_ADDRESS" } }), {
+      status: reply === undefined ? 404 : 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const events = () =>
+    calls.flatMap((call) =>
+      (call.body?.events ?? []).map((event) => [event.kind, event.section, event.target]),
+    );
+  return { studio: { ...studio, fetch }, calls, events };
+}
+
+describe("study session on the project page", () => {
+  const key = `orchestwin.activity.${OPEN}`;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    state.route = reactive({ params: { projectId: OPEN } });
+    sessionStorage.clear();
+    clearFollowedGenerations();
+  });
+
+  afterEach(() => {
+    for (const page of openedPages.splice(0)) {
+      page.unmount();
+    }
+    state.fetch = null;
+    sessionStorage.clear();
+    clearFollowedGenerations();
+  });
+
+  it("neither asks nor sends anything about a study session this browser has not started", async () => {
+    const { studio, calls } = withActivity(fakeStudio(approvedProject()), true);
+    const wrapper = await openInOrder(studio, []);
+
+    for (const stage of [0, 4, 5]) {
+      await wrapper.get(`[data-stage="${stage}"]`).trigger("click");
+      await settle();
+    }
+    const panel = wrapper.get('[data-testid="activity-session"]');
+    (panel.element as HTMLDetailsElement).open = true;
+    panel.element.dispatchEvent(new Event("toggle"));
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new Event("pagehide"));
+    await expect(apiClient.getProject("token", "missing")).rejects.toMatchObject({ status: 404 });
+    await settle();
+
+    expect(calls).toEqual([]);
+    expect(studio.calls.filter((call) => call.includes("/activity"))).toEqual([]);
+    expect(wrapper.find('[data-testid="activity-session-active"]').exists()).toBe(false);
+    expect(
+      wrapper
+        .get('[data-testid="project-details"]')
+        .element.compareDocumentPosition(panel.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it("starts a session from the bottom of the page and shows its row at the top with the focus on Stop", async () => {
+    const { studio, calls, events } = withActivity(fakeStudio(approvedProject()), false);
+    const pinia = createPinia();
+    const wrapper = await openInOrder(studio, [], pinia);
+    expect(studio.readings()).toEqual(OPENING_READINGS);
+
+    await wrapper.get('[data-testid="activity-session-code"]').setValue("SES-P01");
+    await wrapper.get('[data-testid="activity-session"] form').trigger("submit");
+    await settle();
+
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(["POST /sessions"]);
+    expect(calls[0]?.body).toEqual({ session_code: "SES-P01" });
+    expect(sessionStorage.getItem(key)).toBe("SES-P01");
+    const row = wrapper.get('[data-testid="activity-session-active"]');
+    expect(row.attributes("role")).toBe("status");
+    expect(row.text()).toContain("Recording of times and steps is on · SES-P01");
+    expect(document.activeElement).toBe(row.get('[data-testid="activity-session-stop"]').element);
+    expect(
+      row.element.compareDocumentPosition(wrapper.get('[data-testid="guidance-mode"]').element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(wrapper.find('[data-testid="activity-session"]').exists()).toBe(false);
+
+    await useActivityJournalStore(pinia).flush();
+    await settle();
+    expect(events()).toEqual([
+      ["SECTION_OPENED", "PACKAGE", null],
+      ["MODE_CHANGED", "PACKAGE", null],
+      ["LOCALE_SET", "PACKAGE", null],
+    ]);
+    expect(calls[1]?.body).toMatchObject({
+      session_code: "SES-P01",
+      source: "WEB",
+      events: [{ status: null }, { status: "GUIDED" }, { status: "en" }],
+    });
+  });
+
+  it("resumes the session of this browser, records what the owner opens and stops from the row", async () => {
+    sessionStorage.setItem(key, "SES-P01");
+    let release: () => void = () => undefined;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { studio, calls, events } = withActivity(fakeStudio(approvedProject()), true, hold);
+    const pinia = createPinia();
+    const wrapper = await openInOrder(studio, [], pinia);
+    const journal = useActivityJournalStore(pinia);
+    expect(wrapper.find('[data-testid="activity-session-active"]').exists()).toBe(false);
+    release();
+    await settle();
+
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(["GET /session"]);
+    expect(studio.readings()).toEqual(OPENING_READINGS);
+    expect(wrapper.get('[data-testid="activity-session-active"]').text()).toContain(
+      "Recording of times and steps is on · SES-P01",
+    );
+
+    await wrapper.get('[data-stage="4"]').trigger("click");
+    await settle();
+    const probe = document.createElement("details");
+    probe.dataset.testid = "probe-details";
+    wrapper.get('[data-testid="stage-design"]').element.append(probe);
+    probe.open = true;
+    probe.dispatchEvent(new Event("toggle"));
+    probe.dispatchEvent(new Event("toggle"));
+    const why = wrapper
+      .get('[data-testid="stage-design"]')
+      .get<HTMLDetailsElement>('details[data-testid="alternative-why"]');
+    why.element.open = true;
+    await why.trigger("toggle");
+    await expect(apiClient.getProject("token", "missing")).rejects.toMatchObject({ status: 404 });
+    await journal.flush();
+    await settle();
+
+    expect(events().filter(([kind]) => kind !== "REQUEST_FAILED")).toEqual([
+      ["SECTION_OPENED", "PACKAGE", null],
+      ["SECTION_OPENED", "DESIGN", null],
+      ["DETAIL_OPENED", "DESIGN", "probe-details"],
+      ["DETAIL_OPENED", "DESIGN", "alternative-why"],
+      ["WHY_OPENED", "DESIGN", why.attributes("data-why-code")],
+    ]);
+    expect(why.attributes("data-why-code")).toMatch(/^DES-\d{3}$/);
+    expect(events()).toContainEqual(["REQUEST_FAILED", "DESIGN", "UNKNOWN_ADDRESS"]);
+
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    await settle();
+    expect(calls.at(-1)).toMatchObject({ method: "POST", path: "/events", keepalive: true });
+    expect(
+      calls
+        .at(-1)
+        ?.body?.events?.map((event) => event.kind)
+        .filter((kind) => kind !== "REQUEST_FAILED"),
+    ).toEqual(["PAGE_HIDDEN"]);
+
+    const hidden = calls.length;
+    vi.restoreAllMocks();
+    document.dispatchEvent(new Event("visibilitychange"));
+    await wrapper.get('[data-stage="2"]').trigger("click");
+    await settle();
+    await wrapper.get('[data-testid="activity-session-stop"]').trigger("click");
+    await settle();
+
+    expect(calls.at(-1)).toMatchObject({ method: "POST", path: "/sessions/SES-P01/end" });
+    expect(calls.at(-2)).toMatchObject({ method: "POST", path: "/events", keepalive: false });
+    expect(calls.at(-2)?.body?.events?.at(-1)).toMatchObject({
+      kind: "PAGE_HIDDEN",
+      section: "USER_TWINS",
+    });
+    expect(
+      calls
+        .slice(hidden)
+        .flatMap((call) => call.body?.events ?? [])
+        .filter((event) => event.kind !== "REQUEST_FAILED")
+        .map((event) => [event.kind, event.section]),
+    ).toEqual([
+      ["PAGE_VISIBLE", "DESIGN"],
+      ["SECTION_OPENED", "USER_TWINS"],
+      ["PAGE_HIDDEN", "USER_TWINS"],
+    ]);
+    expect(sessionStorage.getItem(key)).toBeNull();
+    expect(wrapper.find('[data-testid="activity-session-active"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(
+      wrapper.get('[data-testid="activity-session"] summary').element,
+    );
+    const sent = calls.length;
+    probe.open = false;
+    probe.dispatchEvent(new Event("toggle"));
+    probe.open = true;
+    probe.dispatchEvent(new Event("toggle"));
+    await journal.flush();
+    await settle();
+    expect(calls).toHaveLength(sent);
   });
 });

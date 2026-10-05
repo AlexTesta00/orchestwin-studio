@@ -44,6 +44,9 @@ TOOL_ORDER = [
     "run_tests",
     "get_tasks",
     "get_evidence",
+    "get_why",
+    "get_validation",
+    "get_scenario_walkthrough",
 ]
 CAPABILITIES = {
     "tools": {"listChanged": False},
@@ -260,6 +263,9 @@ def test_the_twelve_tools_are_listed_with_schemas_that_hold_together(tmp_path: P
         "run_tests": [],
         "get_tasks": [],
         "get_evidence": [],
+        "get_why": ["code"],
+        "get_validation": [],
+        "get_scenario_walkthrough": ["scenario_key"],
     }
     assert tools[10]["inputSchema"]["properties"]["status"] == {
         "type": "string",
@@ -629,7 +635,7 @@ def test_a_failed_answer_of_the_studio_is_a_tool_error_with_its_code(tmp_path: P
         "code": "INVALID_TWIN_CHAT_OUTPUT",
         "message": f"{name} could not answer: the model gave no valid answer or could not be "
         "reached (INVALID_TWIN_CHAT_OUTPUT). You can ask the question again, but it is a new "
-        "spending.",
+        "expense.",
     }
     assert tool_error(answered[3]) == {
         "code": "TWIN_NOT_FOUND",

@@ -5,7 +5,7 @@ import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 from typing import Final
 
 from orchestwin.cli.api import twin_chat
@@ -27,6 +27,9 @@ LEARNING_DOCUMENT: Final = "twins/feedback/learned.json"
 LEARNING_KIND: Final = "orchestwin.twin-learning"
 EVIDENCE_DOCUMENT: Final = "twins/evidence.json"
 EVIDENCE_KIND: Final = "orchestwin.research-evidence"
+VALIDATION_DOCUMENT: Final = "validation/human-validation.json"
+WORKFLOW_DECISIONS_DOCUMENT: Final = "workflow/decisions.json"
+PROVIDED_PROTOTYPES_DOCUMENT: Final = "design/provided-prototypes.json"
 MARKDOWN_SUFFIX: Final = ".md"
 FOLDER_MISSING: Final = "FOLDER_MISSING"
 FOLDER_UNREADABLE: Final = "FOLDER_UNREADABLE"
@@ -198,6 +201,170 @@ class Knowledge:
     def twins(self) -> tuple[Twin, ...] | None:
         document = self.stage("twins")
         return None if document is None else twins_from(twin_chat.twin_versions(document))
+
+    def workflow_inputs(self):
+        from orchestwin.workflow_inputs import WorkflowInputError, workflow_records
+
+        files = {}
+        for relative in (WORKFLOW_DECISIONS_DOCUMENT, PROVIDED_PROTOTYPES_DOCUMENT):
+            value = self.read(relative)
+            if value is not None:
+                files[relative] = json.dumps(value, ensure_ascii=False)
+        if "workflow_inputs" not in self.manifest and not files:
+            return workflow_records(_mapping(self.manifest.get("project")).get("id"))
+        from orchestwin.knowledge.archive import KnowledgeArchiveError
+        from orchestwin.knowledge.workflow_inputs import read_workflow_inputs
+
+        try:
+            return read_workflow_inputs(SimpleNamespace(manifest=self.manifest, files=files))
+        except (ValueError, WorkflowInputError, KnowledgeArchiveError) as error:
+            raise FolderProblem(FOLDER_UNREADABLE, path=WORKFLOW_DECISIONS_DOCUMENT) from error
+
+    def approved_provided_prototype(self):
+        records = self.workflow_inputs()
+        declared = _mapping(self.manifest.get("workflow_inputs"))
+        reference = _mapping(declared.get("approved_prototype"))
+        if reference.get("gate_status") != "APPROVED":
+            return None
+        return next(
+            (
+                item
+                for item in reversed(records["prototypes"])
+                if (item["id"], item["version_number"], item["content_hash"])
+                == (
+                    reference.get("artifact_id"),
+                    reference.get("version_number"),
+                    reference.get("content_hash"),
+                )
+            ),
+            None,
+        )
+
+    def why(
+        self, *, project_id: str | None = None, validation_context=False
+    ) -> Mapping[str, object]:
+        from orchestwin.cli.mcp.verification import verify_files
+        from orchestwin.why import build_why_document
+
+        def invalid(relative):
+            return FolderProblem(FOLDER_UNREADABLE, path=relative)
+
+        verify_files(self.root, self.manifest, inside=inside, fail=invalid)
+        identity = _mapping(self.manifest.get("project")).get("id")
+        if not isinstance(identity, str) or (project_id is not None and identity != project_id):
+            raise invalid(MANIFEST)
+        stages = {stage: self.stage(stage) for stage in self.approved}
+        for stage, document in stages.items():
+            entry = _mapping(_mapping(self.manifest.get("stages")).get(stage))
+            if (
+                document is None
+                or document.get("id") != entry.get("version_id")
+                or document.get("content_hash") != entry.get("content_hash")
+                or document.get("version_number") != entry.get("version_number")
+            ):
+                raise invalid(f"{stage}/{stage}.json")
+        reviews = self.document(REVIEWS_DOCUMENT, required=False) or {}
+        learning = self.document(LEARNING_DOCUMENT, required=False) or {}
+        records = self.validation_records()
+        workflow = self.workflow_inputs()
+        result = build_why_document(
+            project_id=identity,
+            stages=stages,
+            evidence=self.evidence(),
+            evaluations=[reviews] if reviews else [],
+            learning=learning,
+            hypotheses=records["hypotheses"],
+            outcomes=records["outcomes"],
+            workflow_inputs=workflow,
+        )
+        declared = self.manifest.get("why")
+        exported = self.document("traceability/why.json", required=False)
+        if declared is not None:
+            if (
+                declared != {"document": "traceability/why.json", "schema_version": 1}
+                or _mapping(self.manifest.get("schemas")).get("why") != "schema/why.schema.json"
+                or exported != result
+            ):
+                raise invalid("traceability/why.json")
+        elif exported is not None:
+            raise invalid("traceability/why.json")
+        if validation_context:
+            result = build_why_document(
+                project_id=identity,
+                stages=stages,
+                evidence=self.evidence(),
+                evaluations=[reviews] if reviews else [],
+                learning=learning,
+                hypotheses=records["hypotheses"],
+                outcomes=records["outcomes"],
+                workflow_inputs=workflow,
+                validation_context=True,
+            )
+        return result
+
+    def why_limits(self) -> tuple[str, ...]:
+        if "why" in self.manifest:
+            return ()
+        limits = ["LEGACY_DOSSIER"]
+        if self.read(REVIEWS_DOCUMENT) is None:
+            limits.append("LEGACY_FEEDBACK_CONTEXT_MISSING")
+        return tuple(limits)
+
+    def validation_records(self):
+        declared = self.manifest.get("validation")
+        document = self.document(VALIDATION_DOCUMENT, required=False)
+        if declared is None and document is None:
+            return {"hypotheses": [], "outcomes": [], "omitted_sections": [], "limits": []}
+        if (
+            not isinstance(declared, Mapping)
+            or declared.get("document") != VALIDATION_DOCUMENT
+            or declared.get("schema_version") != 1
+            or document is None
+            or document.get("kind") != "orchestwin.validation-records"
+            or document.get("schema_version") != 1
+            or document.get("project_id") != _mapping(self.manifest.get("project")).get("id")
+            or declared.get("hypotheses") != len(document.get("hypotheses", []))
+            or declared.get("outcomes") != len(document.get("outcomes", []))
+        ):
+            raise FolderProblem(FOLDER_UNREADABLE, path=VALIDATION_DOCUMENT)
+        from orchestwin.cli.mcp.validation import verify_records
+
+        if not verify_records(document, self.evidence() or {}):
+            raise FolderProblem(FOLDER_UNREADABLE, path=VALIDATION_DOCUMENT)
+        return document
+
+    def validation(self, *, project_id=None):
+        from orchestwin.validation import validation_overview
+
+        document = self.why(project_id=project_id, validation_context=True)
+        records = self.validation_records()
+        answer = validation_overview(
+            document=document,
+            hypotheses=records["hypotheses"],
+            outcomes=records["outcomes"],
+            evidence=self.evidence(),
+        )
+        answer["omitted_sections"] = [*answer["omitted_sections"], *records["omitted_sections"]]
+        answer["limits"] = sorted({*answer["limits"], *records["limits"], *self.why_limits()})
+        return answer
+
+    def walkthrough(
+        self, scenario_key, *, project_id=None, alternative_id=None, document_hash=None
+    ):
+        from orchestwin.validation import ValidationError, scenario_walkthrough
+        from orchestwin.workflow_inputs import PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE
+
+        if self.approved_provided_prototype() is not None:
+            raise ValidationError(PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE)
+
+        answer = scenario_walkthrough(
+            self.why(project_id=project_id, validation_context=True),
+            scenario_key,
+            alternative_id=alternative_id,
+            document_hash=document_hash,
+        )
+        answer["limits"] = sorted({*answer["limits"], *self.why_limits()})
+        return answer
 
 
 def load(root: Path) -> Knowledge:
@@ -462,6 +629,11 @@ def design_view(document: Mapping[str, object]) -> DesignView:
         screens=screens,
         transitions=_transitions(prototype),
     )
+
+
+def alternative_direction(alternative: Mapping[str, object]) -> Mapping[str, object] | None:
+    direction = _mapping(alternative.get("visual_language")).get("direction")
+    return direction if isinstance(direction, Mapping) else None
 
 
 def markdown_files(root: Path) -> list[str]:

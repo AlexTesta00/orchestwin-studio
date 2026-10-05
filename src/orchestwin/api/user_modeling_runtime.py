@@ -145,7 +145,9 @@ class _UnavailableUserModelingPort:
     gate_events = unavailable
 
 
-def create_runtime_user_modeling_router(services: UserModelingServices | None) -> APIRouter:
+def create_runtime_user_modeling_router(
+    services: UserModelingServices | None, owner_inputs=None
+) -> APIRouter:
     """Mount the existing HTTP contract using concrete services and authenticated owner IDs."""
     if services is None:
         unavailable = _UnavailableUserModelingPort()
@@ -159,6 +161,7 @@ def create_runtime_user_modeling_router(services: UserModelingServices | None) -
     else:
         dependencies = UserModelingApiDependencies(
             commands=services.commands,
+            owner_inputs=owner_inputs,
             context_check=services.commands.snapshot_context_is_current,
             revisions=services.revisions,
             queries=services.queries,

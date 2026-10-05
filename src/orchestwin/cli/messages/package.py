@@ -1,6 +1,34 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "package.why_verified": {
+        "it": "La catena Perché? è stata ricalcolata dai dati importati e verificata.",
+        "en": "The Why? chain was rebuilt from imported data and verified.",
+    },
+    "package.import_limit.LEGACY_FEEDBACK_CONTEXT_MISSING": {
+        "it": "Il Dossier precedente cita feedback con versioni non esportate: quei rilievi non sono stati ripristinati.",
+        "en": "The legacy Dossier cites feedback with versions that were not exported: those findings were not restored.",
+    },
+    "package.import_limit.LEARNED_PROJECTION_NOT_RESTORED": {
+        "it": "La sintesi informativa learned.json non contiene snapshot completi e non ripristina osservazioni di sviluppo.",
+        "en": "The informative learned.json projection lacks complete snapshots and does not restore development observations.",
+    },
+    "package.import_limit.FEEDBACK_CONTEXT_NOT_RESTORED": {
+        "it": "Alcuni feedback storici citano versioni non esportate: restano leggibili nel Dossier originale e non sono stati ripristinati.",
+        "en": "Some historical feedback cites versions not exported: it remains readable in the original Dossier and was not restored.",
+    },
+    "package.import_limit.HYPOTHESIS_HISTORY_PARTIAL": {
+        "it": "Il Dossier contiene solo una parte delle versioni delle ipotesi; il numero di versione originale è conservato.",
+        "en": "The Dossier contains only part of the hypothesis history; original version numbers are preserved.",
+    },
+    "package.import_omissions": {
+        "it": "Sezioni omesse dal ripristino: {count}.",
+        "en": "Sections omitted from restoration: {count}.",
+    },
+    "package.import_omission": {
+        "it": "  {kind} {identity}: {reason}.",
+        "en": "  {kind} {identity}: {reason}.",
+    },
     "package.help": {
         "it": "Porta la cartella di conoscenza tra lo Studio e questa cartella",
         "en": "Move the knowledge folder between the Studio and this folder",

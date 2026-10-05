@@ -147,6 +147,26 @@ def run_import(context: CommandContext, source_text: str, name: str | None) -> i
         origin=verified.project_name,
         version=verified.package_version,
     )
+    if document.get("why_verified") is True:
+        console.say("package.why_verified")
+    for limit in document.get("import_limits", ()):
+        if limit in {
+            "LEGACY_FEEDBACK_CONTEXT_MISSING",
+            "LEARNED_PROJECTION_NOT_RESTORED",
+            "FEEDBACK_CONTEXT_NOT_RESTORED",
+            "HYPOTHESIS_HISTORY_PARTIAL",
+        }:
+            console.say("package.import_limit." + limit)
+    omissions = document.get("omitted_sections", ())
+    if omissions:
+        console.say("package.import_omissions", count=len(omissions))
+        for item in omissions:
+            console.say(
+                "package.import_omission",
+                kind=item.get("kind", ""),
+                identity=item.get("evaluation_run_id", item.get("id", "")),
+                reason=item.get("reason", ""),
+            )
     stages = imports.approval_required(document)
     if stages:
         console.say("package.import_approval", count=len(stages))

@@ -194,6 +194,22 @@ describe("RequirementsDefinitionView", () => {
     },
   );
 
+  it.each([
+    ["it", "Indicazione del proprietario"],
+    ["en", "Owner input"],
+  ] as const)("names in %s a source given by the owner as the owner's", (locale, label) => {
+    const value = specification();
+    value.scenarios[0]!.sources = [{ ...source, kind: "OWNER_INPUT" }];
+    const wrapper = mount(RequirementsDefinitionView, {
+      props: { specification: value, locale },
+    });
+    const sources = wrapper.get(
+      '[data-testid="definition-scenarios-item"] [data-testid="definition-sources"]',
+    );
+    expect(sources.get("li span").text()).toBe(label);
+    expect(wrapper.text()).not.toContain("committente");
+  });
+
   it("reads legacy fields and declares absent needs without filling them from requirements", () => {
     const value = specification();
     value.schema_version = 1;

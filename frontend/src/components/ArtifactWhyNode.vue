@@ -1,0 +1,261 @@
+<script setup lang="ts">
+import { computed } from "vue";
+import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
+import { DIRECTION_AXES, directionAxisLabel, directionValueLabel } from "./visualLanguage";
+import { whyGapLabel, whyMessages, whyNodeTitle } from "./whyCopy";
+import { humanValidationCopy } from "./humanValidationCopy";
+import type { WhyNode } from "../types/why";
+
+const props = withDefaults(defineProps<{ node: WhyNode; locale?: "en" | "it" }>(), {
+  locale: "en",
+});
+const copy = computed(() => whyMessages[props.locale]);
+const validationCopy = computed(() => humanValidationCopy[props.locale]);
+const rationaleLabel = computed(() => {
+  const origin = props.node.rationale?.origin;
+  return origin === "MODEL"
+    ? copy.value.model
+    : origin === "OWNER"
+      ? copy.value.owner
+      : origin === "SYSTEM"
+        ? copy.value.system
+        : copy.value.unknown;
+});
+const direction = computed(() => {
+  const value = props.node.declared_context.direction;
+  if (!value) return null;
+  return {
+    title: `${copy.value.visualDirection}: ${value.name}`,
+    concept: value.concept,
+    axes: DIRECTION_AXES.flatMap((axis) => {
+      const label = directionValueLabel(props.locale, axis, value.axes[axis]);
+      if (label === null) return [];
+      return [{ axis, text: `${directionAxisLabel(props.locale, axis)}: ${label}` }];
+    }),
+    origin: copy.value.directionOrigin.replace("{count}", String(value.candidates)),
+  };
+});
+</script>
+
+<template>
+  <article
+    class="grid min-w-0 gap-2 rounded-field border border-current/15 p-3 text-sm [overflow-wrap:anywhere]"
+    data-testid="why-node"
+    :data-why-key="node.key"
+  >
+    <strong class="font-semibold">{{ whyNodeTitle(node, locale) }}</strong>
+    <UserModelingEpistemicBadge
+      v-if="!node.declared_context.hypothesis && !node.declared_context.outcome"
+      :status="node.display_status"
+      :show-details="false"
+      :locale="locale"
+    />
+    <section
+      v-if="node.declared_context.provided_prototype"
+      class="grid gap-2"
+      data-testid="why-provided-prototype"
+    >
+      <strong>{{ copy.supplied }}</strong>
+      <p v-if="node.declared_context.provided_prototype.declared_origin" class="m-0">
+        {{ copy.declaredOrigin }}: {{ node.declared_context.provided_prototype.declared_origin }}
+      </p>
+      <p class="m-0" data-testid="why-provided-evaluation-limit">
+        {{ copy.prototypeEvaluationLimit }}
+      </p>
+      <ul v-if="node.declared_context.limits?.length" class="m-0 grid list-disc gap-1 pl-5 text-xs">
+        <li v-for="limit in node.declared_context.limits" :key="limit">
+          {{ whyGapLabel(limit, locale) }}
+        </li>
+      </ul>
+    </section>
+    <section
+      v-if="node.declared_context.workflow_decision"
+      class="grid gap-2"
+      data-testid="why-declared-decision"
+    >
+      <strong>{{
+        node.declared_context.workflow_decision.action === "RESOLVE_MISSING"
+          ? copy.resolvedGap
+          : copy.declaredGap
+      }}</strong>
+      <p class="m-0 whitespace-pre-wrap">{{ node.declared_context.workflow_decision.reason }}</p>
+    </section>
+    <section
+      v-if="node.declared_context.hypothesis"
+      class="grid gap-2"
+      data-testid="why-operational-hypothesis"
+    >
+      <strong>{{ validationCopy.operational }}</strong>
+      <p v-if="node.declared_context.hypothesis.task" class="m-0 whitespace-pre-wrap">
+        {{ validationCopy.task }}: {{ node.declared_context.hypothesis.task }}
+      </p>
+      <div class="grid gap-1">
+        <strong>{{ validationCopy.observe }}</strong>
+        <ul class="m-0 list-disc pl-5">
+          <li v-for="(item, index) in node.declared_context.hypothesis.observe" :key="index">
+            {{ item }}
+          </li>
+        </ul>
+      </div>
+      <p class="m-0 whitespace-pre-wrap">
+        {{ validationCopy.limitations }}: {{ node.declared_context.hypothesis.limitations }}
+      </p>
+    </section>
+    <section
+      v-if="node.declared_context.outcome"
+      class="grid gap-2"
+      data-testid="why-validation-outcome"
+    >
+      <strong>{{
+        node.declared_context.outcome.session_kind === "HUMAN_SESSION"
+          ? validationCopy.human
+          : validationCopy.synthetic
+      }}</strong>
+      <p class="m-0">
+        {{ validationCopy.states[node.declared_context.outcome.outcome] }} ·
+        {{ node.declared_context.outcome.session_ref }}
+      </p>
+      <p v-if="node.declared_context.effective_status === 'RETIRED'" class="m-0 font-semibold">
+        {{ validationCopy.retired }}
+      </p>
+      <p v-if="node.declared_context.outcome.coverage === 'PARTIAL'" class="m-0">
+        {{ validationCopy.partial }}
+      </p>
+      <p class="m-0 whitespace-pre-wrap">{{ node.declared_context.outcome.limitations }}</p>
+    </section>
+    <section
+      v-if="node.declared_context.observation_value"
+      class="grid gap-1"
+      data-testid="why-claim-value"
+    >
+      <strong>{{ copy.claim }}</strong>
+      <p
+        v-if="node.declared_context.observation_value.kind === 'TEXT'"
+        class="m-0 whitespace-pre-wrap"
+      >
+        {{ node.declared_context.observation_value.text }}
+      </p>
+      <ul
+        v-else-if="node.declared_context.observation_value.kind === 'ITEMS'"
+        class="m-0 grid list-disc gap-1 pl-5"
+      >
+        <li v-for="(item, index) in node.declared_context.observation_value.items" :key="index">
+          {{ item }}
+        </li>
+      </ul>
+      <p v-else class="m-0">
+        {{
+          node.declared_context.observation_value.kind === "ABSTAINED"
+            ? copy.abstainedValue
+            : copy.unknownValue
+        }}
+      </p>
+      <p v-if="node.declared_context.observation_value.reason" class="m-0 whitespace-pre-wrap">
+        {{ node.declared_context.observation_value.reason }}
+      </p>
+    </section>
+    <section v-if="direction" class="grid gap-1" data-testid="why-direction">
+      <strong>{{ direction.title }}</strong>
+      <p class="m-0 whitespace-pre-wrap">{{ direction.concept }}</p>
+      <ul v-if="direction.axes.length > 0" class="m-0 grid list-disc gap-1 pl-5 text-xs">
+        <li v-for="item in direction.axes" :key="item.axis">{{ item.text }}</li>
+      </ul>
+      <p class="m-0 text-xs" data-testid="why-direction-origin">{{ direction.origin }}</p>
+    </section>
+    <p class="m-0 text-xs">
+      {{ node.current ? copy.current : copy.historical }} · {{ copy.version }}
+      {{ node.reference.version_number ?? "—" }}
+    </p>
+    <p v-if="node.reference.content_hash" class="m-0 font-mono text-xs break-all">
+      {{ copy.hash }}: {{ node.reference.content_hash }}
+    </p>
+    <div
+      v-if="node.declared_context.base_reference"
+      class="grid gap-1 text-xs"
+      data-testid="why-base-reference"
+    >
+      <strong>{{ copy.base }}: {{ node.declared_context.base_reference.version_number }}</strong>
+      <p class="m-0 font-mono break-all">
+        {{ copy.hash }}: {{ node.declared_context.base_reference.content_hash }}
+      </p>
+    </div>
+    <div
+      v-if="node.declared_context.audit_reference"
+      class="grid gap-1 text-xs"
+      data-testid="why-audit-reference"
+    >
+      <strong>{{ copy.audit }}</strong>
+      <p class="m-0 font-mono break-all">
+        {{ copy.hash }}: {{ node.declared_context.audit_reference.content_hash }}
+      </p>
+    </div>
+    <div v-if="node.rationale" class="grid gap-1" data-testid="why-rationale">
+      <strong>{{ rationaleLabel }}</strong>
+      <p class="m-0 whitespace-pre-wrap">{{ node.rationale.text }}</p>
+      <p class="m-0 text-xs">{{ copy.version }} {{ node.rationale.version_number ?? "—" }}</p>
+      <p v-if="node.rationale.content_hash" class="m-0 font-mono text-xs break-all">
+        {{ copy.hash }}: {{ node.rationale.content_hash }}
+      </p>
+    </div>
+    <section
+      v-for="(item, index) in node.citations"
+      :key="index"
+      class="grid gap-1 border-t border-current/15 pt-2"
+      data-testid="why-citation"
+    >
+      <strong
+        >{{ copy.source }}:
+        {{ item.source?.title ?? item.source?.code ?? item.citation.source_id }}</strong
+      >
+      <p class="m-0 text-xs">
+        {{
+          item.session_kind === "HUMAN_SESSION"
+            ? validationCopy.human
+            : item.session_kind === "SYNTHETIC_EXERCISE"
+              ? validationCopy.synthetic
+              : item.effect === "CONTRADICTS"
+                ? copy.contradicts
+                : item.effect === "ADDS"
+                  ? copy.adds
+                  : copy.supports
+        }}
+      </p>
+      <p
+        v-if="item.status === 'RETIRED' || item.source?.status === 'RETIRED'"
+        class="m-0 font-semibold"
+        data-testid="why-retired-source"
+      >
+        {{ copy.retired }}
+      </p>
+      <p v-if="item.source?.text_available === false" class="m-0 text-xs">
+        {{ copy.sourceUnavailable }}
+      </p>
+      <p class="m-0 text-xs">
+        {{ copy.version }} {{ item.citation.source_version }} · {{ copy.lines }}
+        {{ item.citation.start_line }}–{{ item.citation.end_line }} · {{ copy.offsets }}
+        {{ item.citation.start }}–{{ item.citation.end }}
+      </p>
+      <p class="m-0 font-mono text-xs break-all">
+        {{ copy.hash }}: {{ item.citation.content_hash }}
+      </p>
+      <blockquote
+        class="m-0 border-l-2 border-current/30 pl-3 whitespace-pre-wrap"
+        data-testid="why-quote"
+      >
+        {{ item.citation.quote }}
+      </blockquote>
+      <p v-if="item.source?.method" class="m-0 text-xs">{{ item.source.method }}</p>
+      <p v-if="item.source?.context" class="m-0 text-xs">{{ item.source.context }}</p>
+      <p v-if="item.source?.limitations" class="m-0 text-xs">{{ item.source.limitations }}</p>
+    </section>
+    <ul v-if="node.gaps.length > 0" class="m-0 grid list-disc gap-1 pl-5 text-xs">
+      <li v-for="(gap, index) in node.gaps" :key="index">{{ whyGapLabel(gap.code, locale) }}</li>
+    </ul>
+    <details class="text-xs">
+      <summary tabindex="0" class="flex min-h-11 cursor-pointer items-center">
+        {{ node.code }}
+      </summary>
+      <p class="m-0 font-mono break-all">{{ node.reference.artifact_id }}</p>
+    </details>
+  </article>
+</template>

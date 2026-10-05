@@ -24,6 +24,7 @@ import type {
 } from "@/api/team-contracts";
 import type { HumanGateEventResponse } from "@/api/workflow-contracts";
 import { useAuthStore } from "@/stores/auth";
+import { useGuidanceStore } from "@/stores/guidance";
 import { type TeamAuthorizedRequest, useTeamStore } from "@/stores/team";
 import UiButton from "./UiButton.vue";
 import UiDecisionBar from "./UiDecisionBar.vue";
@@ -47,6 +48,7 @@ const props = withDefaults(
 const emit = defineEmits<{ "sections-changed": [] }>();
 
 const auth = useAuthStore();
+const guidance = useGuidanceStore();
 const store = useTeamStore();
 
 provide(
@@ -164,7 +166,7 @@ const { t, te, locale } = useI18n({
             definition:
               "Data and actions to protect, access, session, what happens with wrong credentials.",
             design:
-              "How one sees being signed in and how to sign out, confirmations before deleting, sensitive data not in full.",
+              "How people see that they are signed in and how they sign out, confirmations before deleting, sensitive data not in full.",
           },
         },
         aspects: {
@@ -922,6 +924,8 @@ function statusText(value: string): string {
 }
 
 function revisionText(value: string): string {
+  if (value === "OWNER_PROVIDED")
+    return locale.value === "it" ? "Fornito dal proprietario" : "Owner supplied";
   return translatedOrFallback(`flow.revisions.${value}`, humanize(value));
 }
 
@@ -1240,7 +1244,9 @@ function eventLabel(event: HumanGateEventResponse): string {
     <UiStateBlock
       v-else-if="!initialLoading && (store.currentVersion === null || proposalOutdated)"
       kind="empty"
-      :text="proposalOutdated ? t('flow.outdated') : t('flow.prepareText')"
+      :text="
+        proposalOutdated ? t('flow.outdated') : guidance.expert ? undefined : t('flow.prepareText')
+      "
       data-testid="team-proposal-needed"
     >
       <UiButton

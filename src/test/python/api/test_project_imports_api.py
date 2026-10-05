@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from functools import cache
 from uuid import UUID
@@ -133,6 +134,40 @@ def expected_stages() -> dict[str, dict[str, object]]:
     return {stage: imported().record.stage_versions[stage] for stage in STAGES}
 
 
+def test_import_metadata_is_returned_by_creation_and_origin_without_extra_stage_entries():
+    service = FakeProjectImportService()
+    omissions = (
+        {
+            "kind": "SYNTHETIC_EVALUATION",
+            "evaluation_run_id": str(OTHER_PROJECT),
+            "reason": "FEEDBACK_CONTEXT_NOT_RESTORED",
+            "references": ["design_reference=missing"],
+        },
+    )
+    limits = ("FEEDBACK_CONTEXT_NOT_RESTORED",)
+    service.result = replace(
+        service.result,
+        record=replace(service.result.record, import_limits=limits, omitted_sections=omissions),
+        import_limits=limits,
+        omitted_sections=omissions,
+    )
+    with client(service) as connection:
+        created = connection.post(IMPORTS, files=upload()).json()
+        origin = connection.get(ORIGIN).json()
+    for payload in (created, origin):
+        assert payload["omitted_sections"] == list(omissions)
+        assert payload["import_limits"] == list(limits)
+        assert set(payload["stages"]) == set(STAGES)
+
+
+def test_legacy_import_origin_omits_empty_metadata():
+    record = replace(imported().record, import_limits=(), omitted_sections=())
+    payload = module.ProjectImportOriginPayload.from_record(record).model_dump(mode="json")
+    assert set(payload) == {"origin", "stages", "imported_at", "archive_hash"}
+    result = module.ProjectImportPayload.from_result(imported()).model_dump(mode="json")
+    assert "omitted_sections" not in result
+
+
 def test_import_answers_created_with_the_new_project_its_origin_and_the_steps_to_approve() -> None:
     service = FakeProjectImportService()
     result = service.result
@@ -176,6 +211,28 @@ def test_import_without_a_display_name_lets_the_service_use_the_folder_name() ->
 
     assert response.status_code == 201
     assert service.calls == [("import", OWNER, ARCHIVE, None)]
+
+
+@pytest.mark.parametrize(
+    ("verified", "limits"),
+    [
+        (False, ()),
+        (True, ("LEARNED_PROJECTION_NOT_RESTORED",)),
+        (False, ("LEGACY_FEEDBACK_CONTEXT_MISSING",)),
+    ],
+)
+def test_import_reports_the_actual_why_verification_and_limits_without_approving_stages(
+    verified: bool, limits: tuple[str, ...]
+) -> None:
+    service = FakeProjectImportService()
+    service.result = replace(service.result, why_verified=verified, import_limits=limits)
+
+    response = client(service).post(IMPORTS, files=upload())
+
+    assert response.status_code == 201
+    assert response.json()["why_verified"] is verified
+    assert response.json()["import_limits"] == list(limits)
+    assert response.json()["approval_required"] == list(STAGES)
 
 
 @pytest.mark.parametrize(
@@ -286,6 +343,7 @@ def test_origin_of_an_imported_project_names_its_folder_and_versions() -> None:
         "stages": expected_stages(),
         "imported_at": "2026-09-28T09:00:00Z",
         "archive_hash": record.archive_hash,
+        "import_limits": list(record.import_limits),
     }
     assert service.calls == [("origin", OWNER, NEW_PROJECT)]
 

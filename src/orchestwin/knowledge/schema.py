@@ -58,6 +58,18 @@ from orchestwin.artifacts.prototypes import (
     PrototypeViewport,
 )
 from orchestwin.artifacts.references import ArtifactKind
+from orchestwin.artifacts.visual_directions import (
+    MAX_DIRECTION_CONCEPT_LENGTH,
+    MAX_DIRECTION_NAME_LENGTH,
+    MAX_DIRECTION_RULE_LENGTH,
+    MAX_DIRECTION_RULES,
+    MIN_DIRECTION_RULES,
+    DirectionColour,
+    DirectionDensity,
+    DirectionLayout,
+    DirectionShape,
+    DirectionType,
+)
 from orchestwin.evaluation.artifacts import EvaluationArtifactModality
 from orchestwin.evaluation.findings import (
     SyntheticFindingCriterion,
@@ -145,6 +157,7 @@ from orchestwin.knowledge.state import (
     TWIN_LEARNING_KIND,
     VERDICTS,
 )
+from orchestwin.knowledge.validation_schema import ValidationRecords
 from orchestwin.models.team_proposals import (
     TEAM_PROPOSAL_SCHEMA_VERSION,
     TeamProposalJustificationKind,
@@ -258,6 +271,10 @@ _DESIGN_ADDITIONS: Final = {
     "DesignPackageSnapshot": ("generated_mockup", "owner_assertions"),
 }
 _DESIGN_ADDITION_KEYWORDS: Final = {"DesignCritique": ("dependentRequired",)}
+_DIRECTION_ADDITIONS: Final = {"VisualLanguage": ("direction",)}
+_MAX_DIRECTION_TYPICALITY: Final = 100
+_MIN_DIRECTION_CANDIDATES: Final = 2
+_MAX_DIRECTION_CANDIDATES: Final = 20
 _DEFINITION_PREFIX: Final = "#/$defs/"
 
 
@@ -319,6 +336,9 @@ _OwnerAssertion = Annotated[str, Field(min_length=1, max_length=MAX_OWNER_ASSERT
 _OwnerAssertions = Annotated[
     list[_OwnerAssertion], Field(min_length=1, max_length=MAX_OWNER_ASSERTIONS)
 ]
+_DirectionName = Annotated[str, Field(min_length=1, max_length=MAX_DIRECTION_NAME_LENGTH)]
+_DirectionConcept = Annotated[str, Field(min_length=1, max_length=MAX_DIRECTION_CONCEPT_LENGTH)]
+_DirectionRule = Annotated[str, Field(min_length=1, max_length=MAX_DIRECTION_RULE_LENGTH)]
 _MarkupRequirementCode = Annotated[str, Field(pattern=_MARKUP_REQUIREMENT_CODE_PATTERN)]
 _RequirementCode = Annotated[str, Field(pattern=_code("REQ"))]
 _ScreenCode = Annotated[str, Field(pattern=_code("SCR"))]
@@ -1050,6 +1070,65 @@ class TwinFit(_Record):
     statement: str = Field(description="Why the visual language suits that user twin.")
 
 
+class DirectionAxes(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    layout: Annotated[DirectionLayout, _BY_VALUE] = Field(
+        description="How every screen is composed, such as panels, bands or an editorial page."
+    )
+    shape: Annotated[DirectionShape, _BY_VALUE] = Field(
+        description="Language of the shapes of panels and controls: corners, borders and shadows."
+    )
+    type: Annotated[DirectionType, _BY_VALUE] = Field(
+        description="Type scale of the screens and where the hierarchy of the text comes from."
+    )
+    colour: Annotated[DirectionColour, _BY_VALUE] = Field(
+        description="How the colours of the palette are used on the screens."
+    )
+    density: Annotated[DirectionDensity, _BY_VALUE] = Field(
+        description="How much space surrounds the content and how large the controls are."
+    )
+
+
+class VisualDirection(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    name: _DirectionName = Field(description="Name of the art direction, in two or three words.")
+    concept: _DirectionConcept = Field(
+        description="Idea of the direction and why it suits the people and the domain of the project."
+    )
+    rules: list[_DirectionRule] = Field(
+        min_length=MIN_DIRECTION_RULES,
+        max_length=MAX_DIRECTION_RULES,
+        description=(
+            "Rules for the screens of the alternative, concrete enough that a person can check them "
+            "by looking at the result."
+        ),
+    )
+    axes: DirectionAxes = Field(
+        description="Value of the direction on each of the five axes of the vocabulary of directions."
+    )
+    typicality: int = Field(
+        ge=0,
+        le=_MAX_DIRECTION_TYPICALITY,
+        description=(
+            "Estimate of the model, from 0 to 100, of how likely a designer asked the same question "
+            "would propose this direction."
+        ),
+    )
+    candidates: int = Field(
+        ge=_MIN_DIRECTION_CANDIDATES,
+        le=_MAX_DIRECTION_CANDIDATES,
+        description=(
+            "Number of candidate directions the model proposed, among which the Studio chose the "
+            "two directions furthest from each other."
+        ),
+    )
+    vocabulary_version: _Version = Field(
+        description="Version of the vocabulary of directions that defines the axes and their values."
+    )
+
+
 class VisualLanguage(_Record):
     catalog_version: _Version = Field(description="Version of the visual catalog in use.")
     catalog_content_hash: Sha256 = Field(description="SHA-256 digest of the visual catalog.")
@@ -1075,6 +1154,13 @@ class VisualLanguage(_Record):
     )
     twin_fit: list[TwinFit] = Field(
         description="How the visual language suits each user twin, at most once per twin."
+    )
+    direction: Annotated[VisualDirection | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Art direction of the alternative, proposed by the model and chosen by the Studio so "
+            "that the two alternatives differ; left out when the alternative has none."
+        ),
     )
 
 
@@ -2546,6 +2632,11 @@ class StableIdentifier(_Record):
     id: Uuid = Field(description="Stable identifier of the item.")
 
 
+class WhyEntry(_Record):
+    document: Literal["traceability/why.json"]
+    schema_version: Literal[1]
+
+
 class KnowledgeManifest(_Record):
     model_config = ConfigDict(json_schema_extra=_MANIFEST_VERSION_RULES)
 
@@ -2595,6 +2686,8 @@ class KnowledgeManifest(_Record):
     files: dict[str, Sha256] = Field(
         description="SHA-256 digest of every file, except orchestwin.json and the index."
     )
+    why: Annotated[WhyEntry | None, _OPTIONAL] = None
+    workflow_inputs: Annotated[dict[str, object] | None, _OPTIONAL] = None
 
     @model_validator(mode="after")
     def _fits_its_version(self) -> KnowledgeManifest:
@@ -2702,6 +2795,93 @@ class ResearchEvidenceDocument(_Record):
         return self
 
 
+class WhyReference(_Record):
+    artifact_id: str
+    version_number: int | None
+    content_hash: str | None
+
+
+class WhyRationale(_Record):
+    text: str
+    origin: Literal["MODEL", "OWNER", "SYSTEM", "UNKNOWN"]
+    version_number: int | None
+    content_hash: str | None
+
+
+class WhyGap(_Record):
+    code: Literal[
+        "MISSING_NEED",
+        "MISSING_SCENARIO",
+        "MISSING_TWIN",
+        "MISSING_CLAIM",
+        "MISSING_SOURCE",
+        "MISSING_SOURCE_VERSION",
+        "MISSING_RATIONALE",
+        "SOURCE_RETIRED",
+        "SOURCE_TEXT_UNAVAILABLE",
+        "OMITTED_SECTION",
+        "CONTEXT_OUTDATED",
+        "VALIDATION_REFERENCE_UNAVAILABLE",
+        "DECLARED_MISSING",
+        "MISSING_REQUIREMENT_ANCHOR",
+        "PROVIDED_PROTOTYPE_CODE_UNAVAILABLE",
+        "PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE",
+        "PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE",
+        "PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE",
+        "PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE",
+    ]
+    node_key: str
+    related_code: str | None
+    stage: str | None
+
+
+class WhyContext(_Record):
+    perspectives: list[dict[str, object]]
+
+
+class WhyNode(_Record):
+    key: str
+    code: str
+    kind: str
+    title: str
+    display_status: Literal["EVIDENCED", "INFERRED", "HYPOTHESIZED", "CONTESTED", "UNKNOWN"]
+    reference: WhyReference
+    current: bool
+    rationale: WhyRationale | None
+    citations: list[dict[str, object]]
+    validation_required: bool
+    gaps: list[WhyGap]
+    declared_context: WhyContext
+
+
+class WhyLink(_Record):
+    source: str
+    target: str
+    kind: str
+
+
+class WhyDocument(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    kind: Literal["orchestwin.why"]
+    schema_version: Literal[1]
+    project_id: Uuid
+    nodes: list[WhyNode]
+    links: list[WhyLink]
+    omitted_sections: list[str]
+    workflow_records: Annotated[dict[str, object] | None, _OPTIONAL] = None
+
+    @model_validator(mode="after")
+    def _references(self):
+        keys = {node.key for node in self.nodes}
+        if len(keys) != len(self.nodes):
+            raise ValueError("why node keys must be unique")
+        if any(link.source not in keys or link.target not in keys for link in self.links):
+            raise ValueError("why links must reference existing nodes")
+        if any(gap.node_key != node.key for node in self.nodes for gap in node.gaps):
+            raise ValueError("why gaps must reference their node")
+        return self
+
+
 _MODELS: Final = {
     "manifest": KnowledgeManifest,
     "brief": BriefDocument,
@@ -2718,9 +2898,16 @@ _MODELS: Final = {
     "tests": TestReviewsDocument,
     "learning": TwinLearningDocument,
     "evidence": ResearchEvidenceDocument,
+    "why": WhyDocument,
+    "validation": ValidationRecords,
 }
 _WRITTEN_BY: Final = "OrchesTwin Studio writes it when it exports the knowledge folder."
 _SCHEMA_TEXTS: Final = {
+    "validation": (
+        "Operational hypotheses and validation outcomes",
+        "Owner-selected operational hypotheses and exact source citations; candidates remain derived.",
+    ),
+    "why": ("Why traceability", "Derived provenance links, gaps and declared context."),
     "evidence": (
         "Research evidence excerpts",
         "Exact approved quotations, source provenance and limits. Original documents are excluded; owner approval does not establish empirical research or human validation.",
@@ -2827,6 +3014,8 @@ _DOCUMENT_PATHS: Final = {
     FEEDBACK_TESTS: "tests",
     FEEDBACK_LEARNING: "learning",
     EVIDENCE_DOCUMENT: "evidence",
+    "traceability/why.json": "why",
+    "validation/human-validation.json": "validation",
 }
 
 
@@ -2840,6 +3029,15 @@ def has_design_additions(package: Mapping[str, object]) -> bool:
             and (item.get("verdict") is not None or item.get("quote") is not None)
             for item in critiques
         )
+    )
+
+
+def has_direction_additions(package: Mapping[str, object]) -> bool:
+    return any(
+        isinstance(item, Mapping)
+        and isinstance(item.get("visual_language"), Mapping)
+        and item["visual_language"].get("direction") is not None
+        for item in package.get("alternatives") or ()
     )
 
 
@@ -2858,13 +3056,17 @@ def _referenced_definitions(node: object) -> set[str]:
     return found
 
 
-def _without_design_additions(schema: dict[str, object]) -> dict[str, object]:
+def _without_additions(
+    schema: dict[str, object],
+    additions: Mapping[str, tuple[str, ...]],
+    addition_keywords: Mapping[str, tuple[str, ...]],
+) -> dict[str, object]:
     stripped = deepcopy(schema)
     definitions = stripped["$defs"]
-    for model, fields in _DESIGN_ADDITIONS.items():
+    for model, fields in additions.items():
         for field in fields:
             del definitions[model]["properties"][field]
-    for model, keywords in _DESIGN_ADDITION_KEYWORDS.items():
+    for model, keywords in addition_keywords.items():
         for keyword in keywords:
             del definitions[model][keyword]
     kept = _referenced_definitions(
@@ -2879,11 +3081,38 @@ def _without_design_additions(schema: dict[str, object]) -> dict[str, object]:
     return stripped
 
 
-def _published_schema(name: str, *, design_additions: bool) -> dict[str, object]:
+def _published_schema(
+    name: str,
+    *,
+    design_additions: bool,
+    direction_additions: bool = False,
+    validation_additions: bool = False,
+    workflow_additions: bool = False,
+) -> dict[str, object]:
     title, description = _SCHEMA_TEXTS[name]
     schema = _MODELS[name].model_json_schema(schema_generator=_KnowledgeJsonSchema)
+    if not workflow_additions:
+        if name == "manifest":
+            schema["properties"].pop("workflow_inputs", None)
+        if name == "why":
+            schema["properties"].pop("workflow_records", None)
+            schema["$defs"]["WhyGap"]["properties"]["code"]["enum"] = [
+                item
+                for item in schema["$defs"]["WhyGap"]["properties"]["code"]["enum"]
+                if item not in {"DECLARED_MISSING", "MISSING_REQUIREMENT_ANCHOR"}
+                and not item.startswith("PROVIDED_PROTOTYPE_")
+            ]
+        revision = schema.get("$defs", {}).get("TeamProposalRevisionKind")
+        if isinstance(revision, dict) and "OWNER_PROVIDED" in revision.get("enum", []):
+            revision["enum"].remove("OWNER_PROVIDED")
     if name == "design" and not design_additions:
-        schema = _without_design_additions(schema)
+        schema = _without_additions(schema, _DESIGN_ADDITIONS, _DESIGN_ADDITION_KEYWORDS)
+    if name == "design" and not direction_additions:
+        schema = _without_additions(schema, _DIRECTION_ADDITIONS, {})
+    if name == "why" and not validation_additions:
+        schema["$defs"]["WhyGap"]["properties"]["code"]["enum"].remove(
+            "VALIDATION_REFERENCE_UNAVAILABLE"
+        )
     return {
         **schema,
         "$schema": SCHEMA_DIALECT,
@@ -2894,26 +3123,60 @@ def _published_schema(name: str, *, design_additions: bool) -> dict[str, object]
 
 
 def knowledge_schemas(
-    *, design_additions: bool = False, research_evidence: bool = False, only_evidence: bool = False
+    *,
+    design_additions: bool = False,
+    direction_additions: bool = False,
+    research_evidence: bool = False,
+    only_evidence: bool = False,
+    only_why: bool = False,
+    only_validation: bool = False,
+    validation_additions: bool = False,
+    workflow_additions: bool = False,
 ) -> dict[str, dict[str, object]]:
     names = (
-        ("evidence",)
+        ("validation",)
+        if only_validation
+        else ("why",)
+        if only_why
+        else ("evidence",)
         if only_evidence
         else (*SCHEMA_NAMES, *(("evidence",) if research_evidence else ()))
     )
-    return {name: _published_schema(name, design_additions=design_additions) for name in names}
+    return {
+        name: _published_schema(
+            name,
+            design_additions=design_additions,
+            direction_additions=direction_additions,
+            validation_additions=validation_additions,
+            workflow_additions=workflow_additions,
+        )
+        for name in names
+    }
 
 
 def schema_files(
-    *, design_additions: bool = False, research_evidence: bool = False, only_evidence: bool = False
+    *,
+    design_additions: bool = False,
+    direction_additions: bool = False,
+    research_evidence: bool = False,
+    only_evidence: bool = False,
+    only_why: bool = False,
+    only_validation: bool = False,
+    validation_additions: bool = False,
+    workflow_additions: bool = False,
 ) -> dict[str, str]:
     return {
         schema_document(name): json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False)
         + "\n"
         for name, schema in knowledge_schemas(
             design_additions=design_additions,
+            direction_additions=direction_additions,
             research_evidence=research_evidence,
             only_evidence=only_evidence,
+            only_why=only_why,
+            only_validation=only_validation,
+            validation_additions=validation_additions,
+            workflow_additions=workflow_additions,
         ).items()
     }
 
@@ -3025,6 +3288,7 @@ __all__ = [
     "SCHEMA_NAMES",
     "KnowledgeSchemaError",
     "has_design_additions",
+    "has_direction_additions",
     "knowledge_schemas",
     "schema_files",
     "schema_name_for_path",

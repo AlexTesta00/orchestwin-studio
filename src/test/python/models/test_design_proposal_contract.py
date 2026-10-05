@@ -27,6 +27,7 @@ from orchestwin.artifacts.references import (
     ArtifactKind,
     VersionedArtifactReference,
 )
+from orchestwin.artifacts.visual_directions import HABITUAL_AXES, DirectionAxes
 from orchestwin.models.design import (
     DesignAgentTeamInput,
     DesignProposalIssueCode,
@@ -85,6 +86,19 @@ SCENARIO_ID = UUID("00000000-0000-4000-8000-000000000040")
 DOD_ID = UUID("00000000-0000-4000-8000-000000000050")
 TWIN_ID = UUID("00000000-0000-4000-8000-000000000060")
 CREATED_AT = datetime(2026, 8, 19, 10, 0, tzinfo=UTC)
+REQUEST_HASH_BEFORE_DIRECTIONS = "bd22444c4102aefa2c03e7b5b826c53932dda6a266996a709faa2f3d3bee9725"
+REQUEST_KEYS = [
+    "schema_version",
+    "project_id",
+    "project_mode",
+    "catalog",
+    "requirements",
+    "team",
+    "user_modeling",
+]
+EDITORIAL_AXES = DirectionAxes(
+    layout="EDITORIAL", shape="SQUARE_RULES", type="DISPLAY", colour="INK", density="SPACIOUS"
+)
 
 
 def requirements_context(
@@ -483,3 +497,31 @@ def test_identical_requests_and_results_are_reproducibly_hashed() -> None:
     assert first_request.content_hash == second_request.content_hash
     assert first_result.to_snapshot() == second_result.to_snapshot()
     assert first_result.content_hash == second_result.content_hash
+
+
+def test_a_request_without_avoided_directions_keeps_its_snapshot_and_its_hash() -> None:
+    request = proposal_request()
+
+    assert request.avoided_directions == ()
+    assert list(request.to_snapshot()) == REQUEST_KEYS
+    assert request.content_hash == REQUEST_HASH_BEFORE_DIRECTIONS
+
+
+def test_avoided_directions_enter_the_snapshot_and_the_hash_only_when_present() -> None:
+    request = proposal_request()
+    avoiding = replace(request, avoided_directions=(HABITUAL_AXES, EDITORIAL_AXES))
+    snapshot = avoiding.to_snapshot()
+
+    assert list(snapshot) == [*REQUEST_KEYS, "avoided_directions"]
+    assert snapshot["avoided_directions"] == [
+        HABITUAL_AXES.to_snapshot(),
+        EDITORIAL_AXES.to_snapshot(),
+    ]
+    assert {key: value for key, value in snapshot.items() if key != "avoided_directions"} == (
+        request.to_snapshot()
+    )
+    assert avoiding.content_hash != request.content_hash
+    assert replace(avoiding, avoided_directions=()).content_hash == REQUEST_HASH_BEFORE_DIRECTIONS
+    for invalid in ([HABITUAL_AXES], (HABITUAL_AXES.to_snapshot(),), (None,)):
+        with pytest.raises(ValueError, match="avoided directions must be direction axes"):
+            replace(request, avoided_directions=invalid)

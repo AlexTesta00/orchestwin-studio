@@ -1,13 +1,16 @@
 """Tests for immutable local user accounts."""
 
+from dataclasses import fields, replace
 from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
 
 from orchestwin.identity.domain import (
+    GuidanceMode,
     InvalidEmailAddress,
     NormalizedEmail,
+    UserAccount,
     create_user_account,
 )
 
@@ -57,3 +60,29 @@ def test_user_account_is_created_with_stable_values() -> None:
     assert user.created_at == timestamp
     assert user.updated_at == timestamp
     assert "test-hash" not in repr(user)
+
+
+def test_the_guidance_modes_are_exactly_guided_and_expert() -> None:
+    assert [mode.value for mode in GuidanceMode] == ["GUIDED", "EXPERT"]
+    assert GuidanceMode("GUIDED") is GuidanceMode.GUIDED
+    assert GuidanceMode("EXPERT") is GuidanceMode.EXPERT
+
+    for value in ("guided", "Expert", "", " GUIDED", "NOVICE"):
+        with pytest.raises(ValueError):
+            GuidanceMode(value)
+
+
+def test_a_new_account_has_not_chosen_a_guidance_mode() -> None:
+    user = create_user_account(
+        user_id=UUID("00000000-0000-4000-8000-000000000001"),
+        email=NormalizedEmail.parse("owner@example.com"),
+        password_hash="$argon2id$test-hash",
+        created_at=datetime(2026, 10, 5, 9, 0, tzinfo=UTC),
+    )
+    chosen = replace(user, guidance_mode=GuidanceMode.EXPERT)
+
+    assert [field.name for field in fields(UserAccount)][-1] == "guidance_mode"
+    assert user.guidance_mode is None
+    assert chosen.guidance_mode is GuidanceMode.EXPERT
+    assert replace(chosen, guidance_mode=None) == user
+    assert chosen != user

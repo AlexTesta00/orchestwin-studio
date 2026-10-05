@@ -1,8 +1,11 @@
+export type GuidanceMode = "GUIDED" | "EXPERT";
+
 export interface UserResponse {
   readonly id: string;
   readonly email: string;
   readonly is_active: boolean;
   readonly created_at: string;
+  readonly guidance_mode: GuidanceMode | null;
 }
 
 export interface AuthenticationResponse {
@@ -23,6 +26,7 @@ export interface AuthenticationApi {
   refresh(): Promise<AuthenticationResponse>;
   logout(): Promise<void>;
   me(accessToken: string): Promise<UserResponse>;
+  chooseGuidanceMode(accessToken: string, mode: GuidanceMode): Promise<UserResponse>;
 }
 
 export type ProjectMode = "GREENFIELD_GENERATION" | "BROWNFIELD_ASSESSMENT";

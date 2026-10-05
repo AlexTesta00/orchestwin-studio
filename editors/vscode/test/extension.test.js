@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { after, afterEach, before, describe, it } = require("node:test");
 const fixtures = require("./fixtures");
+const validationData = require("./validation-fixtures");
 const extensionModule = require("../extension");
 const { posixPath } = require("../src/agents");
 const { text } = require("../src/messages");
@@ -215,6 +216,7 @@ function start(options = {}) {
     setTimeout: timers.setTimeout.bind(timers),
     clearTimeout: timers.clearTimeout.bind(timers),
     nonce: () => "fixednonce",
+    execFile: options.execFile,
   });
   const context = { subscriptions: [] };
   extension.activate(context);
@@ -551,5 +553,245 @@ describe("the extension", () => {
     assert.equal(typeof extensionModule.activate, "function");
     assert.equal(typeof extensionModule.createExtension, "function");
     assert.doesNotThrow(() => extensionModule.deactivate());
+  });
+
+  function whyAnswer(title = "Exact requirement") {
+    return {
+      kind: "orchestwin.why-answer",
+      schema_version: 1,
+      project_id: fixtures.PROJECT_ID,
+      target: {
+        key: "REQUIREMENT:req:3:hash:context",
+        code: "REQ-001",
+        kind: "REQUIREMENT",
+        title,
+        display_status: "UNKNOWN",
+        current: true,
+        reference: {
+          artifact_id: "req",
+          version_number: 3,
+          content_hash: "hash",
+        },
+        rationale: null,
+        citations: [],
+        gaps: [],
+        declared_context: { perspectives: [] },
+      },
+      summary: {
+        upstream_count: 0,
+        downstream_count: 0,
+        complete_to_twin: false,
+        complete_to_evidence: false,
+        all_paths_complete: false,
+      },
+      upstream: [],
+      downstream: [],
+      links: [],
+      gaps: [],
+      human_validation: [],
+      declared_context: { perspectives: [] },
+      limits: [],
+    };
+  }
+
+  it("opens why through the command and renders a verified offline answer without a terminal", async () => {
+    const calls = [];
+    session = start({
+      folders: [root],
+      execFile: (program, args, options, finish) => {
+        calls.push({ program, args, options });
+        finish(null, JSON.stringify(whyAnswer()), "");
+      },
+    });
+    const focused = [];
+    session.vscode.commands.executeCommand = async (command) => {
+      focused.push(command);
+    };
+    await session.commands.get("orchestwin.why")("REQ-001");
+    assert.deepEqual(focused, ["orchestwin.panel.focus"]);
+    assert.deepEqual(calls[0].args, ["why", "REQ-001", "--offline", "--json"]);
+    assert.equal(calls[0].options.shell, false);
+    assert.equal(calls[0].options.cwd, root);
+    assert.equal(session.created.length, 0);
+    assert.equal(session.opened.length, 0);
+    assert.ok(session.view.webview.html.includes("Exact requirement"));
+    assert.ok(session.view.webview.html.includes(text("en", "why.offline")));
+    await session.extension.receive({ command: "why", code: "REQ-001;calc" });
+    assert.equal(calls.length, 1);
+  });
+
+  it("asks for a selector in a legacy folder and presents ambiguity candidates explicitly", async () => {
+    const key = "ELEMENT:elm:1:hash:alternative-one";
+    const calls = [];
+    session = start({
+      folders: [root],
+      language: "it",
+      execFile: (_program, args, _options, finish) => {
+        calls.push(args);
+        if (args[1] === "ELM-001") {
+          finish(
+            { code: 2 },
+            "",
+            JSON.stringify({
+              error: { code: "WHY_CODE_AMBIGUOUS", candidates: [key] },
+            }),
+          );
+        } else {
+          finish(
+            null,
+            JSON.stringify(whyAnswer("Element of selected alternative")),
+            "",
+          );
+        }
+      },
+    });
+    session.vscode.window.showInputBox = async (options) => {
+      assert.equal(options.prompt, text("it", "why.code"));
+      assert.equal(options.validateInput("ELM-001"), undefined);
+      assert.equal(options.validateInput("$(bad)"), text("it", "why.invalid"));
+      return "ELM-001";
+    };
+    await session.commands.get("orchestwin.why")();
+    assert.ok(plain(session.view.webview.html).includes(text("it", "why.ambiguous")));
+    assert.ok(session.view.webview.html.includes(`data-code="${key}"`));
+    await session.extension.receive({ command: "why", code: key });
+    assert.equal(calls[1][1], key);
+    assert.ok(
+      session.view.webview.html.includes("Element of selected alternative"),
+    );
+  });
+
+  it("discards an earlier why response after refresh and after disposal", async () => {
+    const callbacks = [];
+    session = start({
+      folders: [root],
+      execFile: (_program, _args, _options, finish) => {
+        callbacks.push(finish);
+      },
+    });
+    const pending = session.extension.receive({
+      command: "why",
+      code: "REQ-001",
+    });
+    session.commands.get("orchestwin.refresh")();
+    callbacks[0](null, JSON.stringify(whyAnswer("Stale response")), "");
+    await pending;
+    assert.ok(!session.view.webview.html.includes("Stale response"));
+    const disposed = session.extension.receive({
+      command: "why",
+      code: "REQ-001",
+    });
+    session.extension.dispose();
+    callbacks[1](null, JSON.stringify(whyAnswer("Disposed response")), "");
+    await disposed;
+    assert.ok(!session.view.webview.html.includes("Disposed response"));
+  });
+
+  it("reads validation only after a gesture, offline by default and explicitly from Studio", async () => {
+    const calls = [];
+    session = start({ folders: [root], execFile: (program, args, options, finish) => {
+      calls.push({ program, args, options });
+      finish(null, JSON.stringify(validationData.overview()), "");
+    } });
+    assert.equal(calls.length, 0);
+    await session.commands.get("orchestwin.validation")();
+    assert.deepEqual(calls[0].args, ["validation", "--offline", "--json"]);
+    assert.equal(calls[0].options.shell, false);
+    assert.ok(session.view.webview.html.includes(text("en", "validation.offline")));
+    await session.extension.receive({ command: "validation", mode: "studio" });
+    assert.deepEqual(calls[1].args, ["validation", "--json"]);
+    assert.ok(session.view.webview.html.includes(text("en", "validation.studio")));
+    await session.extension.receive({ command: "validation", mode: "write" });
+    await session.extension.receive({ command: "saveHypothesis" });
+    await session.extension.receive({ command: "recordOutcome" });
+    assert.equal(calls.length, 2);
+    assert.equal(session.created.length, 0);
+    assert.equal(session.opened.length, 0);
+  });
+
+  it("reads the requested walkthrough filters without changing the design or opening a terminal", async () => {
+    const calls = [];
+    session = start({ folders: [root], language: "it", execFile: (_program, args, _options, finish) => {
+      calls.push(args);
+      finish(null, JSON.stringify(validationData.walkthrough()), "");
+    } });
+    await session.extension.receive({ command: "validationWalkthrough", code: "SCN-001", alternative: "alternative-id", documentHash: validationData.HASH, mode: "studio" });
+    assert.deepEqual(calls[0], ["validation", "walkthrough", "SCN-001", "--alternative", "alternative-id", "--document-hash", validationData.HASH, "--json"]);
+    assert.ok(session.view.webview.html.includes("Original expected outcome"));
+    assert.ok(session.view.webview.html.includes(text("it", "validation.linkToComplete")));
+    await session.extension.receive({ command: "validationWalkthrough", code: "SCN-001;calc" });
+    assert.equal(calls.length, 1);
+    assert.ok(plain(session.view.webview.html).includes(text("it", "validation.invalid")));
+    assert.equal(session.created.length, 0);
+  });
+
+  it("selects an exact scenario for the palette command and cancels cleanly", async () => {
+    const calls = [];
+    session = start({ folders: [root], execFile: (_program, args, _options, finish) => {
+      calls.push(args);
+      finish(null, JSON.stringify(validationData.walkthrough()), "");
+    } });
+    session.vscode.window.showInputBox = async (options) => {
+      assert.equal(options.prompt, text("en", "validation.scenarioKey"));
+      assert.equal(options.validateInput("SCN-001"), undefined);
+      assert.equal(options.validateInput("--help"), text("en", "validation.invalid"));
+      return "SCN-001";
+    };
+    await session.commands.get("orchestwin.scenarioWalkthrough")();
+    assert.deepEqual(calls[0], ["validation", "walkthrough", "SCN-001", "--offline", "--json"]);
+    session.vscode.window.showInputBox = async () => undefined;
+    await session.commands.get("orchestwin.scenarioWalkthrough")();
+    assert.equal(calls.length, 1);
+  });
+
+  it("discards validation reads superseded by a newer request or by a folder refresh", async () => {
+    const callbacks = [];
+    session = start({ folders: [root], execFile: (_program, _args, _options, finish) => callbacks.push(finish) });
+    const old = session.extension.receive({ command: "validation" });
+    const newer = session.extension.receive({ command: "validation", mode: "studio" });
+    const latestAnswer = validationData.overview({ hypotheses: [validationData.hypothesis({ question: "Latest response" })] });
+    callbacks[1](null, JSON.stringify(latestAnswer), "");
+    await newer;
+    callbacks[0](null, JSON.stringify(validationData.overview({ hypotheses: [validationData.hypothesis({ question: "Stale response" })] })), "");
+    await old;
+    assert.ok(session.view.webview.html.includes("Latest response"));
+    assert.ok(!session.view.webview.html.includes("Stale response"));
+    const refreshed = session.extension.receive({ command: "validation" });
+    session.watchers[0].fire("change");
+    session.timers.run();
+    callbacks[2](null, JSON.stringify(latestAnswer), "");
+    await refreshed;
+    assert.ok(!session.view.webview.html.includes("Latest response"));
+  });
+
+  it("discards a walkthrough from an earlier project or after disposal", async () => {
+    const callbacks = [];
+    session = start({ folders: [root], execFile: (_program, _args, _options, finish) => callbacks.push(finish) });
+    const pending = session.extension.receive({ command: "validationWalkthrough", code: "SCN-001" });
+    const other = freshProject();
+    session.vscode.workspace.workspaceFolders = [{ uri: session.vscode.Uri.file(other), name: "other", index: 0 }];
+    session.folderEvents.fire();
+    session.timers.run();
+    callbacks[0](null, JSON.stringify(validationData.walkthrough({ expected_outcome: "Earlier project response" })), "");
+    await pending;
+    assert.ok(!session.view.webview.html.includes("Earlier project response"));
+    const disposed = session.extension.receive({ command: "validationWalkthrough", code: "SCN-001" });
+    session.extension.dispose();
+    callbacks[1](null, JSON.stringify(validationData.walkthrough({ expected_outcome: "Disposed walkthrough" })), "");
+    await disposed;
+    assert.ok(!session.view.webview.html.includes("Disposed walkthrough"));
+  });
+
+  it("clears cached validation before a read in another project, even before a watcher refresh", async () => {
+    session = start({ folders: [root], execFile: (_program, args, _options, finish) => {
+      finish(null, JSON.stringify(args[0] === "why" ? whyAnswer("Other project requirement") : validationData.overview({ hypotheses: [validationData.hypothesis({ question: "Earlier cached validation" })] })), "");
+    } });
+    await session.extension.receive({ command: "validation" });
+    assert.ok(session.view.webview.html.includes("Earlier cached validation"));
+    const other = freshProject();
+    session.vscode.workspace.workspaceFolders = [{ uri: session.vscode.Uri.file(other), name: "other", index: 0 }];
+    await session.extension.receive({ command: "why", code: "REQ-001" });
+    assert.ok(session.view.webview.html.includes("Other project requirement"));
+    assert.ok(!session.view.webview.html.includes("Earlier cached validation"));
   });
 });

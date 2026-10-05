@@ -17,8 +17,10 @@ import {
   type GenerationRequestJob,
 } from "../api/generationJobs";
 import { UserModelingApiError, userModelingApi } from "../api/userModeling";
+import type { GuidanceMode, UserResponse } from "../api/contracts";
 
 import { useTeamStore } from "../stores/team";
+import { useAuthStore } from "../stores/auth";
 import { useUserModelingStore } from "../stores/userModeling";
 
 import type {
@@ -509,9 +511,20 @@ function emulateVisibility(): () => void {
   };
 }
 
+function owner(guidanceMode: GuidanceMode): UserResponse {
+  return {
+    id: OWNER_ID,
+    email: "owner@example.com",
+    is_active: true,
+    created_at: "2026-10-05T08:00:00Z",
+    guidance_mode: guidanceMode,
+  };
+}
+
 describe("ProjectUserModelingFlow", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
     document.body.innerHTML = "";
   });
 
@@ -1221,6 +1234,91 @@ describe("ProjectUserModelingFlow", () => {
     ).toBe("false");
   });
 
+  it.each([
+    {
+      locale: "it",
+      status: 502,
+      body: "",
+      words: "User Modeling API request failed",
+      sentence: "Non è stato possibile completare la richiesta. Puoi riprovare.",
+    },
+    {
+      locale: "en",
+      status: 502,
+      body: "",
+      words: "User Modeling API request failed",
+      sentence: "The request could not be completed. You can try again.",
+    },
+    {
+      locale: "it",
+      status: 200,
+      body: "<html>",
+      words: "returned invalid JSON",
+      sentence: "Lo Studio ha dato una risposta che questa pagina non riesce a leggere.",
+    },
+    {
+      locale: "en",
+      status: 200,
+      body: "<html>",
+      words: "returned invalid JSON",
+      sentence: "The Studio gave an answer that this page cannot read.",
+    },
+  ] as const)(
+    "says in $locale why the twins were not brought to approval when the Studio answers $status",
+    async ({ locale, status, body, words, sentence }) => {
+      const store = useUserModelingStore();
+      store.activateProject(PROJECT_ID);
+      store.applySnapshot(snapshot);
+      store.readiness = {
+        ...readinessReview,
+        gate_exists: false,
+        gate_id: null,
+        gate_status: null,
+      };
+      vi.spyOn(generationJobsApi, "list").mockResolvedValue([]);
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(body, { status })),
+      );
+      const decideGate = vi.spyOn(userModelingApi, "decideGate");
+      const wrapper = mount(ProjectUserModelingFlow, {
+        global: { plugins: [createAppI18n(locale)] },
+        props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale, autoLoad: false },
+      });
+
+      await decisionPrimary(wrapper, "approve").trigger("click");
+      await flushPromises();
+
+      const alert = wrapper.get('[role="alert"]').text();
+      expect(alert).toBe(sentence);
+      expect(wrapper.text()).not.toContain(words);
+      expect(alert).not.toContain(String(status));
+      expect(alert).not.toMatch(/[A-Z]+_[A-Z_]+/);
+      expect(decideGate).not.toHaveBeenCalled();
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["it", "Si è verificato un errore inatteso nel passo User Twin."],
+    ["en", "An unexpected error occurred in the User Twin step."],
+  ] as const)(
+    "says in %s that something unexpected happened when the twins failed to load elsewhere",
+    async (locale, sentence) => {
+      const store = useUserModelingStore();
+      vi.spyOn(userModelingApi, "getReadiness").mockRejectedValue("offline");
+      await store.load(PROJECT_ID, ACCESS_TOKEN).catch(() => undefined);
+      const wrapper = mount(ProjectUserModelingFlow, {
+        global: { plugins: [createAppI18n(locale)] },
+        props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale, autoLoad: false },
+      });
+
+      expect(wrapper.get('[role="alert"]').text()).toBe(sentence);
+      expect(wrapper.text()).not.toContain("An unexpected User Modeling error occurred");
+      wrapper.unmount();
+    },
+  );
+
   it("rejects the profiles from the other decisions only with a reason", async () => {
     const store = useUserModelingStore();
     store.activateProject(PROJECT_ID);
@@ -1269,7 +1367,7 @@ describe("ProjectUserModelingFlow", () => {
     [
       "en",
       "The brief or the perspectives changed: generate and approve a new User Twin version before continuing.",
-      "The brief or the perspectives changed: use «Update and confirm» above to keep these twins and re-anchor them, or create them again.",
+      "The brief or the perspectives changed: use “Update and confirm” above to keep these twins and re-anchor them, or create them again.",
     ],
     [
       "it",
@@ -1588,6 +1686,78 @@ describe("ProjectUserModelingFlow", () => {
     wrapper.unmount();
   });
 
+  it("keeps profile proposal explicit in expert mode and after returning to guided", async () => {
+    const auth = useAuthStore();
+    auth.user = owner("EXPERT");
+    const team = useTeamStore();
+    team.projectId = PROJECT_ID;
+    team.readiness = { status: "TEAM_APPROVAL_REQUIRED" };
+    const store = useUserModelingStore();
+    vi.spyOn(store, "load").mockResolvedValue(undefined);
+    const propose = vi
+      .spyOn(store, "proposePersonas")
+      .mockResolvedValue({} as PersonaProposalCommandPayload);
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("en")] },
+      props: {
+        projectId: PROJECT_ID,
+        accessToken: ACCESS_TOKEN,
+        locale: "en",
+        autoLoad: true,
+        upstream: "team-1:PENDING_APPROVAL",
+      },
+    });
+    await flushPromises();
+    team.readiness = { status: "READY_FOR_MAIN_WORKFLOW" };
+    await wrapper.setProps({ upstream: "team-1:APPROVED" });
+    await flushPromises();
+    expect(propose).not.toHaveBeenCalled();
+    auth.user = owner("GUIDED");
+    await flushPromises();
+    expect(propose).not.toHaveBeenCalled();
+    await wrapper.get('[data-testid="propose-personas"]').trigger("click");
+    await flushPromises();
+    expect(propose).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("proposes no profile by itself while the access of an expert owner is renewed", async () => {
+    const auth = useAuthStore();
+    auth.user = owner("EXPERT");
+    const team = useTeamStore();
+    team.projectId = PROJECT_ID;
+    team.readiness = { status: "TEAM_APPROVAL_REQUIRED" };
+    const store = useUserModelingStore();
+    vi.spyOn(store, "load").mockResolvedValue(undefined);
+    const propose = vi
+      .spyOn(store, "proposePersonas")
+      .mockResolvedValue({} as PersonaProposalCommandPayload);
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("en")] },
+      props: {
+        projectId: PROJECT_ID,
+        accessToken: ACCESS_TOKEN,
+        locale: "en",
+        autoLoad: true,
+        upstream: "team-1:PENDING_APPROVAL",
+      },
+    });
+    await flushPromises();
+    team.readiness = { status: "READY_FOR_MAIN_WORKFLOW" };
+    await wrapper.setProps({ upstream: "team-1:APPROVED" });
+    await flushPromises();
+
+    auth.user = null;
+    await flushPromises();
+    expect(propose).not.toHaveBeenCalled();
+    auth.user = owner("EXPERT");
+    await flushPromises();
+
+    expect(propose).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="propose-personas"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it("does not propose by itself before the team approval or when profiles already exist", async () => {
     const team = useTeamStore();
     team.projectId = PROJECT_ID;
@@ -1804,6 +1974,7 @@ describe("ProjectUserModelingFlow archetypes", () => {
   };
   beforeEach(() => {
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
     document.body.innerHTML = "";
   });
   afterEach(() => vi.restoreAllMocks());
@@ -2035,6 +2206,7 @@ describe("ProjectUserModelingFlow and a generation still running", () => {
 
   beforeEach(() => {
     setActivePinia(createPinia());
+    useAuthStore().user = owner("GUIDED");
     document.body.innerHTML = "";
     clearFollowedGenerations();
     vi.useFakeTimers();

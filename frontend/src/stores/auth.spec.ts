@@ -10,6 +10,7 @@ import type {
   AuthenticationApi,
   AuthenticationInput,
   AuthenticationResponse,
+  GuidanceMode,
   UserResponse,
 } from "@/api/contracts";
 
@@ -20,6 +21,7 @@ const USER: UserResponse = {
   email: "owner@example.com",
   is_active: true,
   created_at: "2026-08-10T12:00:00Z",
+  guidance_mode: null,
 };
 
 function authenticationResponse(token: string): AuthenticationResponse {
@@ -36,6 +38,11 @@ class FakeAuthenticationApi implements AuthenticationApi {
   public loginResult = authenticationResponse("login-token");
   public refreshResult = authenticationResponse("refresh-token");
   public refreshError: unknown | null = null;
+  public meResult: UserResponse = USER;
+  public meError: unknown | null = null;
+  public meTokens: string[] = [];
+  public chooseErrors: unknown[] = [];
+  public chooseCalls: [string, GuidanceMode][] = [];
 
   public async register(input: AuthenticationInput): Promise<AuthenticationResponse> {
     void input;
@@ -64,9 +71,24 @@ class FakeAuthenticationApi implements AuthenticationApi {
   }
 
   public async me(accessToken: string): Promise<UserResponse> {
-    void accessToken;
+    this.meTokens.push(accessToken);
 
-    return USER;
+    if (this.meError !== null) {
+      throw this.meError;
+    }
+
+    return this.meResult;
+  }
+
+  public async chooseGuidanceMode(accessToken: string, mode: GuidanceMode): Promise<UserResponse> {
+    this.chooseCalls.push([accessToken, mode]);
+    const failure = this.chooseErrors.shift();
+
+    if (failure !== undefined) {
+      throw failure;
+    }
+
+    return { ...USER, guidance_mode: mode };
   }
 }
 
@@ -190,4 +212,84 @@ describe("useAuthStore", () => {
       expect(api.refreshCalls).toBe(0);
     },
   );
+
+  it.each<GuidanceMode>(["GUIDED", "EXPERT"])(
+    "saves the %s mode once and keeps the returned account",
+    async (mode) => {
+      const api = new FakeAuthenticationApi();
+      const store = useAuthStore();
+      await store.login(api, { email: USER.email, password: "test" });
+
+      expect(await store.chooseGuidanceMode(api, mode)).toBe("chosen");
+      expect(api.chooseCalls).toEqual([["login-token", mode]]);
+      expect(store.user).toEqual({ ...USER, guidance_mode: mode });
+      expect(store.status).toBe("authenticated");
+      expect(api.meTokens).toEqual([]);
+    },
+  );
+
+  it("reads the account again when the mode was already chosen", async () => {
+    const api = new FakeAuthenticationApi();
+    const store = useAuthStore();
+    await store.login(api, { email: USER.email, password: "test" });
+    api.chooseErrors = [new ApiError(409, "guidance_mode_already_chosen")];
+    api.meResult = { ...USER, guidance_mode: "GUIDED" };
+
+    expect(await store.chooseGuidanceMode(api, "EXPERT")).toBe("already_chosen");
+    expect(api.chooseCalls).toEqual([["login-token", "EXPERT"]]);
+    expect(api.meTokens).toEqual(["login-token"]);
+    expect(store.user?.guidance_mode).toBe("GUIDED");
+    expect(store.status).toBe("authenticated");
+    expect(store.errorDetail).toBeNull();
+  });
+
+  it.each([
+    new ApiError(500, "unexpected_api_error"),
+    new ApiError(422, "validation_error"),
+    new ApiError(409, "conflict"),
+    new TypeError("Failed to fetch"),
+  ])("fails on %s without touching the session", async (failure) => {
+    const api = new FakeAuthenticationApi();
+    const store = useAuthStore();
+    await store.login(api, { email: USER.email, password: "test" });
+    const account = store.user;
+    api.chooseErrors = [failure];
+
+    expect(await store.chooseGuidanceMode(api, "EXPERT")).toBe("failed");
+    expect(store.status).toBe("authenticated");
+    expect(store.user).toBe(account);
+    expect(store.errorDetail).toBeNull();
+    expect(store.accessToken).toBe("login-token");
+    expect(api.meTokens).toEqual([]);
+    expect(api.refreshCalls).toBe(0);
+  });
+
+  it("fails without touching the session when the account cannot be read again", async () => {
+    const api = new FakeAuthenticationApi();
+    const store = useAuthStore();
+    await store.login(api, { email: USER.email, password: "test" });
+    const account = store.user;
+    api.chooseErrors = [new ApiError(409, "guidance_mode_already_chosen")];
+    api.meError = new ApiError(503, "service_unavailable");
+
+    expect(await store.chooseGuidanceMode(api, "GUIDED")).toBe("failed");
+    expect(store.user).toBe(account);
+    expect(store.status).toBe("authenticated");
+    expect(store.errorDetail).toBeNull();
+  });
+
+  it("renews an expired access token once before saving the choice", async () => {
+    const api = new FakeAuthenticationApi();
+    const store = useAuthStore();
+    await store.login(api, { email: USER.email, password: "test" });
+    api.chooseErrors = [new ApiError(401, "invalid_authentication")];
+
+    expect(await store.chooseGuidanceMode(api, "EXPERT")).toBe("chosen");
+    expect(api.chooseCalls).toEqual([
+      ["login-token", "EXPERT"],
+      ["refresh-token", "EXPERT"],
+    ]);
+    expect(api.refreshCalls).toBe(1);
+    expect(store.user?.guidance_mode).toBe("EXPERT");
+  });
 });

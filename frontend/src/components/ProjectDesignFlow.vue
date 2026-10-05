@@ -243,6 +243,8 @@ import GeneratedMockupDialog, { type MockupObservation } from "./GeneratedMockup
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import ProjectDesignDiscussionPanel from "./ProjectDesignDiscussionPanel.vue";
 import ProjectDesignEvaluationPanel from "./ProjectDesignEvaluationPanel.vue";
+import ProjectHumanValidationPanel from "./ProjectHumanValidationPanel.vue";
+import type { EvidenceFocus } from "../types/humanValidation";
 import ProjectDiagramsView from "./ProjectDiagramsView.vue";
 import UiAgentMessage from "./UiAgentMessage.vue";
 import UiButton from "./UiButton.vue";
@@ -255,7 +257,7 @@ import { elementNames, type ScreenName, type WorkflowName } from "./screenNames"
 import { rosterAvatar, type TwinRoster } from "./twinIdentity";
 import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 import { workflowStatusLabel } from "./workflowLabels";
-import { designApi, type DesignApi } from "../api/design";
+import { designApi, type DesignApi, type DesignDistanceApi } from "../api/design";
 import type { DesignAlignmentApi } from "../api/designAlignment";
 import { designIterationsApi, type DesignIterationsApi } from "../api/designIterations";
 import { designLoopApi, DesignLoopApiError, type DesignLoopApi } from "../api/designLoop";
@@ -265,6 +267,7 @@ import { isGenerationInterrupted } from "../api/generationJobs";
 import { modelUsageApi, type ModelUsageApi } from "../api/modelUsage";
 import type { RequirementsApi } from "../api/requirements";
 import { useAuthStore } from "../stores/auth";
+import { useGuidanceStore } from "../stores/guidance";
 import { type AuthorizedRequest, useDesignStore } from "../stores/design";
 import { ITERATION_ASSERTION_LIMIT, useDesignIterationsStore } from "../stores/designIterations";
 import { findingKey, runMode, useDesignLoopStore } from "../stores/designLoop";
@@ -293,6 +296,7 @@ import type {
   SyntheticFindingPayload,
   SyntheticFindingSeverity,
 } from "../types/designLoop";
+import type { DesignDistanceReportPayload } from "../types/designDistance";
 import type {
   MockupDocumentPayload,
   MockupDocumentSource,
@@ -370,9 +374,11 @@ const props = withDefaults(
     iterationsApi?: DesignIterationsApi;
     pinsApi?: DesignReviewPinsApi;
     usageApi?: ModelUsageApi;
+    distanceApi?: DesignDistanceApi;
     upstream?: UpstreamValue;
     active?: boolean;
     sectionsMode?: boolean;
+    validationRefreshKey?: number;
   }>(),
   {
     locale: "en",
@@ -381,10 +387,14 @@ const props = withDefaults(
     upstream: null,
     active: true,
     sectionsMode: false,
+    validationRefreshKey: 0,
   },
 );
 
-const emit = defineEmits<{ "sections-changed": [] }>();
+const emit = defineEmits<{
+  "sections-changed": [];
+  "open-evidence": [source: EvidenceFocus | null];
+}>();
 
 provide(
   surfaceKey,
@@ -410,11 +420,14 @@ const messages = {
     numbers: ["no", "one", "two", "three", "four", "five", "six", "seven", "eight"],
     viewLabel: "Views of the design",
     loadError: "Design & Evaluation could not be loaded.",
+    genericFailure: "The request could not be completed. You can try again.",
     mockupRequired: "The mockup of this alternative is not ready yet: wait for it before choosing.",
     mockupRequiredDeclarative: "Try the mockup of this alternative first: then you can choose it.",
     pendingOther:
       "Another change is waiting for your decision above: apply it or discard it first.",
     proposeFailed: "Your choice could not be recorded, so nothing changed. Try again in a moment.",
+    contextChanged:
+      "An earlier step needs updating. Review that step before choosing a design alternative. Your current choice is unchanged.",
     applyFailed:
       "Your choice is recorded but it was not applied yet. Press “Choose this one” again.",
     noChanges: "This design is already the current one.",
@@ -571,6 +584,7 @@ const messages = {
     numbers: ["nessuna", "una", "due", "tre", "quattro", "cinque", "sei", "sette", "otto"],
     viewLabel: "Viste del design",
     loadError: "Non è stato possibile caricare Design e valutazione.",
+    genericFailure: "Non è stato possibile completare la richiesta. Puoi riprovare.",
     mockupRequired:
       "Il mockup di questa alternativa non è ancora pronto: aspettalo prima di sceglierla.",
     mockupRequiredDeclarative:
@@ -579,6 +593,8 @@ const messages = {
       "Un'altra modifica aspetta la tua decisione qui sopra: applicala o scartala prima.",
     proposeFailed:
       "Non è stato possibile registrare la tua scelta: non è cambiato nulla. Riprova tra poco.",
+    contextChanged:
+      "Un passo precedente è da aggiornare. Rivedi quel passo prima di scegliere un'alternativa di design. La scelta attuale non è cambiata.",
     applyFailed:
       "La tua scelta è registrata ma non è ancora stata applicata. Premi di nuovo «Scegli questa».",
     noChanges: "Questo design è già quello attuale.",
@@ -660,7 +676,7 @@ const messages = {
     reason: "Motivazione (serve per respingere o per chiedere una revisione)",
     rejectGate: "Respingi il design",
     requestRevision: "Chiedi una revisione",
-    pause: "Metti in pausa",
+    pause: "Metti in pausa l'approvazione",
     cancelGate: "Annulla l'approvazione",
     pausedText: "L'approvazione di questo design è in pausa.",
     resume: "Riprendi l'approvazione",
@@ -700,7 +716,7 @@ const messages = {
     tokensValue: "{input} in ingresso · {output} in uscita · {reasoning} di ragionamento",
     none: "Nessuno",
     methodology:
-      "Il Gate 5 approva ID, versione e hash esatti del Design Package. L'approvazione del proprietario è governance, non validazione empirica. Il feedback sintetico dei User Twin resta un'ipotesi progettuale.",
+      "Il Gate 5 approva ID, versione e hash esatti del Design Package. L'approvazione del proprietario è governance, non validazione empirica. Il feedback sintetico degli User Twin resta un'ipotesi progettuale.",
     history: "Versioni del design",
     historyItem: "Versione {n} · {date}",
     decided: "Modifiche già decise",
@@ -719,6 +735,7 @@ const messages = {
 } as const;
 
 const auth = useAuthStore();
+const guidance = useGuidanceStore();
 const store = useDesignStore();
 const loopStore = useDesignLoopStore();
 const mockups = useDesignMockupsStore();
@@ -734,6 +751,7 @@ const mockupsApi = computed(() => props.mockupsApi ?? designMockupsApi);
 const iterationsApi = computed(() => props.iterationsApi ?? designIterationsApi);
 const pinsApi = computed(() => props.pinsApi ?? designReviewPinsApi);
 const usageApi = computed(() => props.usageApi ?? modelUsageApi);
+const distanceApi = computed(() => props.distanceApi ?? designApi);
 
 const uid = useId();
 const root = ref<HTMLElement | null>(null);
@@ -765,6 +783,7 @@ const iterationScreen = ref<string | null>(null);
 const requestOpen = ref(false);
 const keepAsRule = ref(false);
 const usage = ref<ModelUsagePayload | null>(null);
+const distance = ref<DesignDistanceReportPayload | null>(null);
 const validationFailure = ref<{ key: string; code: string } | null>(null);
 const applyingSource = ref<string | null>(null);
 const applyFailure = ref<{ id: string; code: string } | null>(null);
@@ -776,6 +795,8 @@ let handledApplicationId: string | null = null;
 let declarativeEpoch = 0;
 let dialogSequence = 0;
 let usageSequence = 0;
+let distanceSequence = 0;
+let distanceKey: string | null = null;
 let visibility: ResizeObserver | null = null;
 
 const current = computed(() => (store.projectId === props.projectId ? store.current : null));
@@ -1235,6 +1256,35 @@ const cardNotes = computed<Record<string, string>>(() => {
   return result;
 });
 
+const distanceWant = computed(() => {
+  const version = current.value;
+  if (
+    version === null ||
+    !stepShown.value ||
+    !props.active ||
+    !generatedPath.value ||
+    Object.keys(ensuring).length > 0 ||
+    alternatives.value.some((alternative) => mockups.isChecking(alternative.id))
+  ) {
+    return null;
+  }
+  const drawn = alternatives.value.map((alternative) => {
+    const entry = mockups.entry(alternative.id);
+    return entry.state === "ready" ? entry.result.generation_id : "";
+  });
+  return [props.projectId, versionKey(version), ...drawn].join("|");
+});
+const distanceReport = computed(() => {
+  const report = distance.value;
+  const version = current.value;
+  return report !== null &&
+    version !== null &&
+    report.design_version_id === version.id &&
+    report.design_content_hash === version.content_hash
+    ? report
+    : null;
+});
+
 const previewAlternative = computed(
   () => alternatives.value.find((item) => item.id === previewAlternativeId.value) ?? null,
 );
@@ -1432,7 +1482,7 @@ const errorMessage = computed(() => {
   if (error === null || isGenerationInterrupted(error.code)) {
     return null;
   }
-  return modelFeedback(error.code, props.locale) ?? error.message ?? copy.value.loadError;
+  return revisionFailure(modelFeedback(error.code, props.locale) ?? copy.value.genericFailure);
 });
 const concernCount = computed(
   () =>
@@ -1826,11 +1876,12 @@ async function run(operation: () => Promise<unknown>): Promise<boolean> {
     await operation();
     return true;
   } catch (error) {
-    localError.value =
+    localError.value = revisionFailure(
       modelFeedback(store.error?.code, props.locale) ??
-      (error instanceof Error
-        ? (modelFeedback(error.message, props.locale) ?? error.message)
-        : copy.value.loadError);
+        (error instanceof Error
+          ? (modelFeedback(error.message, props.locale) ?? copy.value.genericFailure)
+          : copy.value.loadError),
+    );
     return false;
   }
 }
@@ -1984,7 +2035,7 @@ async function applyPackage(
   } else {
     const created = await propose(proposed);
     if (created === null) {
-      localError.value = copy.value.proposeFailed;
+      localError.value = revisionFailure(copy.value.proposeFailed);
       return false;
     }
     if (created.diff === null || created.diff.status !== "PROPOSED") {
@@ -1996,14 +2047,23 @@ async function applyPackage(
   }
   const version = await decideRevision(diff.id);
   if (version === null) {
-    localError.value = failedApproval;
+    localError.value = revisionFailure(failedApproval);
     return false;
   }
-  if (requestReview && version.package.prototype !== null && reviewAffected(diff)) {
+  if (
+    !guidance.expert &&
+    requestReview &&
+    version.package.prototype !== null &&
+    reviewAffected(diff)
+  ) {
     reviewRequestedFor.value = version.id;
   }
   changed();
   return true;
+}
+
+function revisionFailure(fallback: string): string {
+  return store.error?.code === "DESIGN_CONTEXT_CHANGED" ? copy.value.contextChanged : fallback;
 }
 
 async function choose(alternativeId: string): Promise<void> {
@@ -2046,7 +2106,7 @@ async function decideDiff(diff: DesignPackageDiffPayload, approve: boolean): Pro
     try {
       const version = await decideRevision(diff.id);
       if (version !== null) {
-        if (version.package.prototype !== null && reviewAffected(diff)) {
+        if (!guidance.expert && version.package.prototype !== null && reviewAffected(diff)) {
           reviewRequestedFor.value = version.id;
         }
         changed();
@@ -2436,7 +2496,7 @@ async function createDeclarative(alternativeId: string): Promise<void> {
     if (epoch === declarativeEpoch) {
       localError.value =
         error instanceof Error
-          ? (modelFeedback(error.message, props.locale) ?? error.message)
+          ? (modelFeedback(error.message, props.locale) ?? copy.value.genericFailure)
           : copy.value.loadError;
     }
   } finally {
@@ -2462,6 +2522,20 @@ async function retryMockup(alternativeId: string): Promise<void> {
     api: mockupsApi.value,
     signal: lifetime.signal,
   });
+}
+
+async function generateSingleMockup(alternativeId: string): Promise<void> {
+  if (store.isBusy || mockups.entry(alternativeId).state !== "idle") return;
+  localError.value = null;
+  try {
+    await mockups.ensure(alternativeId, authorizedRequest, {
+      api: mockupsApi.value,
+      signal: lifetime.signal,
+      draw: true,
+    });
+  } catch {
+    localError.value = copy.value.loadError;
+  }
 }
 
 function loadThumbnail(want: ThumbnailWant): void {
@@ -2514,6 +2588,21 @@ async function loadUsage(): Promise<void> {
   }
 }
 
+async function loadDistance(): Promise<void> {
+  const sequence = ++distanceSequence;
+  const projectId = props.projectId;
+  try {
+    const report = await authorizedRequest((token) => distanceApi.value.distance(projectId, token));
+    if (sequence === distanceSequence) {
+      distance.value = report;
+    }
+  } catch {
+    if (sequence === distanceSequence) {
+      distance.value = null;
+    }
+  }
+}
+
 function holdThumbnail(alternativeId: string): void {
   ensuring[alternativeId] = (ensuring[alternativeId] ?? 0) + 1;
 }
@@ -2545,7 +2634,9 @@ async function prepareMockups(): Promise<void> {
     return;
   }
   if (loaded?.generated_mockups === true) {
-    const draw = mockups.wasPrepared(props.projectId, version.id, version.content_hash);
+    const draw =
+      guidance.automaticAllowed(`${props.projectId}:mockups:${versionKey(version)}`) &&
+      mockups.wasPrepared(props.projectId, version.id, version.content_hash);
     for (const alternative of version.package.alternatives) {
       void mockups
         .ensure(alternative.id, authorizedRequest, {
@@ -2713,6 +2804,17 @@ watch(
   { immediate: true },
 );
 
+watch(
+  () => [props.projectId, guidance.expert, versionKey(current.value)] as const,
+  ([projectId, expert, key]) => {
+    if (expert) {
+      guidance.suppressAutomatic(`${projectId}:mockups:${key}`);
+      reviewRequestedFor.value = null;
+    }
+  },
+  { immediate: true, flush: "sync" },
+);
+
 watchUpstream(
   () => props.upstream,
   (changed) => {
@@ -2730,7 +2832,12 @@ watch(
   () => [props.projectId, current.value?.id, current.value?.content_hash] as const,
   () => {
     const version = current.value;
-    if (version !== null && preparation !== null && versionKey(version) !== preparation.from) {
+    if (
+      !guidance.expert &&
+      version !== null &&
+      preparation !== null &&
+      versionKey(version) !== preparation.from
+    ) {
       mockups.markPrepared(props.projectId, version.id, version.content_hash);
       preparation = null;
     }
@@ -2760,6 +2867,17 @@ watch(stepShown, (shown) => {
     void prepareMockups();
   }
 });
+
+watch(
+  distanceWant,
+  (key) => {
+    if (key !== null && key !== distanceKey) {
+      distanceKey = key;
+      void loadDistance();
+    }
+  },
+  { immediate: true, flush: "post" },
+);
 
 watch(() => props.active, refreshWhenDrawn);
 
@@ -2880,7 +2998,7 @@ onBeforeUnmount(() => {
       class="grid gap-5 rounded-tile border border-night-line bg-night-raised p-5 sm:p-7"
       data-testid="design-empty"
     >
-      <UiAgentMessage :role-label="copy.designer" :avatar="DESIGNER_AVATAR">
+      <UiAgentMessage v-if="!guidance.expert" :role-label="copy.designer" :avatar="DESIGNER_AVATAR">
         {{ copy.noPackage }}
       </UiAgentMessage>
       <p v-if="!prerequisiteReady" class="m-0 text-sm text-on-night-3" role="status">
@@ -2912,7 +3030,7 @@ onBeforeUnmount(() => {
     </section>
 
     <template v-else>
-      <UiAgentMessage :role-label="copy.designer" :avatar="DESIGNER_AVATAR">
+      <UiAgentMessage v-if="!guidance.expert" :role-label="copy.designer" :avatar="DESIGNER_AVATAR">
         {{ agentText }}
       </UiAgentMessage>
 
@@ -3043,6 +3161,8 @@ onBeforeUnmount(() => {
 
         <DesignAlternativeComparison
           :alternatives="current.package.alternatives"
+          :version-number="current.version_number"
+          :content-hash="current.content_hash"
           :twins="current.package.grounding.user_twin_references"
           :recommended-alternative-id="current.package.recommended_alternative_id"
           :selected-alternative-id="chosenAlternativeId"
@@ -3050,6 +3170,7 @@ onBeforeUnmount(() => {
           :choosable="choosable"
           :hints="hints"
           :notes="cardNotes"
+          :distance="distanceReport"
           :choosing="choosing"
           :disabled="store.isBusy || deciding"
           :paid="mockupsPaid"
@@ -3058,6 +3179,27 @@ onBeforeUnmount(() => {
           @open="openMockup"
           @retry="retryMockup"
         />
+
+        <div
+          v-if="guidance.expert && generatedPath"
+          class="flex flex-wrap gap-3"
+          data-testid="explicit-mockup-actions"
+        >
+          <template v-for="alternative in current.package.alternatives" :key="alternative.id">
+            <UiButton
+              v-if="
+                mockups.entry(alternative.id).state === 'idle' &&
+                alternative.id !== chosenAlternativeId
+              "
+              variant="outline"
+              :disabled="store.isBusy || deciding"
+              :data-testid="`generate-mockup-${alternative.code}`"
+              @click="generateSingleMockup(alternative.id)"
+              >{{ locale === "it" ? "Genera il mockup" : "Generate the mockup" }} ·
+              {{ alternative.code }}</UiButton
+            >
+          </template>
+        </div>
 
         <section
           v-if="!generatedPath && previewAlternative !== null"
@@ -3210,7 +3352,7 @@ onBeforeUnmount(() => {
                 :locale="locale"
                 :authorize="authorizedRequest"
                 :api="props.loopApi"
-                :auto-evaluate-version-id="reviewRequestedFor"
+                :auto-evaluate-version-id="guidance.expert ? null : reviewRequestedFor"
                 :static-check-available="staticCheckAvailable"
                 :screens="appliedScreens"
                 :elements="reviewElements"
@@ -3227,6 +3369,15 @@ onBeforeUnmount(() => {
         >
           {{ copy.matrixEmpty }}
         </p>
+
+        <ProjectHumanValidationPanel
+          :project-id="projectId"
+          :authorize="authorizedRequest"
+          :locale="locale"
+          :active="active"
+          :refresh-key="`${current.content_hash}:${loopStore.runs.map((run) => run.id).join(':')}:${validationRefreshKey}`"
+          @open-evidence="emit('open-evidence', $event)"
+        />
 
         <ProjectDesignDiscussionPanel
           v-if="current.package.prototype"

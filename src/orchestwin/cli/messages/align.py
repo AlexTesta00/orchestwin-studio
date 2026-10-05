@@ -286,19 +286,19 @@ MESSAGES: dict[str, dict[str, str]] = {
     "align.choice_later": {"it": "Lascialo per dopo", "en": "Leave it for later"},
     "align.choice_design": {
         "it": "Chiedi una nuova versione del design con questa richiesta",
-        "en": "Ask a new version of the design with this request",
+        "en": "Ask for a new version of the design with this request",
     },
     "align.choice_requirements": {
         "it": "Chiedi una modifica dei requisiti con questa richiesta",
-        "en": "Ask a change of the requirements with this request",
+        "en": "Ask for a change of the requirements with this request",
     },
     "align.choice_design_follow": {
         "it": "Chiedi una nuova versione del design che segua questo commit",
-        "en": "Ask a new version of the design that follows this commit",
+        "en": "Ask for a new version of the design that follows this commit",
     },
     "align.choice_requirements_follow": {
         "it": "Chiedi una modifica dei requisiti che segua questo commit",
-        "en": "Ask a change of the requirements that follows this commit",
+        "en": "Ask for a change of the requirements that follows this commit",
     },
     "align.decided_later": {
         "it": "Non ho registrato niente: il commit aspetta la tua decisione. Rilancia "
@@ -348,11 +348,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "align.kind_aligned": {"it": "segnato come allineato", "en": "marked as aligned"},
     "align.kind_design_change": {
         "it": "chiesta una nuova versione del design",
-        "en": "a new version of the design asked",
+        "en": "a new version of the design asked for",
     },
     "align.kind_requirements_change": {
         "it": "chiesta una modifica dei requisiti",
-        "en": "a change of the requirements asked",
+        "en": "a change of the requirements asked for",
     },
     "align.kind_code_tasks": {
         "it": "compiti registrati per il codice",
@@ -375,7 +375,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "align.decided_design": {
         "it": "Decisione registrata: dal commit {commit} è stata chiesta una nuova versione del "
         "design.",
-        "en": "Decision recorded: a new version of the design was asked from commit {commit}.",
+        "en": "Decision recorded: a new version of the design was requested from commit {commit}.",
     },
     "align.design_approve": {
         "it": "Approvi ora la versione {version} del design?",
@@ -399,7 +399,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "align.decided_requirements": {
         "it": "Decisione registrata: dal commit {commit} è stata chiesta una modifica dei "
         "requisiti.",
-        "en": "Decision recorded: a change of the requirements was asked from commit {commit}.",
+        "en": "Decision recorded: a change of the requirements was requested from commit {commit}.",
     },
     "align.requirements_approve": {
         "it": "Approvi i requisiti alla versione {version}? Dopo riaggancio il design approvato "
@@ -588,19 +588,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "riprova, ed è una nuova spesa.",
         "en": "The model gave an answer that the Studio cannot use (INVALID_PROVIDER_OUTPUT): "
         "nothing was stored. Launching `ut align` again tries once more, and it is a new "
-        "spending.",
+        "expense.",
     },
     "align.errors.RESPONSE_SCHEMA_ERROR": {
         "it": "Il modello ha dato una risposta nella forma sbagliata (RESPONSE_SCHEMA_ERROR): "
         "non è stato salvato niente. Rilanciando `ut align` si riprova, ed è una nuova spesa.",
         "en": "The model gave an answer in the wrong shape (RESPONSE_SCHEMA_ERROR): nothing was "
-        "stored. Launching `ut align` again tries once more, and it is a new spending.",
+        "stored. Launching `ut align` again tries once more, and it is a new expense.",
     },
     "align.errors.INCOMPLETE_OUTPUT": {
         "it": "La risposta del modello si è interrotta a metà (INCOMPLETE_OUTPUT): non è stato "
         "salvato niente. Rilanciando `ut align` si riprova, ed è una nuova spesa.",
         "en": "The answer of the model stopped halfway (INCOMPLETE_OUTPUT): nothing was stored. "
-        "Launching `ut align` again tries once more, and it is a new spending.",
+        "Launching `ut align` again tries once more, and it is a new expense.",
     },
     "align.errors.CONTEXT_BUDGET_EXCEEDED": {
         "it": "Il commit è troppo grande perché il modello lo esamini (CONTEXT_BUDGET_EXCEEDED): "
@@ -610,41 +610,41 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "align.errors.GENERATION_BUDGET_EXCEEDED": {
         "it": "Lo Studio ha rifiutato l'esame perché supererebbe un tetto di spesa. I commit "
-        "restano registrati; chi gestisce lo Studio può alzare il tetto, poi rilancia "
+        "restano registrati; chi gestisce lo Studio può alzare il tetto; poi rilancia "
         "`ut align`.",
         "en": "The Studio refused the review because it would go over a spending ceiling. The "
-        "commits stay recorded; whoever runs the Studio can raise the ceiling, then launch "
+        "commits stay recorded; whoever runs the Studio can raise the ceiling; then launch "
         "`ut align` again.",
     },
     "align.errors.GENERATION_BUDGET_EXCEEDED.total": {
         "it": "Lo Studio ha raggiunto il suo tetto di spesa complessivo ({ceiling} USD): l'esame "
         "non è partito. I commit restano registrati; chi gestisce lo Studio può alzare il "
-        "tetto, poi rilancia `ut align`.",
+        "tetto; poi rilancia `ut align`.",
         "en": "The Studio reached its overall spending ceiling ({ceiling} USD): the review did "
-        "not start. The commits stay recorded; whoever runs the Studio can raise the ceiling, "
+        "not start. The commits stay recorded; whoever runs the Studio can raise the ceiling; "
         "then launch `ut align` again.",
     },
     "align.errors.GENERATION_BUDGET_EXCEEDED.project": {
         "it": "Questo progetto ha raggiunto il suo tetto di spesa ({ceiling} USD): l'esame non "
-        "è partito. I commit restano registrati; chi gestisce lo Studio può alzare il tetto, "
+        "è partito. I commit restano registrati; chi gestisce lo Studio può alzare il tetto; "
         "poi rilancia `ut align`.",
         "en": "This project reached its spending ceiling ({ceiling} USD): the review did not "
-        "start. The commits stay recorded; whoever runs the Studio can raise the ceiling, then "
+        "start. The commits stay recorded; whoever runs the Studio can raise the ceiling; then "
         "launch `ut align` again.",
     },
     "align.errors.GENERATION_BUDGET_EXCEEDED.generation": {
         "it": "Una generazione dell'esame supererebbe il tetto di spesa di una singola "
-        "generazione ({ceiling} USD), quindi non è partita. Chi gestisce lo Studio può alzarlo, "
+        "generazione ({ceiling} USD), quindi non è partita. Chi gestisce lo Studio può alzarlo; "
         "poi rilancia `ut align`.",
         "en": "A generation of the review would go over the spending ceiling of a single "
-        "generation ({ceiling} USD), so it did not start. Whoever runs the Studio can raise it, "
+        "generation ({ceiling} USD), so it did not start. Whoever runs the Studio can raise it; "
         "then launch `ut align` again.",
     },
     "align.errors.GENERATION_LOST": {
         "it": "{label}: l'esame si è perso, forse perché lo Studio è ripartito. I commit restano "
         "registrati: rilancia `ut align` (un nuovo esame è una nuova spesa).",
         "en": "{label}: the review was lost, perhaps because the Studio restarted. The commits "
-        "stay recorded: launch `ut align` again (a new review is a new spending).",
+        "stay recorded: launch `ut align` again (a new review is a new expense).",
     },
     "align.errors.GENERATION_STILL_RUNNING": {
         "it": "{label}: l'esame continua nello Studio. Rilancia `ut align` più tardi: lo ritrova "

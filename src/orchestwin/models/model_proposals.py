@@ -13,11 +13,26 @@ from pydantic import BaseModel, ConfigDict, Field
 from orchestwin.agents.catalog import AgentIdentifier
 from orchestwin.agents.selection_rules import TeamRoleConstraintKind
 from orchestwin.artifacts.visual_catalog import FontFamily, visual_catalog_summary
+from orchestwin.artifacts.visual_directions import select_directions
 from orchestwin.artifacts.visual_exploration import exploration_bindings
 from orchestwin.models.design import (
     DesignProposalProviderKind,
     DesignProposalResult,
     DesignProposalStatus,
+)
+from orchestwin.models.design_directions import (
+    DESIGN_DIRECTIONS_OUTPUT_TOKENS,
+    DESIGN_DIRECTIONS_PURPOSE,
+    DIRECTIONS_ATTEMPT,
+    DIRECTIONS_REJECTED,
+    DIRECTIONS_ROLE,
+    DIRECTIONS_SELECTED,
+    MAX_DIRECTIONS_ATTEMPTS,
+    DirectionCandidatesDraft,
+    bind_directions,
+    directed_design_context,
+    directions_context,
+    directions_instruction,
 )
 from orchestwin.models.hosted_configuration import HOSTED_PROVIDER_KINDS
 from orchestwin.models.planning_schema import (
@@ -29,6 +44,7 @@ from orchestwin.models.profile_drafts import PersonaModelOutput, UserTwinModelOu
 from orchestwin.models.proposal_evidence import (
     generation_output_reference,
     retain_adapter_result,
+    retire_model_generation,
 )
 from orchestwin.models.proposal_generation import (
     ProposalGenerationError,
@@ -145,6 +161,18 @@ HOSTED_PERSPECTIVES_INSTRUCTION = (
     "context.perspectives lists the perspectives chosen for this project, each with its "
     "considerations: take them into account in every alternative and in the critiques, without "
     "adding screens or functions that no requirement asks for."
+)
+HOSTED_DIRECTIONS_INSTRUCTION = (
+    "context.directions gives each alternative its art direction, already chosen for this "
+    "project and different from the other: {first} follows the first and {second} the second. A "
+    "direction has a name, a concept, rules and a position on five axes (layout, shape, type, "
+    "colour, density). It decides how the alternative looks; the approach, the flows, the content "
+    "and the archetype of the alternative remain yours to choose, and must suit the direction. In "
+    "visual, the dimensions listed in visual_exploration are restricted to the values that fit "
+    "the direction: they prevail over any other advice about those dimensions. visual_rationale "
+    "explains how the direction and the values you chose serve the twins and the domain, and "
+    "twin_fit judges the direction from the point of view of each twin. The critiques judge the "
+    "direction too."
 )
 PERSONAS_INSTRUCTION = (
     "Propose one persona content draft per candidate, in input order. "
@@ -271,11 +299,18 @@ def hosted_design_instruction(context):
         if (rule := _exploration_rule(code, exploration)) is not None
     )
     written = "the language of the requirements" if language is None else language["name"]
+    first, second = DESIGN_ALTERNATIVE_CODES
+    directions = (
+        (HOSTED_DIRECTIONS_INSTRUCTION.format(first=first, second=second),)
+        if context.get("directions")
+        else ()
+    )
     return " ".join(
         (
             _design_instruction("/".join(keys), language, CRITIQUE_LIST_INSTRUCTIONS[None]),
             HOSTED_VERDICT_INSTRUCTION.format(language=written),
             HOSTED_PERSPECTIVES_INSTRUCTION,
+            *directions,
             *rules,
         )
     )
@@ -525,8 +560,12 @@ class ModelDesignAdapter:
 
         context, twins = design_context(request)
         route = self.generator.route("design")
+        directions = exploration = None
         if hosted_route(route):
             context = hosted_design_context(context, request.team.selected_agent_ids)
+            directions = await self._directions(request, context)
+            context = directed_design_context(context, directions)
+            exploration = context["visual_exploration"]
             route = self.generator.route("design", context["purpose"])
             output_type, budget = HostedDesignDraft, HOSTED_DESIGN_OUTPUT_TOKENS
             instruction = hosted_design_instruction(context)
@@ -540,14 +579,50 @@ class ModelDesignAdapter:
             max_output_tokens=min(budget, route.configuration.max_output_tokens),
             instruction=instruction,
         )
-        output = bind_design(draft, request, twins, lambda code: _model_reference(route, code))
+        output = bind_design(
+            draft,
+            request,
+            twins,
+            lambda code: _model_reference(route, code),
+            directions=directions,
+            exploration=exploration,
+        )
         return DesignProposalResult(
             status=DesignProposalStatus.PROPOSED,
             provider_kind=DesignProposalProviderKind.MODEL_ADAPTER,
             provider_id=route.provider_id,
-            provider_version=6,
+            provider_version=6 if directions is None else 7,
             package=output,
         )
+
+    async def _directions(self, request, context):
+        route = self.generator.route("design", DESIGN_DIRECTIONS_PURPOSE)
+        budget = min(DESIGN_DIRECTIONS_OUTPUT_TOKENS, route.configuration.max_output_tokens)
+        base = directions_context(context)
+        attempt = base
+        for number in range(1, MAX_DIRECTIONS_ATTEMPTS + 1):
+            draft = await self.generator.generate(
+                task="design",
+                context=attempt,
+                output_type=DirectionCandidatesDraft,
+                max_output_tokens=budget,
+                instruction=directions_instruction(attempt),
+            )
+            try:
+                selected = select_directions(
+                    bind_directions(draft, language=context["language"]),
+                    project_id=request.project_id,
+                    avoided=request.avoided_directions,
+                )
+            except ValueError as error:
+                if number == MAX_DIRECTIONS_ATTEMPTS:
+                    raise
+                await retire_model_generation(role=DIRECTIONS_ATTEMPT, code=DIRECTIONS_REJECTED)
+                rejection = {"code": DIRECTIONS_REJECTED, "reasons": [str(error)]}
+                attempt = {**base, "rejection": rejection}
+                continue
+            await retire_model_generation(role=DIRECTIONS_ROLE, code=DIRECTIONS_SELECTED)
+            return dict(zip(DESIGN_ALTERNATIVE_CODES, selected, strict=True))
 
 
 class ModelUserModelingAdapter:

@@ -21,8 +21,7 @@ export const researchEvidenceCopy = {
       "I declare that this source comes from empirical research, as described in the method and limits.",
     text: "Anonymised text",
     file: "Or choose a UTF-8 text file (.txt or .md)",
-    limit:
-      "Use at most 24,000 characters and 32 KiB per evidence. Divide a longer text into parts.",
+    limit: "Use at most 24,000 characters and 32 KiB per source. Divide a longer text into parts.",
     invalidFile: "Choose a valid UTF-8 .txt or .md file without binary content.",
     missingFields: "Complete the title, source reference, context, method and limits.",
     limitError:
@@ -36,7 +35,7 @@ export const researchEvidenceCopy = {
     latest: "Latest version",
     earlier: "Earlier version",
     active: "Available",
-    retired: "Withdrawn",
+    retired: "Retired",
     nonEmpirical: "Non-empirical source",
     empiricalSource: "Declared empirical source",
     original: "Read the original text",
@@ -64,13 +63,13 @@ export const researchEvidenceCopy = {
     discarded: "Proposal discarded. The twin stays as it was.",
     decisionWarning: "Your approval updates the twin. It does not validate it with real people.",
     basis: "Why this change is proposed",
-    retire: "Withdraw evidence",
+    retire: "Retire evidence",
     retireWarning:
       "Claims supported only by this evidence become hypotheses again, and dependent sections reopen. Other independent evidence remains. No content is regenerated.",
-    reason: "Why you are withdrawing it",
-    retiredDone: "Evidence withdrawn. Review the reopened sections.",
+    reason: "Why you are retiring it",
+    retiredDone: "Evidence retired. Review the reopened sections.",
     retiredReview:
-      "Evidence withdrawn. Review the current twin profile: its pending draft has not been approved. Dependent sections need another look.",
+      "Evidence retired. Review the current twin profile: its pending draft has not been approved. Dependent sections need another look.",
     deleteText: "Delete the original text",
     deleteWarning:
       "The stored original text will be deleted. Metadata, hashes and historical quotes remain, as may existing exports, backups and copies sent to the model.",
@@ -78,7 +77,7 @@ export const researchEvidenceCopy = {
     deletedDone: "Original text deleted; source references and historical quotes remain.",
     saved: "Evidence saved. Choose a twin to request a proposal.",
     revised:
-      "New version saved. Existing claims still cite their original version; withdraw it if it no longer applies.",
+      "New version saved. Existing claims still cite their original version; retire it if it no longer applies.",
     refresh: "Reload sources",
     effects: { SUPPORTS: "Supports", CONTRADICTS: "Contradicts", ADDS: "Adds information" },
     kinds: {
@@ -171,7 +170,7 @@ export const researchEvidenceCopy = {
     refresh: "Ricarica le fonti",
     effects: { SUPPORTS: "Sostiene", CONTRADICTS: "Contraddice", ADDS: "Aggiunge informazioni" },
     kinds: {
-      OWNER_INPUT: "Tuoi appunti o un testo di prova",
+      OWNER_INPUT: "I tuoi appunti o un testo di prova",
       EMPIRICAL_RESEARCH: "Ricerca empirica",
       HUMAN_REVIEW: "Revisione di una persona",
       PROJECT_BRIEF: "Brief del progetto",

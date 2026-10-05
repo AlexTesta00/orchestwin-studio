@@ -10,7 +10,7 @@ from orchestwin.projects import sections_service as readers
 from orchestwin.projects.persistence.progress import overview_statement, project_overview
 from orchestwin.projects.progress import CURRENT_CATALOG, ProjectNextAction
 from src.test.python.agents.test_team_realignment import MODE, changed_brief, version
-from src.test.python.api.test_sections_api import SECTIONS, client
+from src.test.python.api.test_sections_api import OWNER_ID, PROJECT_ID, SECTIONS, client
 from src.test.python.projects.test_project_progress import BRIEF, TEAM, TWINS, columns, row
 from src.test.python.projects.test_sections import aligned
 from src.test.python.projects.test_sections_service import World, service
@@ -77,6 +77,19 @@ def test_the_project_list_and_sections_get_keep_the_global_pending_flag_from_the
     session = AsyncMock()
     session.execute.return_value = result
     session.__aenter__.return_value = session
+    design_read = AsyncMock(return_value=None)
+    provided_read = AsyncMock(return_value=None)
+
+    def repository(current):
+        def scoped(scoped_session, *, owner_user_id):
+            assert scoped_session is session
+            assert owner_user_id == OWNER_ID
+            return SimpleNamespace(current=current)
+
+        return scoped
+
+    monkeypatch.setattr(readers, "SqlAlchemyDesignPackageRepository", repository(design_read))
+    monkeypatch.setattr(readers, "SqlAlchemyWorkflowInputsRepository", repository(provided_read))
     monkeypatch.setattr(
         readers,
         "SqlAlchemyKnowledgePackageRepository",
@@ -99,3 +112,5 @@ def test_the_project_list_and_sections_get_keep_the_global_pending_flag_from_the
     assert body["alignment"]["available"] is False
     old_reader.assert_not_awaited()
     session.execute.assert_awaited_once()
+    design_read.assert_awaited_once_with(project_id=PROJECT_ID)
+    provided_read.assert_awaited_once_with(PROJECT_ID)

@@ -7,6 +7,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
+from orchestwin.artifacts.visual_directions import DIRECTION_AXES
 from orchestwin.knowledge.layout import table_document
 
 type _Rows = list[dict[str, object]]
@@ -181,6 +182,10 @@ TABLE_COLUMNS: Final = {
 NEEDS_TABLE_COLUMNS: Final = _STAGE_COLUMNS[_REQUIREMENTS_STAGE]["needs"]
 JOURNEYS_TABLE_COLUMNS: Final = _STAGE_COLUMNS[_REQUIREMENTS_STAGE]["journeys"]
 CRITIQUE_VERDICT_COLUMNS: Final = ("verdict", "quote")
+DIRECTION_DIMENSIONS: Final = (
+    "direction_name",
+    *(f"direction_{axis}" for axis in DIRECTION_AXES),
+)
 REQUIREMENTS_CHAIN_COLUMNS: Final = {
     "requirements": ("need_ids",),
     "user-stories": ("need_ids",),
@@ -425,8 +430,25 @@ def _workflow_rows(package: Mapping[str, object], codes: _Codes) -> _Rows:
     return rows
 
 
+def _direction_rows(alternative: Mapping[str, object]) -> _Rows:
+    direction = _visual(alternative).get("direction")
+    if direction is None:
+        return []
+    axes = direction["axes"]
+    values = (direction["name"], *(axes[axis] for axis in DIRECTION_AXES))
+    return [
+        {"alternative": alternative["code"], "dimension": dimension, "value": value}
+        for dimension, value in zip(DIRECTION_DIMENSIONS, values, strict=True)
+    ]
+
+
 def _visual_rows(
-    package: Mapping[str, object], field: str, name_column: str, value_column: str
+    package: Mapping[str, object],
+    field: str,
+    name_column: str,
+    value_column: str,
+    *,
+    directions: bool = False,
 ) -> _Rows:
     rows: _Rows = []
     for alternative in package["alternatives"]:
@@ -435,6 +457,8 @@ def _visual_rows(
             {"alternative": alternative["code"], name_column: name, value_column: entries[name]}
             for name in sorted(entries)
         )
+        if directions:
+            rows.extend(_direction_rows(alternative))
     return rows
 
 
@@ -655,7 +679,7 @@ def design_tables(
     tables: dict[str, _Rows] = {
         "alternatives": _alternative_rows(package, codes),
         "workflows": _workflow_rows(package, codes),
-        "visual-language": _visual_rows(package, "choices", "dimension", "value"),
+        "visual-language": _visual_rows(package, "choices", "dimension", "value", directions=True),
         "palette": _visual_rows(package, "palette", "role", "colour"),
         "critiques": _critique_rows(package, alternatives, verdicts=verdicts),
         "concerns": _concern_rows(package, codes, alternatives),
@@ -679,6 +703,7 @@ def knowledge_tables(
 
 __all__ = [
     "CRITIQUE_VERDICT_COLUMNS",
+    "DIRECTION_DIMENSIONS",
     "JOURNEYS_TABLE_COLUMNS",
     "NEEDS_TABLE_COLUMNS",
     "REQUIREMENTS_CHAIN_COLUMNS",

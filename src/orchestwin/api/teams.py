@@ -31,6 +31,7 @@ from orchestwin.agents.catalog import (
     AgentSelectionPolicy,
     all_agent_catalog_entries,
 )
+from orchestwin.agents.owner_inputs import OwnerTeamInputError, OwnerTeamInputService
 from orchestwin.agents.perspectives import (
     AspectView,
     Perspective,
@@ -671,6 +672,16 @@ def agent_team_service_dependency(
     return service
 
 
+def owner_team_inputs_dependency(request: Request) -> OwnerTeamInputService:
+    service = getattr(request.app.state, "owner_team_inputs", None)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "OWNER_TEAM_INPUTS_UNAVAILABLE"},
+        )
+    return service
+
+
 def _proposal_version_response(
     version: TeamProposalVersion | None,
 ) -> TeamProposalVersionResponse | None:
@@ -755,6 +766,49 @@ def create_team_router() -> APIRouter:
             "agent-teams",
         ]
     )
+
+    @router.post(
+        "/projects/{project_id}/team/owner-proposals",
+        response_model=TeamProposalGenerationResponse,
+        status_code=status.HTTP_201_CREATED,
+        operation_id="createOwnerProvidedTeamProposal",
+    )
+    async def create_owner_team_endpoint(
+        project_id: UUID,
+        payload: TeamProposalEditRequest,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[OwnerTeamInputService, Depends(owner_team_inputs_dependency)],
+    ) -> TeamProposalGenerationResponse:
+        try:
+            result = await service.create(
+                project_id=project_id,
+                owner_user_id=user.id,
+                selected_agent_ids=tuple(payload.selected_agent_ids),
+                owner_rationales=tuple(value.to_domain() for value in payload.owner_rationales),
+            )
+        except OwnerTeamInputError as error:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_409_CONFLICT
+                    if error.code == "TEAM_PROPOSAL_ALREADY_EXISTS"
+                    else status.HTTP_422_UNPROCESSABLE_CONTENT
+                ),
+                detail={"code": error.code},
+            ) from error
+        if result.status is not TeamProposalApplicationStatus.CREATED:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_404_NOT_FOUND
+                    if result.status
+                    in {
+                        TeamProposalApplicationStatus.PROJECT_NOT_FOUND,
+                        TeamProposalApplicationStatus.BRIEF_NOT_FOUND,
+                    }
+                    else status.HTTP_409_CONFLICT
+                ),
+                detail={"code": result.status.value},
+            )
+        return _generation_response(result)
 
     @router.get(
         "/agent-catalog",

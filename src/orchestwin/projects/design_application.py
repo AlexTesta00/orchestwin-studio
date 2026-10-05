@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from types import TracebackType
@@ -358,7 +358,14 @@ class LocalDesignGenerationService:
                 status=DesignGenerationStatus.REJECTED,
                 issue=DesignGenerationIssueCode.DESIGN_PACKAGE_NOT_FOUND,
             )
-        proposal = await self._proposals.propose(context.to_proposal_request())
+        avoided = tuple(
+            item.visual_language.direction.axes
+            for item in current.package.alternatives
+            if item.visual_language is not None and item.visual_language.direction is not None
+        )
+        proposal = await self._proposals.propose(
+            replace(context.to_proposal_request(), avoided_directions=avoided)
+        )
         if proposal.status is not DesignProposalStatus.PROPOSED:
             return DesignGenerationResult(
                 status=DesignGenerationStatus.REJECTED,

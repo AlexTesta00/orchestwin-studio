@@ -14,6 +14,7 @@ import {
   type RequirementsApi,
 } from "../api/requirements";
 import { requirementsAlignmentApi } from "../api/requirementsAlignment";
+import { useRequirementsStore } from "../stores/requirements";
 import type {
   HumanGateEventPayload,
   HumanGatePayload,
@@ -1388,7 +1389,7 @@ describe("ProjectRequirementsFlow", () => {
       "true",
     );
     expect(wrapper.get('[data-testid="artifact-view-switch"]').attributes("aria-label")).toBe(
-      "Vista della definizione",
+      "Viste della definizione",
     );
     const text = wrapper.get('[data-testid="requirements-text-view"]');
     expect(text.isVisible()).toBe(true);
@@ -2443,11 +2444,15 @@ describe("ProjectRequirementsFlow in sections mode", () => {
       true,
       "When you approve, the sections that follow are updated with one gesture, without losing their content.",
     ],
-    ["it", false, "Approvando, il designer prepara le alternative di design e i twin le provano."],
+    [
+      "it",
+      false,
+      "Quando approvi, il designer prepara le alternative di design e i twin le provano.",
+    ],
     [
       "it",
       true,
-      "Approvando, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
+      "Quando approvi, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
     ],
   ] as const)(
     "says in %s what follows the approval, in sections mode %s",
@@ -2492,6 +2497,58 @@ describe("ProjectRequirementsFlow in sections mode", () => {
     expect(wrapper.get('[data-testid="requirements-error"]').text()).toContain(sentence);
     wrapper.unmount();
   });
+
+  it.each([
+    { locale: "it", status: 500, code: null },
+    { locale: "en", status: 500, code: null },
+    { locale: "it", status: 404, code: "REQUIREMENTS_GATE_NOT_FOUND" },
+    { locale: "en", status: 404, code: "REQUIREMENTS_GATE_NOT_FOUND" },
+  ] as const)(
+    "says in $locale that the Definition could not be read when the Studio answers $status",
+    async ({ locale, status, code }) => {
+      const api = new FakeApi();
+      const failing = createRequirementsApi({
+        fetchImpl: async () =>
+          new Response(code === null ? "" : JSON.stringify({ detail: { code } }), { status }),
+      });
+      vi.spyOn(api, "readiness").mockImplementation(() =>
+        failing.readiness(PROJECT_ID, "access-token"),
+      );
+      const wrapper = mountFlow(api, true, { locale });
+      await flushPromises();
+
+      const error = wrapper.get('[data-testid="requirements-error"]').text();
+      expect(error).toBe(
+        locale === "it"
+          ? "Non è stato possibile completare la richiesta. Puoi riprovare."
+          : "The request could not be completed. You can try again.",
+      );
+      expect(wrapper.text()).not.toContain(code ?? "Requirements API request failed");
+      expect(error).not.toContain(String(status));
+      expect(error).not.toMatch(/[A-Z]+_[A-Z_]+/);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["it", "Si è verificato un errore inatteso nei requisiti."],
+    ["en", "An unexpected error occurred in the requirements."],
+  ] as const)(
+    "says in %s that something unexpected happened when the requirements failed elsewhere",
+    async (locale, sentence) => {
+      const api = new FakeApi();
+      vi.spyOn(api, "readiness").mockRejectedValue("offline");
+      await useRequirementsStore()
+        .load(PROJECT_ID, authorize, api)
+        .catch(() => undefined);
+      const wrapper = mountFlow(api, false, { locale });
+      await flushPromises();
+
+      expect(wrapper.get('[data-testid="requirements-error"]').text()).toBe(sentence);
+      expect(wrapper.text()).not.toContain("An unexpected Requirements error occurred");
+      wrapper.unmount();
+    },
+  );
 });
 
 describe("ProjectRequirementsFlow and requirements still being written", () => {

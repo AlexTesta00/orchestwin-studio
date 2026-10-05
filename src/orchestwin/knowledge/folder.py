@@ -65,7 +65,12 @@ from orchestwin.knowledge.research_evidence import (
     evidence_markdown,
 )
 from orchestwin.knowledge.research_evidence import present as has_evidence
-from orchestwin.knowledge.schema import SCHEMA_NAMES, has_design_additions, schema_files
+from orchestwin.knowledge.schema import (
+    SCHEMA_NAMES,
+    has_design_additions,
+    has_direction_additions,
+    schema_files,
+)
 from orchestwin.knowledge.sources import KnowledgeSources
 from orchestwin.knowledge.state_documents import (
     acceptance_runs,
@@ -83,6 +88,9 @@ from orchestwin.knowledge.state_documents import (
 )
 from orchestwin.knowledge.tables import knowledge_tables
 from orchestwin.knowledge.twins import PortableTwin, portable_twins
+from orchestwin.knowledge.validation_records import VALIDATION_DOCUMENT, portable_records
+from orchestwin.knowledge.why import WHY_DOCUMENT, folder_why
+from orchestwin.knowledge.workflow_inputs import export_workflow_files, workflow_manifest
 from orchestwin.models.output_language import dominant_language
 from orchestwin.workflow.gates import HumanGate
 
@@ -361,7 +369,10 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
         files[twin.document_path] = json_text(twin.document)
         files[twin.text_path] = twin_markdown(twin.document, language=folder_language(sources))
     files.update(
-        schema_files(design_additions=package is not None and has_design_additions(package))
+        schema_files(
+            design_additions=package is not None and has_design_additions(package),
+            direction_additions=package is not None and has_direction_additions(package),
+        )
     )
     if has_evidence(sources.research_evidence):
         files[EVIDENCE_DOCUMENT] = json_text(sources.research_evidence)
@@ -369,6 +380,50 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
             sources.research_evidence, language=folder_language(sources)
         )
         files.update(schema_files(research_evidence=True, only_evidence=True))
+    files.update(export_workflow_files(sources))
+    document = folder_why(
+        project_id=str(sources.project_id),
+        documents={stage: stage_document_payload(sources, stage) for stage in present},
+        files=files,
+    )
+    from orchestwin.knowledge.validation_records import has_validation_records
+
+    if has_validation_records(sources.validation_records):
+        files[VALIDATION_DOCUMENT] = json_text(
+            portable_records(
+                document=document,
+                records=sources.validation_records,
+                evidence=sources.research_evidence,
+            )
+        )
+        files.update(schema_files(only_validation=True))
+        document = folder_why(
+            project_id=str(sources.project_id),
+            documents={stage: stage_document_payload(sources, stage) for stage in present},
+            files=files,
+        )
+    files[WHY_DOCUMENT] = json_text(document)
+    workflow_additions = bool(
+        sources.workflow_inputs.get("decisions") or sources.workflow_inputs.get("prototypes")
+    ) or (sources.team is not None and sources.team.revision_kind.value == "OWNER_PROVIDED")
+    if workflow_additions:
+        files.update(
+            {
+                path: text
+                for path, text in schema_files(
+                    design_additions=package is not None and has_design_additions(package),
+                    workflow_additions=True,
+                ).items()
+                if path in {"schema/manifest.schema.json", "schema/team.schema.json"}
+            }
+        )
+    files.update(
+        schema_files(
+            only_why=True,
+            validation_additions=VALIDATION_DOCUMENT in files,
+            workflow_additions=workflow_additions,
+        )
+    )
     return files
 
 
@@ -512,10 +567,12 @@ def folder_manifest(
             name: schema_document(name)
             for name in (
                 *SCHEMA_NAMES,
+                "why",
                 *(("evidence",) if has_evidence(sources.research_evidence) else ()),
             )
         },
         "files": file_digests(files),
+        "why": {"document": WHY_DOCUMENT, "schema_version": 1},
     }
     if has_evidence(sources.research_evidence):
         result["research_evidence"] = {
@@ -524,6 +581,18 @@ def folder_manifest(
             "sources": len(sources.research_evidence.get("evidence", ())),
             "citations": len(sources.research_evidence.get("citations", ())),
         }
+    if VALIDATION_DOCUMENT in files:
+        validation = json.loads(files[VALIDATION_DOCUMENT])
+        result["validation"] = {
+            "document": VALIDATION_DOCUMENT,
+            "schema_version": 1,
+            "hypotheses": len(validation["hypotheses"]),
+            "outcomes": len(validation["outcomes"]),
+        }
+        result["schemas"]["validation"] = schema_document("validation")
+    workflow = workflow_manifest(files)
+    if workflow is not None:
+        result["workflow_inputs"] = workflow
     return result
 
 

@@ -38,6 +38,7 @@ from src.test.python.integration.cli_journey_support import (
     write_json,
 )
 from src.test.python.integration.test_postgresql_cli_alignment import (
+    MCP_TOOLS,
     approve_the_design,
     json_lines,
     local_twins,
@@ -397,8 +398,10 @@ def serve_the_results(scene: Scene, acceptance: Acceptance) -> None:
     answered = all(answer.get("jsonrpc") == "2.0" and "result" in answer for answer in answers)
     assert answered, run.transcript()
     names = [tool["name"] for tool in answers[1]["result"]["tools"]]
-    assert len(names) == 12, names
-    assert names[-4:] == [GET_TEST_RESULTS, RUN_TESTS, GET_TASKS, "get_evidence"], names
+    assert len(names) == 15, names
+    assert names == list(MCP_TOOLS), names
+    assert names[8:13] == [GET_TEST_RESULTS, RUN_TESTS, GET_TASKS, "get_evidence", "get_why"], names
+    assert names[13:] == ["get_validation", "get_scenario_walkthrough"], names
     document = read_json(scene.knowledge.joinpath(*TESTS_DOCUMENT))
     assert tool_document(answers[2]) == {"runs": document["runs"][:1]}
     assert document["runs"][0]["id"] == acceptance.runs[0]

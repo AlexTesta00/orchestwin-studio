@@ -20,7 +20,7 @@ from orchestwin.projects.requirements_primitives import (
 
 STRUCTURED_GENERATION_SCHEMA_VERSION: Final = 1
 _MAX_IDENTIFIER_LENGTH: Final = 256
-_MAX_TEXT_LENGTH: Final = 16_000
+_MAX_TEXT_LENGTH: Final = 20_000
 _MAX_PAYLOAD_LENGTH: Final = 1_000_000
 
 

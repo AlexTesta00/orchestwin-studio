@@ -1,6 +1,42 @@
 from __future__ import annotations
 
-MESSAGES: dict[str, dict[str, str]] = {
+from collections.abc import Iterator, Mapping
+
+
+class _ProvidedLimitMessages(Mapping[str, str]):
+    def __init__(self, code: str) -> None:
+        self.code = code
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(("it", "en"))
+
+    def __len__(self) -> int:
+        return 2
+
+    def __getitem__(self, language: str) -> str:
+        from orchestwin.workflow_inputs import PROVIDED_PROTOTYPE_LIMIT_MESSAGES
+
+        sentence = PROVIDED_PROTOTYPE_LIMIT_MESSAGES[language][self.code]
+        return f"{sentence} ({self.code})"
+
+
+MESSAGES: dict[str, Mapping[str, str]] = {
+    **{
+        "errors." + code: _ProvidedLimitMessages(code)
+        for code in (
+            "PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE",
+            "PROVIDED_PROTOTYPE_CODE_UNAVAILABLE",
+            "PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE",
+            "PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE",
+            "PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE",
+        )
+    },
+    "errors.WORKFLOW_PROJECT_MISMATCH": {
+        "it": "Lo Studio ha restituito record di workflow di un altro progetto "
+        "(WORKFLOW_PROJECT_MISMATCH). Riprova a leggere il progetto.",
+        "en": "The Studio returned workflow records for another project "
+        "(WORKFLOW_PROJECT_MISMATCH). Try reading the project again.",
+    },
     "errors.NOT_SIGNED_IN": {
         "it": "Non hai eseguito l'accesso allo Studio {studio}. Accedi con `ut login`.",
         "en": "You are not signed in to the Studio {studio}. Sign in with `ut login`.",
@@ -118,7 +154,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "La generazione non ha superato i controlli dello Studio. Puoi riprovare, ma è "
         "una nuova spesa.",
         "en": "The generation did not pass the checks of the Studio. You can try again, but "
-        "it is a new spending.",
+        "it is a new expense.",
     },
     "errors.GENERATION_STILL_RUNNING": {
         "it": "{label}: la generazione continua nello Studio. Rilancia il comando più tardi: "
@@ -141,7 +177,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Il modello ha impiegato troppo tempo e la generazione è stata fermata. Puoi "
         "riprovare, ma è una nuova spesa.",
         "en": "The model took too long and the generation was stopped. You can try again, "
-        "but it is a new spending.",
+        "but it is a new expense.",
     },
     "errors.PROVIDER_UNAVAILABLE": {
         "it": "Il fornitore del modello non si raggiunge in questo momento. Riprova tra "

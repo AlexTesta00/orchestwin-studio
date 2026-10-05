@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, useId } from "vue";
+import { computed, inject, ref, useId } from "vue";
 
 import { useSurface } from "./UiSurface.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
+import { whyContextKey } from "./whyContext";
+import { whyMessages } from "./whyCopy";
 
 export interface ArtifactTableColumn {
   key: string;
@@ -22,6 +25,12 @@ interface ActiveSort {
   direction: SortDirection;
 }
 
+const SORT_PATHS: Record<SortDirection | "none", string> = {
+  none: "M6 1.5v9M3.5 4 6 1.5 8.5 4M3.5 8 6 10.5 8.5 8",
+  ascending: "M6 10.5v-9M3 4.5l3-3 3 3",
+  descending: "M6 1.5v9M3 7.5l3 3 3-3",
+};
+
 const props = withDefaults(
   defineProps<{
     caption: string;
@@ -30,6 +39,9 @@ const props = withDefaults(
     rowKey: string;
     locale?: Locale;
     emptyText?: string | undefined;
+    why?: boolean;
+    versionNumber?: number | undefined;
+    contentHash?: string | undefined;
   }>(),
   { locale: "en", emptyText: undefined },
 );
@@ -57,8 +69,10 @@ const palettes = {
     heading: "text-ink",
     sort: "text-ink hover:text-action",
     symbol: "text-ink-3",
-    row: "border-line-soft even:bg-row-alt",
+    row: "border-line-soft",
+    stripe: "bg-row-alt",
     key: "text-ink",
+    why: "bg-surface text-ink-2",
     cell: "text-ink-2",
     missing: "font-medium text-warn",
     count: "text-ink-3",
@@ -71,7 +85,9 @@ const palettes = {
     sort: "text-on-night-2 hover:text-on-night",
     symbol: "text-on-night-3",
     row: "border-on-night/8",
+    stripe: "",
     key: "text-on-night",
+    why: "bg-night-panel text-on-night-2",
     cell: "text-on-night",
     missing: "font-medium text-warn-on-night",
     count: "text-on-night-3",
@@ -83,6 +99,13 @@ const copy = computed(() => messages[props.locale]);
 const surface = useSurface(() => undefined);
 const palette = computed(() => palettes[surface.value]);
 const activeSort = ref<ActiveSort | null>(null);
+const whyContext = inject(whyContextKey, null);
+const whyLabel = computed(() => whyMessages[props.locale].why);
+const whyRows = computed(() => props.why === true && whyContext !== null);
+const openWhy = ref(new Set<string>());
+const keptWhy = ref(new Set<string>());
+
+const rowIndex = computed(() => new Map(props.rows.map((row, index) => [row, index])));
 
 const headerKey = computed(
   () => props.columns.find((column) => column.key === props.rowKey)?.key ?? props.columns[0]?.key,
@@ -158,14 +181,8 @@ function ariaSort(column: ArtifactTableColumn): SortDirection | "none" | undefin
   return active !== null && active.key === column.key ? active.direction : "none";
 }
 
-function sortSymbol(column: ArtifactTableColumn): string {
-  const state = ariaSort(column);
-
-  if (state === "ascending") {
-    return "↑";
-  }
-
-  return state === "descending" ? "↓" : "↕";
+function sortPath(column: ArtifactTableColumn): string {
+  return SORT_PATHS[ariaSort(column) ?? "none"];
 }
 
 function toggleSort(key: string): void {
@@ -183,6 +200,29 @@ function toggleSort(key: string): void {
 function isEmpty(value: string | undefined): boolean {
   return value === undefined || value.trim().length === 0;
 }
+
+function whyKey(row: Record<string, string>): string {
+  return row[props.rowKey] ?? `#${rowIndex.value.get(row) ?? 0}`;
+}
+
+function whyId(row: Record<string, string>, part: "item" | "why"): string {
+  return `${captionId}-${part}-${rowIndex.value.get(row) ?? 0}`;
+}
+
+function whyTitle(row: Record<string, string>): string | undefined {
+  return row.title ?? row.goal ?? row.statement;
+}
+
+function toggleWhy(row: Record<string, string>): void {
+  const key = whyKey(row);
+
+  if (openWhy.value.has(key)) {
+    openWhy.value.delete(key);
+  } else {
+    openWhy.value.add(key);
+    keptWhy.value.add(key);
+  }
+}
 </script>
 
 <template>
@@ -197,7 +237,7 @@ function isEmpty(value: string | undefined): boolean {
 
     <template v-else>
       <div
-        :class="['overflow-x-auto border', palette.region]"
+        :class="['overflow-x-auto border', palette.region, whyRows ? '@container' : '']"
         role="region"
         tabindex="0"
         :aria-labelledby="captionId"
@@ -227,63 +267,123 @@ function isEmpty(value: string | undefined): boolean {
                   v-if="column.sortable"
                   type="button"
                   :class="[
-                    '-mx-1 -my-2 inline-flex min-h-11 items-center gap-1.5 rounded-control px-1 font-semibold transition-colors duration-150',
+                    'relative -mx-1 inline-flex items-center gap-1.5 rounded-control px-1 leading-[normal] font-semibold whitespace-nowrap transition-colors duration-150 before:absolute before:inset-x-0 before:-inset-y-3.5',
                     palette.sort,
                   ]"
                   :data-testid="`sort-${column.key}`"
                   @click="toggleSort(column.key)"
                 >
                   {{ column.label }}
-                  <span :class="palette.symbol" aria-hidden="true">{{ sortSymbol(column) }}</span>
+                  <svg
+                    :class="['size-3 shrink-0', palette.symbol]"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path :d="sortPath(column)" />
+                  </svg>
                 </button>
                 <template v-else>{{ column.label }}</template>
               </th>
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="(row, index) in sortedRows"
-              :key="row[rowKey] ?? index"
-              :class="['border-t align-top first:border-t-0', palette.row]"
-              :data-row-key="row[rowKey]"
-            >
-              <template v-for="column in columns" :key="column.key">
-                <th
-                  v-if="column.key === headerKey"
-                  scope="row"
-                  :class="[
-                    'px-3 py-3.5 font-mono text-xs leading-6 font-medium first:pl-5 last:pr-5',
-                    palette.key,
-                    widthClasses[column.key],
-                  ]"
-                  :data-column="column.key"
-                >
-                  <span v-if="isEmpty(row[column.key])" role="img" :aria-label="copy.emptyCell"
-                    >—</span
+            <template v-for="(row, index) in sortedRows" :key="row[rowKey] ?? index">
+              <tr
+                :class="[
+                  'border-t align-top first:border-t-0',
+                  palette.row,
+                  index % 2 === 1 ? palette.stripe : '',
+                ]"
+                :data-row-key="row[rowKey]"
+              >
+                <template v-for="column in columns" :key="column.key">
+                  <th
+                    v-if="column.key === headerKey"
+                    :id="whyRows ? whyId(row, 'item') : undefined"
+                    scope="row"
+                    :class="[
+                      'px-3 py-3.5 font-mono text-xs leading-6 font-medium first:pl-5 last:pr-5',
+                      palette.key,
+                      widthClasses[column.key],
+                    ]"
+                    :data-column="column.key"
                   >
-                  <template v-else>{{ row[column.key] }}</template>
-                </th>
-                <td
-                  v-else
-                  :class="[
-                    'px-3 py-3.5 leading-normal first:pl-5 last:pr-5',
-                    palette.cell,
-                    widthClasses[column.key],
-                    column.numeric ? 'text-right tabular-nums' : '',
-                    column.strong ? 'font-semibold' : '',
-                  ]"
-                  :data-column="column.key"
-                >
-                  <template v-if="isEmpty(row[column.key])">
-                    <span v-if="column.missing" :class="palette.missing" data-missing>{{
-                      column.missing
-                    }}</span>
-                    <span v-else role="img" :aria-label="copy.emptyCell">—</span>
-                  </template>
-                  <template v-else>{{ row[column.key] }}</template>
+                    <span v-if="isEmpty(row[column.key])" role="img" :aria-label="copy.emptyCell"
+                      >—</span
+                    >
+                    <template v-else>{{ row[column.key] }}</template>
+                    <div
+                      v-if="whyRows"
+                      class="mt-2 flex"
+                      data-testid="table-why"
+                      :data-why-code="row[rowKey] ?? ''"
+                    >
+                      <button
+                        type="button"
+                        :class="[
+                          'inline-flex min-h-11 cursor-pointer items-center rounded-field border border-current/15 px-3 font-sans text-sm font-semibold whitespace-nowrap',
+                          palette.why,
+                        ]"
+                        :aria-expanded="openWhy.has(whyKey(row))"
+                        :aria-controls="whyId(row, 'why')"
+                        :aria-label="`${whyLabel} ${whyTitle(row) ?? row[rowKey] ?? ''}`"
+                        data-testid="why-open"
+                        @click="toggleWhy(row)"
+                      >
+                        {{ whyLabel }}
+                      </button>
+                    </div>
+                  </th>
+                  <td
+                    v-else
+                    :class="[
+                      'px-3 py-3.5 leading-normal first:pl-5 last:pr-5',
+                      palette.cell,
+                      widthClasses[column.key],
+                      column.numeric ? 'text-right tabular-nums' : '',
+                      column.strong ? 'font-semibold' : '',
+                    ]"
+                    :data-column="column.key"
+                  >
+                    <template v-if="isEmpty(row[column.key])">
+                      <span v-if="column.missing" :class="palette.missing" data-missing>{{
+                        column.missing
+                      }}</span>
+                      <span v-else role="img" :aria-label="copy.emptyCell">—</span>
+                    </template>
+                    <template v-else>{{ row[column.key] }}</template>
+                  </td>
+                </template>
+              </tr>
+              <tr
+                v-if="whyRows"
+                v-show="openWhy.has(whyKey(row))"
+                :class="['align-top', index % 2 === 1 ? palette.stripe : '']"
+                :data-why-row="row[rowKey]"
+                data-testid="table-why-row"
+              >
+                <td :colspan="columns.length" :headers="whyId(row, 'item')">
+                  <div :id="whyId(row, 'why')" class="sticky left-0 w-[100cqw] px-3 pb-4 sm:px-5">
+                    <ArtifactWhy
+                      v-if="keptWhy.has(whyKey(row))"
+                      panel
+                      :open="openWhy.has(whyKey(row))"
+                      :code="row[rowKey] ?? ''"
+                      :version-number="versionNumber"
+                      :content-hash="contentHash"
+                      :locale="locale"
+                      test-id="table-why-panel"
+                      class="max-w-180"
+                    />
+                  </div>
                 </td>
-              </template>
-            </tr>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>

@@ -17,6 +17,7 @@ import ArtifactViewSwitch, { type ArtifactView } from "./ArtifactViewSwitch.vue"
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import ProjectDiagramsView from "./ProjectDiagramsView.vue";
 import RequirementsTableView from "./RequirementsTableView.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
 import RequirementsDefinitionView from "./RequirementsDefinitionView.vue";
 import RequirementsTraceabilityView from "./RequirementsTraceabilityView.vue";
 import RequirementsTwinAlignment from "./RequirementsTwinAlignment.vue";
@@ -38,6 +39,7 @@ import {
 } from "../api/generationJobs";
 import { RequirementsApiError, requirementsApi, type RequirementsApi } from "../api/requirements";
 import { useAuthStore } from "../stores/auth";
+import { useGuidanceStore } from "../stores/guidance";
 import { type GenerationResumeFailure, useGenerationResume } from "../stores/generationJobs";
 import { type AuthorizedRequest, useRequirementsStore } from "../stores/requirements";
 import type {
@@ -106,6 +108,7 @@ provide(
 );
 
 const auth = useAuthStore();
+const guidance = useGuidanceStore();
 const store = useRequirementsStore();
 const root = ref<HTMLElement | null>(null);
 const viewSwitch = ref<InstanceType<typeof ArtifactViewSwitch> | null>(null);
@@ -321,6 +324,8 @@ const messages = {
     discarded: "Discarded",
     openInText: "{code} · {title}: read it in the text",
     loadError: "The Definition could not be loaded.",
+    genericFailure: "The request could not be completed. You can try again.",
+    unexpectedError: "An unexpected error occurred in the requirements.",
   },
   it: {
     loading: "Carico la definizione…",
@@ -340,7 +345,7 @@ const messages = {
     functionalGroup: "Requisiti funzionali",
     nonFunctional: "Requisiti non funzionali",
     constraints: "Vincoli",
-    viewLabel: "Vista della definizione",
+    viewLabel: "Viste della definizione",
     digestBoth: [
       "In breve: {must} cosa che l'applicazione deve fare e {should} che dovrebbe fare.",
       "In breve: {must} cose che l'applicazione deve fare e {should} che dovrebbe fare.",
@@ -438,9 +443,9 @@ const messages = {
       "L'analista non ha trovato nulla da cambiare con questa richiesta. Prova a descrivere la modifica in un altro modo.",
     reasonRequired: "Per respingere o scartare serve una motivazione.",
     approveGate: "Approva la definizione",
-    barDefault: "Approvando, il designer prepara le alternative di design e i twin le provano.",
+    barDefault: "Quando approvi, il designer prepara le alternative di design e i twin le provano.",
     barDefaultSections:
-      "Approvando, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
+      "Quando approvi, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
     barApproved:
       "Hai approvato questa definizione. Puoi ancora chiedere una modifica a parole: la nuova versione torna qui per la tua approvazione.",
     barPending:
@@ -509,6 +514,8 @@ const messages = {
     discarded: "Scartata",
     openInText: "{code} · {title}: leggilo nel testo",
     loadError: "Non è stato possibile caricare la Definizione.",
+    genericFailure: "Non è stato possibile completare la richiesta. Puoi riprovare.",
+    unexpectedError: "Si è verificato un errore inatteso nei requisiti.",
   },
 } as const;
 
@@ -902,7 +909,10 @@ const errorMessage = computed(() => {
     return null;
   }
 
-  return modelFeedback(error.code, props.locale) ?? error.message ?? copy.value.loadError;
+  return (
+    modelFeedback(error.code, props.locale) ??
+    (error.status === null ? copy.value.unexpectedError : copy.value.genericFailure)
+  );
 });
 
 function counted(count: number, [singular, plural]: readonly [string, string]): string {
@@ -1018,7 +1028,7 @@ async function run(operation: () => Promise<unknown>): Promise<boolean> {
     localError.value =
       modelFeedback(store.error?.code, props.locale) ??
       (error instanceof Error
-        ? (modelFeedback(error.message, props.locale) ?? error.message)
+        ? (modelFeedback(error.message, props.locale) ?? copy.value.genericFailure)
         : copy.value.loadError);
     return false;
   }
@@ -1630,7 +1640,7 @@ onBeforeUnmount(() => {
       class="grid gap-5 rounded-tile border border-night-line bg-night-raised p-5 sm:p-7"
       data-testid="requirements-empty"
     >
-      <UiAgentMessage :role-label="copy.analyst" :avatar="ANALYST_AVATAR">
+      <UiAgentMessage v-if="!guidance.expert" :role-label="copy.analyst" :avatar="ANALYST_AVATAR">
         {{ copy.noSpecification }}
       </UiAgentMessage>
       <p v-if="!prerequisiteReady" class="m-0 text-sm text-on-night-3" role="status">
@@ -1819,6 +1829,8 @@ onBeforeUnmount(() => {
         role="tabpanel"
         :aria-labelledby="tabIdOf('table')"
         :specification="specification"
+        :version-number="current.version_number"
+        :content-hash="current.content_hash"
         :locale="locale"
         data-testid="requirements-table-view"
       />
@@ -1871,6 +1883,8 @@ onBeforeUnmount(() => {
           ref="definitionView"
           :highlighted="highlighted"
           :specification="specification"
+          :version-number="current.version_number"
+          :content-hash="current.content_hash"
           :locale="locale"
           @select-item="openItem"
         />
@@ -1932,6 +1946,16 @@ onBeforeUnmount(() => {
                   class="grid gap-4 pr-3 pb-4 pl-9 sm:pl-32"
                   data-testid="requirement-detail"
                 >
+                  <ArtifactWhy
+                    :code="requirement.code"
+                    :title="requirement.title"
+                    kind="REQUIREMENT"
+                    :artifact-id="requirement.id"
+                    :version-number="current.version_number"
+                    :content-hash="current.content_hash"
+                    :locale="locale"
+                    test-id="requirement-why"
+                  />
                   <div class="min-w-0">
                     <p class="m-0 text-[15px] leading-normal">{{ requirement.statement }}</p>
                     <p

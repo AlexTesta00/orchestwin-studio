@@ -52,6 +52,7 @@ from orchestwin.api.requirements import (
 )
 from orchestwin.api.research_evidence import EvidenceBody
 from orchestwin.artifacts.bound_mockups import create_bound_mockup, markup_requirement_codes
+from orchestwin.artifacts.design_distance import design_distance_report
 from orchestwin.artifacts.design_evaluation import (
     ANCHOR_LABEL_LENGTH,
     MATCH_SIMILARITY,
@@ -59,6 +60,7 @@ from orchestwin.artifacts.design_evaluation import (
     finding_similarity,
     synthetic_finding_from_snapshot,
 )
+from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.generated_mockup_document import MockupPin, mockup_document
 from orchestwin.artifacts.generated_mockup_review import (
     MockupIssueSeverity,
@@ -73,6 +75,14 @@ from orchestwin.artifacts.generated_mockups import (
     screen_trees,
 )
 from orchestwin.artifacts.visual_catalog import MODES, VisualChoices
+from orchestwin.artifacts.visual_directions import (
+    AXIS_BINDINGS,
+    DIRECTION_AXES,
+    DIRECTION_CANDIDATES,
+    DirectionAxes,
+    VisualDirection,
+    create_visual_direction,
+)
 from orchestwin.artifacts.visual_language import TwinFit, create_visual_language
 from orchestwin.evaluation.findings import (
     SyntheticFindingCriterion,
@@ -325,6 +335,7 @@ COSTS = {
     "REQUIREMENTS_CHANGE": 300_000,
     "DESIGN_PROPOSAL": 450_000,
     "DESIGN_REGENERATION": 450_000,
+    "DESIGN_DIRECTIONS": 150_000,
     "MOCKUP": 1_450_000,
     "ITERATION": 1_100_000,
     "DESIGN_EVALUATION": 165_000,
@@ -345,6 +356,7 @@ TASKS = {
     "REQUIREMENTS_CHANGE": "requirements",
     "DESIGN_PROPOSAL": "design",
     "DESIGN_REGENERATION": "design",
+    "DESIGN_DIRECTIONS": "design",
     "MOCKUP": "design",
     "ITERATION": "design",
     "DESIGN_EVALUATION": "twin_review",
@@ -365,6 +377,7 @@ PURPOSES = {
     "REQUIREMENTS_CHANGE": "REQUIREMENTS_CHANGE",
     "DESIGN_PROPOSAL": "DESIGN_ALTERNATIVES_HOSTED",
     "DESIGN_REGENERATION": "DESIGN_ALTERNATIVES_HOSTED",
+    "DESIGN_DIRECTIONS": "DESIGN_DIRECTIONS",
     "MOCKUP": "DESIGN_MOCKUP_HTML",
     "ITERATION": "DESIGN_ITERATION",
     "DESIGN_EVALUATION": "DESIGN_TWIN_REVIEW",
@@ -487,6 +500,31 @@ GESTURE_ISSUES = {
     "REQUIREMENTS_APPROVAL_REQUIRED": "UPSTREAM_NOT_READY",
 }
 ALIGNMENT_REASON = "Aligned to the current upstream versions with unchanged content."
+ACTIVITY_GATES = {GATE_TYPES[stage]: key for key, stage in SECTION_STAGES.items()}
+ACTIVITY_GATE_KINDS = {
+    "SUBMIT": "GATE_SUBMITTED",
+    "APPROVE": "GATE_APPROVED",
+    "REJECT": "GATE_REJECTED",
+    "REQUEST_REVISION": "GATE_REVISION_REQUESTED",
+    "PAUSE": "GATE_PAUSED",
+    "RESUME": "GATE_RESUMED",
+    "CANCEL": "GATE_CANCELLED",
+    "ARTIFACT_SUPERSEDED": "GATE_SUPERSEDED",
+}
+ACTIVITY_PURPOSES = {
+    "TEST_PLAN": "PACKAGE",
+    "TEST_REVIEW": "PACKAGE",
+    "CODE_CHANGE_REVIEW": "PACKAGE",
+    "CODE_ALIGNMENT": "PACKAGE",
+    "TWIN_UPDATE": "USER_TWINS",
+}
+ACTIVITY_TASKS = {
+    "brief": "BRIEF",
+    "team": "TEAM",
+    "user_modeling": "USER_TWINS",
+    "requirements": "REQUIREMENTS",
+}
+OWNER_REVISIONS = ("OWNER_EDITED", "OWNER_PROVIDED")
 SPECIFICATION_ITEMS = ("requirements", "user_stories", "acceptance_criteria")
 CITED_KEYS = ("requirement_ids", "user_story_ids", "acceptance_criterion_ids")
 FIRST_LINE_LENGTH = 120
@@ -942,6 +980,76 @@ ALTERNATIVES = {
             "tone": "ESSENTIAL",
         },
     ),
+}
+DIRECTED_ALTERNATIVES = {
+    "DES-001": (
+        {
+            "layout": "STAGE",
+            "shape": "SOFT_FILL",
+            "type": "READING",
+            "colour": "TINTED",
+            "density": "SPACIOUS",
+        },
+        8,
+    ),
+    "DES-002": (
+        {
+            "layout": "WORKBENCH",
+            "shape": "SQUARE_RULES",
+            "type": "CAPS_LABELS",
+            "colour": "INK",
+            "density": "COMFORTABLE",
+        },
+        5,
+    ),
+}
+DIRECTION_TEXTS = {
+    "it": {
+        "DES-001": (
+            "Foglio da lettura",
+            "Una sola colonna centrata, come una pagina da leggere con calma. Al tavolo, con poca "
+            "luce, chi paga trova un compito per volta e cifre grandi.",
+            (
+                "Il titolo della schermata sta in alto al centro, grande e da solo.",
+                "I gruppi stanno su superfici tinte, senza bordi.",
+                "L'azione principale è un pulsante pieno, l'unico elemento colorato.",
+            ),
+        ),
+        "DES-002": (
+            "Scontrino di cassa",
+            "Uno strumento a tutta larghezza, come uno scontrino: righe fitte, etichette "
+            "maiuscole, cifre in colonna. Chi divide il conto confronta le quote a colpo d'occhio.",
+            (
+                "Il titolo è un'etichetta piccola nella barra in alto.",
+                "Filetti sottili separano le righe; nessun riquadro.",
+                "Le cifre stanno in colonna, allineate a destra.",
+                "Il colore primario compare solo sull'azione principale.",
+            ),
+        ),
+    },
+    "en": {
+        "DES-001": (
+            "Reading sheet",
+            "One centred column, like a page read at leisure. At the table, in dim light, whoever "
+            "pays finds one task at a time and large digits.",
+            (
+                "The screen title sits at the top centre, large and alone.",
+                "Groups sit on tinted surfaces, without borders.",
+                "The main action is a filled button, the only coloured element.",
+            ),
+        ),
+        "DES-002": (
+            "Till receipt",
+            "A full-width tool, like a receipt: dense rows, upper-case labels, digits in columns. "
+            "Whoever splits the bill compares the shares at a glance.",
+            (
+                "The title is a small label in the top bar.",
+                "Thin rules separate the rows; no boxes.",
+                "Digits stand in columns, aligned to the right.",
+                "The primary colour appears only on the main action.",
+            ),
+        ),
+    },
 }
 DESIGN_TEXTS = {
     "it": {
@@ -1443,6 +1551,15 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}", "get_project"),
     Route("PATCH", "/projects/{project_id}", "rename_project"),
     Route("GET", "/projects/{project_id}/sections", "sections"),
+    Route("GET", "/projects/{project_id}/workflow-inputs", "workflow_inputs"),
+    Route("GET", "/projects/{project_id}/provided-prototypes/state", "provided_state"),
+    Route("GET", "/projects/{project_id}/provided-prototypes/current", "provided_current"),
+    Route("GET", "/projects/{project_id}/provided-prototypes/gate/current", "provided_gate"),
+    Route(
+        "GET",
+        "/projects/{project_id}/provided-prototypes/{prototype_id}/document",
+        "provided_document",
+    ),
     Route("POST", "/projects/{project_id}/sections/alignment", "align_sections"),
     Route("GET", "/projects/{project_id}/brief-versions", "brief_history"),
     Route("POST", "/projects/{project_id}/brief-versions", "create_brief"),
@@ -1543,6 +1660,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}/design/current", "design_current"),
     Route("GET", "/projects/{project_id}/design", "design_history"),
     Route("GET", "/projects/{project_id}/design/readiness", "design_readiness"),
+    Route("GET", "/projects/{project_id}/design/distance", "design_distance"),
     Route("POST", "/projects/{project_id}/design/revisions", "design_revision"),
     Route("GET", "/projects/{project_id}/design/revisions", "design_revisions"),
     Route("GET", "/projects/{project_id}/design/revisions/{diff_id}", "design_revision_view"),
@@ -1602,6 +1720,10 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/projects/{project_id}/code-tasks", "create_tasks"),
     Route("POST", "/projects/{project_id}/code-tasks/{code}/status", "task_status"),
     Route("GET", "/projects/{project_id}/twin-learning", "twin_learning"),
+    Route("GET", "/projects/{project_id}/artifacts/why", "why"),
+    Route("GET", "/projects/{project_id}/validation", "validation"),
+    Route("GET", "/projects/{project_id}/validation/walkthrough", "validation_walkthrough"),
+    Route("GET", "/projects/{project_id}/artifacts/why/document", "why_document"),
     Route("GET", "/projects/{project_id}/evidence", "evidence_list"),
     Route("POST", "/projects/{project_id}/evidence", "evidence_add"),
     Route("GET", "/projects/{project_id}/evidence/{evidence_id}", "evidence_show"),
@@ -1618,6 +1740,11 @@ ROUTES: tuple[Route, ...] = (
         "/projects/{project_id}/user-twins/{twin_id}/observations/{code}/retire",
         "retire_observation",
     ),
+    Route("GET", "/projects/{project_id}/activity", "activity"),
+    Route("GET", "/projects/{project_id}/activity/session", "activity_session"),
+    Route("POST", "/projects/{project_id}/activity/sessions", "activity_start"),
+    Route("POST", "/projects/{project_id}/activity/sessions/{session_code}/end", "activity_end"),
+    Route("POST", "/projects/{project_id}/activity/events", "activity_events"),
 )
 
 
@@ -2237,6 +2364,7 @@ class FakeProject:
         self.mockups: dict[str, dict[str, object]] = {}
         self.iterations: list[dict[str, object]] = []
         self.runs: list[dict[str, object]] = []
+        self.finding_decisions: list[dict[str, object]] = []
         self.packages: list[dict[str, object]] = []
         self.folders: list[dict[str, ArtifactVersion]] = []
         self.gestures: list[dict[str, object]] = []
@@ -2260,6 +2388,13 @@ class FakeProject:
         self.evidence_versions: list[dict[str, object]] = []
         self.evidence_texts: dict[tuple[str, int], str] = {}
         self.evidence_changes: list[dict[str, object]] = []
+        self.validation_hypotheses: list[dict[str, object]] = []
+        self.validation_outcomes: list[dict[str, object]] = []
+        self.workflow_decisions: list[dict[str, object]] = []
+        self.provided_prototypes: list[dict[str, object]] = []
+        self.provided_gate: dict[str, object] | None = None
+        self.provided_context_current = True
+        self.activity_journal: list[dict[str, object]] = []
 
     @property
     def owner(self) -> str:
@@ -2484,9 +2619,12 @@ class FakeStudio:
         billing: str | None = None,
         job_polls: int = 2,
         now: Callable[[], datetime] | None = None,
+        directions: bool = False,
     ) -> None:
         if language not in LANGUAGES:
             raise ValueError("language must be it or en")
+        if directions and not hosted:
+            raise ValueError("directions need a hosted model")
         if isinstance(twins, bool) or not isinstance(twins, int) or not 1 <= twins <= MAX_TWINS:
             raise ValueError(f"twins must be between 1 and {MAX_TWINS}")
         if isinstance(job_polls, bool) or not isinstance(job_polls, int) or job_polls < 0:
@@ -2500,6 +2638,7 @@ class FakeStudio:
         self.language = language
         self.twins = twins
         self.hosted = hosted
+        self.directions = directions
         self.billing = billing
         self.job_polls = job_polls
         self.requests: list[RecordedRequest] = []
@@ -2789,6 +2928,7 @@ class FakeStudio:
         )
         try:
             call.params = _path_parameters(parameters)
+            self._provided_guard(call, route.action)
             return getattr(self, f"_route_{route.action}")(call)
         except _Invalid as invalid:
             detail = "invalid_authentication" if relative == "/auth/login" else "invalid_request"
@@ -3518,6 +3658,116 @@ class FakeStudio:
         if project is None:
             raise _Refusal(404, "project_not_found")
         return _Answer(200, self._project_payload(project))
+
+    def seed_workflow_inputs(
+        self, project, *, decisions=(), prototypes=(), gate=None, context_current=True
+    ):
+        from orchestwin.artifacts.provided_prototypes import provided_prototype_from_snapshot
+        from orchestwin.workflow_inputs import workflow_records
+
+        envelope = workflow_records(project.id, decisions=decisions, prototypes=prototypes)
+        for item in envelope["prototypes"]:
+            provided_prototype_from_snapshot(item)
+        project.workflow_decisions = copy.deepcopy(envelope["decisions"])
+        project.provided_prototypes = copy.deepcopy(envelope["prototypes"])
+        project.provided_gate = copy.deepcopy(gate)
+        project.provided_context_current = context_current
+
+    def _workflow_inputs(self, project):
+        from orchestwin.workflow_inputs import workflow_records
+
+        return workflow_records(project.id, project.workflow_decisions, project.provided_prototypes)
+
+    def _provided_guard(self, call, action):
+        from orchestwin.workflow_inputs import (
+            PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE,
+            PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE,
+            PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE,
+            PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE,
+        )
+
+        if "project_id" not in call.params:
+            return
+        project = self._owned(call)
+        if project is None or not project.provided_prototypes:
+            return
+        code = None
+        if action == "validation_walkthrough":
+            code = PROVIDED_PROTOTYPE_WALKTHROUGH_UNAVAILABLE
+        elif call.method != "GET" and "/design/" in call.path:
+            if action == "evaluation":
+                code = PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE
+            elif action.startswith("design_revision"):
+                code = PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE
+            else:
+                code = PROVIDED_PROTOTYPE_OPERATION_UNAVAILABLE
+        if code is not None:
+            raise _Refusal(409, {"code": code})
+
+    def _route_workflow_inputs(self, call):
+        return _Answer(200, self._workflow_inputs(self._code_project(call)))
+
+    def _route_provided_state(self, call):
+        project = self._code_project(call)
+        if not project.provided_prototypes:
+            return _Answer(
+                200,
+                {
+                    "source": "EXPLORATION" if project.design else "NONE",
+                    "approved": False,
+                    "context_current": True,
+                    "limits": [],
+                },
+            )
+        return _Answer(
+            200,
+            {
+                "source": "PROVIDED_PROTOTYPE",
+                "prototype": copy.deepcopy(project.provided_prototypes[-1]),
+                "gate": copy.deepcopy(project.provided_gate),
+                "approved": bool(
+                    project.provided_gate and project.provided_gate.get("status") == "APPROVED"
+                ),
+                "context_current": project.provided_context_current,
+                "limits": self._workflow_inputs(project)["limits"],
+            },
+        )
+
+    def _route_provided_current(self, call):
+        project = self._code_project(call)
+        if not project.provided_prototypes:
+            raise _Refusal(404, {"code": "PROVIDED_PROTOTYPE_NOT_FOUND"})
+        return _Answer(200, copy.deepcopy(project.provided_prototypes[-1]))
+
+    def _route_provided_gate(self, call):
+        project = self._code_project(call)
+        if project.provided_gate is None:
+            raise _Refusal(404, {"code": "PROVIDED_PROTOTYPE_GATE_NOT_FOUND"})
+        return _Answer(200, copy.deepcopy(project.provided_gate))
+
+    def _route_provided_document(self, call):
+        from orchestwin.artifacts.provided_prototypes import provided_prototype_from_snapshot
+        from orchestwin.artifacts.visual_catalog import resolve_visual_tokens
+
+        project = self._code_project(call)
+        snapshot = next(
+            (
+                item
+                for item in reversed(project.provided_prototypes)
+                if item["id"] == call.params["prototype_id"]
+            ),
+            None,
+        )
+        if snapshot is None:
+            raise _Refusal(404, {"code": "PROVIDED_PROTOTYPE_NOT_FOUND"})
+        prototype = provided_prototype_from_snapshot(snapshot)
+        document = mockup_document(
+            prototype.mockup.mockup,
+            tokens=resolve_visual_tokens(VisualChoices.from_snapshot(prototype.visual_choices)),
+            language="en",
+            entry_screen=call.query.get("entry_screen", ["SCR-001"])[0],
+        )
+        return _Answer(200, {"html": document, "title": prototype.title})
 
     def _route_rename_project(self, call: _Call) -> _Answer:
         fields = _Fields(call.json(), ("display_name",))
@@ -5951,11 +6201,13 @@ class FakeStudio:
             for twin in twins
         )
         for spec in ALTERNATIVES[self.language]:
+            direction = self._direction(spec["code"]) if self.directions else None
             language = create_visual_language(
-                choices=VisualChoices.from_snapshot(_choices(spec)),
+                choices=VisualChoices.from_snapshot(_choices(spec, direction)),
                 product_name=spec["product_name"],
                 rationale=spec["rationale"],
                 twin_fit=fits,
+                direction=direction,
             )
             alternatives.append(
                 {
@@ -6050,6 +6302,18 @@ class FakeStudio:
             "generated_mockup": None,
             "owner_assertions": [],
         }
+
+    def _direction(self, code: str) -> VisualDirection:
+        axes, typicality = DIRECTED_ALTERNATIVES[code]
+        name, concept, rules = DIRECTION_TEXTS[self.language][code]
+        return create_visual_direction(
+            name=name,
+            concept=concept,
+            rules=rules,
+            axes=DirectionAxes(**axes),
+            typicality=typicality,
+            candidates=DIRECTION_CANDIDATES,
+        )
 
     def _append_design(
         self, project: FakeProject, package: dict[str, object], account: _Account
@@ -6165,9 +6429,14 @@ class FakeStudio:
             raise _Refusal(
                 409, {"code": "PROPOSAL_REJECTED", "proposal_issue": "UX_DESIGNER_REQUIRED"}
             )
+        self._record_directions(project)
         self._record(project, "DESIGN_PROPOSAL")
         version = self._append_design(project, self._design_package(project), call.account)
         return _Answer(201, _generation_payload("CREATED", version, None))
+
+    def _record_directions(self, project: FakeProject) -> None:
+        if self.directions:
+            self._record(project, "DESIGN_DIRECTIONS")
 
     def _has_designer(self, project: FakeProject) -> bool:
         team = project.team
@@ -6198,6 +6467,7 @@ class FakeStudio:
                     "REJECTED", None, "PROPOSAL_REJECTED", proposal_issue="UX_DESIGNER_REQUIRED"
                 ),
             )
+        self._record_directions(project)
         self._record(project, "DESIGN_REGENERATION")
         version = self._append_design(project, self._design_package(project), call.account)
         return _Answer(201, _generation_payload("CREATED", version, None))
@@ -6235,6 +6505,14 @@ class FakeStudio:
                 "approved_current_package": bool(approved),
             },
         )
+
+    def _route_design_distance(self, call: _Call) -> _Answer:
+        from orchestwin.api.design_distance import DesignDistancePayload
+
+        project, design = self._governed_design(call)
+        version = _design_version(design)
+        report = design_distance_report(version, _kept_mockups(project, design))
+        return _Answer(200, DesignDistancePayload.model_validate(report).model_dump(mode="json"))
 
     def _route_design_revision(self, call: _Call) -> _Answer:
         fields = _Fields(call.json(), ("package",))
@@ -6799,7 +7077,7 @@ class FakeStudio:
                     "media_type": "text/html",
                     "sha256_digest": hashlib.sha256(document).hexdigest(),
                     "size_bytes": len(document),
-                    "storage_key": f"design-evaluation/{run_id}",
+                    "storage_key": f"sha256/{hashlib.sha256(document).hexdigest()[:2]}/{hashlib.sha256(document).hexdigest()}",
                     "location": "design/mockup.html",
                 }
             ],
@@ -6807,7 +7085,9 @@ class FakeStudio:
             "is_multimodal": False,
             "created_at": _iso(started),
         }
-        bundle["content_hash"] = _digest(bundle)
+        bundle["content_hash"] = _digest(
+            {key: bundle[key] for key in ("project_id", "workflow_run_id", "scenario", "artifacts")}
+        )
         earlier = len(project.runs)
         anchors = _anchors(package["prototype"])
         responses = []
@@ -6832,8 +7112,8 @@ class FakeStudio:
                 "evidence_gaps": [],
                 "is_simulated_feedback": True,
             }
-            response["completed_at"] = _iso(self._now())
             response["content_hash"] = _digest(response)
+            response["completed_at"] = _iso(self._now())
             response["disclaimer"] = DISCLAIMER
             responses.append(response)
         responses.sort(key=lambda item: str(item["twin_id"]))
@@ -7199,7 +7479,10 @@ class FakeStudio:
         project = self._owned(call)
         if project is None:
             raise _Refusal(404, {"code": "PROJECT_NOT_FOUND"})
-        return _Answer(200, self._sections(project))
+        document = self._sections(project)
+        if project.workflow_decisions or project.provided_prototypes:
+            document = {**document, "workflow_inputs": self._workflow_inputs(project)}
+        return _Answer(200, document)
 
     def _route_align_sections(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -7762,18 +8045,23 @@ class FakeStudio:
         project = self._new_project(call.account, name, mode)
         self._seed(project, "design", approve=False)
         imported_at = self._now()
-        if "twins/evidence.json" in verified.files:
+        plan = None
+        if "twins/evidence.json" in verified.files or "why" in verified.manifest:
             from orchestwin.api.design import DesignPackagePayload
             from orchestwin.api.teams import TeamProposalVersionResponse
             from orchestwin.api.user_modeling import UserModelingSnapshotVersionPayload
 
-            plan = plan_project_import(
-                verified,
-                project_id=UUID(project.id),
-                brief_version_id=UUID(self._new_id()),
-                owner_user_id=UUID(call.account.id),
-                created_at=imported_at,
-            )
+            try:
+                plan = plan_project_import(
+                    verified,
+                    project_id=UUID(project.id),
+                    brief_version_id=UUID(self._new_id()),
+                    owner_user_id=UUID(call.account.id),
+                    created_at=imported_at,
+                )
+            except KnowledgeArchiveError as error:
+                self._projects.pop(project.id, None)
+                raise _Refusal(422, {"code": error.code, "location": error.detail}) from None
             documents = plan_documents(
                 plan, owner_user_id=UUID(call.account.id), created_at=imported_at
             )
@@ -7811,8 +8099,19 @@ class FakeStudio:
             ]
             project.gates = {}
             project.gate_events = {}
-            project.evidence_versions = copy.deepcopy(plan.research_evidence["evidence"])
-            for item in plan.research_evidence["citations"]:
+            project.mockups = {}
+            project.runs = [item.to_snapshot() for item in plan.evaluations]
+            project.finding_decisions = [item.to_snapshot() for item in plan.finding_decisions]
+            project.validation_hypotheses = copy.deepcopy(
+                (plan.validation_records or {}).get("hypotheses", [])
+            )
+            project.validation_outcomes = copy.deepcopy(
+                (plan.validation_records or {}).get("outcomes", [])
+            )
+            project.evidence_versions = copy.deepcopy(
+                (plan.research_evidence or {}).get("evidence", [])
+            )
+            for item in (plan.research_evidence or {}).get("citations", []):
                 twin = next(
                     (twin for twin in plan.twins if str(twin.twin_id) == item["twin_id"]), None
                 )
@@ -7825,14 +8124,6 @@ class FakeStudio:
                     None,
                 )
                 citation = item["citation"]
-                matches = any(
-                    reference.source_id == citation["source_id"]
-                    and reference.source_version == citation["source_version"]
-                    and reference.content_hash == citation["content_hash"]
-                    for reference in (
-                        () if observation is None else observation.provenance.references
-                    )
-                )
                 project.evidence_changes.append(
                     {
                         "twin_id": item["twin_id"],
@@ -7859,10 +8150,19 @@ class FakeStudio:
                         "after": observation.to_snapshot()
                         if observation is not None
                         else {"kind": "historical-citation", "profile_available": False},
-                        "retired_at": None
-                        if matches and item["status"] == "ACTIVE"
-                        else _iso(imported_at),
+                        "retired_at": None if item["status"] == "ACTIVE" else _iso(imported_at),
                     }
+                )
+        if plan is not None and "why" in verified.manifest:
+            from orchestwin.knowledge.why import importable_why, normalized_why
+
+            original = importable_why(verified, plan.omitted_sections)
+            if normalized_why(
+                original, identities=plan.identities, hashes=plan.hashes
+            ) != normalized_why(self._why_document(project)):
+                self._projects.pop(project.id, None)
+                raise _Refusal(
+                    422, {"code": "FOLDER_WHY_MISMATCH", "location": "exported derivation"}
                 )
         stages = {
             stage: {
@@ -7885,6 +8185,10 @@ class FakeStudio:
             "imported_at": _stamp(imported_at),
             "archive_hash": hashlib.sha256(content).hexdigest(),
         }
+        if plan is not None and plan.import_limits:
+            project.origin["import_limits"] = list(plan.import_limits)
+        if plan is not None and plan.omitted_sections:
+            project.origin["omitted_sections"] = list(plan.omitted_sections)
         twins = project.snapshot["snapshot"]["twin_versions"] if project.snapshot else []
         return _Answer(
             201,
@@ -7902,6 +8206,13 @@ class FakeStudio:
                 ],
                 "imported_at": _stamp(imported_at),
                 "approval_required": list(STAGES),
+                "why_verified": plan is not None and "why" in verified.manifest,
+                "import_limits": [] if plan is None else list(plan.import_limits),
+                **(
+                    {"omitted_sections": list(plan.omitted_sections)}
+                    if plan is not None and plan.omitted_sections
+                    else {}
+                ),
             },
         )
 
@@ -9362,6 +9673,297 @@ class FakeStudio:
             },
         )
 
+    def _why_document(self, project: FakeProject, *, validation_context=False) -> dict[str, object]:
+        from orchestwin.why import build_why_document
+
+        return build_why_document(
+            project_id=project.id,
+            validation_context=validation_context,
+            stages={
+                "brief": [
+                    {**item.payload, "brief": item.brief.to_snapshot()} for item in project.briefs
+                ],
+                "team": [
+                    {
+                        **{name: value for name, value in item.items() if name != "perspectives"},
+                        "proposal": _fake_team_proposal(item).to_snapshot(),
+                    }
+                    for item in project.teams
+                ],
+                "twins": [
+                    {**item, "snapshot": _fake_modeling(item["snapshot"]).to_snapshot()}
+                    for item in project.snapshots
+                ],
+                "requirements": [
+                    {
+                        **item,
+                        "specification": _fake_requirements(item["specification"]).to_snapshot(),
+                    }
+                    for item in project.requirements
+                ],
+                "design": [
+                    {**item, "package": _fake_design(item["package"]).to_snapshot()}
+                    for item in project.designs
+                ],
+            },
+            evidence={
+                "evidence": project.evidence_versions,
+                "citations": self._evidence_citations(project),
+            },
+            evaluations=[{"runs": project.runs, "decisions": project.finding_decisions}],
+            hypotheses=project.validation_hypotheses,
+            outcomes=project.validation_outcomes,
+            learning={"twins": self._learning_entries(project)},
+            workflow_inputs=self._workflow_inputs(project),
+            mockups=[
+                item
+                for item in project.mockups.values()
+                if item.get("base_reference") and item.get("audit_reference")
+            ],
+        )
+
+    def _route_why_document(self, call: _Call) -> _Answer:
+        return _Answer(200, self._why_document(self._code_project(call)))
+
+    def seed_validation_records(self, project: FakeProject, *, hypotheses=(), outcomes=()):
+        from orchestwin.artifacts.human_validation import (
+            hypothesis_from_snapshot,
+            outcome_from_snapshot,
+        )
+
+        for restore, items in (
+            (hypothesis_from_snapshot, hypotheses),
+            (outcome_from_snapshot, outcomes),
+        ):
+            for item in items:
+                record = restore(item).to_snapshot()
+                if record["project_id"] != project.id or record["owner_user_id"] != str(
+                    project.account.id
+                ):
+                    raise ValueError("validation fixture must match its project and owner")
+        project.validation_hypotheses = copy.deepcopy(list(hypotheses))
+        project.validation_outcomes = copy.deepcopy(list(outcomes))
+
+    def _route_validation(self, call: _Call) -> _Answer:
+        from orchestwin.validation import validation_overview
+
+        project = self._code_project(call)
+        document = validation_overview(
+            document=self._why_document(project, validation_context=True),
+            hypotheses=project.validation_hypotheses,
+            outcomes=project.validation_outcomes,
+            evidence={"evidence": project.evidence_versions},
+        )
+        if project.workflow_decisions or project.provided_prototypes:
+            document = {**document, "workflow_inputs": self._workflow_inputs(project)}
+        return _Answer(200, document)
+
+    def _route_validation_walkthrough(self, call: _Call) -> _Answer:
+        from orchestwin.validation import ValidationError, scenario_walkthrough
+
+        try:
+            return _Answer(
+                200,
+                scenario_walkthrough(
+                    self._why_document(self._code_project(call), validation_context=True),
+                    call.query.get("scenario_key", [""])[0],
+                    alternative_id=call.query.get("alternative_id", [None])[0],
+                    document_hash=call.query.get("document_hash", [None])[0],
+                ),
+            )
+        except ValidationError as error:
+            raise _Refusal(409, {"code": error.code}) from None
+
+    def _activity_facts(self, project: FakeProject) -> list[dict[str, object]]:
+        facts = [_activity_fact(project.created_at, "BRIEF", "PROJECT_CREATED", "OWNER")]
+        for turn in (turn for dialogue in project.dialogues for turn in dialogue.turns):
+            facts.append(_activity_fact(turn.asked_at, "BRIEF", "BRIEF_QUESTION_ASKED", "MODEL"))
+            if turn.answer is not None and turn.answered_at is not None:
+                waited = turn.answered_at - turn.asked_at
+                facts.append(
+                    _activity_fact(
+                        turn.answered_at,
+                        "BRIEF",
+                        "BRIEF_QUESTION_ANSWERED",
+                        "OWNER",
+                        duration_ms=round(waited.total_seconds() * 1000),
+                        outcome=turn.answer.kind.value,
+                    )
+                )
+        versions = (
+            ("BRIEF", "BRIEF_VERSION_SAVED", "OWNER", [item.payload for item in project.briefs]),
+            ("TEAM", "TEAM_VERSION_SAVED", "MODEL", project.teams),
+            ("USER_TWINS", "TWINS_VERSION_SAVED", "STUDIO", project.snapshots),
+            ("REQUIREMENTS", "DEFINITION_VERSION_SAVED", "STUDIO", project.requirements),
+            ("DESIGN", "DESIGN_VERSION_SAVED", "STUDIO", project.designs),
+            ("PACKAGE", "PACKAGE_PUBLISHED", "OWNER", project.packages),
+        )
+        for section, kind, actor, items in versions:
+            for item in items:
+                if not item.get("created_at"):
+                    continue
+                revision = item.get("revision_kind")
+                facts.append(
+                    _activity_fact(
+                        item["created_at"],
+                        section,
+                        kind,
+                        "OWNER" if revision in OWNER_REVISIONS else actor,
+                        version_number=item.get("version_number"),
+                        outcome=revision,
+                    )
+                )
+        for event in (event for events in project.gate_events.values() for event in events):
+            aligned = event.reason == ALIGNMENT_REASON
+            facts.append(
+                _activity_fact(
+                    event.occurred_at,
+                    ACTIVITY_GATES[event.artifact.gate_type],
+                    ACTIVITY_GATE_KINDS[event.kind.value],
+                    "STUDIO" if aligned or event.actor_user_id is None else "OWNER",
+                    version_number=event.artifact.version,
+                    outcome="ALIGNED" if aligned else None,
+                )
+            )
+        for item in project.usage:
+            purpose = str(item["purpose"])
+            facts.append(
+                _activity_fact(
+                    item["recorded_at"],
+                    ACTIVITY_PURPOSES.get(purpose)
+                    or ACTIVITY_TASKS.get(str(item["task"]), "DESIGN"),
+                    "GENERATION",
+                    "MODEL",
+                    duration_ms=item["latency_milliseconds"],
+                    outcome=item["failure_code"] or item["status"],
+                    purpose=purpose,
+                )
+            )
+        return facts
+
+    def _activity_append(
+        self, project: FakeProject, rows: Sequence[Mapping[str, object]]
+    ) -> list[dict[str, object]]:
+        received_at = _iso(self._now())
+        first = len(project.activity_journal) + 1
+        added = [
+            {"sequence": first + index, **row, "received_at": received_at}
+            for index, row in enumerate(rows)
+        ]
+        project.activity_journal.extend(added)
+        return added
+
+    def _route_activity(self, call: _Call) -> _Answer:
+        from orchestwin.activity import ActivityError, project_activity
+
+        project = self._code_project(call)
+        try:
+            document = project_activity(
+                project_id=project.id,
+                facts=self._activity_facts(project),
+                journal=project.activity_journal,
+            )
+        except ActivityError as error:
+            raise _Refusal(422, {"code": error.code}) from None
+        return _Answer(200, document)
+
+    def _route_activity_session(self, call: _Call) -> _Answer:
+        from orchestwin.activity import active_session
+
+        session = active_session(self._code_project(call).activity_journal)
+        return _Answer(200, {"active": session is not None, "session": session})
+
+    def _route_activity_start(self, call: _Call) -> _Answer:
+        from orchestwin.activity import (
+            MAX_JOURNAL_EVENTS,
+            ActivityError,
+            active_session,
+            validate_session_code,
+        )
+
+        body = call.json()
+        try:
+            if not isinstance(body, dict) or set(body) != {"session_code"}:
+                raise ActivityError("ACTIVITY_INPUT_INVALID")
+            code = validate_session_code(body["session_code"])
+        except ActivityError as error:
+            raise _Refusal(422, {"code": error.code}) from None
+        project = self._code_project(call)
+        if active_session(project.activity_journal) is not None:
+            raise _Refusal(409, {"code": "ACTIVITY_SESSION_ACTIVE"})
+        if any(row["session_code"] == code for row in project.activity_journal):
+            raise _Refusal(409, {"code": "ACTIVITY_SESSION_CODE_USED"})
+        if len(project.activity_journal) >= MAX_JOURNAL_EVENTS:
+            raise _Refusal(409, {"code": "ACTIVITY_JOURNAL_FULL"})
+        (row,) = self._activity_append(project, [_activity_row(code, "SESSION_STARTED")])
+        return _Answer(
+            201,
+            {
+                "status": "ACTIVITY_SESSION_STARTED",
+                "session": {"code": code, "started_at": row["received_at"]},
+            },
+        )
+
+    def _route_activity_end(self, call: _Call) -> _Answer:
+        from orchestwin.activity import ActivityError, active_session, validate_session_code
+
+        try:
+            code = validate_session_code(call.params["session_code"])
+        except ActivityError as error:
+            raise _Refusal(422, {"code": error.code}) from None
+        project = self._code_project(call)
+        session = active_session(project.activity_journal)
+        if session is None or session["code"] != code:
+            raise _Refusal(409, {"code": "ACTIVITY_SESSION_NOT_ACTIVE"})
+        (row,) = self._activity_append(project, [_activity_row(code, "SESSION_ENDED")])
+        return _Answer(
+            200,
+            {
+                "status": "ACTIVITY_SESSION_ENDED",
+                "session": {**session, "ended_at": row["received_at"]},
+            },
+        )
+
+    def _route_activity_events(self, call: _Call) -> _Answer:
+        from orchestwin.activity import (
+            MAX_JOURNAL_EVENTS,
+            ActivityError,
+            active_session,
+            journal_rows,
+        )
+
+        body = call.json()
+        try:
+            if not isinstance(body, dict) or not set(body) <= {"session_code", "source", "events"}:
+                raise ActivityError("ACTIVITY_INPUT_INVALID")
+            rows = journal_rows(
+                source=body.get("source"),
+                events=body.get("events"),
+                session_code=body.get("session_code"),
+            )
+        except ActivityError as error:
+            raise _Refusal(422, {"code": error.code}) from None
+        project = self._code_project(call)
+        session = active_session(project.activity_journal)
+        if session is None or session["code"] != body["session_code"]:
+            raise _Refusal(409, {"code": "ACTIVITY_SESSION_NOT_ACTIVE"})
+        if len(project.activity_journal) + len(rows) > MAX_JOURNAL_EVENTS:
+            raise _Refusal(409, {"code": "ACTIVITY_JOURNAL_FULL"})
+        self._activity_append(project, rows)
+        return _Answer(202, {"status": "ACTIVITY_EVENTS_RECORDED", "recorded": len(rows)})
+
+    def _route_why(self, call: _Call) -> _Answer:
+        from orchestwin.why import WhyError, explain_why
+
+        document = self._why_document(self._code_project(call))
+        try:
+            return _Answer(200, explain_why(document, call.query.get("code", [""])[0]))
+        except WhyError as error:
+            status = {"WHY_CODE_INVALID": 422, "WHY_CODE_AMBIGUOUS": 409}.get(error.code, 404)
+            raise _Refusal(
+                status, {"code": error.code, "candidates": list(error.candidates)}
+            ) from None
+
     def _route_evidence_show(self, call: _Call) -> _Answer:
         project = self._code_project(call)
         version = call.query.get("version", [None])[0]
@@ -10392,6 +10994,24 @@ class FakeStudio:
     def _knowledge_folder(
         self, project: FakeProject, present: Sequence[str], number: int, moment: datetime
     ):
+        from types import SimpleNamespace
+
+        from orchestwin.artifacts.design_evaluation import design_evaluation_run_from_snapshot
+        from orchestwin.artifacts.design_finding_validations import finding_validation_from_snapshot
+        from orchestwin.knowledge.sources import knowledge_feedback
+        from orchestwin.knowledge.validation_records import preserve_import_history
+
+        origin = None
+        if project.origin is not None:
+            metadata = project.origin["origin"]
+            origin = SimpleNamespace(
+                source_project_id=metadata["project_id"],
+                package_version=metadata["package_version"],
+                package_content_hash=metadata["package_content_hash"],
+                omitted_sections=project.origin.get("omitted_sections", ()),
+                import_limits=project.origin.get("import_limits", ()),
+            )
+
         documents = {}
         for stage in present:
             version = copy.deepcopy(project.artifact(stage))
@@ -10416,6 +11036,19 @@ class FakeStudio:
             "project_name": project.name,
             "state": self._state_sources(project, present[-1]),
             "research_evidence": self._evidence_dossier(project),
+            "validation_records": preserve_import_history(
+                {
+                    "hypotheses": project.validation_hypotheses,
+                    "outcomes": project.validation_outcomes,
+                },
+                origin,
+            ),
+            "feedback": knowledge_feedback(
+                runs=(design_evaluation_run_from_snapshot(item) for item in project.runs),
+                validations=(
+                    finding_validation_from_snapshot(item) for item in project.finding_decisions
+                ),
+            ),
         }
         for stage, version in versions.items():
             name = "modeling" if stage == "twins" else stage
@@ -10627,7 +11260,7 @@ def _path_parameters(values: Mapping[str, str]) -> dict[str, str]:
             else:
                 parsed[name] = str(int(value))
             continue
-        if name in ("commit", "code"):
+        if name in ("commit", "code", "session_code"):
             parsed[name] = value
             continue
         try:
@@ -10797,6 +11430,31 @@ def _stamp(moment: datetime) -> str:
 
 def _iso(moment: datetime) -> str:
     return moment.astimezone(UTC).isoformat()
+
+
+def _activity_fact(
+    at: datetime | str, section: str, kind: str, actor: str, **values: object
+) -> dict[str, object]:
+    return {
+        "at": at if isinstance(at, str) else _iso(at),
+        "section": section,
+        "kind": kind,
+        "actor": actor,
+        **values,
+    }
+
+
+def _activity_row(session_code: str, kind: str) -> dict[str, object]:
+    return {
+        "session_code": session_code,
+        "source": "STUDIO",
+        "kind": kind,
+        "section": None,
+        "target": None,
+        "client_at": None,
+        "duration_ms": None,
+        "status": None,
+    }
 
 
 def _canonical(value: object) -> str:
@@ -12042,6 +12700,7 @@ def _user_payload(account: _Account) -> dict[str, object]:
         "email": account.email,
         "is_active": True,
         "created_at": _stamp(account.created_at),
+        "guidance_mode": None,
     }
 
 
@@ -12272,6 +12931,40 @@ def _fake_design(package: Mapping[str, object]):
     return DesignPackagePayload.model_validate(package).to_domain()
 
 
+def _design_version(design: Mapping[str, object]) -> DesignPackageVersion:
+    return DesignPackageVersion(
+        id=UUID(str(design["id"])),
+        project_id=UUID(str(design["project_id"])),
+        version_number=int(design["version_number"]),
+        package=_fake_design(design["package"]),
+        content_hash=str(design["content_hash"]),
+        created_by_user_id=UUID(str(design["created_by_user_id"])),
+        created_at=datetime.fromisoformat(str(design["created_at"])),
+        based_on_version_number=design["based_on_version_number"],
+    )
+
+
+def _kept_mockups(
+    project: FakeProject, design: Mapping[str, object]
+) -> dict[UUID, GeneratedMockup]:
+    package = design["package"]
+    applied = package.get("generated_mockup")
+    mockups: dict[UUID, GeneratedMockup] = {}
+    for alternative in package["alternatives"]:
+        identifier = str(alternative["id"])
+        bound = applied
+        if bound is None or str(bound["mockup"]["design_alternative_id"]) != identifier:
+            stored = project.mockups.get(identifier)
+            bound = None if stored is None else stored["package"].get("generated_mockup")
+        language = alternative.get("visual_language")
+        if bound is None or language is None:
+            continue
+        mockups[UUID(identifier)] = generated_mockup_from_snapshot(
+            bound["mockup"], token_names=language["tokens"]
+        )
+    return mockups
+
+
 def _fake_persona_profile(profile: Mapping[str, object]):
     payload = copy.deepcopy(dict(profile))
     payload.setdefault("schema_version", 1)
@@ -12457,7 +13150,19 @@ def _generation_payload(
     }
 
 
-def _choices(spec: Mapping[str, str]) -> dict[str, str]:
+def _choices(spec: Mapping[str, str], direction: VisualDirection | None = None) -> dict[str, str]:
+    choices = _plain_choices(spec)
+    if direction is None:
+        return choices
+    for axis in DIRECTION_AXES:
+        for dimension, allowed in AXIS_BINDINGS[axis][getattr(direction.axes, axis)].items():
+            values = [item.value for item in allowed]
+            if choices[dimension] not in values:
+                choices[dimension] = values[0]
+    return choices
+
+
+def _plain_choices(spec: Mapping[str, str]) -> dict[str, str]:
     return {
         "archetype": spec["archetype"],
         "hue_family": spec["hue"],
