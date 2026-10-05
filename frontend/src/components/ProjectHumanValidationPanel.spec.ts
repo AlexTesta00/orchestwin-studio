@@ -1,8 +1,12 @@
-import { flushPromises, mount } from "@vue/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount, type DOMWrapper } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
 import ProjectHumanValidationPanel from "./ProjectHumanValidationPanel.vue";
 import { HumanValidationApiError, type HumanValidationApi } from "../api/humanValidation";
 import type { ResearchEvidenceApi } from "../api/researchEvidence";
+import { useDesignStore } from "../stores/design";
+import { UNSELECTED_DESIGN_VERSION } from "../test/designFixtures";
 import {
   operationalHypothesis,
   validationCandidate,
@@ -10,19 +14,28 @@ import {
   validationOutcome,
   validationOverview,
   validationSource,
+  VALIDATION_HASH,
+  VALIDATION_ORIGIN,
   VALIDATION_QUOTE,
   VALIDATION_SOURCE_ID,
+  VALIDATION_TWIN,
 } from "../test/humanValidationFixtures";
+import { whyNode } from "../test/whyFixtures";
+import type { DesignPackageVersionPayload } from "../types/design";
 import type { HumanValidationOverview, OperationalHypothesis } from "../types/humanValidation";
+import type { WhyDocument, WhyNode } from "../types/why";
 import { expectAccessible } from "../test/axe";
 
 const wrappers: { unmount: () => void }[] = [];
+beforeEach(() => {
+  setActivePinia(createPinia());
+});
 afterEach(() => {
   for (const wrapper of wrappers) wrapper.unmount();
   wrappers.length = 0;
 });
 
-function clients(initial = validationOverview()) {
+function clients(initial = validationOverview(), graph: WhyDocument = validationDocument()) {
   let current = initial;
   const api = {
     overview: vi.fn<HumanValidationApi["overview"]>(async () => current),
@@ -76,7 +89,7 @@ function clients(initial = validationOverview()) {
     propose: vi.fn(),
     decide: vi.fn(),
   };
-  const why = { document: vi.fn(async () => validationDocument()), explain: vi.fn() };
+  const why = { document: vi.fn(async () => graph), explain: vi.fn() };
   return {
     api,
     evidence,
@@ -132,6 +145,165 @@ function withHypothesis(hypothesis: OperationalHypothesis = operationalHypothesi
       contested: 0,
       retired_outcomes: 0,
     },
+  });
+}
+
+const CRITIQUE_TEXT =
+  "La proposta risponde agli obiettivi di velocità e di uso con il pollice per chi fa conti in piedi. Il giudizio si basa su osservazioni dedotte dal brief e non verificate con persone reali.";
+
+const CONCERN_SUMMARY = "Con il pollice si preme facilmente il tasto accanto a quello giusto.";
+const CONCERN_MITIGATION = "Tasti più distanziati nella prossima versione.";
+const DESIGN_VERSION: DesignPackageVersionPayload = {
+  ...UNSELECTED_DESIGN_VERSION,
+  project_id: "project",
+  package: {
+    ...UNSELECTED_DESIGN_VERSION.package,
+    project_id: "project",
+    concerns: [
+      {
+        id: "concern-id",
+        code: "DRK-001",
+        summary: CONCERN_SUMMARY,
+        mitigation: CONCERN_MITIGATION,
+        requirement_ids: [],
+        design_alternative_ids: [],
+      },
+    ],
+  },
+};
+const READER_TWIN = whyNode({
+  key: "reader-twin",
+  code: "UT-002",
+  kind: "USER_TWIN",
+  title: "Reader twin",
+  validation_required: false,
+  reference: { artifact_id: "reader-twin-id", version_number: 1, content_hash: VALIDATION_HASH },
+});
+
+function rationale(text: string): WhyNode["rationale"] {
+  return { text, origin: "MODEL", version_number: 2, content_hash: VALIDATION_HASH };
+}
+
+function candidateOf(origin: WhyNode, twins = [VALIDATION_TWIN, READER_TWIN]) {
+  return validationCandidate({
+    key: origin.key,
+    code: origin.code,
+    kind: origin.kind,
+    title: origin.title,
+    reference: origin.reference,
+    origin,
+    twin_references: twins,
+  });
+}
+
+function readableCandidates(): HumanValidationOverview {
+  const candidates = [
+    candidateOf(
+      whyNode({
+        key: "silent",
+        code: "DRK-001",
+        kind: "DESIGN_CONCERN",
+        title: "DRK-001",
+        reference: {
+          artifact_id: "concern-id",
+          version_number: DESIGN_VERSION.version_number,
+          content_hash: DESIGN_VERSION.content_hash,
+        },
+      }),
+    ),
+    candidateOf(
+      whyNode({
+        key: "explained",
+        code: "DRK-002",
+        kind: "DESIGN_CONCERN",
+        title: "DRK-002",
+        rationale: rationale("Il tasto per ricominciare è lontano dal pollice."),
+      }),
+    ),
+    candidateOf(
+      whyNode({
+        key: "finding",
+        code: "UTF-001",
+        kind: "SYNTHETIC_FINDING",
+        title: "Dopo il secondo numero il display non mostra più l'operazione.",
+        rationale: rationale("Spiegazione completa che resta nei dettagli."),
+      }),
+    ),
+    candidateOf(
+      whyNode({
+        key: "second-finding",
+        code: "UTF-001",
+        kind: "SYNTHETIC_FINDING",
+        title: "Non vedo come cancellare soltanto l'ultima cifra.",
+      }),
+    ),
+    candidateOf(
+      whyNode({
+        key: "critique",
+        code: "CRQ-001",
+        kind: "SYNTHETIC_DESIGN_CRITIQUE",
+        title: CRITIQUE_TEXT,
+        rationale: rationale(CRITIQUE_TEXT),
+      }),
+    ),
+    candidateOf(
+      whyNode({
+        ...VALIDATION_ORIGIN,
+        declared_context: {
+          perspectives: [],
+          observation_value: {
+            kind: "ITEMS",
+            text: null,
+            items: ["Tasti grandi", "Cifre leggibili"],
+            reason: null,
+          },
+        },
+      }),
+      [VALIDATION_TWIN],
+    ),
+    candidateOf(
+      whyNode({
+        ...VALIDATION_ORIGIN,
+        key: "expertise",
+        code: "UT-001:user_twin.expertise",
+        title: "expertise",
+        rationale: rationale("Il brief non descrive le competenze."),
+        declared_context: {
+          perspectives: [],
+          observation_value: { kind: "UNKNOWN", text: null, items: [], reason: null },
+        },
+      }),
+      [],
+    ),
+  ];
+  return validationOverview({ candidates, candidate_count: candidates.length });
+}
+
+function readableDocument(): WhyDocument {
+  const base = validationDocument();
+  return {
+    ...base,
+    nodes: [...base.nodes, READER_TWIN],
+    links: [
+      ...base.links,
+      { source: "finding", target: "twin", kind: "EVALUATED_BY" },
+      { source: "second-finding", target: "reader-twin", kind: "EVALUATED_BY" },
+      { source: "critique", target: "reader-twin", kind: "ACTOR" },
+    ],
+  };
+}
+
+async function openCandidates(wrapper: ReturnType<typeof panel>["wrapper"]) {
+  await flushPromises();
+  await wrapper.get('[data-testid="validation-show-candidates"]').trigger("click");
+  await wrapper.get('[data-testid="validation-show-all"]').trigger("click");
+  return wrapper.findAll('[data-testid="validation-candidate"]');
+}
+
+function read(cards: DOMWrapper<Element>[], part: "title" | "twin" | "text") {
+  return cards.map((card) => {
+    const element = card.find(`[data-testid="validation-candidate-${part}"]`);
+    return element.exists() ? element.text() : null;
   });
 }
 
@@ -409,5 +581,105 @@ describe("Web human validation", () => {
     expect(wrapper.text()).toContain("Question");
     expect(wrapper.text()).toContain("What to observe");
     await expectAccessible(wrapper.element);
+  });
+
+  it("shows the type, the twin and what each candidate says without opening the details", async () => {
+    const { wrapper } = panel(clients(readableCandidates(), readableDocument()));
+    const cards = await openCandidates(wrapper);
+    expect(read(cards, "title")).toEqual([
+      "Criticità · DRK-001",
+      "Criticità · DRK-002",
+      "Osservazione del twin · UTF-001",
+      "Osservazione del twin · UTF-001",
+      "Parere del twin · CRQ-001",
+      "Calculator twin · Obiettivi",
+      "Twin · Esperienza",
+    ]);
+    expect(read(cards, "twin")).toEqual([
+      null,
+      null,
+      "Twin: Calculator twin",
+      "Twin: Reader twin",
+      "Twin: Reader twin",
+      null,
+      null,
+    ]);
+    expect(read(cards, "text")).toEqual([
+      null,
+      "Il tasto per ricominciare è lontano dal pollice.",
+      "Dopo il secondo numero il display non mostra più l'operazione.",
+      "Non vedo come cancellare soltanto l'ultima cifra.",
+      CRITIQUE_TEXT,
+      "Tasti grandi, Cifre leggibili",
+      "Il brief non descrive le competenze.",
+    ]);
+    for (const text of wrapper.findAll('[data-testid="validation-candidate-text"]')) {
+      expect(text.element.closest("details")).toBeNull();
+      expect(text.classes()).toContain("line-clamp-3");
+    }
+    expect(cards[2]!.get("details").text()).toContain(
+      "Spiegazione completa che resta nei dettagli.",
+    );
+    expect(cards[4]!.get("details").text()).toContain(CRITIQUE_TEXT);
+    expect(cards[5]!.get("details").text()).toContain("UT-001:user_twin.goals");
+  });
+
+  it("names the candidate types and twins in English and keeps the cards accessible", async () => {
+    const { wrapper } = panel(clients(readableCandidates(), readableDocument()), {
+      locale: "en",
+    });
+    const cards = await openCandidates(wrapper);
+    expect(read(cards, "title")).toEqual([
+      "Concern · DRK-001",
+      "Concern · DRK-002",
+      "Twin observation · UTF-001",
+      "Twin observation · UTF-001",
+      "Twin opinion · CRQ-001",
+      "Calculator twin · Goals",
+      "Twin · Expertise",
+    ]);
+    expect(read(cards, "twin")[3]).toBe("Twin: Reader twin");
+    expect(read(cards, "text")[5]).toBe("Tasti grandi, Cifre leggibili");
+    expect(cards[5]!.text()).toContain("To verify");
+    expect(cards[2]!.text()).toContain("Synthetic pre-validation");
+    await expectAccessible(wrapper.element);
+  });
+
+  it("takes a concern sentence only from the loaded design version of this project", async () => {
+    const design = useDesignStore();
+    const { wrapper } = panel(clients(readableCandidates(), readableDocument()));
+    const cards = await openCandidates(wrapper);
+    expect(read(cards, "text")[0]).toBeNull();
+    design.activateProject("other");
+    design.applyVersion({ ...DESIGN_VERSION, project_id: "other" });
+    await nextTick();
+    expect(read(cards, "text")[0]).toBeNull();
+    design.activateProject("project");
+    design.applyVersion({ ...DESIGN_VERSION, content_hash: "e".repeat(64) });
+    await nextTick();
+    expect(read(cards, "text")[0]).toBeNull();
+    design.applyVersion(DESIGN_VERSION);
+    await nextTick();
+    expect(read(cards, "text").slice(0, 2)).toEqual([
+      CONCERN_SUMMARY,
+      "Il tasto per ricominciare è lontano dal pollice.",
+    ]);
+    expect(read(cards, "title")[0]).toBe("Criticità · DRK-001");
+    expect(cards[0]!.text()).not.toContain(CONCERN_MITIGATION);
+    await wrapper.setProps({ locale: "en" });
+    expect(read(cards, "title")[0]).toBe("Concern · DRK-001");
+    expect(read(cards, "text")[0]).toBe(CONCERN_SUMMARY);
+  });
+
+  it("titles the hypothesis form with the heading of the chosen card", async () => {
+    const { wrapper } = panel(clients(readableCandidates(), readableDocument()));
+    const cards = await openCandidates(wrapper);
+    const heading = () => wrapper.get('[data-testid="validation-hypothesis-form"] h3').text();
+    await cards[0]!.get('[data-testid="validation-select-candidate"]').trigger("click");
+    expect(heading()).toBe("Ipotesi operativa · Criticità · DRK-001");
+    await cards[5]!.get('[data-testid="validation-select-candidate"]').trigger("click");
+    expect(heading()).toBe("Ipotesi operativa · Calculator twin · Obiettivi");
+    await wrapper.setProps({ locale: "en" });
+    expect(heading()).toBe("Operational hypothesis · Calculator twin · Goals");
   });
 });

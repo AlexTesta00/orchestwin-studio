@@ -94,8 +94,8 @@ export const humanValidationCopy = {
     walkthrough: "Percorso dello scenario",
     openWalkthrough: "Apri percorso",
     walkthroughIntro:
-      "Compito e passaggi provengono dallo scenario. La navigazione del mockup è una prova software.",
-    steps: "Passaggi",
+      "Compito e passi provengono dallo scenario. La navigazione del mockup è una prova software.",
+    steps: "Passi",
     expected: "Esito atteso nello scenario",
     anchorCandidates: "Elementi pertinenti allo scenario",
     anchorCandidatesHelp:
@@ -104,9 +104,14 @@ export const humanValidationCopy = {
     noObserve:
       "Che cosa osservare non è specificato per questo passo. Completa l'ipotesi operativa.",
     noTask: "Il compito non è disponibile nella versione dello scenario.",
-    noSteps: "I passaggi non sono disponibili nella versione dello scenario.",
+    noSteps: "I passi non sono disponibili nella versione dello scenario.",
     noScenarios: "Nessuno scenario disponibile per questo mockup.",
     omitted: "Alcuni dati non sono disponibili in questa vista.",
+    kinds: {
+      DESIGN_CONCERN: "Criticità",
+      SYNTHETIC_DESIGN_CRITIQUE: "Parere del twin",
+      SYNTHETIC_FINDING: "Osservazione del twin",
+    },
     states: {
       TO_VERIFY: "Da verificare",
       CONFIRMED: "Confermata",
@@ -118,7 +123,7 @@ export const humanValidationCopy = {
       MISSING_DESIGN: "Manca il design collegato",
       VALIDATION_REFERENCE_UNAVAILABLE: "Il riferimento esatto non è disponibile",
       STEP_ANCHOR_NOT_ATTESTED: "Manca il collegamento attestato fra questo passo e un elemento",
-      SCENARIO_STEPS_UNAVAILABLE: "Passaggi dello scenario non disponibili",
+      SCENARIO_STEPS_UNAVAILABLE: "Passi dello scenario non disponibili",
       MISSING_MOCKUP_ANCHOR: "Manca un elemento del mockup collegato allo scenario",
       SCENARIO_LEVEL_ANCHORS_ONLY:
         "Gli elementi sono collegati allo scenario, non ai singoli passi",
@@ -214,7 +219,7 @@ export const humanValidationCopy = {
     humanSummary: "Active outcomes from sessions with people",
     syntheticSummary: "Active outcomes from synthetic exercises",
     retiredHelp:
-      "The retired source stays in history with its quote. Without other active human outcomes the hypothesis returns to verify.",
+      "The retired source stays in history with its quote. Without other active human outcomes the hypothesis goes back to awaiting verification.",
     walkthrough: "Scenario walkthrough",
     openWalkthrough: "Open walkthrough",
     walkthroughIntro:
@@ -231,6 +236,11 @@ export const humanValidationCopy = {
     noSteps: "The steps are unavailable in this scenario version.",
     noScenarios: "No scenario available for this mockup.",
     omitted: "Some data is unavailable in this view.",
+    kinds: {
+      DESIGN_CONCERN: "Concern",
+      SYNTHETIC_DESIGN_CRITIQUE: "Twin opinion",
+      SYNTHETIC_FINDING: "Twin observation",
+    },
     states: {
       TO_VERIFY: "To verify",
       CONFIRMED: "Confirmed",

@@ -14,6 +14,7 @@ import {
 } from "../api/humanValidation";
 import { whyApi as defaultWhyApi, type WhyApi } from "../api/why";
 import { researchEvidenceApi, type ResearchEvidenceApi } from "../api/researchEvidence";
+import { useDesignStore } from "../stores/design";
 import type { AuthorizedRequest } from "../stores/twinLearning";
 import type {
   EvidenceFocus,
@@ -26,7 +27,7 @@ import type {
   ValidationSessionKind,
 } from "../types/humanValidation";
 import type { ResearchEvidencePayload } from "../types/researchEvidence";
-import type { WhyDocument } from "../types/why";
+import type { WhyDocument, WhyNode } from "../types/why";
 
 const props = withDefaults(
   defineProps<{
@@ -55,6 +56,7 @@ provide(
 );
 const prefix = `validation-${useId()}`;
 const copy = computed(() => humanValidationCopy[props.locale]);
+const designStore = useDesignStore();
 const overview = ref<HumanValidationOverview | null>(null);
 const document = ref<WhyDocument | null>(null);
 const sources = ref<ResearchEvidencePayload[]>([]);
@@ -108,6 +110,20 @@ const visibleCandidates = computed(() =>
     ? (overview.value?.candidates ?? [])
     : (overview.value?.candidates.slice(0, 3) ?? []),
 );
+const candidateTwins = computed(() => {
+  const linked = new Map<string, Set<string>>();
+  for (const link of document.value?.links ?? [])
+    linked.set(link.source, (linked.get(link.source) ?? new Set<string>()).add(link.target));
+  return new Map(
+    (overview.value?.candidates ?? []).map((candidate) => [
+      candidate.key,
+      candidate.twin_references
+        .filter((node) => linked.get(candidate.key)?.has(node.key))
+        .map((node) => whyNodeTitle(node, props.locale))
+        .join(", "),
+    ]),
+  );
+});
 const scenarioOptions = computed(() =>
   currentNodes.value.filter(
     (node) =>
@@ -190,6 +206,41 @@ function sourceKey(source: ResearchEvidencePayload): string {
 }
 function gapLabel(code: string): string {
   return copy.value.gaps[code as keyof typeof copy.value.gaps] ?? whyGapLabel(code, props.locale);
+}
+function candidateHeading(candidate: ValidationCandidate): string {
+  const node = candidate.origin;
+  if (node.kind === "USER_TWIN_CLAIM") {
+    const twin = candidateTwins.value.get(candidate.key) || copy.value.twin;
+    return `${twin} · ${whyNodeTitle(node, props.locale)}`;
+  }
+  const kind = copy.value.kinds[node.kind as keyof typeof copy.value.kinds];
+  return kind ? `${kind} · ${node.code}` : node.code;
+}
+function concernSummary(node: WhyNode): string | null {
+  const version = designStore.projectId === props.projectId ? designStore.current : null;
+  if (
+    node.kind !== "DESIGN_CONCERN" ||
+    !version ||
+    version.project_id !== props.projectId ||
+    version.version_number !== node.reference.version_number ||
+    version.content_hash !== node.reference.content_hash
+  )
+    return null;
+  return (
+    version.package.concerns.find(
+      (concern) => concern.id === node.reference.artifact_id && concern.code === node.code,
+    )?.summary ?? null
+  );
+}
+function candidateText(node: WhyNode): string | null {
+  const value = node.declared_context.observation_value;
+  const own =
+    node.kind === "USER_TWIN_CLAIM"
+      ? value?.text || value?.items?.join(", ") || value?.reason
+      : node.title === node.code
+        ? concernSummary(node)
+        : node.title;
+  return own?.trim() || node.rationale?.text.trim() || null;
 }
 function state(hypothesis: OperationalHypothesis): string {
   return copy.value.states[hypothesis.state ?? "TO_VERIFY"];
@@ -547,9 +598,26 @@ watch(
             class="grid min-w-0 gap-2 rounded-field border border-dashed border-violet-on-night/60 p-4"
             data-testid="validation-candidate"
           >
-            <h4 class="m-0 text-sm font-semibold [overflow-wrap:anywhere]">
-              {{ whyNodeTitle(candidate.origin, locale) }}
+            <h4
+              class="m-0 text-sm font-semibold [overflow-wrap:anywhere]"
+              data-testid="validation-candidate-title"
+            >
+              {{ candidateHeading(candidate) }}
             </h4>
+            <p
+              v-if="candidate.kind !== 'USER_TWIN_CLAIM' && candidateTwins.get(candidate.key)"
+              class="m-0 text-xs text-on-night-2"
+              data-testid="validation-candidate-twin"
+            >
+              {{ copy.twin }}: {{ candidateTwins.get(candidate.key) }}
+            </p>
+            <p
+              v-if="candidateText(candidate.origin)"
+              class="m-0 line-clamp-3 text-sm [overflow-wrap:anywhere]"
+              data-testid="validation-candidate-text"
+            >
+              {{ candidateText(candidate.origin) }}
+            </p>
             <p class="m-0 text-xs text-violet-on-night-2">
               {{
                 candidate.kind === "USER_TWIN_CLAIM" ? copy.states.TO_VERIFY : copy.prevalidation
@@ -618,9 +686,7 @@ watch(
         data-testid="validation-hypothesis-form"
         @submit.prevent="saveHypothesis"
       >
-        <h3 class="m-0 font-semibold">
-          {{ copy.operational }} · {{ whyNodeTitle(selected.origin, locale) }}
-        </h3>
+        <h3 class="m-0 font-semibold">{{ copy.operational }} · {{ candidateHeading(selected) }}</h3>
         <p class="m-0 text-sm text-on-night-2">{{ copy.concrete }}</p>
         <p class="m-0 text-xs text-on-night-2">{{ copy.explicitLink }}</p>
         <div class="grid gap-3 sm:grid-cols-2">
