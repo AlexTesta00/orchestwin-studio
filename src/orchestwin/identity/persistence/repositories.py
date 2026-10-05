@@ -5,15 +5,17 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import ColumnElement, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.identity.domain import (
+    GuidanceMode,
     NormalizedEmail,
     UserAccount,
 )
 from orchestwin.identity.persistence.models import (
     AuthSessionRecord,
+    UserGuidanceChoiceRecord,
     UserRecord,
 )
 from orchestwin.identity.sessions import (
@@ -24,6 +26,7 @@ from orchestwin.identity.sessions import (
 
 def user_record_to_domain(
     record: UserRecord,
+    guidance_mode: str | None = None,
 ) -> UserAccount:
     """Translate a user record into an immutable domain value."""
     return UserAccount(
@@ -33,6 +36,7 @@ def user_record_to_domain(
         is_active=record.is_active,
         created_at=record.created_at,
         updated_at=record.updated_at,
+        guidance_mode=None if guidance_mode is None else GuidanceMode(guidance_mode),
     )
 
 
@@ -88,26 +92,14 @@ class SqlAlchemyUserRepository:
         user_id: UUID,
     ) -> UserAccount | None:
         """Return an account by identifier."""
-        record = await self._session.scalar(select(UserRecord).where(UserRecord.id == user_id))
-
-        if record is None:
-            return None
-
-        return user_record_to_domain(record)
+        return await self._get_one(UserRecord.id == user_id)
 
     async def get_by_email(
         self,
         email: NormalizedEmail,
     ) -> UserAccount | None:
         """Return an account by normalized email."""
-        record = await self._session.scalar(
-            select(UserRecord).where(UserRecord.email_normalized == email.value)
-        )
-
-        if record is None:
-            return None
-
-        return user_record_to_domain(record)
+        return await self._get_one(UserRecord.email_normalized == email.value)
 
     async def update_password_hash(
         self,
@@ -122,6 +114,44 @@ class SqlAlchemyUserRepository:
 
         if result.rowcount != 1:
             raise RuntimeError("user disappeared during password hash upgrade")
+
+    async def add_guidance_choice(
+        self,
+        *,
+        user_id: UUID,
+        mode: GuidanceMode,
+        chosen_at: datetime,
+    ) -> None:
+        self._session.add(
+            UserGuidanceChoiceRecord(
+                user_id=user_id,
+                mode=mode.value,
+                chosen_at=chosen_at,
+            )
+        )
+        await self._session.flush()
+
+    async def _get_one(
+        self,
+        condition: ColumnElement[bool],
+    ) -> UserAccount | None:
+        row = (
+            await self._session.execute(
+                select(UserRecord, UserGuidanceChoiceRecord.mode)
+                .outerjoin(
+                    UserGuidanceChoiceRecord,
+                    UserGuidanceChoiceRecord.user_id == UserRecord.id,
+                )
+                .where(condition)
+            )
+        ).one_or_none()
+
+        if row is None:
+            return None
+
+        record, guidance_mode = row
+
+        return user_record_to_domain(record, guidance_mode)
 
 
 class SqlAlchemyRefreshSessionRepository:

@@ -6,15 +6,22 @@ import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime
 from types import TracebackType
+from typing import Any
 from uuid import UUID
 
+import pytest
 from pydantic import SecretStr
+from sqlalchemy.exc import IntegrityError
 
 from orchestwin.identity.application import (
+    AuthenticatedSession,
     AuthenticationStatus,
+    GuidanceChoiceResult,
+    GuidanceChoiceStatus,
     LocalIdentityApplicationService,
 )
 from orchestwin.identity.domain import (
+    GuidanceMode,
     NormalizedEmail,
     UserAccount,
 )
@@ -42,6 +49,7 @@ class InMemoryUserRepository:
             UUID,
             UserAccount,
         ] = {}
+        self.choices: list[tuple[UUID, GuidanceMode, datetime]] = []
 
     async def add(
         self,
@@ -78,6 +86,26 @@ class InMemoryUserRepository:
         self.users[user_id] = replace(
             self.users[user_id],
             password_hash=password_hash,
+        )
+
+    async def add_guidance_choice(
+        self,
+        *,
+        user_id: UUID,
+        mode: GuidanceMode,
+        chosen_at: datetime,
+    ) -> None:
+        if any(chosen == user_id for chosen, _, _ in self.choices):
+            raise IntegrityError(
+                "INSERT INTO user_guidance_choices",
+                {},
+                Exception("duplicate key value violates unique constraint"),
+            )
+
+        self.choices.append((user_id, mode, chosen_at))
+        self.users[user_id] = replace(
+            self.users[user_id],
+            guidance_mode=mode,
         )
 
 
@@ -162,9 +190,11 @@ class InMemoryIdentityUnitOfWork:
         self,
         users: InMemoryUserRepository,
         sessions: InMemoryRefreshRepository,
+        exits: list[type[BaseException] | None] | None = None,
     ) -> None:
         self.users = users
         self.refresh_sessions = sessions
+        self.exits = exits
 
     async def __aenter__(
         self,
@@ -177,10 +207,15 @@ class InMemoryIdentityUnitOfWork:
         exception: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        if self.exits is not None:
+            self.exits.append(exception_type)
+
         return None
 
 
-def build_service() -> tuple[
+def build_service(
+    exits: list[type[BaseException] | None] | None = None,
+) -> tuple[
     LocalIdentityApplicationService,
     InMemoryUserRepository,
     InMemoryRefreshRepository,
@@ -202,6 +237,7 @@ def build_service() -> tuple[
         unit_of_work_factory=lambda: InMemoryIdentityUnitOfWork(
             users,
             sessions,
+            exits,
         ),
         password_service=password_service,
         access_token_service=token_service,
@@ -296,3 +332,150 @@ def test_current_user_requires_valid_access_token() -> None:
     assert resolved is not None
     assert resolved.id == USER_ID
     assert invalid is None
+
+
+EMAIL = "owner@example.com"
+PASSWORD = "Correct horse battery staple!"
+MISSING_USER_ID = UUID("00000000-0000-4000-8000-000000000099")
+
+
+def register(service: LocalIdentityApplicationService) -> AuthenticatedSession:
+    result = asyncio.run(service.register(email=EMAIL, password=PASSWORD))
+    assert result.authenticated is not None
+    return result.authenticated
+
+
+def seen_modes(
+    service: LocalIdentityApplicationService,
+    access_token: str,
+) -> list[GuidanceMode | None]:
+    current = asyncio.run(service.current_user(access_token))
+    login = asyncio.run(service.login(email=EMAIL, password=PASSWORD))
+    assert current is not None
+    assert login.authenticated is not None
+    refresh = asyncio.run(service.refresh(login.authenticated.refresh_token.token))
+    assert refresh.authenticated is not None
+    return [
+        current.guidance_mode,
+        login.authenticated.user.guidance_mode,
+        refresh.authenticated.user.guidance_mode,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("mode", "other"),
+    [
+        (GuidanceMode.GUIDED, GuidanceMode.EXPERT),
+        (GuidanceMode.EXPERT, GuidanceMode.GUIDED),
+    ],
+)
+def test_each_account_chooses_its_guidance_mode_once(
+    mode: GuidanceMode,
+    other: GuidanceMode,
+) -> None:
+    service, users, _ = build_service()
+    registered = register(service)
+    before = seen_modes(service, registered.access_token.token)
+
+    chosen = asyncio.run(service.choose_guidance_mode(user_id=USER_ID, mode=mode.value))
+    again = [
+        asyncio.run(service.choose_guidance_mode(user_id=USER_ID, mode=value))
+        for value in (mode.value, other.value)
+    ]
+
+    assert registered.user.guidance_mode is None
+    assert before == [None, None, None]
+    assert chosen == GuidanceChoiceResult(
+        status=GuidanceChoiceStatus.CHOSEN,
+        user=replace(registered.user, guidance_mode=mode),
+    )
+    assert again == [GuidanceChoiceResult(status=GuidanceChoiceStatus.ALREADY_CHOSEN)] * 2
+    assert seen_modes(service, registered.access_token.token) == [mode, mode, mode]
+    assert [(user_id, value) for user_id, value, _ in users.choices] == [(USER_ID, mode)]
+    assert users.choices[0][2].tzinfo is UTC
+    assert users.users[USER_ID] == replace(registered.user, guidance_mode=mode)
+
+
+@pytest.mark.parametrize("mode", ["", "guided", "Expert", " GUIDED", "GUIDED ", "NOVICE"])
+def test_an_unknown_guidance_mode_is_invalid_before_any_transaction(mode: str) -> None:
+    exits: list[type[BaseException] | None] = []
+    service, users, _ = build_service(exits)
+    register(service)
+    exits.clear()
+
+    result = asyncio.run(service.choose_guidance_mode(user_id=USER_ID, mode=mode))
+
+    assert result == GuidanceChoiceResult(status=GuidanceChoiceStatus.INVALID)
+    assert exits == []
+    assert users.choices == []
+    assert users.users[USER_ID].guidance_mode is None
+
+
+def test_a_missing_or_inactive_account_cannot_choose() -> None:
+    service, users, _ = build_service()
+    register(service)
+
+    missing = asyncio.run(service.choose_guidance_mode(user_id=MISSING_USER_ID, mode="GUIDED"))
+    users.users[USER_ID] = replace(users.users[USER_ID], is_active=False)
+    inactive = asyncio.run(service.choose_guidance_mode(user_id=USER_ID, mode="EXPERT"))
+
+    assert missing == GuidanceChoiceResult(status=GuidanceChoiceStatus.USER_UNAVAILABLE)
+    assert inactive == GuidanceChoiceResult(status=GuidanceChoiceStatus.USER_UNAVAILABLE)
+    assert users.choices == []
+    assert users.users[USER_ID].guidance_mode is None
+
+
+def test_a_choice_lost_to_a_concurrent_request_is_already_chosen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exits: list[type[BaseException] | None] = []
+    service, users, _ = build_service(exits)
+    registered = register(service)
+    exits.clear()
+    original = users.add_guidance_choice
+
+    async def concurrent_winner(**choice: Any) -> None:
+        await original(user_id=USER_ID, mode=GuidanceMode.EXPERT, chosen_at=NOW)
+        await original(**choice)
+
+    monkeypatch.setattr(users, "add_guidance_choice", concurrent_winner)
+
+    result = asyncio.run(service.choose_guidance_mode(user_id=USER_ID, mode="GUIDED"))
+    current = asyncio.run(service.current_user(registered.access_token.token))
+
+    assert result == GuidanceChoiceResult(status=GuidanceChoiceStatus.ALREADY_CHOSEN)
+    assert exits[0] is IntegrityError
+    assert [mode for _, mode, _ in users.choices] == [GuidanceMode.EXPERT]
+    assert current is not None
+    assert current.guidance_mode is GuidanceMode.EXPERT
+
+
+def test_a_guidance_choice_result_carries_the_account_only_when_chosen() -> None:
+    user = UserAccount(
+        id=USER_ID,
+        email=NormalizedEmail(EMAIL),
+        password_hash="$argon2id$hidden",
+        is_active=True,
+        created_at=NOW,
+        updated_at=NOW,
+        guidance_mode=GuidanceMode.GUIDED,
+    )
+    refused = (
+        GuidanceChoiceStatus.ALREADY_CHOSEN,
+        GuidanceChoiceStatus.INVALID,
+        GuidanceChoiceStatus.USER_UNAVAILABLE,
+    )
+
+    assert [status.value for status in GuidanceChoiceStatus] == [
+        "guidance_mode_chosen",
+        "guidance_mode_already_chosen",
+        "invalid_guidance_mode",
+        "user_unavailable",
+    ]
+    assert GuidanceChoiceResult(status=GuidanceChoiceStatus.CHOSEN, user=user).user == user
+    with pytest.raises(ValueError, match="only a chosen guidance mode"):
+        GuidanceChoiceResult(status=GuidanceChoiceStatus.CHOSEN)
+    for status in refused:
+        assert GuidanceChoiceResult(status=status).user is None
+        with pytest.raises(ValueError, match="only a chosen guidance mode"):
+            GuidanceChoiceResult(status=status, user=user)
