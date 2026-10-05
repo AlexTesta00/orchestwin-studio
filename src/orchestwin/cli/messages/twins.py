@@ -14,7 +14,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{effect} on {field}, source v{version}, lines {first}-{last}: “{quote}”",
     },
     "twins.help_persona": {
-        "it": "Mostra la Persona derivata dal User Twin",
+        "it": "Mostra la Persona derivata dallo User Twin",
         "en": "Show the Persona derived from the User Twin",
     },
     "twins.option_why": {
@@ -30,7 +30,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Il brief e le scelte del proprietario non sono evidenze su utenti reali.",
         "en": "The brief and the owner's choices are not evidence about real users.",
     },
-    "twins.status_evidenced": {"it": "Evidenziato", "en": "Evidenced"},
+    "twins.status_evidenced": {"it": "Documentato", "en": "Evidenced"},
     "twins.status_inferred": {"it": "Dedotto", "en": "Inferred"},
     "twins.status_hypothesized": {"it": "Ipotizzato", "en": "Hypothesized"},
     "twins.status_contested": {"it": "Contestato", "en": "Contested"},
@@ -316,8 +316,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "twins.conversation_hint": {
         "it": "Scrivi una domanda e premi Invio. Per finire scrivi /esci. Ogni risposta è una "
         "piccola spesa del modello.",
-        "en": "Write a question and press Enter. To finish write /quit. Each answer is a small "
-        "spending of the model.",
+        "en": "Write a question and press Enter. To finish write /quit. Each answer means a little "
+        "spending on the model.",
     },
     "twins.you": {"it": "Tu:", "en": "You:"},
     "twins.answer_by": {"it": "{name}:", "en": "{name}:"},
@@ -338,7 +338,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "oppure non era raggiungibile ({code}). Puoi fare di nuovo la domanda: è una nuova "
         "spesa, e prima ti mostro di nuovo la stima.",
         "en": "{name} could not answer: the model gave no valid answer or could not be "
-        "reached ({code}). You can ask the question again: it is a new spending, and the "
+        "reached ({code}). You can ask the question again: it means new spending, and the "
         "estimate is shown again first.",
     },
     "twins.conversation_changed": {
@@ -371,7 +371,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "comando: è una nuova spesa, e prima ti mostro di nuovo la stima.",
         "en": "{name} could not answer: the model gave no valid answer or could not be "
         "reached ({code}). You can ask the question again by launching the command again: it "
-        "is a new spending, and the estimate is shown again first.",
+        "means new spending, and the estimate is shown again first.",
     },
     "twins.errors.TWIN_CHAT_MODEL_NOT_CONFIGURED": {
         "it": "Il modello che dà voce ai twin non è collegato allo Studio. Chiedi a chi "
@@ -563,33 +563,33 @@ MESSAGES: dict[str, dict[str, str]] = {
     "twins.update_errors.GENERATION_BUDGET_EXCEEDED": {
         "it": "Lo Studio ha rifiutato la proposta per {name} perché supererebbe un tetto di "
         "spesa: per questo twin non è stato speso niente. Chi gestisce lo Studio può alzare il "
-        "tetto, poi rilancia `ut twins update`.",
+        "tetto; poi rilancia `ut twins update`.",
         "en": "The Studio refused the proposal for {name} because it would go over a spending "
         "ceiling: nothing was spent for this twin. Whoever runs the Studio can raise the "
-        "ceiling, then launch `ut twins update` again.",
+        "ceiling; then launch `ut twins update` again.",
     },
     "twins.update_errors.GENERATION_BUDGET_EXCEEDED.total": {
         "it": "Lo Studio ha raggiunto il suo tetto di spesa complessivo ({ceiling} USD): la "
-        "proposta per {name} non è partita. Chi gestisce lo Studio può alzare il tetto, poi "
+        "proposta per {name} non è partita. Chi gestisce lo Studio può alzare il tetto; poi "
         "rilancia `ut twins update`.",
         "en": "The Studio reached its overall spending ceiling ({ceiling} USD): the proposal for "
-        "{name} did not start. Whoever runs the Studio can raise the ceiling, then launch "
+        "{name} did not start. Whoever runs the Studio can raise the ceiling; then launch "
         "`ut twins update` again.",
     },
     "twins.update_errors.GENERATION_BUDGET_EXCEEDED.project": {
         "it": "Questo progetto ha raggiunto il suo tetto di spesa ({ceiling} USD): la proposta "
-        "per {name} non è partita. Chi gestisce lo Studio può alzare il tetto, poi rilancia "
+        "per {name} non è partita. Chi gestisce lo Studio può alzare il tetto; poi rilancia "
         "`ut twins update`.",
         "en": "This project reached its spending ceiling ({ceiling} USD): the proposal for "
-        "{name} did not start. Whoever runs the Studio can raise the ceiling, then launch "
+        "{name} did not start. Whoever runs the Studio can raise the ceiling; then launch "
         "`ut twins update` again.",
     },
     "twins.update_errors.GENERATION_BUDGET_EXCEEDED.generation": {
         "it": "La proposta per {name} supererebbe il tetto di spesa di una singola generazione "
-        "({ceiling} USD), quindi non è partita. Chi gestisce lo Studio può alzarlo, poi "
+        "({ceiling} USD), quindi non è partita. Chi gestisce lo Studio può alzarlo; poi "
         "rilancia `ut twins update`.",
         "en": "The proposal for {name} would go over the spending ceiling of a single "
-        "generation ({ceiling} USD), so it did not start. Whoever runs the Studio can raise it, "
+        "generation ({ceiling} USD), so it did not start. Whoever runs the Studio can raise it; "
         "then launch `ut twins update` again.",
     },
     "twins.update_errors.GENERATION_BUDGET_UNAVAILABLE": {
@@ -654,7 +654,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "`ut twins update` si riprova, ed è una nuova spesa.",
         "en": "The model gave an answer that the Studio cannot use (INVALID_PROVIDER_OUTPUT): "
         "nothing was stored for {name}. Launching `ut twins update` again tries once more, and "
-        "it is a new spending.",
+        "it means new spending.",
     },
     "twins.update_errors.TWIN_UPDATE_ALREADY_DECIDED": {
         "it": "Nel frattempo la proposta per {name} è già stata decisa, forse da un altro "

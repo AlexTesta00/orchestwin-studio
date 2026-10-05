@@ -206,7 +206,7 @@ def test_the_whole_path_in_italian_says_what_happens_at_each_step(tmp_path: Path
     assert "Punti essenziali ancora aperti: 4." in lines
     assert "Domanda 1: Quale problema risolve il progetto?" in lines
     assert "Punti essenziali ancora aperti: 1." in lines
-    assert 'Passo "Brief" approvato (versione 3). Salvato in .orchestwin/steps/brief.json.' in lines
+    assert "Passo «Brief» approvato (versione 3). Salvato in .orchestwin/steps/brief.json." in lines
     assert "Il percorso ha quattro passi: Brief, Prospettive, User Twin e Definizione." in (
         run.output
     )
@@ -217,7 +217,7 @@ def test_the_whole_path_in_italian_says_what_happens_at_each_step(tmp_path: Path
     assert "  Difficoltà: Conti a mente sbagliati; Attesa alla cassa" in lines
     assert "- Divisione del conto" in lines
     assert (
-        'Fatto: il progetto "Calcolo mancia" ha approvati tutti i passi fino alla Definizione.'
+        "Fatto: il progetto «Calcolo mancia» ha approvati tutti i passi fino alla Definizione."
         in (lines)
     )
     assert lines[lines.index("- Brief: versione 3") : lines.index("- Brief: versione 3") + 4] == [

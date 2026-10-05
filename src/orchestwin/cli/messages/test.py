@@ -547,7 +547,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "lancia `ut test --plan new` per un piano nuovo, che è una nuova spesa.",
         "en": "The test plan saved on this computer is not in the Studio (TEST_PLAN_NOT_FOUND): "
         "the results of this run stay in .orchestwin/tests; launch `ut test --plan new` for a "
-        "new plan, which is a new spending.",
+        "new plan, which is a new expense.",
     },
     "test.errors.TEST_RUN_NOT_FOUND": {
         "it": "Lo Studio non trova questa esecuzione (TEST_RUN_NOT_FOUND): rilancia `ut test`.",
@@ -591,19 +591,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "riprova, ed è una nuova spesa.",
         "en": "The model gave an answer that the Studio cannot use (INVALID_PROVIDER_OUTPUT): "
         "nothing was stored. Launching `ut test` again tries once more, and it is a new "
-        "spending.",
+        "expense.",
     },
     "test.errors.RESPONSE_SCHEMA_ERROR": {
         "it": "Il modello ha dato una risposta nella forma sbagliata (RESPONSE_SCHEMA_ERROR): "
         "non è stato salvato niente. Rilanciando `ut test` si riprova, ed è una nuova spesa.",
         "en": "The model gave an answer in the wrong shape (RESPONSE_SCHEMA_ERROR): nothing was "
-        "stored. Launching `ut test` again tries once more, and it is a new spending.",
+        "stored. Launching `ut test` again tries once more, and it is a new expense.",
     },
     "test.errors.INCOMPLETE_OUTPUT": {
         "it": "La risposta del modello si è interrotta a metà (INCOMPLETE_OUTPUT): non è stato "
         "salvato niente. Rilanciando `ut test` si riprova, ed è una nuova spesa.",
         "en": "The answer of the model stopped halfway (INCOMPLETE_OUTPUT): nothing was stored. "
-        "Launching `ut test` again tries once more, and it is a new spending.",
+        "Launching `ut test` again tries once more, and it is a new expense.",
     },
     "test.errors.CONTEXT_BUDGET_EXCEEDED": {
         "it": "Il materiale da mandare al modello è troppo grande (CONTEXT_BUDGET_EXCEEDED): non "
@@ -613,44 +613,44 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "test.errors.GENERATION_BUDGET_EXCEEDED": {
         "it": "Lo Studio ha rifiutato la generazione perché supererebbe un tetto di spesa. Chi "
-        "gestisce lo Studio può alzare il tetto, poi rilancia `ut test`.",
+        "gestisce lo Studio può alzare il tetto; poi rilancia `ut test`.",
         "en": "The Studio refused the generation because it would go over a spending ceiling. "
-        "Whoever runs the Studio can raise the ceiling, then launch `ut test` again.",
+        "Whoever runs the Studio can raise the ceiling; then launch `ut test` again.",
     },
     "test.errors.GENERATION_BUDGET_EXCEEDED.total": {
         "it": "Lo Studio ha raggiunto il suo tetto di spesa complessivo ({ceiling} USD): la "
-        "generazione non è partita. Chi gestisce lo Studio può alzare il tetto, poi rilancia "
+        "generazione non è partita. Chi gestisce lo Studio può alzare il tetto; poi rilancia "
         "`ut test`.",
         "en": "The Studio reached its overall spending ceiling ({ceiling} USD): the generation "
-        "did not start. Whoever runs the Studio can raise the ceiling, then launch `ut test` "
+        "did not start. Whoever runs the Studio can raise the ceiling; then launch `ut test` "
         "again.",
     },
     "test.errors.GENERATION_BUDGET_EXCEEDED.project": {
         "it": "Questo progetto ha raggiunto il suo tetto di spesa ({ceiling} USD): la "
-        "generazione non è partita. Chi gestisce lo Studio può alzare il tetto, poi rilancia "
+        "generazione non è partita. Chi gestisce lo Studio può alzare il tetto; poi rilancia "
         "`ut test`.",
         "en": "This project reached its spending ceiling ({ceiling} USD): the generation did not "
-        "start. Whoever runs the Studio can raise the ceiling, then launch `ut test` again.",
+        "start. Whoever runs the Studio can raise the ceiling; then launch `ut test` again.",
     },
     "test.errors.GENERATION_BUDGET_EXCEEDED.generation": {
         "it": "La generazione supererebbe il tetto di spesa di una singola generazione "
-        "({ceiling} USD), quindi non è partita. Chi gestisce lo Studio può alzarlo, poi rilancia "
+        "({ceiling} USD), quindi non è partita. Chi gestisce lo Studio può alzarlo; poi rilancia "
         "`ut test`.",
         "en": "The generation would go over the spending ceiling of a single generation "
-        "({ceiling} USD), so it did not start. Whoever runs the Studio can raise it, then launch "
+        "({ceiling} USD), so it did not start. Whoever runs the Studio can raise it; then launch "
         "`ut test` again.",
     },
     "test.errors.GENERATION_LOST": {
         "it": "{label}: la generazione si è persa, forse perché lo Studio è ripartito. Rilancia "
         "`ut test` (una generazione nuova è una nuova spesa).",
         "en": "{label}: the generation was lost, perhaps because the Studio restarted. Launch "
-        "`ut test` again (a new generation is a new spending).",
+        "`ut test` again (a new generation is a new expense).",
     },
     "test.errors.GENERATION_STILL_RUNNING": {
         "it": "{label}: il lavoro continua nello Studio e il risultato resterà lì. Rilanciando "
         "`ut test` più tardi, un piano o delle critiche nuove sono una nuova spesa.",
-        "en": "{label}: the work goes on in the Studio and its result stays there. Launching "
-        "`ut test` again later, a new plan or new critiques are a new spending.",
+        "en": "{label}: the work goes on in the Studio and its result stays there. If you launch "
+        "`ut test` again later, a new plan or new critiques are a new expense.",
     },
     "test.errors.GENERATION_INTERRUPTED": {
         "it": "Interrotto. {label}: il lavoro continua nello Studio e il risultato resterà lì.",

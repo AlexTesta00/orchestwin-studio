@@ -80,7 +80,7 @@ def test_an_empty_change_request_changes_nothing(tmp_path: Path) -> None:
 
         assert run.status == 0, run.errors
         assert posted(studio, "/change-requests") == []
-    assert "No change asked." in run.output
+    assert "No change requested." in run.output
 
 
 def test_everything_is_read_in_full(tmp_path: Path) -> None:
@@ -170,7 +170,7 @@ def test_changes_from_the_answers_file_are_applied(tmp_path: Path) -> None:
         assert saved_step(tmp_path, "requirements")["version"]["version_number"] == 2
     lines = run.output.splitlines()
     assert "Estimate: 0.78-1.02 USD, about 7 min. Credit left in the Studio: 60.00 USD." in lines
-    assert "Change asked by the file: " + REQUEST in lines
+    assert "Change requested by the file: " + REQUEST in lines
     assert "Change applied: the requirements are at version 2." in lines
 
 

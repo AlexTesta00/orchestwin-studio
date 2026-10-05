@@ -98,9 +98,9 @@ def test_a_choice_by_number_in_italian(tmp_path: Path) -> None:
         evaluations = session.requests("POST", EVALUATIONS)
 
     assert run.status == 0, run.errors
-    assert "Hai scelto DES-001 “Calcolo guidato”: il design è ora alla versione 2." in run.output
+    assert "Hai scelto DES-001 «Calcolo guidato»: il design è ora alla versione 2." in run.output
     assert "Revisione dei twin, versione 2" in run.output
-    assert "schermata “Importo del conto”" in run.output
+    assert "schermata «Importo del conto»" in run.output
     assert chosen == first
     assert [json.loads(item.body)["locale"] for item in evaluations] == ["it-IT"]
 
@@ -387,7 +387,7 @@ def test_the_approval_in_italian(tmp_path: Path) -> None:
         run = session.ut("design", "approve", language="it")
 
     assert run.status == 0, run.errors
-    assert "Design approvato: DES-001 “Calcolo guidato”, versione 2." in run.output
+    assert "Design approvato: DES-001 «Calcolo guidato», versione 2." in run.output
     assert "Dentro trovi ORCHESTWIN.md, da leggere per primo" in run.output
     assert "brief, prospettive, twin, requisiti e design" in run.output
     lines = run.output.splitlines()

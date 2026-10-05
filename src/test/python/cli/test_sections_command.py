@@ -235,7 +235,7 @@ def blocked_document(key: str, blocked: str, *upstream: dict[str, object]) -> di
                 "it": [
                     "Design e valutazione non si aggiorna da sola: il design cita REQ-003, "
                     "AC-004, che la Definizione non contiene più: rigenera le alternative nel "
-                    "passo Design e valutazione del web. Poi continua con `ut design`."
+                    "passo Design e valutazione dello Studio web. Poi continua con `ut design`."
                 ],
             },
         ),
