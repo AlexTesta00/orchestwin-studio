@@ -732,7 +732,7 @@ def requirements_markdown(
         labels = {
             "PROJECT_BRIEF": "Brief di progetto" if language == "it" else "Project brief",
             "USER_TWIN": "Twin utente" if language == "it" else "User twin",
-            "OWNER_INPUT": "Indicazione del committente" if language == "it" else "Owner input",
+            "OWNER_INPUT": "Indicazione del proprietario" if language == "it" else "Owner input",
             "MODEL_PROPOSAL": "Proposta del modello" if language == "it" else "Model proposal",
             "SYSTEM_ARTIFACT": "Artefatto di sistema" if language == "it" else "System artifact",
         }
@@ -765,7 +765,7 @@ def requirements_markdown(
         f"# {text['definition']}",
         "",
         (
-            f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal committente il {gate.updated_at.isoformat()}."
+            f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal proprietario il {gate.updated_at.isoformat()}."
             if language == "it"
             else f"{version_word} {version.version_number}, content hash `{version.content_hash}`, approved by the owner on {gate.updated_at.isoformat()}."
         ),
@@ -1253,7 +1253,7 @@ def _twin_texts(language: str | None) -> dict[str, str]:
         "behaviours": ("Comportamenti", "Behaviours"),
         "pain_points": ("Difficoltà", "Pain points"),
         "constraints": ("Vincoli", "Constraints"),
-        "EVIDENCED": ("Evidenziato", "Evidenced"),
+        "EVIDENCED": ("Documentato", "Evidenced"),
         "INFERRED": ("Dedotto", "Inferred"),
         "HYPOTHESIZED": ("Ipotizzato", "Hypothesized"),
         "CONTESTED": ("Contestato", "Contested"),
@@ -1340,9 +1340,10 @@ def twin_markdown(document: Mapping[str, object], *, language: str | None = None
             "assumptions with a declared epistemic status and confidence. `twin.json` next to this "
             "document is a self-contained copy that another OrchesTwin project can import."
             if language != "it"
-            else "Uno User Twin è un modello di un tipo di utente: le sue osservazioni sono "
-            "ipotesi con stato epistemico e confidenza dichiarati. `twin.json` accanto a "
-            "questo documento è una copia autonoma che un altro progetto OrchesTwin può importare."
+            else "Uno User Twin è un modello di un tipo di utente, non una persona: le sue "
+            "osservazioni sono ipotesi con stato epistemico e confidenza dichiarati. "
+            "`twin.json` accanto a questo documento è una copia autonoma che un altro "
+            "progetto OrchesTwin può importare."
         ),
         "",
         f"## {texts['archetype']}",

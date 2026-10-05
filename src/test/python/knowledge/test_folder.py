@@ -486,7 +486,7 @@ def test_every_view_of_a_step_says_that_the_owner_approved_it(make) -> None:
         if make is real_sources and stage == "requirements":
             assert (
                 built.files[stage_text(stage)].splitlines()[2]
-                == f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal committente il {package.gate(stage).updated_at.isoformat()}."
+                == f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal proprietario il {package.gate(stage).updated_at.isoformat()}."
             )
             continue
         assert built.files[stage_text(stage)].splitlines()[2] == (
