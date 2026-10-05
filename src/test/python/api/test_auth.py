@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -11,7 +12,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from orchestwin.api.app import create_app
-from orchestwin.api.auth import AuthApiSettings, AuthAttemptLimits
+from orchestwin.api.auth import AuthApiSettings, AuthAttemptLimits, UserResponse
 from orchestwin.api.services import (
     ApplicationRuntime,
 )
@@ -24,11 +25,14 @@ from orchestwin.identity.application import (
     AuthenticatedSession,
     AuthenticationResult,
     AuthenticationStatus,
+    GuidanceChoiceResult,
+    GuidanceChoiceStatus,
     IdentityApplicationService,
     IdentityUnitOfWork,
     LocalIdentityApplicationService,
 )
 from orchestwin.identity.domain import (
+    GuidanceMode,
     NormalizedEmail,
     UserAccount,
 )
@@ -42,6 +46,9 @@ from orchestwin.identity.tokens import (
     AccessTokenSettings,
     IssuedAccessToken,
     JwtAccessTokenService,
+)
+from src.test.python.identity.test_identity_application import (
+    build_service as build_identity_service,
 )
 
 USER_ID = UUID("00000000-0000-4000-8000-000000000001")
@@ -162,6 +169,11 @@ class FakeIdentityService:
         self.logout_tokens: list[str] = []
         self.register_calls = 0
         self.login_calls = 0
+        self.guidance_result = GuidanceChoiceResult(
+            status=GuidanceChoiceStatus.CHOSEN,
+            user=replace(build_user(), guidance_mode=GuidanceMode.EXPERT),
+        )
+        self.guidance_calls: list[tuple[UUID, str]] = []
 
     async def register(
         self,
@@ -202,6 +214,15 @@ class FakeIdentityService:
             return None
 
         return self.current_user_result
+
+    async def choose_guidance_mode(
+        self,
+        *,
+        user_id: UUID,
+        mode: str,
+    ) -> GuidanceChoiceResult:
+        self.guidance_calls.append((user_id, mode))
+        return self.guidance_result
 
 
 def build_client(
@@ -518,3 +539,160 @@ def test_each_application_starts_with_empty_attempt_counters() -> None:
 
     assert blocked.status_code == 429
     assert fresh.status_code == 401
+
+
+GUIDANCE_PATH = "/api/v1/auth/guidance-mode"
+BEARER = {"Authorization": "Bearer signed-access-token"}
+
+
+@pytest.mark.parametrize(("mode", "other"), [("GUIDED", "EXPERT"), ("EXPERT", "GUIDED")])
+def test_an_account_chooses_its_guidance_mode_once_through_the_api(mode: str, other: str) -> None:
+    service, _, _ = build_identity_service()
+
+    with build_client(service) as client:
+        registered = register(client, "owner@example.com")
+        bearer = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+        before = client.get("/api/v1/auth/me", headers=bearer)
+        anonymous = client.post(GUIDANCE_PATH, json={"guidance_mode": mode})
+        chosen = client.post(GUIDANCE_PATH, json={"guidance_mode": mode}, headers=bearer)
+        repeated = [
+            client.post(GUIDANCE_PATH, json={"guidance_mode": value}, headers=bearer)
+            for value in (mode, other)
+        ]
+        after = client.get("/api/v1/auth/me", headers=bearer)
+        signed_in = client.post(
+            "/api/v1/auth/login",
+            json={"email": "owner@example.com", "password": "Correct horse battery staple!"},
+        )
+        refreshed = client.post("/api/v1/auth/refresh")
+
+    account = registered.json()["user"]
+    assert registered.status_code == 201
+    assert account["guidance_mode"] is None
+    assert (before.status_code, before.json()) == (200, account)
+    assert (anonymous.status_code, anonymous.json()) == (401, {"detail": "invalid_authentication"})
+    assert anonymous.headers["www-authenticate"] == "Bearer"
+    assert (chosen.status_code, chosen.json()) == (200, {**account, "guidance_mode": mode})
+    assert [(response.status_code, response.json()) for response in repeated] == [
+        (409, {"detail": "guidance_mode_already_chosen"})
+    ] * 2
+    assert (after.status_code, after.json()) == (200, chosen.json())
+    assert (signed_in.status_code, signed_in.json()["user"]) == (200, chosen.json())
+    assert (refreshed.status_code, refreshed.json()["user"]) == (200, chosen.json())
+
+
+@pytest.mark.parametrize(
+    ("body", "location", "kind"),
+    [
+        ({"guidance_mode": "NOVICE"}, ["body", "guidance_mode"], "literal_error"),
+        ({"guidance_mode": "guided"}, ["body", "guidance_mode"], "literal_error"),
+        ({"guidance_mode": None}, ["body", "guidance_mode"], "literal_error"),
+        ({}, ["body", "guidance_mode"], "missing"),
+        (None, ["body"], "missing"),
+        ({"guidance_mode": "GUIDED", "role": "owner"}, ["body", "role"], "extra_forbidden"),
+    ],
+)
+def test_an_invalid_guidance_mode_request_is_refused_before_the_service(
+    body: object,
+    location: list[str],
+    kind: str,
+) -> None:
+    service = FakeIdentityService()
+
+    with build_client(service) as client:
+        response = client.post(GUIDANCE_PATH, json=body, headers=BEARER)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "invalid_request",
+        "errors": [{"loc": location, "type": kind}],
+    }
+    assert service.guidance_calls == []
+
+
+def test_a_chosen_guidance_mode_returns_the_updated_account() -> None:
+    service = FakeIdentityService()
+
+    with build_client(service) as client:
+        response = client.post(GUIDANCE_PATH, json={"guidance_mode": "EXPERT"}, headers=BEARER)
+
+    assert service.guidance_result.user is not None
+    assert response.status_code == 200
+    assert response.json() == UserResponse.from_domain(service.guidance_result.user).model_dump(
+        mode="json"
+    )
+    assert response.json()["guidance_mode"] == "EXPERT"
+    assert service.guidance_calls == [(USER_ID, "EXPERT")]
+
+
+@pytest.mark.parametrize(
+    ("outcome", "status_code", "detail"),
+    [
+        (GuidanceChoiceStatus.ALREADY_CHOSEN, 409, "guidance_mode_already_chosen"),
+        (GuidanceChoiceStatus.INVALID, 422, "invalid_guidance_mode"),
+        (GuidanceChoiceStatus.USER_UNAVAILABLE, 401, "invalid_authentication"),
+    ],
+)
+def test_each_refused_guidance_choice_has_a_stable_response(
+    outcome: GuidanceChoiceStatus,
+    status_code: int,
+    detail: str,
+) -> None:
+    service = FakeIdentityService()
+    service.guidance_result = GuidanceChoiceResult(status=outcome)
+
+    with build_client(service) as client:
+        response = client.post(GUIDANCE_PATH, json={"guidance_mode": "GUIDED"}, headers=BEARER)
+
+    assert (response.status_code, response.json()) == (status_code, {"detail": detail})
+    assert response.headers.get("www-authenticate") == ("Bearer" if status_code == 401 else None)
+    assert service.guidance_calls == [(USER_ID, "GUIDED")]
+
+
+def test_an_unknown_bearer_cannot_choose_a_guidance_mode() -> None:
+    service = FakeIdentityService()
+
+    with build_client(service) as client:
+        response = client.post(
+            GUIDANCE_PATH,
+            json={"guidance_mode": "GUIDED"},
+            headers={"Authorization": "Bearer unknown-access-token"},
+        )
+
+    assert (response.status_code, response.json()) == (401, {"detail": "invalid_authentication"})
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert service.guidance_calls == []
+
+
+def test_the_guidance_mode_is_published_in_the_contract() -> None:
+    with build_client(FakeIdentityService()) as client:
+        document = client.get("/api/v1/openapi.json").json()
+
+    operation = document["paths"][GUIDANCE_PATH]["post"]
+    schemas = document["components"]["schemas"]
+    modes = {"type": "string", "enum": ["GUIDED", "EXPERT"]}
+    assert operation["operationId"] == "chooseGuidanceMode"
+    assert operation["summary"] == "Choose the guidance mode once"
+    assert operation["requestBody"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/GuidanceModeRequest"
+    }
+    assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/UserResponse"
+    }
+    assert schemas["UserResponse"]["required"] == [
+        "id",
+        "email",
+        "is_active",
+        "created_at",
+        "guidance_mode",
+    ]
+    assert schemas["UserResponse"]["properties"]["guidance_mode"]["anyOf"] == [
+        modes,
+        {"type": "null"},
+    ]
+    assert schemas["GuidanceModeRequest"]["required"] == ["guidance_mode"]
+    assert schemas["GuidanceModeRequest"]["additionalProperties"] is False
+    assert {
+        name: {key: value for key, value in field.items() if key != "title"}
+        for name, field in schemas["GuidanceModeRequest"]["properties"].items()
+    } == {"guidance_mode": modes}

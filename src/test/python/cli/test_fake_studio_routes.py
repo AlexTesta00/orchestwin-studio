@@ -986,6 +986,10 @@ def test_the_added_routes_answer_like_the_real_application(real_client: TestClie
             201,
         )
         client.token = str(created["access_token"])
+        real_account = real_client.get(PREFIX + "/auth/me").json()
+        assert fits(UserResponse, client.call("GET", "/auth/me")) == created["user"]
+        assert set(created["user"]) == set(real_account)
+        assert created["user"]["guidance_mode"] is real_account["guidance_mode"] is None
         real_readiness = real_client.get(PREFIX + "/model-runtime/readiness")
         assert client.call("GET", "/model-runtime/readiness") == (
             real_readiness.status_code,

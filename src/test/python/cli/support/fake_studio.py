@@ -12700,6 +12700,7 @@ def _user_payload(account: _Account) -> dict[str, object]:
         "email": account.email,
         "is_active": True,
         "created_at": _stamp(account.created_at),
+        "guidance_mode": None,
     }
 
 

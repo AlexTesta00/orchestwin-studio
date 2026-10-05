@@ -40,6 +40,7 @@ from orchestwin.identity.application import (
     AuthenticatedSession,
     AuthenticationResult,
     AuthenticationStatus,
+    GuidanceChoiceStatus,
     IdentityApplicationService,
 )
 from orchestwin.identity.domain import UserAccount
@@ -142,6 +143,12 @@ class LoginRequest(BaseModel):
     )
 
 
+class GuidanceModeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    guidance_mode: Literal["GUIDED", "EXPERT"]
+
+
 class UserResponse(BaseModel):
     """Safe account representation returned by the API."""
 
@@ -151,6 +158,7 @@ class UserResponse(BaseModel):
     email: str
     is_active: bool
     created_at: datetime
+    guidance_mode: Literal["GUIDED", "EXPERT"] | None
 
     @classmethod
     def from_domain(
@@ -163,6 +171,7 @@ class UserResponse(BaseModel):
             email=user.email.value,
             is_active=user.is_active,
             created_at=user.created_at,
+            guidance_mode=None if user.guidance_mode is None else user.guidance_mode.value,
         )
 
 
@@ -513,5 +522,44 @@ def create_auth_router(
         ],
     ) -> UserResponse:
         return UserResponse.from_domain(user)
+
+    @router.post(
+        "/guidance-mode",
+        response_model=UserResponse,
+        summary="Choose the guidance mode once",
+        operation_id="chooseGuidanceMode",
+    )
+    async def choose_guidance_mode(
+        payload: GuidanceModeRequest,
+        user: Annotated[
+            UserAccount,
+            Depends(current_user_dependency),
+        ],
+        service: Annotated[
+            IdentityApplicationService,
+            Depends(identity_service_dependency),
+        ],
+    ) -> UserResponse:
+        result = await service.choose_guidance_mode(
+            user_id=user.id,
+            mode=payload.guidance_mode,
+        )
+
+        if result.status is GuidanceChoiceStatus.ALREADY_CHOSEN:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=result.status.value,
+            )
+
+        if result.status is GuidanceChoiceStatus.INVALID:
+            raise HTTPException(
+                status_code=(status.HTTP_422_UNPROCESSABLE_CONTENT),
+                detail=result.status.value,
+            )
+
+        if result.user is None:
+            raise unauthorized_exception()
+
+        return UserResponse.from_domain(result.user)
 
     return router
