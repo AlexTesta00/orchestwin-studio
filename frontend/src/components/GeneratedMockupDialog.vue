@@ -525,7 +525,7 @@ onUnmounted(() => {
                 :aria-controls="regionId"
                 :tabindex="index === focusIndex ? 0 : -1"
                 :class="[
-                  'inline-flex min-h-11 max-w-[calc(28ch+1.75rem)] min-w-0 items-center rounded-pill px-3.5 text-[13px] font-medium transition-colors duration-150',
+                  'inline-flex min-h-11 max-w-[calc(28ch+1.75rem)] min-w-0 items-center rounded-pill px-3.5 py-1 text-[13px] leading-snug font-medium transition-colors duration-150',
                   screen.code === selectedScreen
                     ? 'bg-on-night text-ink'
                     : 'text-on-night hover:bg-night-hover',
@@ -534,7 +534,7 @@ onUnmounted(() => {
                 data-testid="mockup-dialog-screen"
                 @click="requestScreen(screen.code)"
               >
-                <span class="truncate" data-testid="mockup-dialog-screen-title">{{
+                <span class="min-w-0 break-words" data-testid="mockup-dialog-screen-title">{{
                   screen.title
                 }}</span>
               </button>

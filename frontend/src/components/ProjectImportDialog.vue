@@ -23,6 +23,7 @@ interface ImportFailure {
 const MAX_ARCHIVE_SIZE = 16 * 1024 * 1024;
 const NAME_LIMIT = 120;
 const MOCKUP_LOCATION = "design: package.generated_mockup";
+const FOLDER_STAGES = ["brief", "team", "twins", "requirements", "design"] as const;
 
 const props = withDefaults(
   defineProps<{
@@ -54,6 +55,21 @@ const messages = {
     tamperedFile: "The file {file} was changed after the export, so the folder cannot be trusted.",
     mockupRefused:
       "The mockup inside this folder contains something that the Studio does not accept, so the folder was not imported.",
+    incomplete: "This folder is not complete, so a project cannot start from it.",
+    incompleteStep:
+      "This folder is not complete: the {steps} step is missing, so a project cannot start from it.",
+    incompleteSteps:
+      "This folder is not complete: the {steps} steps are missing, so a project cannot start from it.",
+    incompleteHelp:
+      "To start from a folder, all five steps must be approved: approve them in the project it comes from, then export the folder again from the Studio.",
+    step: "“{name}”",
+    stages: {
+      brief: "Brief",
+      team: "Perspectives",
+      twins: "User Twin",
+      requirements: "Definition",
+      design: "Design & Evaluation",
+    },
     errors: {
       FOLDER_ARCHIVE_TOO_LARGE: "The archive is larger than 16 MB, the most the Studio accepts.",
       FOLDER_ARCHIVE_INVALID:
@@ -90,6 +106,21 @@ const messages = {
       "Il file {file} è stato modificato dopo l'esportazione, quindi la cartella non è affidabile.",
     mockupRefused:
       "Il mockup dentro questa cartella contiene qualcosa che lo Studio non accetta, quindi la cartella non è stata importata.",
+    incomplete: "Questa cartella non è completa, quindi non può nascerne un progetto.",
+    incompleteStep:
+      "Questa cartella non è completa: manca il passo {steps}, quindi non può nascerne un progetto.",
+    incompleteSteps:
+      "Questa cartella non è completa: mancano i passi {steps}, quindi non può nascerne un progetto.",
+    incompleteHelp:
+      "Per partire da una cartella servono tutti e cinque i passi approvati: approvali nel progetto da cui viene, poi esporta di nuovo la cartella dallo Studio.",
+    step: "«{name}»",
+    stages: {
+      brief: "Brief",
+      team: "Prospettive",
+      twins: "User Twin",
+      requirements: "Definizione",
+      design: "Design e valutazione",
+    },
     errors: {
       FOLDER_ARCHIVE_TOO_LARGE: "L'archivio supera i 16 MB, il massimo che lo Studio accetta.",
       FOLDER_ARCHIVE_INVALID:
@@ -129,6 +160,7 @@ const failure = ref<ImportFailure | null>(null);
 const failureText = computed(() => {
   const current = failure.value;
   if (current === null) return "";
+  if (current.code === "FOLDER_INCOMPLETE") return incompleteText(current.location);
   if (current.code === "FOLDER_TAMPERED" && current.location) {
     return fill(copy.value.tamperedFile, { file: current.location });
   }
@@ -160,6 +192,19 @@ defineExpose({ busy });
 
 function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
+}
+
+function incompleteText(location: string | null): string {
+  const first = FOLDER_STAGES.findIndex((stage) => stage === location);
+  const missing = first < 0 ? [] : FOLDER_STAGES.slice(first);
+  const names = missing.map((stage) => fill(copy.value.step, { name: copy.value.stages[stage] }));
+  const steps = new Intl.ListFormat(props.locale === "it" ? "it-IT" : "en-GB", {
+    style: "long",
+    type: "conjunction",
+  }).format(names);
+  const template = missing.length === 1 ? copy.value.incompleteStep : copy.value.incompleteSteps;
+  const sentence = missing.length === 0 ? copy.value.incomplete : fill(template, { steps });
+  return `${sentence} ${copy.value.incompleteHelp}`;
 }
 
 function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {

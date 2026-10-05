@@ -478,6 +478,36 @@ describe("project brief dialogue", () => {
     },
   );
 
+  it.each([
+    ["it", "Inizia il dialogo"],
+    ["en", "Start the dialogue"],
+  ] as const)(
+    "puts the example field above the start button on narrow screens in %s, tall enough for the whole example, and keeps the row from sm",
+    async (locale, label) => {
+      const wrapper = mountDialogue(fakeApi(null), null, locale);
+      await flushPromises();
+      const statement = wrapper.get("[data-testid='brief-dialogue-statement']");
+      const start = wrapper.get("[data-testid='brief-dialogue-start']");
+      const row = statement.element.parentElement!;
+      const form = row.parentElement!;
+
+      expect(start.text()).toBe(label);
+      expect(start.element.parentElement).toBe(row);
+      expect(form.tagName).toBe("FORM");
+      expect(form.classList.contains("grid-cols-1")).toBe(true);
+      expect([...row.classList]).toEqual(
+        expect.arrayContaining(["flex", "flex-col", "items-end", "sm:flex-row"]),
+      );
+      expect(row.classList.contains("flex-row")).toBe(false);
+      expect(statement.classes()).toEqual(expect.arrayContaining(["w-full", "min-w-0", "flex-1"]));
+      expect(statement.classes().filter((name) => name.includes("min-h-"))).toEqual([
+        "max-sm:min-h-[116px]",
+      ]);
+      expect(statement.attributes("rows")).toBe("3");
+      wrapper.unmount();
+    },
+  );
+
   it("has no axe violations", async () => {
     const wrapper = mountDialogue(
       fakeApi(

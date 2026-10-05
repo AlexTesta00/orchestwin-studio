@@ -311,6 +311,62 @@ describe("ProjectImportDialog", () => {
     expect(wrapper.get(submit).attributes("disabled")).toBeUndefined();
   });
 
+  it.each([
+    [
+      "it",
+      "design",
+      "Questa cartella non è completa: manca il passo «Design e valutazione», quindi non può nascerne un progetto. Per partire da una cartella servono tutti e cinque i passi approvati: approvali nel progetto da cui viene, poi esporta di nuovo la cartella dallo Studio.",
+    ],
+    [
+      "en",
+      "design",
+      "This folder is not complete: the “Design & Evaluation” step is missing, so a project cannot start from it. To start from a folder, all five steps must be approved: approve them in the project it comes from, then export the folder again from the Studio.",
+    ],
+    [
+      "it",
+      "twins",
+      "Questa cartella non è completa: mancano i passi «User Twin», «Definizione» e «Design e valutazione», quindi non può nascerne un progetto. Per partire da una cartella servono tutti e cinque i passi approvati: approvali nel progetto da cui viene, poi esporta di nuovo la cartella dallo Studio.",
+    ],
+    [
+      "en",
+      "requirements",
+      "This folder is not complete: the “Definition” and “Design & Evaluation” steps are missing, so a project cannot start from it. To start from a folder, all five steps must be approved: approve them in the project it comes from, then export the folder again from the Studio.",
+    ],
+    [
+      "it",
+      null,
+      "Questa cartella non è completa, quindi non può nascerne un progetto. Per partire da una cartella servono tutti e cinque i passi approvati: approvali nel progetto da cui viene, poi esporta di nuovo la cartella dallo Studio.",
+    ],
+    [
+      "en",
+      null,
+      "This folder is not complete, so a project cannot start from it. To start from a folder, all five steps must be approved: approve them in the project it comes from, then export the folder again from the Studio.",
+    ],
+    [
+      "it",
+      "manifest",
+      "Questa cartella non è completa, quindi non può nascerne un progetto. Per partire da una cartella servono tutti e cinque i passi approvati: approvali nel progetto da cui viene, poi esporta di nuovo la cartella dallo Studio.",
+    ],
+  ] as const)(
+    "says in %s that the folder is incomplete and which steps it lacks (%s)",
+    async (locale, location, message) => {
+      const api = importsApi();
+      api.importArchive.mockRejectedValueOnce(refused("FOLDER_INCOMPLETE", location));
+      const wrapper = mountDialog(api, locale);
+      await choose(wrapper, archive());
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+      const alert = wrapper.get(error);
+      expect(alert.attributes("role")).toBe("alert");
+      expect(alert.get("p").text()).toBe(message);
+      expect(alert.get("p").text()).not.toMatch(/FOLDER_INCOMPLETE|Riprova|Try again/);
+      expect(alert.get("details code").text()).toBe(
+        location === null ? "FOLDER_INCOMPLETE" : `FOLDER_INCOMPLETE · ${location}`,
+      );
+      expect(wrapper.emitted("imported")).toBeUndefined();
+    },
+  );
+
   it("keeps the technical reason of an inconsistent folder inside the details", async () => {
     const api = importsApi();
     api.importArchive.mockRejectedValueOnce(refused("FOLDER_INCONSISTENT", "DESIGN_OUTDATED"));
