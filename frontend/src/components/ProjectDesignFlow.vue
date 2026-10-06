@@ -213,6 +213,7 @@ import {
 } from "vue";
 
 import { apiClient } from "@/api/client";
+import AlignmentProposalsNotice from "./AlignmentProposalsNotice.vue";
 import ArtifactViewSwitch, { type ArtifactView } from "./ArtifactViewSwitch.vue";
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
 import DesignAlternativeComparison, {
@@ -1987,6 +1988,11 @@ function onReapproved(): void {
   changed();
 }
 
+async function onProposalApplied(): Promise<void> {
+  await load();
+  changed();
+}
+
 async function onInsightApplied(application: InsightApplicationPayload): Promise<void> {
   if (application.id === handledApplicationId) {
     return;
@@ -3075,6 +3081,14 @@ onBeforeUnmount(() => {
         class="grid gap-6"
         data-testid="design-text-view"
       >
+        <AlignmentProposalsNotice
+          :project-id="projectId"
+          section="DESIGN"
+          :locale="locale"
+          :authorize="authorizedRequest"
+          @applied="onProposalApplied"
+        />
+
         <section
           v-if="store.pendingDiffs.length > 0"
           class="grid gap-3"

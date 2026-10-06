@@ -947,7 +947,11 @@ function mountFlow(api: FakeDesignApi, options: MountOptions = {}) {
     },
     global: {
       plugins: [...(options.pinia === undefined ? [] : [options.pinia]), createAppI18n(locale)],
-      stubs: { ProjectHumanValidationPanel: true, ...options.stubs },
+      stubs: {
+        ProjectHumanValidationPanel: true,
+        AlignmentProposalsNotice: true,
+        ...options.stubs,
+      },
     },
     ...(options.attach === true ? { attachTo: document.body } : {}),
   });
@@ -3868,6 +3872,50 @@ describe("ProjectDesignFlow and a refused first proposal", () => {
     expect(wrapper.text()).not.toContain("PROPOSAL_REJECTED");
     expect(wrapper.find('[data-testid="design-error"]').exists()).toBe(false);
     expect(api.generate).not.toHaveBeenCalled();
+  });
+
+  it.each(["en", "it"] as const)(
+    "mounts in %s the proposals from the code in the design section with the token of the page",
+    async (locale) => {
+      const wrapper = mountFlow(new FakeDesignApi(SELECTED_DESIGN_VERSION), { locale });
+      await flushPromises();
+
+      const notice = wrapper.getComponent({ name: "AlignmentProposalsNotice" });
+      expect(notice.props("projectId")).toBe(DESIGN_PROJECT_ID);
+      expect(notice.props("section")).toBe("DESIGN");
+      expect(notice.props("locale")).toBe(locale);
+      const authorized = notice.props("authorize") as <T>(
+        operation: (accessToken: string) => Promise<T>,
+      ) => Promise<T>;
+      await expect(authorized(async (accessToken) => accessToken)).resolves.toBe("access-token");
+      expect(wrapper.get('[data-testid="design-text-view"]').element.contains(notice.element)).toBe(
+        true,
+      );
+      expect(wrapper.find('[data-testid="design-pending-changes"]').exists()).toBe(false);
+    },
+  );
+
+  it("reloads the revisions of the design when a proposal from the code is applied", async () => {
+    const api = new FakeDesignApi(SELECTED_DESIGN_VERSION);
+    const wrapper = mountFlow(api);
+    await flushPromises();
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
+
+    api.diffsResult = [PROPOSED_DESIGN_DIFF];
+    const notice = wrapper.getComponent({ name: "AlignmentProposalsNotice" });
+    notice.vm.$emit("applied", {
+      code: "ALN-002",
+      section: "DESIGN",
+      diffId: PROPOSED_DESIGN_DIFF.id,
+    });
+    await flushPromises();
+
+    const pending = wrapper.get('[data-testid="design-pending-changes"]');
+    expect(pending.findAll('[data-testid="design-pending-change"]')).toHaveLength(1);
+    expect(
+      notice.element.compareDocumentPosition(pending.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
 });
 

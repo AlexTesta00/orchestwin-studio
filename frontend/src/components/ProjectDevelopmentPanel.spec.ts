@@ -16,6 +16,7 @@ import {
   type GenerationJobsApi,
   type GenerationRequestJob,
 } from "../api/generationJobs";
+import type { KnowledgeAlignmentApi } from "../api/knowledgeAlignment";
 import type { TwinLearningApi } from "../api/twinLearning";
 import { useDesignStore } from "../stores/design";
 import { useRequirementsStore } from "../stores/requirements";
@@ -29,6 +30,7 @@ import type {
   CodeTaskStatus,
 } from "../types/codeChanges";
 import type { GenerationOperation } from "../types/designMockups";
+import type { KnowledgeAlignmentRunSummaryPayload } from "../types/knowledgeAlignment";
 import type { RequirementsSpecificationVersionPayload } from "../types/requirements";
 import type { TwinLearningPayload } from "../types/twinLearning";
 
@@ -335,6 +337,36 @@ const LEARNING: TwinLearningPayload = {
 
 const NO_TWINS: TwinLearningPayload = { ...LEARNING, twins: [] };
 
+const KNOWLEDGE_RUN: KnowledgeAlignmentRunSummaryPayload = {
+  id: "88888888-8888-4888-8888-888888888888",
+  project_id: PROJECT_ID,
+  from_commit: ALIGNED_COMMIT,
+  to_commit: NEWEST_COMMIT,
+  commits: [SECOND_COMMIT, NEWEST_COMMIT],
+  locale: "en-US",
+  requirements_version_number: 2,
+  design_version_number: 2,
+  alternative_code: "DES-001",
+  summary: "The code shows the reservations of the day and drops the empty state of the list.",
+  created_at: "2026-09-29T09:30:00+00:00",
+  cost_microusd: 320000,
+  generation_ids: ["88888888-8888-4888-8888-888888888801"],
+  waiting: 1,
+  proposals_count: 3,
+};
+
+const EARLIER_KNOWLEDGE_RUN: KnowledgeAlignmentRunSummaryPayload = {
+  ...KNOWLEDGE_RUN,
+  id: "88888888-8888-4888-8888-888888888880",
+  from_commit: null,
+  to_commit: ALIGNED_COMMIT,
+  commits: [ALIGNED_COMMIT],
+  summary: "The first screens follow the design.",
+  created_at: "2026-09-28T16:30:00+00:00",
+  waiting: 0,
+  proposals_count: 0,
+};
+
 function requirementsVersion(): RequirementsSpecificationVersionPayload {
   return {
     id: "requirements",
@@ -365,6 +397,18 @@ function developmentApi(overrides: Partial<CodeChangesApi> = {}) {
 
 function learningApi(read: TwinLearningApi["overview"] = async () => NO_TWINS) {
   return { overview: vi.fn<TwinLearningApi["overview"]>(read) };
+}
+
+function alignmentApi(runs: KnowledgeAlignmentRunSummaryPayload[] = []) {
+  const unused = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+  return {
+    runs: vi.fn<KnowledgeAlignmentApi["runs"]>(async () => ({ items: runs })),
+    proposals: vi.fn<KnowledgeAlignmentApi["proposals"]>(unused),
+    apply: vi.fn<KnowledgeAlignmentApi["apply"]>(unused),
+    skip: vi.fn<KnowledgeAlignmentApi["skip"]>(unused),
+  };
 }
 
 function generation(
@@ -412,6 +456,7 @@ function jobsApi(running: GenerationRequestJob[] = [], reads: GenerationRequestJ
 interface Extras {
   learning?: TwinLearningApi;
   jobs?: GenerationJobsApi;
+  alignment?: KnowledgeAlignmentApi;
 }
 
 function mountPanel(api: CodeChangesApi, locale: Locale = "en", extras: Extras = {}) {
@@ -424,6 +469,7 @@ function mountPanel(api: CodeChangesApi, locale: Locale = "en", extras: Extras =
       api,
       learningApi: extras.learning ?? learningApi(),
       jobsApi: extras.jobs ?? jobsApi(),
+      alignmentApi: extras.alignment ?? alignmentApi(),
     },
     attachTo: document.body,
   });
@@ -475,9 +521,9 @@ describe("ProjectDevelopmentPanel", () => {
     expect(jobs.list).toHaveBeenCalledWith(PROJECT_ID, TOKEN, "RUNNING");
     expect(wrapper.get("h2").text()).toBe("Development outside the Studio");
     expect(spoken(wrapper.get('[data-testid="development-terminal"]'))).toBe(
-      "Reviews and decisions are made from the terminal with ut align: this page only shows their result.",
+      "Reviews and decisions are made from the terminal with ut verify: this page only shows their result.",
     );
-    expect(wrapper.get('[data-testid="development-terminal"] code').text()).toBe("ut align");
+    expect(wrapper.get('[data-testid="development-terminal"] code').text()).toBe("ut verify");
     expect(wrapper.find('[data-testid="development-job"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="learning-block"]').exists()).toBe(false);
     wrapper.unmount();
@@ -707,28 +753,28 @@ describe("ProjectDevelopmentPanel", () => {
     [
       "en",
       1,
-      "1 review was made against earlier versions of the requirements or of the design: ut align --recheck has the twins review that commit again.",
+      "1 review was made against earlier versions of the requirements or of the design: ut verify --recheck has the twins review that commit again.",
       "To re-review",
       "Reviewed against requirements version 2 and design version 1 (DES-001)",
     ],
     [
       "en",
       2,
-      "2 reviews were made against earlier versions of the requirements or of the design: ut align --recheck has the twins review those commits again.",
+      "2 reviews were made against earlier versions of the requirements or of the design: ut verify --recheck has the twins review those commits again.",
       "To re-review",
       "Reviewed against requirements version 2 and design version 1 (DES-001)",
     ],
     [
       "it",
       1,
-      "1 revisione è stata fatta su versioni precedenti dei requisiti o del design: ut align --recheck fa riesaminare quel commit ai twin.",
+      "1 revisione è stata fatta su versioni precedenti dei requisiti o del design: ut verify --recheck fa riesaminare quel commit ai twin.",
       "Da riesaminare",
       "Rivisto rispetto ai requisiti versione 2 e al design versione 1 (DES-001)",
     ],
     [
       "it",
       2,
-      "2 revisioni sono state fatte su versioni precedenti dei requisiti o del design: ut align --recheck fa riesaminare quei commit ai twin.",
+      "2 revisioni sono state fatte su versioni precedenti dei requisiti o del design: ut verify --recheck fa riesaminare quei commit ai twin.",
       "Da riesaminare",
       "Rivisto rispetto ai requisiti versione 2 e al design versione 1 (DES-001)",
     ],
@@ -748,7 +794,7 @@ describe("ProjectDevelopmentPanel", () => {
         '[data-testid="development-pending"] [data-testid="development-stale"]',
       );
       expect(spoken(notice)).toBe(sentence);
-      expect(notice.findAll("code").map((item) => item.text())).toEqual(["ut align --recheck"]);
+      expect(notice.findAll("code").map((item) => item.text())).toEqual(["ut verify --recheck"]);
       const rows = wrapper.findAll('[data-testid="development-change"]');
       const stale = rows[0]!.get('[data-testid="development-change-stale"]');
       expect(stale.text()).toBe(chip);
@@ -870,7 +916,7 @@ describe("ProjectDevelopmentPanel", () => {
       "Keep the short format of the dates.",
     ]);
     expect(spoken(verdict.get('[data-testid="development-code-tasks"]'))).toContain(
-      "They become open tasks only when you decide so with ut align.",
+      "They become open tasks only when you decide so with ut verify.",
     );
     expect(verdict.find('[data-testid="development-design-request"]').exists()).toBe(false);
     expect(verdict.find('[data-testid="development-requirements-request"]').exists()).toBe(false);
@@ -946,7 +992,7 @@ describe("ProjectDevelopmentPanel", () => {
 
     expect(wrapper.get("h2").text()).toBe("Sviluppo fuori dallo Studio");
     expect(spoken(wrapper.get('[data-testid="development-terminal"]'))).toBe(
-      "Revisioni e decisioni si fanno dal terminale con ut align: questa pagina ne mostra solo il risultato.",
+      "Revisioni e decisioni si fanno dal terminale con ut verify: questa pagina ne mostra solo il risultato.",
     );
     expect(wrapper.get('[data-testid="development-reference-requirements"]').text()).toBe(
       "versione 2",
@@ -1000,12 +1046,12 @@ describe("ProjectDevelopmentPanel", () => {
   it.each([
     [
       "en",
-      "No commit recorded yet. Record the first one with ut align or ut watch.",
+      "No commit recorded yet. Record the first one with ut verify or ut watch.",
       "No commit aligned yet",
     ],
     [
       "it",
-      "Nessun commit registrato. Registra il primo con ut align o ut watch.",
+      "Nessun commit registrato. Registra il primo con ut verify o ut watch.",
       "Nessun commit ancora allineato",
     ],
   ] as const)("says in %s that no commit is recorded yet", async (locale, empty, aligned) => {
@@ -1019,7 +1065,7 @@ describe("ProjectDevelopmentPanel", () => {
 
     const sentence = wrapper.get('[data-testid="development-empty"]');
     expect(spoken(sentence)).toBe(empty);
-    expect(sentence.findAll("code").map((item) => item.text())).toEqual(["ut align", "ut watch"]);
+    expect(sentence.findAll("code").map((item) => item.text())).toEqual(["ut verify", "ut watch"]);
     expect(wrapper.get('[data-testid="development-aligned"]').text()).toBe(aligned);
     expect(wrapper.find('[data-testid="development-pending"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="development-tasks"]').exists()).toBe(false);
@@ -1397,6 +1443,139 @@ describe("ProjectDevelopmentPanel", () => {
 
     expect(wrapper.find('[data-testid="development-job"]').exists()).toBe(false);
     expect(api.alignment).toHaveBeenCalledTimes(3);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      {
+        title: "Knowledge alignment",
+        labels: ["Commits", "Date", "Proposals", "Waiting for a decision"],
+        commits: "from a1a1a1a to c0ffee1",
+        terminal:
+          "Proposals are made from the terminal with ut align; you decide them here and in the sections.",
+      },
+    ],
+    [
+      "it",
+      {
+        title: "Allineamento della conoscenza",
+        labels: ["Commit", "Data", "Proposte", "In attesa di decisione"],
+        commits: "da a1a1a1a a c0ffee1",
+        terminal: "Le proposte si fanno dal terminale con ut align; qui e nelle sezioni le decidi.",
+      },
+    ],
+  ] as const)(
+    "shows in %s the latest alignment of the knowledge with the code after the latest review",
+    async (locale, expected) => {
+      const alignment = alignmentApi([EARLIER_KNOWLEDGE_RUN, KNOWLEDGE_RUN]);
+      const wrapper = mountPanel(developmentApi(), locale, { alignment });
+      await flushPromises();
+
+      expect(alignment.runs).toHaveBeenCalledTimes(1);
+      expect(alignment.runs).toHaveBeenCalledWith(PROJECT_ID, TOKEN);
+      const block = wrapper.get('[data-testid="development-knowledge"]');
+      expect(block.get("h3").text()).toBe(expected.title);
+      expect(block.get('[data-testid="development-knowledge-summary"]').text()).toBe(
+        KNOWLEDGE_RUN.summary,
+      );
+      const run = block.get('[data-testid="development-knowledge-run"]');
+      expect(run.findAll("dt").map((item) => item.text())).toEqual(expected.labels);
+      expect(spoken(block.get('[data-testid="development-knowledge-commits"]'))).toBe(
+        expected.commits,
+      );
+      expect(spoken(block.get('[data-testid="development-knowledge-date"]'))).toBe(
+        words(dated(KNOWLEDGE_RUN.created_at, locale)),
+      );
+      expect(block.get('[data-testid="development-knowledge-proposals"]').text()).toBe("3");
+      expect(block.get('[data-testid="development-knowledge-waiting"]').text()).toBe("1");
+      expect(block.find('[data-testid="development-knowledge-none"]').exists()).toBe(false);
+      const terminal = block.get('[data-testid="development-knowledge-terminal"]');
+      expect(spoken(terminal)).toBe(expected.terminal);
+      expect(terminal.findAll("code").map((item) => item.text())).toEqual(["ut align"]);
+      const review = wrapper.get('[data-testid="development-run"]').element;
+      expect(review.compareDocumentPosition(block.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      expect(wrapper.findAll("button").map((button) => button.attributes("data-testid"))).toEqual([
+        "development-refresh",
+        "step-technical-details-toggle",
+      ]);
+      await expectAccessible(wrapper.element);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["en", "up to a1a1a1a"],
+    ["it", "fino a a1a1a1a"],
+  ] as const)(
+    "says in %s up to which commit a first run read the code",
+    async (locale, commits) => {
+      const wrapper = mountPanel(developmentApi(), locale, {
+        alignment: alignmentApi([EARLIER_KNOWLEDGE_RUN]),
+      });
+      await flushPromises();
+
+      const block = wrapper.get('[data-testid="development-knowledge"]');
+      expect(spoken(block.get('[data-testid="development-knowledge-commits"]'))).toBe(commits);
+      expect(block.get('[data-testid="development-knowledge-proposals"]').text()).toBe("0");
+      expect(block.get('[data-testid="development-knowledge-waiting"]').text()).toBe("0");
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["en", "The knowledge has not been compared with the code yet."],
+    ["it", "La conoscenza non è ancora stata confrontata con il codice."],
+  ] as const)(
+    "says in %s that the knowledge was never compared with the code and still names ut align",
+    async (locale, sentence) => {
+      const wrapper = mountPanel(developmentApi(), locale);
+      await flushPromises();
+
+      const block = wrapper.get('[data-testid="development-knowledge"]');
+      expect(block.get('[data-testid="development-knowledge-none"]').text()).toBe(sentence);
+      expect(block.find('[data-testid="development-knowledge-run"]').exists()).toBe(false);
+      expect(block.get('[data-testid="development-knowledge-terminal"] code').text()).toBe(
+        "ut align",
+      );
+      wrapper.unmount();
+    },
+  );
+
+  it("keeps the rest of the section when the runs of the alignment cannot be read", async () => {
+    const alignment = alignmentApi();
+    alignment.runs.mockRejectedValue(new TypeError("Failed to fetch"));
+    const wrapper = mountPanel(developmentApi(), "en", { alignment });
+    await flushPromises();
+
+    expect(wrapper.findAll('[data-testid="development-change"]')).toHaveLength(2);
+    expect(wrapper.find('[data-testid="development-knowledge-none"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="development-error"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("reads the runs of the alignment again with the control and for another project", async () => {
+    const alignment = alignmentApi([KNOWLEDGE_RUN]);
+    const wrapper = mountPanel(developmentApi(), "en", { alignment });
+    await flushPromises();
+    expect(alignment.runs).toHaveBeenCalledTimes(1);
+
+    alignment.runs.mockResolvedValueOnce({ items: [{ ...KNOWLEDGE_RUN, waiting: 0 }] });
+    await wrapper.get('[data-testid="development-refresh"]').trigger("click");
+    await flushPromises();
+
+    expect(alignment.runs).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('[data-testid="development-knowledge-waiting"]').text()).toBe("0");
+
+    alignment.runs.mockResolvedValueOnce({ items: [] });
+    await wrapper.setProps({ projectId: SECOND_PROJECT_ID });
+    await flushPromises();
+
+    expect(alignment.runs).toHaveBeenLastCalledWith(SECOND_PROJECT_ID, TOKEN);
+    expect(wrapper.find('[data-testid="development-knowledge-none"]').exists()).toBe(true);
     wrapper.unmount();
   });
 

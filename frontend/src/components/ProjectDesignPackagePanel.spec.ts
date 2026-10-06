@@ -582,11 +582,11 @@ describe("ProjectDesignPackagePanel", () => {
   it.each([
     [
       "en",
-      "Development goes on from the terminal: ut align checks the commits against the design and ut watch follows them.",
+      "Development goes on from the terminal: ut verify checks the commits against the design and ut watch follows them.",
     ],
     [
       "it",
-      "Lo sviluppo continua dal terminale: ut align confronta i commit con il design e ut watch li segue.",
+      "Lo sviluppo continua dal terminale: ut verify confronta i commit con il design e ut watch li segue.",
     ],
   ] as const)(
     "names the commands of the terminal in %s after the versions once the design is approved",
@@ -596,7 +596,10 @@ describe("ProjectDesignPackagePanel", () => {
 
       const sentence = wrapper.get('[data-testid="package-terminal"]');
       expect(spoken(sentence)).toBe(expected);
-      expect(sentence.findAll("code").map((item) => item.text())).toEqual(["ut align", "ut watch"]);
+      expect(sentence.findAll("code").map((item) => item.text())).toEqual([
+        "ut verify",
+        "ut watch",
+      ]);
       expect(
         wrapper.get('[data-testid="package-history"]').element.contains(sentence.element),
       ).toBe(true);
@@ -1148,10 +1151,11 @@ describe("ProjectDesignPackagePanel", () => {
       "it",
       "Poi, durante lo sviluppo",
       [
-        "Metti la cartella sotto git: ut align lavora sui commit.",
+        "Metti la cartella sotto git: ut verify lavora sui commit.",
         "Fai scrivere l'applicazione al tuo agente di programmazione, con requisiti e design come contesto.",
         "Verifica i criteri di accettazione nei browser di questo computer (con --url se l'applicazione ha un suo indirizzo).",
-        "Fai esaminare i commit ai twin e riallinea codice, design e requisiti.",
+        "I twin esaminano i commit e il modello dice se codice, Definizione e Design sono allineati; decidi tu.",
+        "Legge le modifiche del codice e propone aggiornamenti alla Definizione, al Design e al piano dei test: li approvi uno per uno.",
         "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
         "Guarda a che punto è il progetto.",
       ],
@@ -1160,10 +1164,11 @@ describe("ProjectDesignPackagePanel", () => {
       "en",
       "Then, during development",
       [
-        "Put the folder under git: ut align works on the commits.",
+        "Put the folder under git: ut verify works on the commits.",
         "Have your coding agent write the application, with the requirements and the design as context.",
         "Check the acceptance criteria in the browsers of this computer (with --url if the application has an address of its own).",
-        "Have the twins review the commits and bring code, design and requirements back in line.",
+        "The twins review the commits and the model says whether code, Definition and Design are aligned; you decide.",
+        "Reads the code changes and proposes updates to the Definition, the Design and the test plan: you approve them one by one.",
         "Have the twins propose what they learned from the development.",
         "See where the project stands.",
       ],
@@ -1185,14 +1190,17 @@ describe("ProjectDesignPackagePanel", () => {
         "git init",
         "ut code",
         "ut test --static .",
+        "ut verify",
         "ut align",
         "ut twins update",
         "ut status",
       ]);
       expect(items[0]!.get('[data-testid="package-development-text"] code').text()).toBe(
-        "ut align",
+        "ut verify",
       );
       expect(items[2]!.get('[data-testid="package-development-text"] code').text()).toBe("--url");
+      expect(items[3]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
+      expect(items[4]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
       wrapper.unmount();
     },
   );
@@ -1290,7 +1298,7 @@ describe("ProjectDesignPackagePanel", () => {
   });
 
   it.each([
-    { name: "the chosen design", options: {}, count: 10 },
+    { name: "the chosen design", options: {}, count: 11 },
     {
       name: "a supplied design",
       options: {

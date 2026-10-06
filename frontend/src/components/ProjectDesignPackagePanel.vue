@@ -41,6 +41,7 @@ const DEVELOPMENT_STEPS = [
   { key: "git", command: "git init" },
   { key: "code", command: "ut code" },
   { key: "test", command: "ut test --static ." },
+  { key: "verify", command: "ut verify" },
   { key: "align", command: "ut align" },
   { key: "learn", command: "ut twins update" },
   { key: "status", command: "ut status" },
@@ -157,11 +158,13 @@ const messages = {
     },
     developmentWay: "Then, during development",
     developmentSteps: {
-      git: "Put the folder under git: `ut align` works on the commits.",
+      git: "Put the folder under git: `ut verify` works on the commits.",
       code: "Have your coding agent write the application, with the requirements and the design as context.",
       test: "Check the acceptance criteria in the browsers of this computer (with `--url` if the application has an address of its own).",
+      verify:
+        "The twins review the commits and the model says whether code, Definition and Design are aligned; you decide.",
       align:
-        "Have the twins review the commits and bring code, design and requirements back in line.",
+        "Reads the code changes and proposes updates to the Definition, the Design and the test plan: you approve them one by one.",
       learn: "Have the twins propose what they learned from the development.",
       status: "See where the project stands.",
     },
@@ -188,7 +191,7 @@ const messages = {
     downloadVersion: "Download version {number}",
     earlier: "Earlier versions ({count})",
     terminal:
-      "Development goes on from the terminal: `ut align` checks the commits against the design and `ut watch` follows them.",
+      "Development goes on from the terminal: `ut verify` checks the commits against the design and `ut watch` follows them.",
   },
   it: {
     agentRole: "Sviluppatore dell'interfaccia",
@@ -264,10 +267,13 @@ const messages = {
     },
     developmentWay: "Poi, durante lo sviluppo",
     developmentSteps: {
-      git: "Metti la cartella sotto git: `ut align` lavora sui commit.",
+      git: "Metti la cartella sotto git: `ut verify` lavora sui commit.",
       code: "Fai scrivere l'applicazione al tuo agente di programmazione, con requisiti e design come contesto.",
       test: "Verifica i criteri di accettazione nei browser di questo computer (con `--url` se l'applicazione ha un suo indirizzo).",
-      align: "Fai esaminare i commit ai twin e riallinea codice, design e requisiti.",
+      verify:
+        "I twin esaminano i commit e il modello dice se codice, Definizione e Design sono allineati; decidi tu.",
+      align:
+        "Legge le modifiche del codice e propone aggiornamenti alla Definizione, al Design e al piano dei test: li approvi uno per uno.",
       learn: "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
       status: "Guarda a che punto è il progetto.",
     },
@@ -294,7 +300,7 @@ const messages = {
     downloadVersion: "Scarica la versione {number}",
     earlier: "Versioni precedenti ({count})",
     terminal:
-      "Lo sviluppo continua dal terminale: `ut align` confronta i commit con il design e `ut watch` li segue.",
+      "Lo sviluppo continua dal terminale: `ut verify` confronta i commit con il design e `ut watch` li segue.",
   },
 } as const;
 
