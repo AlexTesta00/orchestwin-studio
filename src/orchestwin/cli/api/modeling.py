@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.jobs import reply_body
@@ -13,10 +13,19 @@ PENDING: Final = "PENDING_CONFIRMATION"
 CONFIRMED: Final = "CONFIRMED"
 REJECTED: Final = "REJECTED"
 CONFIRM: Final = "CONFIRM"
+APPROVE: Final = "APPROVE"
 REJECT: Final = "REJECT"
 TEXT: Final = "TEXT"
 ITEMS: Final = "ITEMS"
 MAX_REASON: Final = 2000
+REPLACEMENT_KEYS: Final = (
+    "value",
+    "epistemic_status",
+    "confidence",
+    "provenance",
+    "human_validation",
+    "rationale",
+)
 
 
 def modeling_path(project_id: str) -> str:
@@ -76,6 +85,44 @@ def decide_gate(
     client: StudioClient, project_id: str, action: str = "APPROVE"
 ) -> tuple[int, object]:
     return _send(client, "POST", f"{modeling_path(project_id)}/gate/decision", {"action": action})
+
+
+def propose_revision(
+    client: StudioClient,
+    project_id: str,
+    twin_id: str,
+    replacements: Sequence[Mapping[str, object]],
+) -> tuple[int, object]:
+    return _send(
+        client,
+        "POST",
+        f"{modeling_path(project_id)}/twins/{twin_id}/revisions",
+        {"replacements": [dict(item) for item in replacements]},
+    )
+
+
+def decide_revision(
+    client: StudioClient,
+    project_id: str,
+    diff_id: str,
+    decision: str,
+    reason: str | None = None,
+) -> tuple[int, object]:
+    body: dict[str, object] = {"decision": decision}
+    if reason is not None:
+        body["reason"] = reason
+    return _send(client, "POST", f"{modeling_path(project_id)}/revisions/{diff_id}/decision", body)
+
+
+def owner_profiles(
+    client: StudioClient, project_id: str, profiles: Sequence[Mapping[str, object]]
+) -> tuple[int, object]:
+    return _send(
+        client,
+        "POST",
+        f"{modeling_path(project_id)}/owner-profiles",
+        {"profiles": [dict(item) for item in profiles]},
+    )
 
 
 def approved(document: Mapping[str, object]) -> bool:
