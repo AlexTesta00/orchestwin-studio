@@ -2,10 +2,14 @@
 
 from enum import StrEnum
 from pathlib import Path
-from typing import ClassVar, Self
+from typing import ClassVar, Final, Self
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from orchestwin.identity.domain import NormalizedEmail
+
+LOCAL_OWNER_DEFAULT_EMAIL: Final = "local-owner@example.com"
 
 
 class RuntimeEnvironment(StrEnum):
@@ -33,6 +37,11 @@ class ModelRuntimeMode(StrEnum):
     REAL_REQUIRED = "REAL_REQUIRED"
 
 
+class AccessMode(StrEnum):
+    ACCOUNTS = "ACCOUNTS"
+    LOCAL_OWNER = "LOCAL_OWNER"
+
+
 class ApplicationSettings(BaseSettings):
     """Immutable settings loaded from environment variables or a dotenv file."""
 
@@ -54,6 +63,8 @@ class ApplicationSettings(BaseSettings):
     api_prefix: str = "/api/v1"
     cors_allowed_origins: tuple[str, ...] = ("http://127.0.0.1:5173",)
     cors_allow_credentials: bool = True
+    access_mode: AccessMode = AccessMode.ACCOUNTS
+    local_owner_email: str | None = None
 
     training_adapter_registry_root: Path = Path("var/artifacts/model-adapters")
 
@@ -93,6 +104,11 @@ class ApplicationSettings(BaseSettings):
             raise ValueError("runtime storage paths must not contain parent traversal")
         return path
 
+    @field_validator("local_owner_email")
+    @classmethod
+    def validate_local_owner_email(cls, value: str | None) -> str | None:
+        return None if value is None else NormalizedEmail.parse(value).value
+
     @model_validator(mode="after")
     def validate_environment_safety(self) -> Self:
         """Reject unsafe production and CORS combinations."""
@@ -103,6 +119,9 @@ class ApplicationSettings(BaseSettings):
             raise ValueError("credentialed CORS must not use a wildcard origin")
 
         return self
+
+    def resolved_local_owner_email(self) -> str:
+        return self.local_owner_email or LOCAL_OWNER_DEFAULT_EMAIL
 
 
 def load_settings(
