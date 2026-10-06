@@ -90,6 +90,14 @@ const messages = {
         what: "the proposal of what a twin learned",
         of: "of the proposal of what a twin learned",
       },
+      KNOWLEDGE_ALIGNMENT: {
+        what: "the alignment of the knowledge to the code",
+        of: "of the alignment of the knowledge to the code",
+      },
+      DESIGN_CHANGE: {
+        what: "the change to the design from the words",
+        of: "of the change to the design from the words",
+      },
     } satisfies Record<GenerationOperation, Subject>,
   },
   it: {
@@ -144,6 +152,14 @@ const messages = {
       TWIN_UPDATE: {
         what: "la proposta di ciò che un twin ha imparato",
         of: "della proposta di ciò che un twin ha imparato",
+      },
+      KNOWLEDGE_ALIGNMENT: {
+        what: "l'allineamento della conoscenza al codice",
+        of: "dell'allineamento della conoscenza al codice",
+      },
+      DESIGN_CHANGE: {
+        what: "la modifica del design dalle parole",
+        of: "della modifica del design dalle parole",
       },
     } satisfies Record<GenerationOperation, Subject>,
   },

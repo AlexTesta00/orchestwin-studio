@@ -585,6 +585,36 @@ describe("Generation Jobs API client", () => {
     );
   });
 
+  it.each([
+    [
+      "KNOWLEDGE_ALIGNMENT",
+      { run: { id: "run-1", proposals: [{ code: "ALN-001", section: "REQUIREMENTS" }] } },
+    ],
+    ["DESIGN_CHANGE", { revision: { status: "CREATED", diff: { id: "diff-1" } }, changes: [] }],
+  ] as const)("reads and lists the job of a %s", async (operation, body) => {
+    const running = job({ operation });
+    const ended = {
+      ...job(),
+      operation,
+      status: "SUCCEEDED",
+      stage: null,
+      finished_at: "2026-09-28T10:03:00+00:00",
+      response: { status_code: 201, body },
+    };
+    const api = createGenerationJobsApi({ fetchImpl: async () => json({ items: [running] }) });
+
+    await expect(api.list(PROJECT_ID, "token", "RUNNING")).resolves.toEqual([running]);
+    expect(generationJobOf(ended)).toEqual(
+      job({
+        operation,
+        status: "SUCCEEDED",
+        stage: null,
+        finished_at: "2026-09-28T10:03:00+00:00",
+        response: { status_code: 201, body },
+      }),
+    );
+  });
+
   it("lists the running plan and review of the acceptance tests started by ut test", async () => {
     const plan = job({ operation: "TEST_PLAN" });
     const review = job({

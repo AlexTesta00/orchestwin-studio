@@ -47,7 +47,9 @@ export type GenerationOperation =
   | "CODE_CHANGE_REVIEW"
   | "TEST_PLAN"
   | "TEST_REVIEW"
-  | "TWIN_UPDATE";
+  | "TWIN_UPDATE"
+  | "KNOWLEDGE_ALIGNMENT"
+  | "DESIGN_CHANGE";
 
 export interface GenerationJobResponsePayload {
   status_code: number;
