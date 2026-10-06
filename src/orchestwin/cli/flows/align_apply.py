@@ -28,6 +28,7 @@ from orchestwin.cli.flows.verify_decision import (
 )
 
 if TYPE_CHECKING:
+    from orchestwin.cli.commands.init import Journey
     from orchestwin.cli.context import CommandContext
     from orchestwin.cli.flows.verify_review import Titles, Workspace
 
@@ -285,6 +286,17 @@ def requirements_follow_up(
     if not console.confirm("align.requirements_approve", default=True, version=number):
         console.say("align.requirements_left", version=number)
         return
+    approve_requirements(context, workspace, journey, updated, outcome)
+
+
+def approve_requirements(
+    context: CommandContext,
+    workspace: Workspace,
+    journey: Journey,
+    updated: Mapping[str, object],
+    outcome: Outcome,
+) -> None:
+    client, project_id = workspace.client, workspace.project_id
     try:
         gate = journey.approve(
             lambda: requirements_api.submit_gate(client, project_id),
@@ -311,7 +323,7 @@ def design_follow_up(
     outcome: Outcome,
 ) -> None:
     console = context.console
-    client, project, project_id = workspace.client, workspace.project, workspace.project_id
+    client, project_id = workspace.client, workspace.project_id
     payload = revision if isinstance(revision, Mapping) else {}
     align_knowledge.show_changes(context, alignment_api.texts(payload.get("changes")))
     diff_id = diff_id_of(decided, payload)
@@ -332,6 +344,11 @@ def design_follow_up(
     version = answer.get("version")
     number = version.get("version_number") if isinstance(version, Mapping) else None
     console.say("align.design_revised", version="-" if number is None else number)
+    approve_design(context, workspace, outcome)
+
+
+def approve_design(context: CommandContext, workspace: Workspace, outcome: Outcome) -> None:
+    client, project = workspace.client, workspace.project
     fresh = design_state.read_state(client, project)
     if fresh.chosen is None or fresh.version is None or fresh.approved:
         return

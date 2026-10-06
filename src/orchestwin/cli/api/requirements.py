@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Final
 
+from orchestwin.cli.errors import ApiFailure
 from orchestwin.cli.jobs import reply_body
 
 if TYPE_CHECKING:
@@ -72,6 +73,29 @@ def revisions(client: StudioClient, project_id: str) -> list[Mapping[str, object
     if not isinstance(document, list):
         return []
     return [item for item in document if isinstance(item, Mapping)]
+
+
+def propose_revision(
+    client: StudioClient, project_id: str, specification: Mapping[str, object]
+) -> Mapping[str, object]:
+    document = client.post(
+        f"{requirements_path(project_id)}/revisions", {"specification": specification}
+    )
+    diff = document.get("diff") if isinstance(document, dict) else None
+    if not isinstance(diff, dict) or not isinstance(diff.get("id"), str):
+        raise ApiFailure("API_FAILURE", http_status=201)
+    return document
+
+
+def owner_specification(
+    client: StudioClient, project_id: str, specification: Mapping[str, object]
+) -> tuple[int, object]:
+    return _send(
+        client,
+        "POST",
+        f"{requirements_path(project_id)}/owner-specifications",
+        {"specification": specification},
+    )
 
 
 def pending_revision(
