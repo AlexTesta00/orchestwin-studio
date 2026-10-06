@@ -102,15 +102,15 @@ MESSAGES: dict[str, dict[str, str]] = {
     "tasks.origin_some_twin": {"it": "un twin", "en": "a twin"},
     "tasks.none": {
         "it": "Non ci sono compiti aperti per il codice. I compiti nascono dai rilievi dei twin "
-        "(`ut test`, `ut align`) oppure da te (`ut tasks add`).",
+        "(`ut test`, `ut verify`) oppure da te (`ut tasks add`).",
         "en": "There are no open tasks for the code. Tasks come from the findings of the twins "
-        "(`ut test`, `ut align`) or from you (`ut tasks add`).",
+        "(`ut test`, `ut verify`) or from you (`ut tasks add`).",
     },
     "tasks.none_all": {
         "it": "Non c'è ancora nessun compito per il codice. I compiti nascono dai rilievi dei "
-        "twin (`ut test`, `ut align`) oppure da te (`ut tasks add`).",
+        "twin (`ut test`, `ut verify`) oppure da te (`ut tasks add`).",
         "en": "There is no task for the code yet. Tasks come from the findings of the twins "
-        "(`ut test`, `ut align`) or from you (`ut tasks add`).",
+        "(`ut test`, `ut verify`) or from you (`ut tasks add`).",
     },
     "tasks.hint": {
         "it": "Quando un compito è fatto, chiudilo con `ut tasks done CODE`; `ut code` affida i "
@@ -197,16 +197,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Findings of the twins on commit {commit}: {line}",
     },
     "tasks.commit_none_reviewed": {
-        "it": "Nessun commit in attesa ha ancora un esame dei twin: `ut align` registra i commit "
-        "e li fa esaminare.",
-        "en": "No waiting commit has a review of the twins yet: `ut align` records the commits "
-        "and has them reviewed.",
+        "it": "Nessun commit in attesa ha ancora un esame dei twin: `ut verify` registra i "
+        "commit, i twin li esaminano e il modello dice se codice, Definizione e Design sono "
+        "allineati; decidi tu.",
+        "en": "No waiting commit has a review of the twins yet: `ut verify` records the commits, "
+        "the twins review them and the model says whether code, Definition and Design are "
+        "aligned; you decide.",
     },
     "tasks.commit_not_reviewed": {
         "it": "Il commit {commit} non ha ancora un esame dei twin: nessun compito da creare. "
-        "`ut align` lo fa esaminare.",
+        "`ut verify` lo fa esaminare.",
         "en": "The commit {commit} has no review of the twins yet: no task to create. "
-        "`ut align` has it reviewed.",
+        "`ut verify` has it reviewed.",
     },
     "tasks.no_findings": {
         "it": "I twin non hanno segnalato nessun problema: nessun compito da creare.",
@@ -315,9 +317,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "tasks.errors.CODE_CHANGE_NOT_FOUND": {
         "it": "Lo Studio non trova il commit {commit} tra quelli registrati "
-        "(CODE_CHANGE_NOT_FOUND): `ut align` lo registra.",
+        "(CODE_CHANGE_NOT_FOUND): `ut verify` lo registra.",
         "en": "The Studio does not find the commit {commit} among the recorded ones "
-        "(CODE_CHANGE_NOT_FOUND): `ut align` records it.",
+        "(CODE_CHANGE_NOT_FOUND): `ut verify` records it.",
     },
     "tasks.errors.CODE_CHANGE_AMBIGUOUS": {
         "it": "L'inizio dell'hash indica più di un commit registrato (CODE_CHANGE_AMBIGUOUS): "

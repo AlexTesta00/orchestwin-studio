@@ -682,7 +682,7 @@ def test_reviewing_a_commit_follows_the_job_and_finds_the_run_again(
     assert reviewed == {
         **runs[0],
         "reused": False,
-        "decide_with": "ut align",
+        "decide_with": "ut verify",
         "estimated_usd": [0.45, 0.8],
     }
     assert reviewed["commit"] == TIP_COMMIT

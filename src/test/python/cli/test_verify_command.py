@@ -160,7 +160,7 @@ def test_two_aligned_commits_are_recorded_reviewed_and_the_newest_becomes_the_po
     with session(tmp_path) as current:
         processes = current.repository(ALIGNED_PAIR)
 
-        run = current.ut("align", processes=processes, answers=["y", ""])
+        run = current.ut("verify", processes=processes, answers=["y", ""])
 
         changes = current.project.changes()
         runs = current.project.change_reviews()
@@ -220,12 +220,12 @@ def test_two_aligned_commits_are_recorded_reviewed_and_the_newest_becomes_the_po
 
 def test_a_second_launch_starts_after_the_aligned_commit(tmp_path: Path) -> None:
     with session(tmp_path) as current:
-        first = current.ut("align", processes=current.repository(ALIGNED_PAIR), answers=["y", ""])
+        first = current.ut("verify", processes=current.repository(ALIGNED_PAIR), answers=["y", ""])
         later = commit(THIRD, "Round the tip", parent=SECOND)
         processes = current.repository([later], since=SECOND)
 
-        second = current.ut("align", "--dry-run", processes=processes)
-        nothing = current.ut("align", processes=current.repository([], since=SECOND))
+        second = current.ut("verify", "--dry-run", processes=processes)
+        nothing = current.ut("verify", processes=current.repository([], since=SECOND))
 
     assert first.status == 0, first.errors
     assert second.status == 0, second.errors
@@ -251,7 +251,7 @@ def test_code_drift_records_the_tasks_of_the_model_as_edited(tmp_path: Path) -> 
     with session(tmp_path) as current:
         drift = commit(FIRST, "The tip choice drifts from the screen")
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([drift]),
             answers=["y", "", "", "Cover the tip choice with a test"],
         )
@@ -281,7 +281,9 @@ def test_a_task_of_the_model_can_be_dropped_and_a_blank_one_is_never_sent(
 ) -> None:
     with session(tmp_path) as current:
         drift = commit(FIRST, "Drift in the totals")
-        run = current.ut("align", processes=current.repository([drift]), answers=["y", "", "-", ""])
+        run = current.ut(
+            "verify", processes=current.repository([drift]), answers=["y", "", "-", ""]
+        )
         tasks = current.project.tasks()
         bodies = [
             json.loads(request.body)
@@ -303,7 +305,7 @@ def test_a_task_of_the_model_can_be_dropped_and_a_blank_one_is_never_sent(
 def test_tasks_written_by_the_owner_for_an_aligned_commit(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y", "2", "Add a label to the amount", "  ", ""],
         )
@@ -320,7 +322,7 @@ def test_tasks_written_by_the_owner_for_an_aligned_commit(tmp_path: Path) -> Non
 def test_leaving_it_for_later_records_nothing(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y", "5"],
         )
@@ -333,7 +335,7 @@ def test_leaving_it_for_later_records_nothing(tmp_path: Path) -> None:
 
     assert run.status == 0, run.errors
     assert (
-        "Nothing recorded: the commit waits for your decision. Launch `ut align` again whenever "
+        "Nothing recorded: the commit waits for your decision. Launch `ut verify` again whenever "
         "you want." in run.output
     )
     assert decisions == {FIRST: None}
@@ -346,7 +348,9 @@ def test_an_earlier_commit_with_another_verdict_gets_its_own_question(tmp_path: 
             commit(FIRST, "Drift of the totals"),
             commit(SECOND, "Show the tip", parent=FIRST),
         ]
-        run = current.ut("align", processes=current.repository(commits), answers=["y", "", "later"])
+        run = current.ut(
+            "verify", processes=current.repository(commits), answers=["y", "", "later"]
+        )
         decisions = current.decisions()
 
     assert run.status == 0, run.errors
@@ -359,7 +363,7 @@ def test_a_design_that_is_outdated_gets_a_new_version_approved(tmp_path: Path) -
     with session(tmp_path) as current:
         evolution = commit(FIRST, "Rework the card of the design")
         run = current.ut(
-            "align", processes=current.repository([evolution]), answers=["y", "", "", "y", "y"]
+            "verify", processes=current.repository([evolution]), answers=["y", "", "", "y", "y"]
         )
         changes = current.project.changes()
         design = current.project.current("design")
@@ -384,7 +388,7 @@ def test_the_new_design_version_can_wait_for_a_later_approval(tmp_path: Path) ->
     with session(tmp_path) as current:
         evolution = commit(FIRST, "Rework the card of the design")
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([evolution]),
             answers=["y", "", "Make the card larger", "y", "n"],
         )
@@ -408,7 +412,7 @@ def test_requirements_that_are_outdated_get_a_change_approved(tmp_path: Path) ->
     with session(tmp_path) as current:
         evolution = commit(FIRST, "New requirement: split among friends")
         run = current.ut(
-            "align", processes=current.repository([evolution]), answers=["y", "", "", "y", "y"]
+            "verify", processes=current.repository([evolution]), answers=["y", "", "", "y", "y"]
         )
         changes = current.project.changes()
         requirements = current.project.current("requirements")
@@ -431,7 +435,7 @@ def test_without_a_model_the_commits_are_recorded_and_the_command_ends_with_1(
     tmp_path: Path,
 ) -> None:
     with session(tmp_path, hosted=False) as current:
-        run = current.ut("align", processes=current.repository(ALIGNED_PAIR))
+        run = current.ut("verify", processes=current.repository(ALIGNED_PAIR))
         changes = current.project.changes()
         runs = current.project.change_reviews()
 
@@ -449,7 +453,7 @@ def test_without_a_model_the_commits_are_recorded_and_the_command_ends_with_1(
 def test_a_ceiling_of_the_studio_is_named(tmp_path: Path) -> None:
     with session(tmp_path, budget_usd=0.5) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y"],
         )
@@ -461,13 +465,13 @@ def test_a_ceiling_of_the_studio_is_named(tmp_path: Path) -> None:
     assert run.errors == (
         "The Studio reached its overall spending ceiling (0.50 USD): the review did not start. "
         "The commits stay recorded; whoever runs the Studio can raise the ceiling; then launch "
-        "`ut align` again.\n"
+        "`ut verify` again.\n"
     )
 
 
 def test_a_refused_spending_reviews_nothing(tmp_path: Path) -> None:
     with session(tmp_path) as current:
-        run = current.ut("align", processes=current.repository(ALIGNED_PAIR), answers=["n"])
+        run = current.ut("verify", processes=current.repository(ALIGNED_PAIR), answers=["n"])
         runs = current.project.change_reviews()
 
     assert run.status == 5
@@ -478,7 +482,7 @@ def test_a_refused_spending_reviews_nothing(tmp_path: Path) -> None:
 def test_latest_reviews_only_the_newest_commit(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align", "--latest", processes=current.repository(ALIGNED_PAIR), answers=["y", ""]
+            "verify", "--latest", processes=current.repository(ALIGNED_PAIR), answers=["y", ""]
         )
         runs = current.project.change_reviews()
         decisions = current.decisions()
@@ -500,8 +504,8 @@ def test_since_starts_after_a_commit_of_the_repository(tmp_path: Path) -> None:
             git_command("rev-parse", "--verify", "--quiet", "nothing^{commit}"), status=1
         )
 
-        run = current.ut("align", "--since", FIRST[:7], "--dry-run", processes=processes)
-        refused = current.ut("align", "--since", "nothing", processes=unknown)
+        run = current.ut("verify", "--since", FIRST[:7], "--dry-run", processes=processes)
+        refused = current.ut("verify", "--since", "nothing", processes=unknown)
 
     assert run.status == 0, run.errors
     assert "Commits after 1111111: 1." in run.output
@@ -515,19 +519,19 @@ def test_since_starts_after_a_commit_of_the_repository(tmp_path: Path) -> None:
 def test_changes_not_committed_are_mentioned_but_not_those_of_ut(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         dirty = current.ut(
-            "align",
+            "verify",
             "--dry-run",
             processes=current.repository(ALIGNED_PAIR, status=" M src/app.js\x00"),
         )
         own = current.ut(
-            "align",
+            "verify",
             "--dry-run",
             processes=current.repository(
                 ALIGNED_PAIR, status="?? .orchestwin/\x00 M orchestwin/state/state.md\x00"
             ),
         )
 
-    sentence = "The folder has changes not saved in a commit yet: ut align considers only commits."
+    sentence = "The folder has changes not saved in a commit yet: ut verify considers only commits."
     assert sentence in dirty.output
     assert sentence not in own.output
 
@@ -535,7 +539,7 @@ def test_changes_not_committed_are_mentioned_but_not_those_of_ut(tmp_path: Path)
 def test_a_design_not_yet_approved_is_asked_first(tmp_path: Path) -> None:
     with session(tmp_path, through="requirements") as current:
         processes = current.repository(ALIGNED_PAIR)
-        run = current.ut("align", processes=processes)
+        run = current.ut("verify", processes=processes)
 
     assert run.status == 1
     assert run.errors == (
@@ -550,8 +554,8 @@ def test_the_folder_must_be_in_a_git_repository_and_git_must_exist(tmp_path: Pat
         outside = ScriptedProcesses().expect(
             git_command("rev-parse", "--show-toplevel"), status=128
         )
-        no_git = current.ut("align")
-        not_a_repository = current.ut("align", processes=outside)
+        no_git = current.ut("verify")
+        not_a_repository = current.ut("verify", processes=outside)
 
     assert no_git.status == 1
     assert no_git.errors == (
@@ -563,9 +567,9 @@ def test_the_folder_must_be_in_a_git_repository_and_git_must_exist(tmp_path: Pat
 
 
 def test_a_folder_that_is_not_linked_or_not_signed_in(tmp_path: Path) -> None:
-    unlinked = run_ut(["align"], tmp_path, transport=UrlTransport())
+    unlinked = run_ut(["verify"], tmp_path, transport=UrlTransport())
     link_folder(tmp_path / "project")
-    anonymous = run_ut(["align"], tmp_path, transport=UrlTransport())
+    anonymous = run_ut(["verify"], tmp_path, transport=UrlTransport())
 
     assert unlinked.status == 6
     assert anonymous.status == 3
@@ -575,9 +579,9 @@ def test_a_folder_that_is_not_linked_or_not_signed_in(tmp_path: Path) -> None:
 def test_a_review_made_earlier_is_not_asked_again(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         first = current.ut(
-            "align", processes=current.repository(ALIGNED_PAIR), answers=["y", "later"]
+            "verify", processes=current.repository(ALIGNED_PAIR), answers=["y", "later"]
         )
-        again = current.ut("align", processes=current.repository(ALIGNED_PAIR), answers=[""])
+        again = current.ut("verify", processes=current.repository(ALIGNED_PAIR), answers=[""])
         runs = current.project.change_reviews()
         decisions = current.decisions()
 
@@ -592,7 +596,7 @@ def test_a_review_made_earlier_is_not_asked_again(tmp_path: Path) -> None:
 def test_the_review_in_italian(tmp_path: Path) -> None:
     with session(tmp_path, language="it", link_language="it") as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Aggiunge il campo")]),
             answers=["s", ""],
             language="it",
@@ -649,7 +653,7 @@ MENU_LINES = {
 
 
 LATER_SAID = (
-    "Nothing recorded: the commit waits for your decision. Launch `ut align` again whenever you "
+    "Nothing recorded: the commit waits for your decision. Launch `ut verify` again whenever you "
     "want."
 )
 NO_REQUEST = "No request written: nothing recorded."
@@ -685,7 +689,7 @@ def test_every_other_choice_of_the_menus(
 ) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align", processes=current.repository([commit(FIRST, message)]), answers=answers
+            "verify", processes=current.repository([commit(FIRST, message)]), answers=answers
         )
         decisions = current.decisions()
         tasks = current.project.tasks()
@@ -711,7 +715,7 @@ def test_every_other_choice_of_the_menus(
 def test_an_aligned_commit_can_ask_a_design_that_follows_it(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y", "design", "Make the card larger", "", "y", "y"],
         )
@@ -734,7 +738,7 @@ def test_an_aligned_commit_can_ask_a_design_that_follows_it(tmp_path: Path) -> N
 def test_code_drift_can_ask_the_requirements_to_follow_the_code(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "The tip choice drifts")]),
             answers=["y", "requirements", "Each person chooses a tip", "", "y", "y"],
         )
@@ -743,7 +747,7 @@ def test_code_drift_can_ask_the_requirements_to_follow_the_code(tmp_path: Path) 
 
     assert run.status == 0, run.errors
     assert "Change applied: the requirements are at version 2." in run.output
-    assert said("align.design_realigned", version=3) in run.output.splitlines()
+    assert said("verify.design_realigned", version=3) in run.output.splitlines()
     assert change["decision"]["kind"] == "REQUIREMENTS_CHANGE"
     assert change["decision"]["note"] == "Each person chooses a tip"
     assert requirements is not None and requirements["version_number"] == 2
@@ -756,19 +760,19 @@ def test_code_drift_can_ask_the_requirements_to_follow_the_code(tmp_path: Path) 
             "REQUIREMENTS_APPROVAL_REQUIRED",
             409,
             "The requirements are not approved at the moment (REQUIREMENTS_APPROVAL_REQUIRED): "
-            "approve them with `ut init`, then launch `ut align` again.\n",
+            "approve them with `ut init`, then launch `ut verify` again.\n",
         ),
         (
             "USER_MODELING_APPROVAL_REQUIRED",
             409,
             "The User Twins are not approved at the moment (USER_MODELING_APPROVAL_REQUIRED): "
-            "approve them with `ut init`, then launch `ut align` again.\n",
+            "approve them with `ut init`, then launch `ut verify` again.\n",
         ),
         (
             "INVALID_PROVIDER_OUTPUT",
             502,
             "The model gave an answer that the Studio cannot use (INVALID_PROVIDER_OUTPUT): "
-            "nothing was stored. Launching `ut align` again tries once more, and it is a new "
+            "nothing was stored. Launching `ut verify` again tries once more, and it is a new "
             "expense.\n",
         ),
         (
@@ -785,7 +789,7 @@ def test_a_review_refused_by_the_studio_is_explained(
     with session(tmp_path) as current:
         current.studio.fail_job("CODE_CHANGE_REVIEW", code=code, status=status)
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y"],
         )
@@ -806,7 +810,7 @@ def test_a_folder_that_the_studio_does_not_publish_is_said_in_one_line(tmp_path:
             body={"detail": {"code": "KNOWLEDGE_PACKAGE_VERSION_CONFLICT"}},
         )
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y", ""],
         )
@@ -834,7 +838,7 @@ def test_a_commit_of_the_knowledge_folder_is_recorded_never_reviewed_and_dismiss
 ) -> None:
     with session(tmp_path) as current:
         commits = [commit(FIRST, "Add the amount field"), folder_commit(SECOND, parent=FIRST)]
-        run = current.ut("align", processes=current.repository(commits), answers=["y", ""])
+        run = current.ut("verify", processes=current.repository(commits), answers=["y", ""])
         changes = {str(change["commit"]): change for change in current.project.changes()}
         runs = current.project.change_reviews()
 
@@ -863,7 +867,7 @@ def test_an_older_commit_of_the_knowledge_folder_is_skipped_without_a_decision(
 ) -> None:
     with session(tmp_path) as current:
         commits = [folder_commit(FIRST), commit(SECOND, "Show the tip", parent=FIRST)]
-        run = current.ut("align", processes=current.repository(commits), answers=["y", ""])
+        run = current.ut("verify", processes=current.repository(commits), answers=["y", ""])
         decisions = current.decisions()
         runs = current.project.change_reviews()
 
@@ -883,7 +887,7 @@ def test_a_folder_commit_of_an_italian_project_in_a_subfolder_of_the_repository(
         processes = script_repository(
             ScriptedProcesses(), tmp_path, [folder_commit(FIRST, prefix="project/")]
         )
-        run = current.ut("align", processes=processes, language="it")
+        run = current.ut("verify", processes=processes, language="it")
         changes = current.project.changes()
         posts = review_posts(current.studio)
 
@@ -901,7 +905,7 @@ def test_a_folder_commit_of_an_italian_project_in_a_subfolder_of_the_repository(
 def test_a_dry_run_dismisses_nothing(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         commits = [commit(FIRST, "Add the amount field"), folder_commit(SECOND, parent=FIRST)]
-        run = current.ut("align", "--dry-run", processes=current.repository(commits))
+        run = current.ut("verify", "--dry-run", processes=current.repository(commits))
         decisions = current.decisions()
 
     assert run.status == 0, run.errors
@@ -917,7 +921,7 @@ def test_latest_reviews_the_newest_commit_of_the_code(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         commits = [commit(FIRST, "Add the amount field"), folder_commit(SECOND, parent=FIRST)]
         run = current.ut(
-            "align", "--latest", processes=current.repository(commits), answers=["y", ""]
+            "verify", "--latest", processes=current.repository(commits), answers=["y", ""]
         )
         runs = current.project.change_reviews()
 
@@ -928,14 +932,14 @@ def test_latest_reviews_the_newest_commit_of_the_code(tmp_path: Path) -> None:
 def test_decide_opens_the_menu_again_without_reviews_or_records(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         first = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y", "later"],
         )
         before = len(current.studio.requests)
         processes = current.repository([])
         processes.expect(decide_command(FIRST), output=f"{FIRST}\n")
-        again = current.ut("align", "--decide", FIRST[:7], processes=processes, answers=[""])
+        again = current.ut("verify", "--decide", FIRST[:7], processes=processes, answers=[""])
         later = [
             (request.method, request.path.rsplit("/", 1)[-1])
             for request in current.studio.requests[before:]
@@ -964,11 +968,11 @@ def test_decide_replaces_an_earlier_decision_and_newer_tasks_stay_open(tmp_path:
             commit(SECOND, "The totals drift too", parent=FIRST),
         ]
         first = current.ut(
-            "align", processes=current.repository(commits), answers=["y", "", "", ""]
+            "verify", processes=current.repository(commits), answers=["y", "", "", ""]
         )
         processes = current.repository([])
         processes.expect(decide_command(FIRST), output=f"{FIRST}\n")
-        again = current.ut("align", "--decide", FIRST[:7], processes=processes, answers=["2"])
+        again = current.ut("verify", "--decide", FIRST[:7], processes=processes, answers=["2"])
         decisions = current.decisions()
         tasks = current.project.tasks()
 
@@ -988,14 +992,14 @@ def test_decide_replaces_an_earlier_decision_and_newer_tasks_stay_open(tmp_path:
 
 def test_decide_refusals(tmp_path: Path) -> None:
     with session(tmp_path, hosted=False) as current:
-        recorded = current.ut("align", processes=current.repository(ALIGNED_PAIR))
+        recorded = current.ut("verify", processes=current.repository(ALIGNED_PAIR))
         unknown = current.repository([])
         unknown.expect(decide_command("abcdef0"), status=1)
-        missing = current.ut("align", "--decide", "abcdef0", processes=unknown)
+        missing = current.ut("verify", "--decide", "abcdef0", processes=unknown)
         not_reviewed_git = current.repository([])
         not_reviewed_git.expect(decide_command(FIRST), output=f"{FIRST}\n")
-        not_reviewed = current.ut("align", "--decide", FIRST[:7], processes=not_reviewed_git)
-        alone = current.ut("align", "--decide", FIRST[:7], "--dry-run")
+        not_reviewed = current.ut("verify", "--decide", FIRST[:7], processes=not_reviewed_git)
+        alone = current.ut("verify", "--decide", FIRST[:7], "--dry-run")
 
     assert recorded.status == 1
     assert missing.status == 2
@@ -1006,7 +1010,7 @@ def test_decide_refusals(tmp_path: Path) -> None:
     assert not_reviewed.status == 1
     assert not_reviewed.errors == (
         "The commit 1111111 has no review of the twins in the Studio yet (ALIGN_NOT_REVIEWED): "
-        "launch `ut align` to record it and have it reviewed, then decide.\n"
+        "launch `ut verify` to record it and have it reviewed, then decide.\n"
     )
     assert alone.status == 2
     assert alone.errors == (
@@ -1038,7 +1042,7 @@ def listed_lines(lines: list[str], start: str, end: str) -> list[str]:
 def test_the_tasks_branch_offers_the_findings_of_the_twins(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y", "2", "", "1 3"],
             variables=WIDE,
@@ -1048,16 +1052,16 @@ def test_the_tasks_branch_offers_the_findings_of_the_twins(tmp_path: Path) -> No
         bodies = decision_bodies(current.studio)
 
     lines = run.output.splitlines()
-    question = said("align.findings_question") + " "
+    question = said("verify.findings_question") + " "
     assert run.status == 0, run.errors
-    assert [line[:5] for line in listed_lines(lines, said("align.findings_intro"), question)] == [
+    assert [line[:5] for line in listed_lines(lines, said("verify.findings_intro"), question)] == [
         "  1. ",
         "  2. ",
         "  3. ",
     ]
     after = lines.index(question)
     assert lines[after + 1 : after + 4] == [
-        said("align.decided_tasks", count=2),
+        said("verify.decided_tasks", count=2),
         f"- TSK-001: {tasks[0]['text']}",
         f"- TSK-002: {tasks[1]['text']}",
     ]
@@ -1088,7 +1092,7 @@ def test_the_tasks_branch_offers_the_findings_of_the_twins(tmp_path: Path) -> No
 def test_the_tasks_of_the_verdict_and_the_findings_are_sent_together(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "The tip choice drifts")]),
             answers=["y", "", "", "Cover the tip choice with a test", "2"],
         )
@@ -1098,7 +1102,7 @@ def test_the_tasks_of_the_verdict_and_the_findings_are_sent_together(tmp_path: P
 
     proposed = "Bring the code back in line with screen SCR-001 of the approved design."
     assert run.status == 0, run.errors
-    assert said("align.decided_tasks", count=3) in run.output.splitlines()
+    assert said("verify.decided_tasks", count=3) in run.output.splitlines()
     assert bodies == [
         {
             "kind": "CODE_TASKS",
@@ -1124,7 +1128,7 @@ def test_the_tasks_of_the_verdict_come_first_and_existing_tasks_are_not_offered_
 ) -> None:
     with session(tmp_path) as current:
         first = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y", "2", "", "1"],
         )
@@ -1134,7 +1138,7 @@ def test_the_tasks_of_the_verdict_come_first_and_existing_tasks_are_not_offered_
         processes = current.repository([])
         processes.expect(decide_command(FIRST), output=f"{FIRST}\n")
         again = current.ut(
-            "align",
+            "verify",
             "--decide",
             FIRST[:7],
             processes=processes,
@@ -1147,8 +1151,8 @@ def test_the_tasks_of_the_verdict_come_first_and_existing_tasks_are_not_offered_
     lines = again.output.splitlines()
     listed = listed_lines(
         lines,
-        said("align.findings_intro_verdict"),
-        said("align.findings_question_verdict") + " ",
+        said("verify.findings_intro_verdict"),
+        said("verify.findings_question_verdict") + " ",
     )
     assert (first.status, again.status) == (0, 0)
     assert listed[0] == "  1. " + said("tasks.choice_verdict", text="Cover the amount with a test.")
@@ -1173,7 +1177,7 @@ def test_a_finding_that_left_the_review_records_nothing(tmp_path: Path) -> None:
             body={"detail": {"code": "TASK_SOURCE_INVALID", "index": 0}},
         )
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y", "2", "", "1"],
         )
@@ -1181,7 +1185,7 @@ def test_a_finding_that_left_the_review_records_nothing(tmp_path: Path) -> None:
         decisions = current.decisions()
 
     assert run.status == 1
-    assert run.errors == said("align.errors.TASK_SOURCE_INVALID") + "\n"
+    assert run.errors == said("verify.errors.TASK_SOURCE_INVALID") + "\n"
     assert tasks == []
     assert decisions == {FIRST: None}
 
@@ -1207,11 +1211,11 @@ def test_recheck_without_stale_reviews_says_so_and_needs_no_git(
 ) -> None:
     with session(tmp_path, language=language) as current:
         current.project.seed_change()
-        run = current.ut("align", "--recheck", language=language)
+        run = current.ut("verify", "--recheck", language=language)
         reviews = review_bodies(current.studio)
 
     assert run.status == 0, run.errors
-    assert said("align.recheck_none", language) in run.output.splitlines()
+    assert said("verify.recheck_none", language) in run.output.splitlines()
     assert reviews == []
 
 
@@ -1221,14 +1225,14 @@ def test_recheck_dry_run_lists_the_versions_and_spends_nothing(
 ) -> None:
     with session(tmp_path, language=language) as current:
         changes = stale_changes(current)
-        run = current.ut("align", "--recheck", "--dry-run", language=language, variables=WIDE)
+        run = current.ut("verify", "--recheck", "--dry-run", language=language, variables=WIDE)
         reviews = review_bodies(current.studio)
 
     lines = run.output.splitlines()
     assert run.status == 0, run.errors
     assert (
         said(
-            "align.recheck_list",
+            "verify.recheck_list",
             language,
             count=2,
             requirements=1,
@@ -1241,7 +1245,7 @@ def test_recheck_dry_run_lists_the_versions_and_spends_nothing(
         lines.index(
             "- "
             + said(
-                "align.recheck_line",
+                "verify.recheck_line",
                 language,
                 commit=str(change["commit"])[:7],
                 date="2026-09-29 08:00",
@@ -1254,10 +1258,10 @@ def test_recheck_dry_run_lists_the_versions_and_spends_nothing(
         for change in changes
     ]
     assert positions == sorted(positions)
-    assert said("align.recheck_dry_run", language) in lines
+    assert said("verify.recheck_dry_run", language) in lines
     amount = "0.90-1.60" if language == "en" else "0,90-1,60"
-    assert said("align.dry_run_estimate", language, amount=amount, minutes="6 min") in lines
-    assert lines[-1] == said("align.recheck_hint", language, count=2)
+    assert said("verify.dry_run_estimate", language, amount=amount, minutes="6 min") in lines
+    assert lines[-1] == said("verify.recheck_hint", language, count=2)
     assert reviews == []
 
 
@@ -1281,7 +1285,7 @@ def test_on_the_subscription_the_dry_run_gives_the_time_without_an_amount(
 ) -> None:
     with session(tmp_path, language=language, billing="SUBSCRIPTION") as current:
         processes = current.repository([commit(FIRST, "Add the amount field")])
-        run = current.ut("align", "--dry-run", processes=processes, language=language)
+        run = current.ut("verify", "--dry-run", processes=processes, language=language)
         reviews = review_bodies(current.studio)
 
     assert run.status == 0, run.errors
@@ -1296,16 +1300,16 @@ def test_on_the_subscription_the_recheck_dry_run_gives_the_time_without_an_amoun
 ) -> None:
     with session(tmp_path, language=language, billing="SUBSCRIPTION") as current:
         stale_changes(current)
-        run = current.ut("align", "--recheck", "--dry-run", language=language, variables=WIDE)
+        run = current.ut("verify", "--recheck", "--dry-run", language=language, variables=WIDE)
 
     assert run.status == 0, run.errors
-    assert said("align.dry_run_subscription", language, minutes="6 min") in run.output.splitlines()
+    assert said("verify.dry_run_subscription", language, minutes="6 min") in run.output.splitlines()
     assert "USD" not in run.output
 
 
 def test_on_the_subscription_the_reviews_start_without_a_question(tmp_path: Path) -> None:
     with session(tmp_path, billing="SUBSCRIPTION") as current:
-        run = current.ut("align", processes=current.repository(ALIGNED_PAIR), answers=[""])
+        run = current.ut("verify", processes=current.repository(ALIGNED_PAIR), answers=[""])
         runs = current.project.change_reviews()
 
     lines = run.output.splitlines()
@@ -1322,7 +1326,7 @@ def test_on_the_subscription_the_reviews_start_without_a_question(tmp_path: Path
 def test_with_paid_routes_the_dry_run_names_its_amount(tmp_path: Path, billing: str) -> None:
     with session(tmp_path, billing=billing) as current:
         processes = current.repository([commit(FIRST, "Add the amount field")])
-        run = current.ut("align", "--dry-run", processes=processes)
+        run = current.ut("verify", "--dry-run", processes=processes)
 
     assert run.status == 0, run.errors
     assert (
@@ -1334,14 +1338,14 @@ def test_with_paid_routes_the_dry_run_names_its_amount(tmp_path: Path, billing: 
 def test_recheck_reviews_again_the_oldest_first_and_opens_each_menu(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         older, newer = stale_changes(current)
-        run = current.ut("align", "--recheck", answers=["y", "", "later"])
+        run = current.ut("verify", "--recheck", answers=["y", "", "later"])
         reviews = review_bodies(current.studio)
         decisions = current.decisions()
         stale = [change["review"]["stale"] for change in current.project.changes()]
 
     lines = run.output.splitlines()
     assert run.status == 0, run.errors
-    assert said("align.recheck_reviewing", count=2, twins=2) in lines
+    assert said("verify.recheck_reviewing", count=2, twins=2) in lines
     assert "Go ahead with this spending? [Y/n] " in lines
     assert reviews == [
         (older["commit"], {"locale": "en-US", "again": True}),
@@ -1360,20 +1364,20 @@ def test_recheck_reviews_again_the_oldest_first_and_opens_each_menu(tmp_path: Pa
 def test_recheck_latest_reviews_only_the_newest_stale_commit(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         _, newer = stale_changes(current)
-        run = current.ut("align", "--recheck", "--latest", answers=["y", "later"])
+        run = current.ut("verify", "--recheck", "--latest", answers=["y", "later"])
         reviews = review_bodies(current.studio)
 
     lines = run.output.splitlines()
     assert run.status == 0, run.errors
     assert [commit for commit, _ in reviews] == [newer["commit"]]
-    assert said("align.recheck_reviewing", count=1, twins=2) in lines
-    assert lines[-1] == said("align.recheck_hint", count=1)
+    assert said("verify.recheck_reviewing", count=1, twins=2) in lines
+    assert lines[-1] == said("verify.recheck_hint", count=1)
 
 
 def test_recheck_refused_at_the_spending_question_reviews_nothing(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         stale_changes(current)
-        run = current.ut("align", "--recheck", answers=["n"])
+        run = current.ut("verify", "--recheck", answers=["n"])
         reviews = review_bodies(current.studio)
 
     assert run.status == 5
@@ -1384,12 +1388,12 @@ def test_recheck_refused_at_the_spending_question_reviews_nothing(tmp_path: Path
 def test_recheck_without_a_model_stops_before_the_spending_question(tmp_path: Path) -> None:
     with session(tmp_path, hosted=False) as current:
         stale_changes(current, 1)
-        run = current.ut("align", "--recheck")
-        dry = current.ut("align", "--recheck", "--dry-run")
+        run = current.ut("verify", "--recheck")
+        dry = current.ut("verify", "--recheck", "--dry-run")
         reviews = review_bodies(current.studio)
 
     assert run.status == 1
-    assert run.errors == said("align.errors.CHANGE_REVIEW_MODEL_NOT_CONFIGURED") + "\n"
+    assert run.errors == said("verify.errors.CHANGE_REVIEW_MODEL_NOT_CONFIGURED") + "\n"
     assert "Go ahead" not in run.output
     assert dry.status == 0, dry.errors
     assert reviews == []
@@ -1397,26 +1401,26 @@ def test_recheck_without_a_model_stops_before_the_spending_question(tmp_path: Pa
 
 @pytest.mark.parametrize("extra", [["--since", "HEAD"], ["--decide", "HEAD"], ["--since", "x"]])
 def test_recheck_goes_alone(tmp_path: Path, extra: list[str]) -> None:
-    run = run_ut(["align", "--recheck", *extra], tmp_path, transport=UrlTransport())
+    run = run_ut(["verify", "--recheck", *extra], tmp_path, transport=UrlTransport())
 
     assert run.status == 2
-    assert run.errors == said("align.errors.ALIGN_RECHECK_ALONE") + "\n"
+    assert run.errors == said("verify.errors.ALIGN_RECHECK_ALONE") + "\n"
     assert run.output == ""
 
 
 def test_recheck_names_the_decision_taken_before(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         first = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y", "2", "Add a label to the amount", "", ""],
         )
         current.project.seed_version("design")
-        run = current.ut("align", "--recheck", answers=["y", "later"])
+        run = current.ut("verify", "--recheck", answers=["y", "later"])
 
     assert (first.status, run.status) == (0, 0)
     assert (
-        said("align.earlier_decision", decision=said("align.kind_code_tasks"))
+        said("verify.earlier_decision", decision=said("verify.kind_code_tasks"))
         in run.output.splitlines()
     )
 
@@ -1424,13 +1428,13 @@ def test_recheck_names_the_decision_taken_before(tmp_path: Path) -> None:
 def test_a_design_realignment_names_the_reviews_that_are_now_stale(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Rework the card of the design")]),
             answers=["y", "", "", "y", "y"],
         )
 
     lines = run.output.splitlines()
-    hint = said("align.recheck_hint", count=1)
+    hint = said("verify.recheck_hint", count=1)
     assert run.status == 0, run.errors
     assert lines.count(hint) == 1
     assert lines.index(hint) > lines.index("Do you approve version 3 of the design now? [Y/n] ")
@@ -1440,24 +1444,24 @@ def test_a_design_realignment_names_the_reviews_that_are_now_stale(tmp_path: Pat
 def test_a_requirements_realignment_names_the_reviews_that_are_now_stale(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "New requirement: split among friends")]),
             answers=["y", "", "", "y", "y"],
         )
 
     lines = run.output.splitlines()
-    hint = said("align.recheck_hint", count=1)
+    hint = said("verify.recheck_hint", count=1)
     assert run.status == 0, run.errors
-    assert lines.index(hint) > lines.index(said("align.design_realigned", version=3))
+    assert lines.index(hint) > lines.index(said("verify.design_realigned", version=3))
     assert lines.count(hint) == 1
 
 
-def test_a_normal_align_says_the_stale_reviews_at_the_end(tmp_path: Path) -> None:
+def test_a_normal_verify_says_the_stale_reviews_at_the_end(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         current.project.seed_change()
         current.project.seed_version("design")
         run = current.ut(
-            "align",
+            "verify",
             "--dry-run",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
         )
@@ -1465,7 +1469,7 @@ def test_a_normal_align_says_the_stale_reviews_at_the_end(tmp_path: Path) -> Non
     lines = run.output.splitlines()
     assert run.status == 0, run.errors
     assert lines[-2].startswith("Development: commits recorded: 2;")
-    assert lines[-1] == said("align.recheck_hint", count=1)
+    assert lines[-1] == said("verify.recheck_hint", count=1)
 
 
 REQUIREMENTS_COMMIT = "New requirement: split among friends"
@@ -1494,7 +1498,7 @@ def test_the_requirements_branch_ends_with_the_gesture_the_approval_and_the_fold
     with session(tmp_path, language=language) as current:
         before = current.project.current("design")
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, REQUIREMENTS_COMMIT)]),
             answers=CHANGE_APPLIED if language == "en" else ["s", "", "", "s", "s"],
             language=language,
@@ -1509,14 +1513,14 @@ def test_the_requirements_branch_ends_with_the_gesture_the_approval_and_the_fold
     lines = run.output.splitlines()
     design = next(item for item in sections["sections"] if item["key"] == "DESIGN")
     assert run.status == 0, run.errors
-    realigned = lines.index(said("align.design_realigned", language, version=3))
+    realigned = lines.index(said("verify.design_realigned", language, version=3))
     assert lines[realigned + 1 : realigned + 3] == [
         said("sections.not_covered", language, codes=", ".join(design["codes"])),
         said("sections.evaluation_missing", language),
     ]
     assert design["codes"]
     assert said("sections.evaluation_after", language) not in lines
-    assert said("align.folder_updated", language, version=1) in lines
+    assert said("verify.folder_updated", language, version=1) in lines
     assert sent == [f"/api/v1/projects/{current.project.id}/sections/alignment"]
     assert after is not None and after["version_number"] == 3
     assert approved
@@ -1530,7 +1534,7 @@ def test_the_requirements_branch_ends_with_the_gesture_the_approval_and_the_fold
 def test_a_discarded_change_of_the_requirements_records_nothing(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, REQUIREMENTS_COMMIT)]),
             answers=["y", "", "", "n"],
         )
@@ -1539,7 +1543,7 @@ def test_a_discarded_change_of_the_requirements_records_nothing(tmp_path: Path) 
         sent = gestures(current.studio)
 
     assert run.status == 0, run.errors
-    assert said("align.decided_later") in run.output.splitlines()
+    assert said("verify.decided_later") in run.output.splitlines()
     assert "Decision recorded" not in run.output
     assert decisions == {FIRST: None}
     assert requirements is not None and requirements["version_number"] == 1
@@ -1549,7 +1553,7 @@ def test_a_discarded_change_of_the_requirements_records_nothing(tmp_path: Path) 
 def test_requirements_left_waiting_send_no_gesture(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, REQUIREMENTS_COMMIT)]),
             answers=["y", "", "", "y", "n"],
         )
@@ -1557,7 +1561,7 @@ def test_requirements_left_waiting_send_no_gesture(tmp_path: Path) -> None:
         sent = gestures(current.studio)
 
     assert run.status == 0, run.errors
-    assert said("align.requirements_left", version=2) in run.output.splitlines()
+    assert said("verify.requirements_left", version=2) in run.output.splitlines()
     assert decisions == {FIRST: "REQUIREMENTS_CHANGE"}
     assert sent == []
 
@@ -1583,7 +1587,7 @@ def test_a_design_that_cannot_be_re_anchored_is_told_with_its_codes(tmp_path: Pa
             },
         )
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, REQUIREMENTS_COMMIT)]),
             answers=CHANGE_APPLIED,
         )
@@ -1603,11 +1607,11 @@ def test_a_design_that_cannot_be_re_anchored_is_told_with_its_codes(tmp_path: Pa
 @pytest.mark.parametrize(
     ("status", "body", "key", "values"),
     [
-        (404, {"detail": "Not Found"}, "align.design_not_realigned", {}),
+        (404, {"detail": "Not Found"}, "verify.design_not_realigned", {}),
         (
             503,
             {"detail": {"code": "SECTIONS_SERVICE_UNAVAILABLE"}},
-            "align.design_realign_failed",
+            "verify.design_realign_failed",
             {"code": "SECTIONS_SERVICE_UNAVAILABLE"},
         ),
     ],
@@ -1620,7 +1624,7 @@ def test_a_studio_that_cannot_re_anchor_the_design_says_so(
             "POST", "/projects/{project_id}/sections/alignment", status=status, body=body
         )
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, REQUIREMENTS_COMMIT)]),
             answers=CHANGE_APPLIED,
         )
@@ -1631,7 +1635,7 @@ def test_a_studio_that_cannot_re_anchor_the_design_says_so(
     assert decisions == {FIRST: "REQUIREMENTS_CHANGE"}
 
 
-def test_the_reviews_of_align_use_the_language_of_the_knowledge_folder(tmp_path: Path) -> None:
+def test_the_reviews_of_verify_use_the_language_of_the_knowledge_folder(tmp_path: Path) -> None:
     with session(tmp_path) as current:
         folder = current.root / "orchestwin"
         folder.mkdir()
@@ -1643,7 +1647,7 @@ def test_the_reviews_of_align_use_the_language_of_the_knowledge_folder(tmp_path:
         }
         (folder / "orchestwin.json").write_text(json.dumps(manifest), encoding="utf-8")
         run = current.ut(
-            "align",
+            "verify",
             processes=current.repository([commit(FIRST, "Add the amount field")]),
             answers=["y", ""],
         )

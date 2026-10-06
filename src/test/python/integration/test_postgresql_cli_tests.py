@@ -37,7 +37,7 @@ from src.test.python.integration.cli_journey_support import (
     utc_now,
     write_json,
 )
-from src.test.python.integration.test_postgresql_cli_alignment import (
+from src.test.python.integration.test_postgresql_cli_verify import (
     MCP_TOOLS,
     approve_the_design,
     json_lines,
@@ -357,7 +357,12 @@ def show_the_tests(scene: Scene, acceptance: Acceptance) -> None:
     as_json = scene.ut("status", "--json")
     assert as_json.status == 0, as_json.transcript()
     document = json.loads(as_json.output)
-    assert list(document)[-3:] == ["tests", "learning", "sections"], as_json.transcript()
+    assert list(document)[-4:] == [
+        "tests",
+        "learning",
+        "sections",
+        "knowledge_alignment",
+    ], as_json.transcript()
     assert document["tests"] == {
         "runs": len(acceptance.runs),
         "latest": {

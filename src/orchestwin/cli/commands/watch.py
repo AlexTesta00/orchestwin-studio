@@ -16,12 +16,12 @@ from orchestwin.cli.errors import (
     ApiFailure,
     CliError,
 )
-from orchestwin.cli.flows import align_review
 from orchestwin.cli.flows import changes as git
+from orchestwin.cli.flows import verify_review
 
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
-    from orchestwin.cli.flows.align_review import Titles, Workspace
+    from orchestwin.cli.flows.verify_review import Titles, Workspace
 
 NAME = "watch"
 DEFAULT_MAX_USD: Final = 5.0
@@ -69,7 +69,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         )
     if not math.isfinite(cap) or cap <= 0:
         raise CliError("WATCH_MAX_USD_INVALID", status=USAGE_STATUS)
-    workspace = align_review.prepare(context)
+    workspace = verify_review.prepare(context)
     watcher = Watcher(context, workspace, twins=arguments.twins, cap=cap, interval=interval)
     return watcher.run(once=arguments.once)
 
@@ -97,7 +97,7 @@ class Watcher:
         self.last: str | None = None
         self.count = 1
         self.names: Titles | None = None
-        self.locale = align_review.locale(context, workspace.project)
+        self.locale = verify_review.locale(context, workspace.project)
 
     def run(self, *, once: bool) -> int:
         try:
@@ -146,7 +146,7 @@ class Watcher:
         elif not self.reviewing:
             console.say("watch.review_unavailable")
         else:
-            self.count = align_review.twins_count(workspace.client, workspace.project)
+            self.count = verify_review.twins_count(workspace.client, workspace.project)
             budget = usage.budget(workspace.client)
             self.subscription = usage.on_subscription(budget)
             cap = costs.usd_text(self.cap, context.language)
@@ -192,11 +192,11 @@ class Watcher:
 
     def store(self, commits: tuple[git.Commit, ...]) -> bool:
         console = self.console
-        folder = align_review.folder_commits(self.workspace, commits)
+        folder = verify_review.folder_commits(self.workspace, commits)
         try:
-            known = align_review.known_changes(self.workspace)
-            align_review.record(self.context, self.workspace, commits, known)
-            dismissed = align_review.dismiss_folder_commit(
+            known = verify_review.known_changes(self.workspace)
+            verify_review.record(self.context, self.workspace, commits, known)
+            dismissed = verify_review.dismiss_folder_commit(
                 self.context, self.workspace, commits, folder, known
             )
         except CliError as error:
@@ -205,7 +205,7 @@ class Watcher:
             return False
         console.write()
         console.say("watch.new_commits", count=len(commits))
-        console.items([align_review.commit_line(self.context, commit) for commit in commits])
+        console.items([verify_review.commit_line(self.context, commit) for commit in commits])
         if folder:
             console.say(
                 "watch.folder_only_dismissed" if dismissed else "watch.folder_only",
@@ -224,7 +224,7 @@ class Watcher:
 
     def review_queue(self) -> None:
         context, console = self.context, self.console
-        need = align_review.review_estimate(self.count).high_usd
+        need = verify_review.review_estimate(self.count).high_usd
         while self.queue:
             commit = self.queue[0]
             if self.spent + need > self.cap + TOLERANCE:
@@ -236,7 +236,7 @@ class Watcher:
                 self.stop_reviews()
                 return
             try:
-                run = align_review.review(context, self.workspace, commit.hash, locale=self.locale)
+                run = verify_review.review(context, self.workspace, commit.hash, locale=self.locale)
             except CliError as error:
                 if error.code == INTERRUPTED or error.status == SIGN_IN_STATUS:
                     raise
@@ -253,7 +253,7 @@ class Watcher:
                 continue
             self.queue.pop(0)
             self.spent += need
-            align_review.show_run(
+            verify_review.show_run(
                 context, run, self.titles(), message=git.first_line(commit.message)
             )
             console.say("watch.review_reminder")
@@ -264,7 +264,7 @@ class Watcher:
 
     def titles(self) -> Titles:
         if self.names is None:
-            self.names = align_review.titles(self.workspace.project)
+            self.names = verify_review.titles(self.workspace.project)
         return self.names
 
     def passing(self, error: CliError) -> bool:

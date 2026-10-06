@@ -108,40 +108,40 @@ MESSAGES: dict[str, dict[str, str]] = {
     "watch.cap_reached": {
         "it": "Il prossimo esame supererebbe {cap} USD di spesa stimata: i twin smettono di "
         "esaminare, i commit continuano a essere registrati. Fai esaminare gli altri con "
-        "`ut align`.",
+        "`ut verify`.",
         "en": "The next review would go over {cap} USD of estimated spending: the twins stop "
-        "reviewing, the commits are still recorded. Have the others reviewed with `ut align`.",
+        "reviewing, the commits are still recorded. Have the others reviewed with `ut verify`.",
     },
     "watch.cap_reached_subscription": {
         "it": "Il prossimo esame supererebbe {cap} USD di esami ai prezzi a pagamento "
         "(--max-usd): i twin smettono di esaminare, i commit continuano a essere registrati. Fai "
-        "esaminare gli altri con `ut align`.",
+        "esaminare gli altri con `ut verify`.",
         "en": "The next review would go over {cap} USD of reviews at paid prices (--max-usd): "
         "the twins stop reviewing, the commits are still recorded. Have the others reviewed with "
-        "`ut align`.",
+        "`ut verify`.",
     },
     "watch.review_stopped": {
         "it": "I twin smettono di esaminare ({code}): i commit continuano a essere registrati. "
-        "`ut align` spiega che cosa manca.",
-        "en": "The twins stop reviewing ({code}): the commits are still recorded. `ut align` "
+        "`ut verify` spiega che cosa manca.",
+        "en": "The twins stop reviewing ({code}): the commits are still recorded. `ut verify` "
         "explains what is missing.",
     },
     "watch.review_failed": {
-        "it": "L'esame del commit {commit} non è riuscito ({code}): `ut align` può ripeterlo.",
-        "en": "The review of commit {commit} did not succeed ({code}): `ut align` can repeat it.",
+        "it": "L'esame del commit {commit} non è riuscito ({code}): `ut verify` può ripeterlo.",
+        "en": "The review of commit {commit} did not succeed ({code}): `ut verify` can repeat it.",
     },
     "watch.review_reminder": {
-        "it": "La decisione su questo commit la prendi con `ut align`.",
-        "en": "You take the decision on this commit with `ut align`.",
+        "it": "La decisione su questo commit la prendi con `ut verify`.",
+        "en": "You take the decision on this commit with `ut verify`.",
     },
     "watch.review_interrupted": {
-        "it": "{label}: l'esame continua nello Studio; `ut align` lo ritrova.",
-        "en": "{label}: the review goes on in the Studio; `ut align` finds it.",
+        "it": "{label}: l'esame continua nello Studio; `ut verify` lo ritrova.",
+        "en": "{label}: the review goes on in the Studio; `ut verify` finds it.",
     },
     "watch.stopped": {
         "it": "Osservazione terminata. I commit registrati aspettano la tua decisione con "
-        "`ut align`.",
-        "en": "Watching ended. The recorded commits wait for your decision with `ut align`.",
+        "`ut verify`.",
+        "en": "Watching ended. The recorded commits wait for your decision with `ut verify`.",
     },
     "watch.unreachable": {
         "it": "Lo Studio {address} non risponde: riprovo al prossimo controllo.",

@@ -700,8 +700,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "`ut tasks` shows the things left to do.",
     },
     "design.after_align": {
-        "it": "`ut align` confronta i commit con i requisiti e il design.",
-        "en": "`ut align` compares the commits with the requirements and the design.",
+        "it": "`ut verify`: i twin esaminano i commit e il modello dice se codice, Definizione e "
+        "Design sono allineati; decidi tu.",
+        "en": "`ut verify`: the twins review the commits and the model says whether code, "
+        "Definition and Design are aligned; you decide.",
     },
     "design.after_twins": {
         "it": "`ut twins update` mostra che cosa hanno imparato i twin.",

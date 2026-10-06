@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import costs
 from orchestwin.cli.api import tests as tests_api
-from orchestwin.cli.flows import align_review, test_plan
+from orchestwin.cli.flows import test_plan, verify_review
 from orchestwin.cli.flows.design_state import bullets, wrapped
 from orchestwin.cli.project import json_bytes, read_json, write_atomically
 
@@ -123,7 +123,7 @@ class Names:
 
 
 def names(project: ProjectFolder) -> Names:
-    titles = align_review.titles(project)
+    titles = verify_review.titles(project)
     return Names(
         criteria=statements(project),
         requirements=titles.requirements,

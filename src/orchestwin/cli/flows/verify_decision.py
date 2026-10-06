@@ -26,14 +26,14 @@ from orchestwin.cli.flows import (
     init_requirements,
     task_selection,
 )
-from orchestwin.cli.flows.align_review import project_text
 from orchestwin.cli.flows.design_state import bullets, wrapped
 from orchestwin.cli.flows.publish import publish_and_pull
+from orchestwin.cli.flows.verify_review import project_text
 
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
-    from orchestwin.cli.flows.align_review import Workspace
     from orchestwin.cli.flows.task_selection import Candidate
+    from orchestwin.cli.flows.verify_review import Workspace
 
 ATTEMPTS: Final = 5
 DROP: Final = "-"
@@ -46,15 +46,15 @@ MODEL_TASKS: Final = "model_tasks"
 DESIGN: Final = "design"
 REQUIREMENTS: Final = "requirements"
 LABELS: Final[Mapping[str, str]] = {
-    LATER: "align.choice_later",
-    TASKS: "align.choice_tasks",
-    MODEL_TASKS: "align.choice_model_tasks",
-    DESIGN: "align.choice_design_follow",
-    REQUIREMENTS: "align.choice_requirements_follow",
+    LATER: "verify.choice_later",
+    TASKS: "verify.choice_tasks",
+    MODEL_TASKS: "verify.choice_model_tasks",
+    DESIGN: "verify.choice_design_follow",
+    REQUIREMENTS: "verify.choice_requirements_follow",
 }
 OWN_LABELS: Final[Mapping[tuple[str, str], str]] = {
-    (DESIGN, changes_api.DESIGN_OUTDATED): "align.choice_design",
-    (REQUIREMENTS, changes_api.REQUIREMENTS_OUTDATED): "align.choice_requirements",
+    (DESIGN, changes_api.DESIGN_OUTDATED): "verify.choice_design",
+    (REQUIREMENTS, changes_api.REQUIREMENTS_OUTDATED): "verify.choice_requirements",
 }
 MENUS: Final[Mapping[str, tuple[str, ...]]] = {
     changes_api.ALIGNED: (MARK, TASKS, DESIGN, REQUIREMENTS, LATER),
@@ -117,11 +117,11 @@ def decide(context: CommandContext, workspace: Workspace, items: Sequence[Review
                 status = status or other_status
                 continue
             note = project_text(
-                context, workspace, "align.covered_note", commit=git.short(newest.commit)
+                context, workspace, "verify.covered_note", commit=git.short(newest.commit)
             )
             record(workspace, item.commit, changes_api.DISMISSED, note=note)
             context.console.say(
-                "align.dismissed",
+                "verify.dismissed",
                 commit=git.short(item.commit),
                 newest=git.short(newest.commit),
             )
@@ -136,16 +136,16 @@ def decide_one(
     console = context.console
     console.write()
     console.heading(
-        context.text("align.decision_heading", commit=git.short(item.commit), line=item.line)
+        context.text("verify.decision_heading", commit=git.short(item.commit), line=item.line)
     )
     keys = MENUS.get(item.verdict or "", MENUS[changes_api.ALIGNED])
     choice = menu(context, [Choice(key, context.text(_label(key, item.verdict))) for key in keys])
     if choice.key == LATER:
-        console.say("align.decided_later")
+        console.say("verify.decided_later")
         return None, 0
     if choice.key == MARK:
         record(workspace, item.commit, changes_api.ALIGNED)
-        console.say("align.decided_aligned", commit=git.short(item.commit))
+        console.say("verify.decided_aligned", commit=git.short(item.commit))
         return changes_api.ALIGNED, 0
     if choice.key == DESIGN:
         return design_branch(context, workspace, item)
@@ -164,12 +164,12 @@ def decide_one(
     )
     texts = [*texts, *chosen.texts]
     if not texts and not chosen.findings:
-        console.say("align.tasks_none")
+        console.say("verify.tasks_none")
         return None, 0
     answer = record(
         workspace, item.commit, changes_api.CODE_TASKS, tasks=texts, findings=chosen.findings
     )
-    console.say("align.decided_tasks", count=len(texts) + len(chosen.findings))
+    console.say("verify.decided_tasks", count=len(texts) + len(chosen.findings))
     created = created_tasks(answer, chosen.before)
     if created:
         console.items(
@@ -196,8 +196,8 @@ def choose_tasks(
     candidates = (*verdict, *findings)
     if not candidates:
         return Chosen(before=before)
-    console.say("align.findings_intro_verdict" if verdict else "align.findings_intro")
-    key = "align.findings_question_verdict" if verdict else "align.findings_question"
+    console.say("verify.findings_intro_verdict" if verdict else "verify.findings_intro")
+    key = "verify.findings_question_verdict" if verdict else "verify.findings_question"
     try:
         picked = task_selection.choose(
             context, candidates, question_key=key, default=verdict, limit=room
@@ -237,7 +237,7 @@ def say_recheck(context: CommandContext, workspace: Workspace, count: int) -> No
     if count <= 0 or workspace.hinted[-1:] == [count]:
         return
     workspace.hinted.append(count)
-    context.console.say("align.recheck_hint", count=count)
+    context.console.say("verify.recheck_hint", count=count)
 
 
 def design_branch(
@@ -247,18 +247,18 @@ def design_branch(
     request = edit_request(
         context,
         _text(item.alignment.get("design_request")),
-        heading="align.design_request",
+        heading="verify.design_request",
         limit=changes_api.MAX_DESIGN_REQUEST,
     )
     if request is None:
-        console.say("align.request_none")
+        console.say("verify.request_none")
         return None, 0
     client, project = workspace.client, workspace.project
     state = design_state.read_state(client, project)
     reason = design_change.unavailable(state)
     if reason is not None:
         console.say(reason)
-        console.say("align.design_not_started")
+        console.say("verify.design_not_started")
         return None, 1
     before = state.version_number
     try:
@@ -268,20 +268,20 @@ def design_branch(
             raise
         if not started(error):
             report(context, error, "design")
-            console.say("align.decided_later")
+            console.say("verify.decided_later")
             return None, error.status
         report(context, error, "design")
         record(workspace, item.commit, changes_api.DESIGN_CHANGE, note=request)
-        console.say("align.decided_design", commit=git.short(item.commit))
+        console.say("verify.decided_design", commit=git.short(item.commit))
         return changes_api.DESIGN_CHANGE, error.status
     record(workspace, item.commit, changes_api.DESIGN_CHANGE, note=request)
-    console.say("align.decided_design", commit=git.short(item.commit))
+    console.say("verify.decided_design", commit=git.short(item.commit))
     fresh = design_state.read_state(client, project)
     number = fresh.version_number
     if number is None or number == before or fresh.chosen is None or fresh.approved:
         return changes_api.DESIGN_CHANGE, status
-    if not console.confirm("align.design_approve", default=True, version=number):
-        console.say("align.design_left", version=number)
+    if not console.confirm("verify.design_approve", default=True, version=number):
+        console.say("verify.design_left", version=number)
         return changes_api.DESIGN_CHANGE, status
     try:
         approval = design_choice.approve(context, client, project, fresh)
@@ -304,24 +304,24 @@ def requirements_branch(
     request = edit_request(
         context,
         _text(item.alignment.get("requirements_request")),
-        heading="align.requirements_request",
+        heading="verify.requirements_request",
         limit=changes_api.MAX_REQUIREMENTS_REQUEST,
     )
     if request is None:
-        console.say("align.request_none")
+        console.say("verify.request_none")
         return None, 0
     client, project, project_id = workspace.client, workspace.project, workspace.project_id
     version = requirements_api.current(client, project_id)
     if version is None:
-        console.say("align.requirements_missing")
+        console.say("verify.requirements_missing")
         return None, 1
     try:
         costs.confirm_spending(context, client, [REQUIREMENTS_OPERATION])
     except CliError as error:
         if error.code != "SPENDING_REFUSED":
             raise
-        report(context, error, "align")
-        console.say("align.decided_later")
+        report(context, error, "verify")
+        console.say("verify.decided_later")
         return None, error.status
     journey = Journey(context, client, project, script=None, until=None, idea=None)
     try:
@@ -344,16 +344,16 @@ def requirements_branch(
         if error.code in ENDING_CODES or error.status in UNRECORDABLE:
             raise
         report(context, error, "init")
-        console.say("align.decided_later")
+        console.say("verify.decided_later")
         return None, error.status
     if updated.get("id") == version.get("id"):
-        console.say("align.decided_later")
+        console.say("verify.decided_later")
         return None, 0
     record(workspace, item.commit, changes_api.REQUIREMENTS_CHANGE, note=request)
-    console.say("align.decided_requirements", commit=git.short(item.commit))
+    console.say("verify.decided_requirements", commit=git.short(item.commit))
     number = updated.get("version_number") or "-"
-    if not console.confirm("align.requirements_approve", default=True, version=number):
-        console.say("align.requirements_left", version=number)
+    if not console.confirm("verify.requirements_approve", default=True, version=number):
+        console.say("verify.requirements_left", version=number)
         return changes_api.REQUIREMENTS_CHANGE, 0
     try:
         gate = journey.approve(
@@ -379,10 +379,10 @@ def realign_design(context: CommandContext, workspace: Workspace) -> None:
     except CliError as error:
         if error.status in ENDING_STATUSES:
             raise
-        console.say("align.design_realign_failed", code=str(error.values.get("code", error.code)))
+        console.say("verify.design_realign_failed", code=str(error.values.get("code", error.code)))
         return
     if gesture is None:
-        console.say("align.design_not_realigned")
+        console.say("verify.design_not_realigned")
         return
     after = gesture.sections
     for result in gesture.results:
@@ -390,7 +390,7 @@ def realign_design(context: CommandContext, workspace: Workspace) -> None:
             continue
         if result.outcome == sections_api.ALIGNED and result.key == sections_api.DESIGN:
             number = result.version_number
-            console.say("align.design_realigned", version="-" if number is None else number)
+            console.say("verify.design_realigned", version="-" if number is None else number)
             continue
         console.write(sections_command.result_line(context, after, result))
     for line in sections_command.after_lines(
@@ -407,7 +407,7 @@ def realign_design(context: CommandContext, workspace: Workspace) -> None:
 
 def menu(context: CommandContext, options: Sequence[Choice]) -> Choice:
     console = context.console
-    console.say("align.decision_question")
+    console.say("verify.decision_question")
     for number, option in enumerate(options, start=1):
         console.write(f"  {number}. {option.label}")
     for _ in range(ATTEMPTS):
@@ -423,32 +423,32 @@ def edit_request(context: CommandContext, proposal: str, *, heading: str, limit:
     if not proposal:
         return write_request(context, limit=limit)
     console.say(heading)
-    wrapped(context, context.text("align.quoted", text=proposal), indent="  ")
+    wrapped(context, context.text("verify.quoted", text=proposal), indent="  ")
     for _ in range(ATTEMPTS):
-        answer = " ".join(console.ask("align.request_keep", required=False).split())
+        answer = " ".join(console.ask("verify.request_keep", required=False).split())
         text = answer or proposal
         if len(text) <= limit:
             return text
-        console.say("align.request_too_long", limit=limit)
+        console.say("verify.request_too_long", limit=limit)
     raise CliError("ANSWER_NOT_VALID")
 
 
 def write_request(context: CommandContext, *, limit: int) -> str | None:
     console = context.console
     for _ in range(ATTEMPTS):
-        lines = [line.strip() for line in console.ask_text("align.request_write").splitlines()]
+        lines = [line.strip() for line in console.ask_text("verify.request_write").splitlines()]
         text = "\n".join(line for line in lines if line)
         if not text:
             return None
         if len(text) <= limit:
             return text
-        console.say("align.request_too_long", limit=limit)
+        console.say("verify.request_too_long", limit=limit)
     raise CliError("ANSWER_NOT_VALID")
 
 
 def ask_tasks(context: CommandContext) -> list[str]:
     console = context.console
-    console.say("align.tasks_intro", limit=changes_api.MAX_TASKS)
+    console.say("verify.tasks_intro", limit=changes_api.MAX_TASKS)
     texts: list[str] = []
     refused = 0
     while len(texts) < changes_api.MAX_TASKS:
@@ -465,7 +465,7 @@ def ask_tasks(context: CommandContext) -> list[str]:
             refused += 1
             if refused >= ATTEMPTS:
                 raise CliError("ANSWER_NOT_VALID")
-            console.say("align.task_too_long", limit=changes_api.MAX_TASK_LENGTH)
+            console.say("verify.task_too_long", limit=changes_api.MAX_TASK_LENGTH)
             continue
         texts.append(text)
     return texts
@@ -473,19 +473,19 @@ def ask_tasks(context: CommandContext) -> list[str]:
 
 def edit_tasks(context: CommandContext, proposed: Sequence[str]) -> list[str]:
     console = context.console
-    console.say("align.model_tasks_intro")
+    console.say("verify.model_tasks_intro")
     kept: list[str] = []
     for number, text in enumerate(proposed[: changes_api.MAX_TASKS], start=1):
-        bullets(context, [context.text("align.model_task", number=number, text=text)])
+        bullets(context, [context.text("verify.model_task", number=number, text=text)])
         for _ in range(ATTEMPTS):
-            answer = " ".join(console.ask("align.model_task_edit", required=False).split())
+            answer = " ".join(console.ask("verify.model_task_edit", required=False).split())
             if answer == DROP:
                 break
             chosen = answer or text
             if len(chosen) <= changes_api.MAX_TASK_LENGTH:
                 kept.append(chosen)
                 break
-            console.say("align.task_too_long", limit=changes_api.MAX_TASK_LENGTH)
+            console.say("verify.task_too_long", limit=changes_api.MAX_TASK_LENGTH)
         else:
             raise CliError("ANSWER_NOT_VALID")
     return kept
@@ -519,11 +519,11 @@ def refresh_folder(context: CommandContext, workspace: Workspace) -> None:
         if error.status in ENDING_STATUSES:
             raise
         if isinstance(error, ApiFailure) and error.http_status == 409:
-            console.say("align.folder_refused", code=error.code)
+            console.say("verify.folder_refused", code=error.code)
         else:
-            console.say("align.folder_not_updated", code=str(error.values.get("code", error.code)))
+            console.say("verify.folder_not_updated", code=str(error.values.get("code", error.code)))
         return
-    console.say("align.folder_updated", version=found.version_number)
+    console.say("verify.folder_updated", version=found.version_number)
 
 
 def started(error: CliError) -> bool:
@@ -541,9 +541,9 @@ def report(context: CommandContext, error: CliError, command: str) -> None:
 def _label(key: str, verdict: str | None) -> str:
     if key == MARK:
         return (
-            "align.choice_mark_aligned"
+            "verify.choice_mark_aligned"
             if verdict in (None, changes_api.ALIGNED) or verdict not in MENUS
-            else "align.choice_aligned_anyway"
+            else "verify.choice_aligned_anyway"
         )
     return OWN_LABELS.get((key, verdict or ""), LABELS[key])
 
