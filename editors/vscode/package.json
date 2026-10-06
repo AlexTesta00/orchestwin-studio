@@ -58,13 +58,18 @@
         "category": "OrchesTwin"
       },
       {
-        "command": "orchestwin.align",
-        "title": "%command.align%",
+        "command": "orchestwin.verify",
+        "title": "%command.verify%",
         "category": "OrchesTwin"
       },
       {
         "command": "orchestwin.recheck",
         "title": "%command.recheck%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.align",
+        "title": "%command.align%",
         "category": "OrchesTwin"
       },
       {

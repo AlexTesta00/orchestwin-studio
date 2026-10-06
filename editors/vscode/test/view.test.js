@@ -12,6 +12,16 @@ const { escapeHtml, nextStep, renderPanel } = require("../src/view");
 const NONCE = "0123456789abcdef0123456789abcdef";
 const CSP_SOURCE = "https://file+.vscode-resource.vscode-cdn.net";
 const LANGUAGES = ["en", "it"];
+const ALIGNMENT = Object.freeze({
+  runId: "0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+  finishedAt: "2026-10-06T10:20:00+00:00",
+  fromCommit: fixtures.ALIGNED_COMMIT,
+  toCommit: fixtures.DRIFT_COMMIT,
+  proposals: 5,
+  waiting: 2,
+  applied: 2,
+  skipped: 1,
+});
 const ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
 
 function render(state, language, extra = {}) {
@@ -317,6 +327,60 @@ describe("renderPanel", () => {
     assert.ok(!plain(render(state, "en")).includes(text("en", "code.title")));
   });
 
+  it("shows the knowledge aligned by ut align and asks to decide the proposals that wait", () => {
+    const state = structuredClone(states.complete);
+    state.development.stale = 0;
+    state.alignment = { ...ALIGNMENT };
+    const dates = { en: "6 Oct 2026, 10:20", it: "6 ott 2026, 10:20" };
+    for (const language of LANGUAGES) {
+      const html = render(state, language);
+      const page = plain(html);
+      const block = [
+        text(language, "knowledge.title"),
+        text(language, "knowledge.run"),
+        `${sentence(language, "knowledge.commits", { from: "1a1b1c1", to: "3c3d3e3" })} · ${dates[language]}`,
+        `${text(language, "knowledge.proposals")} 5`,
+        `${text(language, "knowledge.waiting")} 2`,
+      ].join(" ");
+      assert.ok(page.includes(block), `${language}: ${block}`);
+      assert.ok(html.includes('data-step="ALIGN"'));
+      assert.ok(page.includes(counted(language, "next.align", 2)));
+      const [first] = buttons(html);
+      assert.deepEqual([first.command, first.primary], ["alignPending", true]);
+      assert.ok(first.text.includes("ut align --pending"));
+      assert.ok(first.text.includes(text(language, "action.alignPending")));
+      assert.ok(first.text.includes(text(language, "cost.SPENDS")));
+      assert.deepEqual(
+        buttons(html)
+          .slice(1, 4)
+          .map((button) => button.command),
+        ["verify", "align", "code"],
+      );
+      const without = plain(render(states.complete, language));
+      assert.ok(!without.includes(text(language, "knowledge.run")));
+      assert.ok(!without.includes(counted(language, "next.align", 2)));
+    }
+    const italian = plain(render(state, "it"));
+    assert.ok(!italian.includes(sentence("en", "knowledge.run")));
+    assert.ok(!italian.includes(counted("en", "next.align", 2)));
+    state.alignment = { ...ALIGNMENT, fromCommit: null, waiting: 1 };
+    for (const language of LANGUAGES) {
+      const page = plain(render(state, language));
+      assert.ok(page.includes(sentence(language, "knowledge.upTo", { to: "3c3d3e3" })));
+      assert.ok(
+        !page.includes(sentence(language, "knowledge.commits", { from: "1a1b1c1", to: "3c3d3e3" })),
+      );
+      assert.ok(page.includes(counted(language, "next.align", 1)));
+      assert.ok(!page.includes(counted(language, "next.align", 2)));
+    }
+    state.alignment = { ...ALIGNMENT, waiting: 0 };
+    for (const language of LANGUAGES) {
+      const html = render(state, language);
+      assert.ok(html.includes('data-step="CODE"'));
+      assert.ok(plain(html).includes(`${text(language, "knowledge.waiting")} 0`));
+    }
+  });
+
   it("says that the development starts after the design in a partial folder", () => {
     for (const language of LANGUAGES) {
       const page = plain(render(states.partial, language));
@@ -379,8 +443,9 @@ describe("renderPanel", () => {
     const expected = {
       complete: [
         "recheck",
-        "align",
+        "verify",
         "recheck",
+        "align",
         "code",
         "tasks",
         "test",
@@ -391,6 +456,7 @@ describe("renderPanel", () => {
       ],
       old: [
         "code",
+        "verify",
         "align",
         "code",
         "tasks",
@@ -438,7 +504,16 @@ describe("renderPanel", () => {
             assert.ok(button.text.includes(text(language, `cost.${cost}`)), button.command);
           }
           if (
-            ["test", "align", "recheck", "twinsUpdate", "init", "design"].includes(button.command)
+            [
+              "test",
+              "verify",
+              "recheck",
+              "align",
+              "alignPending",
+              "twinsUpdate",
+              "init",
+              "design",
+            ].includes(button.command)
           ) {
             assert.equal(cost, "SPENDS");
           }
@@ -692,7 +767,7 @@ describe("nextStep", () => {
     assert.deepEqual(step(complete), ["RECHECK", "recheck", 1]);
     assert.deepEqual(step(changed(noStale)), ["CODE", "code", 3]);
     assert.deepEqual(step(changed(noTasks)), ["TASKS_FROM_TEST", "tasksFromTest", 2]);
-    assert.deepEqual(step(changed(noProblems)), ["ALIGN", "align", 2]);
+    assert.deepEqual(step(changed(noProblems)), ["VERIFY", "verify", 2]);
     assert.deepEqual(step(changed(noPending)), ["TEST", "test", null]);
     assert.deepEqual(
       step(
@@ -703,6 +778,34 @@ describe("nextStep", () => {
       ),
       ["FIRST_TEST", "test", null],
     );
+  });
+
+  it("asks to decide the proposals from the code after the stale reviews and before the tasks", () => {
+    const noStale = (state) => {
+      state.development.stale = 0;
+    };
+    const waiting = (count) => (state) => {
+      noStale(state);
+      state.alignment = { ...ALIGNMENT, waiting: count };
+    };
+    assert.deepEqual(
+      step(changed((state) => (state.alignment = { ...ALIGNMENT }))),
+      ["RECHECK", "recheck", 1],
+    );
+    assert.deepEqual(step(changed(waiting(2))), ["ALIGN", "alignPending", 2]);
+    assert.deepEqual(step(changed(waiting(1))), ["ALIGN", "alignPending", 1]);
+    assert.deepEqual(step(changed(waiting(0))), ["CODE", "code", 3]);
+    for (const odd of [null, undefined, { waiting: "2" }, { waiting: 2.5 }, { waiting: -1 }, []]) {
+      assert.deepEqual(
+        step(
+          changed((state) => {
+            noStale(state);
+            state.alignment = odd;
+          }),
+        ),
+        ["CODE", "code", 3],
+      );
+    }
   });
 
   it("asks first for what the development needs before it starts", () => {
