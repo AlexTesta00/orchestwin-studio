@@ -172,6 +172,33 @@ describe("ApiClient", () => {
     });
   });
 
+  it("reads the access mode of the Studio without a bearer token", async () => {
+    const mode = { access_mode: "LOCAL_OWNER", registration_open: false };
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(mode), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 }),
+      );
+    const client = new ApiClient("/api/v1", fetchImplementation);
+
+    await expect(client.accessMode()).resolves.toEqual(mode);
+    await expect(client.accessMode()).rejects.toMatchObject({
+      name: "ApiError",
+      status: 404,
+      detail: "Not Found",
+    });
+
+    const [requestUrl, request] = fetchImplementation.mock.calls[0] ?? [];
+    const headers = new Headers(request?.headers);
+    expect(requestUrl).toBe("/api/v1/auth/mode");
+    expect(request?.method).toBeUndefined();
+    expect(request?.body).toBeUndefined();
+    expect(request?.credentials).toBe("include");
+    expect(headers.get("Authorization")).toBeNull();
+    expect(headers.get("Accept")).toBe("application/json");
+  });
+
   it("reports a rate-limited sign-in with its stable code", async () => {
     const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ detail: "too_many_attempts" }), {

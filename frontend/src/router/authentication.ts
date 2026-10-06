@@ -14,7 +14,7 @@ export function installAuthenticationGuard(
   const guidance = useGuidanceStore(pinia);
 
   router.beforeEach(async (target) => {
-    if (auth.status === "idle") {
+    if (auth.status === "idle" || (auth.isLocal && !auth.isAuthenticated)) {
       await auth.bootstrap(api);
     }
 

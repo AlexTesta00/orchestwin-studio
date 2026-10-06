@@ -16,7 +16,7 @@ const shellStore = useShellStore();
 const authStore = useAuthStore();
 
 const { isNavigationOpen } = storeToRefs(shellStore);
-const { isAuthenticated, status: authenticationStatus, user } = storeToRefs(authStore);
+const { isAuthenticated, isLocal, status: authenticationStatus, user } = storeToRefs(authStore);
 
 const { t } = useI18n({
   useScope: "global",
@@ -133,7 +133,7 @@ async function logout(): Promise<void> {
             </RouterLink>
 
             <RouterLink
-              v-if="!isAuthenticated"
+              v-if="!isAuthenticated && !isLocal"
               v-slot="{ href, navigate, isExactActive }"
               custom
               to="/login"
@@ -150,7 +150,7 @@ async function logout(): Promise<void> {
             </RouterLink>
 
             <RouterLink
-              v-if="!isAuthenticated"
+              v-if="!isAuthenticated && !isLocal"
               class="inline-flex min-h-11 items-center justify-center rounded-control border border-ink bg-ink px-4 text-[15px] font-semibold text-white transition-colors duration-150 hover:bg-ink-2 md:ml-1.5"
               to="/register"
               data-testid="register-link"
@@ -180,6 +180,7 @@ async function logout(): Promise<void> {
               </span>
 
               <button
+                v-if="!isLocal"
                 class="inline-flex min-h-11 items-center rounded-control px-3 text-[15px] font-medium text-ink-3 transition-colors duration-150 hover:bg-surface-3/70 hover:text-ink disabled:cursor-not-allowed"
                 type="button"
                 :disabled="authenticationStatus === 'loading'"
@@ -189,6 +190,15 @@ async function logout(): Promise<void> {
                 {{ t("navigation.logout") }}
               </button>
             </template>
+
+            <span
+              v-if="isLocal"
+              class="inline-flex min-h-8 items-center rounded-pill border border-action-soft-line bg-action-soft px-3 text-[13px] font-semibold whitespace-nowrap text-action"
+              :title="t('navigation.localStudioTitle')"
+              data-testid="local-studio-badge"
+            >
+              {{ t("navigation.localStudio") }}
+            </span>
           </div>
         </nav>
       </div>

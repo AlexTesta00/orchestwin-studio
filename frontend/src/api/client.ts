@@ -1,4 +1,5 @@
 import type {
+  AccessModeResponse,
   AuthenticationApi,
   AuthenticationInput,
   AuthenticationResponse,
@@ -136,6 +137,10 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     this.baseUrl = resolveApiBaseUrl(baseUrl);
 
     this.fetchImplementation = fetchImplementation.bind(globalThis);
+  }
+
+  public accessMode(): Promise<AccessModeResponse> {
+    return this.request<AccessModeResponse>("/auth/mode");
   }
 
   public register(input: AuthenticationInput): Promise<AuthenticationResponse> {

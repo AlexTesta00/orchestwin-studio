@@ -80,7 +80,7 @@ const COPY = {
   },
 } as const;
 
-async function mountChoice(path = "/guidance", locale: "it" | "en" = "it") {
+async function mountChoice(path = "/guidance", locale: "it" | "en" = "it", local = false) {
   const router = createAppRouter(createMemoryHistory());
   const pinia = createPinia();
   useAuthStore(pinia).$patch({
@@ -89,6 +89,7 @@ async function mountChoice(path = "/guidance", locale: "it" | "en" = "it") {
     accessToken: "access-token",
     expiresAt: "2026-10-05T08:15:00Z",
   });
+  if (local) useAuthStore(pinia).$patch({ accessMode: "LOCAL_OWNER" });
   await router.push(path);
   await router.isReady();
   const replace = vi.spyOn(router, "replace").mockResolvedValue(undefined);
@@ -357,6 +358,30 @@ describe("guidance choice page", () => {
     expect(choose).not.toHaveBeenCalled();
     wrapper.unmount();
   });
+
+  it.each(["it", "en"] as const)(
+    "offers no exit in a local Studio and still saves the choice in %s",
+    async (locale) => {
+      const logout = vi.spyOn(apiClient, "logout");
+      const choose = vi
+        .spyOn(apiClient, "chooseGuidanceMode")
+        .mockResolvedValue({ ...ACCOUNT, guidance_mode: "GUIDED" });
+      const { wrapper, replace, auth } = await mountChoice("/guidance", locale, true);
+
+      expect(auth.isLocal).toBe(true);
+      expect(wrapper.find('[data-testid="guidance-choice-logout"]').exists()).toBe(false);
+      expect(wrapper.text()).not.toContain(COPY[locale].logout);
+      expect(confirmButton(wrapper).text()).toBe(COPY[locale].confirm);
+
+      await confirmWith(wrapper, "guided");
+
+      expect(choose).toHaveBeenCalledWith("access-token", "GUIDED");
+      expect(replace).toHaveBeenCalledWith("/projects");
+      expect(logout).not.toHaveBeenCalled();
+      expect(auth.isAuthenticated).toBe(true);
+      wrapper.unmount();
+    },
+  );
 
   it("has no axe violations before and after a failed save", { timeout: 30000 }, async () => {
     vi.spyOn(apiClient, "chooseGuidanceMode").mockRejectedValue(

@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 
 import { ApiError, type ApiClient } from "@/api/client";
 import type {
+  AccessMode,
   AuthenticationApi,
   AuthenticationInput,
   AuthenticationResponse,
@@ -28,12 +29,14 @@ export const useAuthStore = defineStore("auth", () => {
   const accessToken = ref<string | null>(null);
   const expiresAt = ref<string | null>(null);
   const errorDetail = ref<string | null>(null);
+  const accessMode = ref<AccessMode | null>(null);
 
   let refreshInFlight: Promise<boolean> | null = null;
 
   const isAuthenticated = computed(
     () => status.value === "authenticated" && user.value !== null && accessToken.value !== null,
   );
+  const isLocal = computed(() => accessMode.value === "LOCAL_OWNER");
 
   function applyAuthentication(response: AuthenticationResponse): void {
     user.value = response.user;
@@ -105,7 +108,25 @@ export const useAuthStore = defineStore("auth", () => {
     return refreshInFlight;
   }
 
+  async function loadAccessMode(api: AuthenticationApi): Promise<AccessMode> {
+    let mode: AccessMode;
+
+    try {
+      const response = await api.accessMode?.();
+      mode = response?.access_mode === "LOCAL_OWNER" ? "LOCAL_OWNER" : "ACCOUNTS";
+    } catch {
+      mode = "ACCOUNTS";
+    }
+
+    accessMode.value = mode;
+    return mode;
+  }
+
   async function bootstrap(api: AuthenticationApi): Promise<boolean> {
+    if (accessMode.value === null) {
+      await loadAccessMode(api);
+    }
+
     if (isAuthenticated.value) {
       return true;
     }
@@ -184,10 +205,13 @@ export const useAuthStore = defineStore("auth", () => {
     accessToken,
     expiresAt,
     errorDetail,
+    accessMode,
     isAuthenticated,
+    isLocal,
     register,
     login,
     refresh,
+    loadAccessMode,
     bootstrap,
     logout,
     withAccessToken,
@@ -197,5 +221,5 @@ export const useAuthStore = defineStore("auth", () => {
 
 export type AuthenticationClient = Pick<
   ApiClient,
-  "register" | "login" | "refresh" | "logout" | "me" | "chooseGuidanceMode"
+  "accessMode" | "register" | "login" | "refresh" | "logout" | "me" | "chooseGuidanceMode"
 >;

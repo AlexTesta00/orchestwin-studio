@@ -7,6 +7,7 @@ import { DesignApiError } from "@/api/design";
 import { RequirementsApiError } from "@/api/requirements";
 import { UserModelingApiError } from "@/api/userModeling";
 import type {
+  AccessModeResponse,
   AuthenticationApi,
   AuthenticationInput,
   AuthenticationResponse,
@@ -43,6 +44,19 @@ class FakeAuthenticationApi implements AuthenticationApi {
   public meTokens: string[] = [];
   public chooseErrors: unknown[] = [];
   public chooseCalls: [string, GuidanceMode][] = [];
+  public accessModeCalls = 0;
+  public accessModeResult: unknown = { access_mode: "ACCOUNTS", registration_open: true };
+  public accessModeError: unknown | null = null;
+
+  public async accessMode(): Promise<AccessModeResponse> {
+    this.accessModeCalls += 1;
+
+    if (this.accessModeError !== null) {
+      throw this.accessModeError;
+    }
+
+    return this.accessModeResult as AccessModeResponse;
+  }
 
   public async register(input: AuthenticationInput): Promise<AuthenticationResponse> {
     void input;
@@ -291,5 +305,121 @@ describe("useAuthStore", () => {
     ]);
     expect(api.refreshCalls).toBe(1);
     expect(store.user?.guidance_mode).toBe("EXPERT");
+  });
+
+  it("starts without an access mode and outside a local Studio", () => {
+    const store = useAuthStore();
+
+    expect(store.accessMode).toBeNull();
+    expect(store.isLocal).toBe(false);
+  });
+
+  it.each([
+    ["LOCAL_OWNER", true],
+    ["ACCOUNTS", false],
+  ] as const)("reads the %s access mode of the Studio", async (mode, local) => {
+    const api = new FakeAuthenticationApi();
+    const store = useAuthStore();
+    api.accessModeResult = { access_mode: mode, registration_open: !local };
+
+    expect(await store.loadAccessMode(api)).toBe(mode);
+    expect(store.accessMode).toBe(mode);
+    expect(store.isLocal).toBe(local);
+    expect(api.accessModeCalls).toBe(1);
+    expect(api.refreshCalls).toBe(0);
+    expect(store.status).toBe("idle");
+  });
+
+  it.each([
+    ["a Studio without the route", new ApiError(404, "Not Found")],
+    ["a Studio that does not answer", new TypeError("Failed to fetch")],
+    ["a failing Studio", new ApiError(503, "service_unavailable")],
+  ])("treats %s as a Studio with accounts", async (_case, failure) => {
+    const api = new FakeAuthenticationApi();
+    const store = useAuthStore();
+    api.accessModeError = failure;
+
+    expect(await store.loadAccessMode(api)).toBe("ACCOUNTS");
+    expect(store.accessMode).toBe("ACCOUNTS");
+    expect(store.isLocal).toBe(false);
+    expect(store.errorDetail).toBeNull();
+  });
+
+  it.each([
+    ["an unknown mode", { access_mode: "SHARED", registration_open: false }],
+    ["an answer without the mode", { registration_open: false }],
+    ["an empty answer", null],
+  ])("treats %s as a Studio with accounts", async (_case, answer) => {
+    const api = new FakeAuthenticationApi();
+    const store = useAuthStore();
+    api.accessModeResult = answer;
+
+    expect(await store.loadAccessMode(api)).toBe("ACCOUNTS");
+    expect(store.isLocal).toBe(false);
+  });
+
+  it("treats a client without the access mode as a Studio with accounts", async () => {
+    const store = useAuthStore();
+    const api: AuthenticationApi = {
+      register: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn(),
+      me: vi.fn(),
+      chooseGuidanceMode: vi.fn(),
+      refresh: vi.fn(async () => authenticationResponse("refresh-token")),
+    };
+
+    expect(await store.bootstrap(api)).toBe(true);
+    expect(store.accessMode).toBe("ACCOUNTS");
+    expect(store.isLocal).toBe(false);
+    expect(store.accessToken).toBe("refresh-token");
+  });
+
+  it("reads the mode once and then opens the session of a local Studio", async () => {
+    const api = new FakeAuthenticationApi();
+    const store = useAuthStore();
+    api.accessModeResult = { access_mode: "LOCAL_OWNER", registration_open: false };
+
+    expect(await store.bootstrap(api)).toBe(true);
+    expect(store.isLocal).toBe(true);
+    expect(store.isAuthenticated).toBe(true);
+    expect(store.accessToken).toBe("refresh-token");
+    expect(store.errorDetail).toBeNull();
+
+    expect(await store.bootstrap(api)).toBe(true);
+    expect(api.accessModeCalls).toBe(1);
+    expect(api.refreshCalls).toBe(1);
+  });
+
+  it("keeps the local mode when the session cannot be opened and tries again later", async () => {
+    const api = new FakeAuthenticationApi();
+    const store = useAuthStore();
+    api.accessModeResult = { access_mode: "LOCAL_OWNER", registration_open: false };
+    api.refreshError = new TypeError("Failed to fetch");
+
+    expect(await store.bootstrap(api)).toBe(false);
+    expect(store.isLocal).toBe(true);
+    expect(store.status).toBe("anonymous");
+    expect(store.errorDetail).toBeNull();
+
+    api.refreshError = null;
+
+    expect(await store.bootstrap(api)).toBe(true);
+    expect(store.isAuthenticated).toBe(true);
+    expect(api.accessModeCalls).toBe(1);
+    expect(api.refreshCalls).toBe(2);
+  });
+
+  it("gives an authorized operation of a local Studio the token of the renewed session", async () => {
+    const api = new FakeAuthenticationApi();
+    const store = useAuthStore();
+    api.accessModeResult = { access_mode: "LOCAL_OWNER", registration_open: false };
+    await store.loadAccessMode(api);
+    const operation = vi.fn(async (token: string) => token);
+
+    expect(await store.withAccessToken(api, operation)).toBe("refresh-token");
+    expect(operation.mock.calls).toEqual([["refresh-token"]]);
+    expect(api.refreshCalls).toBe(1);
+    expect(store.isLocal).toBe(true);
   });
 });
