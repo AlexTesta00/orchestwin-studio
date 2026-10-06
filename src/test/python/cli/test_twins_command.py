@@ -100,6 +100,12 @@ class Offline:
         raise unreachable(url, sent=False)
 
 
+def accounts_only() -> ScriptedTransport:
+    return ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", body={"access_mode": "ACCOUNTS", "registration_open": True}
+    )
+
+
 def sign_in(tmp_path: Path, studio: FakeStudio) -> None:
     studio.add_account(EMAIL, TEST_PASSWORD)
     run = run_ut(
@@ -738,8 +744,10 @@ def test_without_sign_in_the_twins_come_from_the_knowledge_folder(tmp_path: Path
     project = link_folder(tmp_path / "project")
     knowledge.unpack(valid_archive(), project.knowledge)
 
-    listed_run = run_ut(["--lang", "it", "twins"], tmp_path, transport=NoNetwork(), variables=WIDE)
-    shown = run_ut(["twins", "show", "org"], tmp_path, transport=NoNetwork(), variables=WIDE)
+    listed_run = run_ut(
+        ["--lang", "it", "twins"], tmp_path, transport=accounts_only(), variables=WIDE
+    )
+    shown = run_ut(["twins", "show", "org"], tmp_path, transport=accounts_only(), variables=WIDE)
 
     assert listed_run.status == 0
     assert listed_run.output.splitlines()[0] == (
@@ -883,7 +891,7 @@ def test_a_failed_answer_can_be_asked_again_with_a_new_estimate(tmp_path: Path) 
 def test_asking_needs_the_studio_and_the_sign_in(tmp_path: Path) -> None:
     link_folder(tmp_path / "project")
 
-    run = run_ut(["twins", "ask", "1", "Hello?"], tmp_path, transport=NoNetwork())
+    run = run_ut(["twins", "ask", "1", "Hello?"], tmp_path, transport=accounts_only())
 
     assert run.status == 3
     assert run.errors == (
@@ -1197,8 +1205,8 @@ def test_offline_the_labels_and_what_the_twins_learned_come_from_the_folder(
     knowledge.unpack(archive, project.knowledge)
     reception = learned_entries()[0]
 
-    listing = run_ut(["--lang", "it", "twins"], tmp_path, transport=NoNetwork(), variables=WIDE)
-    shown = run_ut(["twins", "show", "1"], tmp_path, transport=NoNetwork(), variables=WIDE)
+    listing = run_ut(["--lang", "it", "twins"], tmp_path, transport=accounts_only(), variables=WIDE)
+    shown = run_ut(["twins", "show", "1"], tmp_path, transport=accounts_only(), variables=WIDE)
 
     assert listing.status == 0
     assert [row[4:] for row in table(listing.output)] == [
@@ -1238,8 +1246,8 @@ def test_offline_a_folder_without_the_learning_gives_the_profile_version_alone(
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content.encode("utf-8"))
 
-    listing = run_ut(["twins"], tmp_path, transport=NoNetwork(), variables=WIDE)
-    shown = run_ut(["twins", "show", "2"], tmp_path, transport=NoNetwork(), variables=WIDE)
+    listing = run_ut(["twins"], tmp_path, transport=accounts_only(), variables=WIDE)
+    shown = run_ut(["twins", "show", "2"], tmp_path, transport=accounts_only(), variables=WIDE)
 
     assert listing.status == 0
     assert [row[4:] for row in table(listing.output)] == [["Version"], ["1"], ["1"]]
@@ -1443,8 +1451,8 @@ def test_learn_names_a_twin_that_matches_nothing(tmp_path: Path) -> None:
 def test_learning_needs_the_sign_in(tmp_path: Path) -> None:
     link_folder(tmp_path / "project")
 
-    run = run_ut(["twins", "learn", "1", "People stand."], tmp_path, transport=NoNetwork())
-    update = run_ut(["twins", "update"], tmp_path, transport=NoNetwork())
+    run = run_ut(["twins", "learn", "1", "People stand."], tmp_path, transport=accounts_only())
+    update = run_ut(["twins", "update"], tmp_path, transport=accounts_only())
 
     assert (run.status, update.status) == (3, 3)
     assert run.errors == say("errors.NOT_SIGNED_IN", studio="http://127.0.0.1:8000") + "\n"

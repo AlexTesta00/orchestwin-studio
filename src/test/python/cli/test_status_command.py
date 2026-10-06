@@ -14,6 +14,9 @@ from .support.transports import API, ScriptedTransport
 
 LOCAL = "http://127.0.0.1:8000"
 BASE = f"{API}/projects/{PROJECT_ID}"
+MODE_PATH = f"{API}/auth/mode"
+ACCOUNTS_MODE = {"access_mode": "ACCOUNTS", "registration_open": True}
+LOCAL_MODE = {"access_mode": "LOCAL_OWNER", "registration_open": False}
 ALIGNED = "4f2a9c1e7b3d5a8f0c6e2b9d1a7f3c5e8b0d2a46"
 TEST_RUN = "00000000-0000-4000-8000-00000000e001"
 TWIN_OWNER = "00000000-0000-4000-8000-0000000000b1"
@@ -820,9 +823,11 @@ def test_offline_a_partial_folder_still_asks_to_download_the_complete_one(tmp_pa
     assert document["next_command"] == "ut package publish"
 
 
-def test_without_sign_in_the_folder_is_read_and_nothing_is_sent(tmp_path: Path) -> None:
+def test_without_sign_in_the_folder_is_read_after_asking_only_the_access_mode(
+    tmp_path: Path,
+) -> None:
     saved_steps(link_folder(tmp_path / "project"))
-    transport = ScriptedTransport()
+    transport = ScriptedTransport().expect("GET", MODE_PATH, body=ACCOUNTS_MODE)
 
     run = run_ut(["status"], tmp_path, transport=transport)
 
@@ -831,7 +836,48 @@ def test_without_sign_in_the_folder_is_read_and_nothing_is_sent(tmp_path: Path) 
         "State read from this folder: you are not signed in to the Studio "
         f"{LOCAL} (`ut login`)." in run.output
     )
-    assert transport.sent == []
+    assert f"Studio: {LOCAL}" in run.output.splitlines()
+    assert [request.path for request in transport.sent] == [MODE_PATH]
+
+
+@pytest.mark.parametrize(
+    ("language", "line"),
+    [
+        ("en", f"Studio: {LOCAL} (local, no sign-in)"),
+        ("it", f"Studio: {LOCAL} (locale, senza accesso)"),
+    ],
+)
+def test_a_local_studio_gives_the_status_without_a_sign_in(
+    tmp_path: Path, language: str, line: str
+) -> None:
+    link_folder(tmp_path / "project")
+    transport = expect_studio(ScriptedTransport().expect("GET", MODE_PATH, body=LOCAL_MODE))
+
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=transport)
+
+    assert run.status == 0, run.errors
+    assert run.output.splitlines()[2] == line
+    assert [request.header("authorization") for request in transport.sent] == [None] * len(
+        transport.sent
+    )
+    assert transport.sent[0].path == MODE_PATH
+    transport.assert_done()
+
+
+def test_the_json_of_a_local_studio_is_the_json_of_a_sign_in(tmp_path: Path) -> None:
+    link_folder(tmp_path / "project")
+    local = expect_studio(ScriptedTransport().expect("GET", MODE_PATH, body=LOCAL_MODE))
+    signed = expect_studio(ScriptedTransport())
+
+    without = json.loads(run_ut(["status", "--json"], tmp_path, transport=local).output)
+    store_session(tmp_path)
+    with_session = json.loads(run_ut(["status", "--json"], tmp_path, transport=signed).output)
+
+    assert without == with_session
+    assert (without["source"], without["reason"], without["studio"]) == ("studio", None, LOCAL)
+    assert signed.requests("GET", MODE_PATH) == []
+    local.assert_done()
+    signed.assert_done()
 
 
 def test_a_studio_that_does_not_answer_gives_the_folder(tmp_path: Path) -> None:
@@ -987,12 +1033,15 @@ def test_an_account_without_projects(tmp_path: Path) -> None:
 
 
 def test_the_list_needs_a_sign_in(tmp_path: Path) -> None:
-    run = run_ut(["status"], tmp_path, transport=ScriptedTransport())
+    transport = ScriptedTransport().expect("GET", MODE_PATH, body=ACCOUNTS_MODE)
+
+    run = run_ut(["status"], tmp_path, transport=transport)
 
     assert run.status == 3
     assert run.errors == (
         f"You are not signed in to the Studio {LOCAL}. Sign in with `ut login`.\n"
     )
+    assert [request.path for request in transport.sent] == [MODE_PATH]
 
 
 def test_offline_outside_a_linked_folder_is_not_linked(tmp_path: Path) -> None:

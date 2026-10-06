@@ -13,6 +13,7 @@ from orchestwin.cli.api import projects as project_api
 from orchestwin.cli.api import sections as sections_api
 from orchestwin.cli.api import tests as tests_api
 from orchestwin.cli.api import usage
+from orchestwin.cli.client import LOCAL_ACCESS, ensure_access
 from orchestwin.cli.commands import sections as sections_command
 from orchestwin.cli.costs import usd_text
 from orchestwin.cli.errors import SIGN_IN_STATUS, ApiFailure, CliError
@@ -118,6 +119,7 @@ class Report:
     billing: str = usage.API_BILLING
     sections: Sections | None = None
     knowledge: KnowledgeAlignment | None = None
+    local_access: bool = False
 
     @property
     def folder_current(self) -> bool:
@@ -202,6 +204,7 @@ class _Studio:
     billing: str = usage.API_BILLING
     sections: Sections | None = None
     knowledge: KnowledgeAlignment | None = None
+    local_access: bool = False
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -268,13 +271,16 @@ def project_report(context: CommandContext, project: ProjectFolder, *, offline: 
         knowledge=found.knowledge
         if found.knowledge is not None
         else folder_knowledge(project, found.steps),
+        local_access=found.local_access,
     )
 
 
 def show(context: CommandContext, report: Report) -> None:
     console = context.console
     console.heading(report.name)
-    console.say("status.studio", studio=report.studio)
+    console.say(
+        "status.studio_local" if report.local_access else "status.studio", studio=report.studio
+    )
     mode_key = MODE_KEYS.get(report.mode)
     console.say("status.mode", mode=context.text(mode_key) if mode_key else report.mode)
     if report.reason is not None:
@@ -619,10 +625,8 @@ def _project_row(
 def _studio_facts(
     context: CommandContext, client: StudioClient, link: ProjectLink
 ) -> _Studio | str:
-    session = context.sessions.read(client.studio)
-    if session is None or not session.signed_in:
-        return NOT_SIGNED_IN
     try:
+        access = ensure_access(context, client)
         if client.health().status != HEALTHY:
             return UNREACHABLE
         found = project_api.get_project(client, link.project_id)
@@ -652,6 +656,7 @@ def _studio_facts(
         billing=billing,
         sections=sections,
         knowledge=knowledge,
+        local_access=access == LOCAL_ACCESS,
     )
 
 

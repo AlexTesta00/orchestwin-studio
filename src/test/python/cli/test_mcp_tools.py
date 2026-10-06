@@ -1130,8 +1130,12 @@ def test_a_failed_answer_is_a_tool_error_with_the_code_of_the_studio(
 
 def test_asking_needs_approved_twins_and_the_sign_in(tmp_path: Path) -> None:
     state_folder(tmp_path)
-    tools, _ = build(tmp_path, spend=True)
+    accounts = ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", status=404, body={"detail": "Not Found"}
+    )
+    tools, _ = build(tmp_path, spend=True, transport=accounts)
     signed_out = refused(tools, "ask_twin", twin="1", question="Ciao?")
+    assert [request.path for request in accounts.sent] == [f"{API}/auth/mode"]
     store_session(tmp_path)
     transport = ScriptedTransport().expect(
         "GET", READINESS, body={"snapshot_exists": True, "approved_current_snapshot": False}

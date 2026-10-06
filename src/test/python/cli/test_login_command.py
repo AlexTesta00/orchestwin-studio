@@ -20,6 +20,18 @@ from .support.transports import API, ScriptedTransport, authentication, refresh_
 
 LOCAL = "http://127.0.0.1:8000"
 REMOTE = "https://studio.example.test"
+MODE_PATH = f"{API}/auth/mode"
+ACCOUNTS_MODE = {"access_mode": "ACCOUNTS", "registration_open": True}
+LOCAL_MODE = {"access_mode": "LOCAL_OWNER", "registration_open": False}
+
+
+def expect_health(
+    transport: ScriptedTransport, *, mode: dict[str, object] | None = ACCOUNTS_MODE
+) -> ScriptedTransport:
+    transport.expect("GET", f"{API}/health", body={"status": "ok"})
+    if mode is not None:
+        transport.expect("GET", MODE_PATH, body=mode)
+    return transport
 
 
 def expect_sign_in(
@@ -27,8 +39,9 @@ def expect_sign_in(
     *,
     status: int = 200,
     email: str = TEST_EMAIL,
+    mode: dict[str, object] | None = ACCOUNTS_MODE,
 ) -> ScriptedTransport:
-    transport.expect("GET", f"{API}/health", body={"status": "ok"})
+    expect_health(transport, mode=mode)
     if status == 200:
         transport.expect(
             "POST",
@@ -121,7 +134,7 @@ def test_the_password_can_come_from_the_first_line_of_the_input(
 
 
 def test_an_empty_password_is_never_sent(tmp_path: Path) -> None:
-    transport = ScriptedTransport().expect("GET", f"{API}/health", body={"status": "ok"})
+    transport = expect_health(ScriptedTransport())
 
     run = run_ut(
         ["login", "--email", TEST_EMAIL, "--password-stdin"],
@@ -203,7 +216,7 @@ def test_addresses_that_are_refused_before_any_request(
 
 
 def test_login_to_a_remote_studio_makes_it_the_default(tmp_path: Path) -> None:
-    transport = expect_sign_in(ScriptedTransport())
+    transport = expect_sign_in(ScriptedTransport(), mode=None)
 
     run = run_ut(
         ["login", "--studio", f"{REMOTE}/api/v1/", "--email", TEST_EMAIL],
@@ -214,13 +227,15 @@ def test_login_to_a_remote_studio_makes_it_the_default(tmp_path: Path) -> None:
 
     assert run.status == 0
     assert transport.sent[0].url == f"{REMOTE}/api/v1/health"
+    assert transport.requests("GET", MODE_PATH) == []
     assert read_session(tmp_path, REMOTE) is not None
     assert f'"default_studio": "{REMOTE}"' in config_text(tmp_path)
+    transport.assert_done()
 
 
 def test_the_default_studio_of_the_sessions_file_is_used(tmp_path: Path) -> None:
     store_session(tmp_path, studio=REMOTE)
-    transport = expect_sign_in(ScriptedTransport())
+    transport = expect_sign_in(ScriptedTransport(), mode=None)
 
     run = run_ut(
         ["login", "--email", TEST_EMAIL], tmp_path, transport=transport, secrets=[TEST_PASSWORD]
@@ -264,10 +279,87 @@ def test_a_folder_linked_to_the_same_studio_adds_nothing(tmp_path: Path) -> None
 def test_input_closed_while_a_question_is_open(
     tmp_path: Path, answers: list[str], secrets: list[str]
 ) -> None:
-    transport = ScriptedTransport().expect("GET", f"{API}/health", body={"status": "ok"})
+    transport = expect_health(ScriptedTransport())
 
     run = run_ut(["login"], tmp_path, transport=transport, answers=answers, secrets=secrets)
 
     assert run.status == 1
     assert run.errors == "The input closed while an answer was awaited: nothing else was done.\n"
     assert transport.requests("POST") == []
+
+
+@pytest.mark.parametrize(
+    ("language", "message"),
+    [
+        (
+            "en",
+            f"The Studio {LOCAL} is local and needs no sign-in: the commands work without "
+            "`ut login`.\n",
+        ),
+        (
+            "it",
+            f"Lo Studio {LOCAL} è locale e non chiede l'accesso: i comandi funzionano senza "
+            "`ut login`.\n",
+        ),
+    ],
+)
+def test_a_local_studio_asks_neither_the_email_nor_the_password(
+    tmp_path: Path, language: str, message: str
+) -> None:
+    transport = expect_health(ScriptedTransport(), mode=LOCAL_MODE)
+
+    run = run_ut(["--lang", language, "login"], tmp_path, transport=transport)
+
+    assert run.status == 0
+    assert run.output == message
+    assert run.errors == ""
+    assert transport.requests("POST") == []
+    assert read_session(tmp_path) is None
+    assert config_text(tmp_path) == ""
+    transport.assert_done()
+
+
+def test_a_local_studio_still_names_the_studio_of_the_linked_folder(tmp_path: Path) -> None:
+    link_folder(tmp_path / "project", studio=REMOTE)
+    transport = expect_health(ScriptedTransport(), mode=LOCAL_MODE)
+
+    run = run_ut(["login", "--studio", LOCAL], tmp_path, transport=transport)
+
+    assert run.status == 0
+    assert run.output.splitlines() == [
+        f"The Studio {LOCAL} is local and needs no sign-in: the commands work without `ut login`.",
+        f"This folder is linked to a project of the Studio {REMOTE}: the commands launched "
+        "here use that Studio.",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [(404, {"detail": "Not Found"}), (200, b"not a document")],
+)
+def test_a_studio_that_does_not_tell_its_mode_asks_the_sign_in_as_before(
+    tmp_path: Path, status: int, body: object
+) -> None:
+    transport = ScriptedTransport().expect("GET", f"{API}/health", body={"status": "ok"})
+    transport.expect("GET", MODE_PATH, status=status, body=body)
+    transport.expect(
+        "POST",
+        f"{API}/auth/login",
+        body=authentication(
+            access_token=TEST_ACCESS_TOKEN, expires_at=START + timedelta(minutes=15)
+        ),
+        headers={"set-cookie": refresh_cookie(TEST_REFRESH_TOKEN)},
+    )
+
+    run = run_ut(
+        ["login", "--email", TEST_EMAIL], tmp_path, transport=transport, secrets=[TEST_PASSWORD]
+    )
+
+    assert run.status == 0
+    assert run.output == f"Signed in as {TEST_EMAIL} to the Studio {LOCAL}.\n"
+    assert [request.path for request in transport.sent] == [
+        f"{API}/health",
+        MODE_PATH,
+        f"{API}/auth/login",
+    ]
+    transport.assert_done()

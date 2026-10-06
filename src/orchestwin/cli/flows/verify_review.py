@@ -9,6 +9,7 @@ from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import modeling as modeling_api
 from orchestwin.cli.api import twin_chat
+from orchestwin.cli.client import ensure_access
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows.code_order import project_language
@@ -66,9 +67,7 @@ def prepare(context: CommandContext, *, repository: bool = True) -> Workspace:
         raise CliError("PROJECT_NOT_LINKED")
     link = project.link()
     client = context.client()
-    session = context.sessions.read(client.studio)
-    if session is None or not session.signed_in:
-        raise CliError("NOT_SIGNED_IN", values={"studio": client.studio.origin})
+    ensure_access(context, client)
     root = git.repository_root(context, project.root) if repository else project.root
     if root is None:
         raise CliError("ALIGN_NO_GIT", values={"folder": str(project.root)})

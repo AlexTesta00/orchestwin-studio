@@ -15,6 +15,7 @@ from orchestwin.cli.http import UrlTransport
 from .support.fake_studio import FakeProject, FakeStudio
 from .support.processes import FakeCommit, FakeFile, ScriptedProcesses, script_repository
 from .support.terminal import TEST_PASSWORD, Run, link_folder, run_ut
+from .support.transports import API, ScriptedTransport
 
 EMAIL = "owner@example.com"
 NAME = "Calcolo mancia"
@@ -569,11 +570,15 @@ def test_the_folder_must_be_in_a_git_repository_and_git_must_exist(tmp_path: Pat
 def test_a_folder_that_is_not_linked_or_not_signed_in(tmp_path: Path) -> None:
     unlinked = run_ut(["verify"], tmp_path, transport=UrlTransport())
     link_folder(tmp_path / "project")
-    anonymous = run_ut(["verify"], tmp_path, transport=UrlTransport())
+    accounts = ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", body={"access_mode": "ACCOUNTS", "registration_open": True}
+    )
+    anonymous = run_ut(["verify"], tmp_path, transport=accounts)
 
     assert unlinked.status == 6
     assert anonymous.status == 3
     assert "ut login" in anonymous.errors
+    assert [request.path for request in accounts.sent] == [f"{API}/auth/mode"]
 
 
 def test_a_review_made_earlier_is_not_asked_again(tmp_path: Path) -> None:

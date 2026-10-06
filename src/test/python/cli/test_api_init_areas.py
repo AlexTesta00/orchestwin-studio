@@ -528,15 +528,20 @@ def test_the_operations_of_the_spending_notice() -> None:
     assert init_command.operations(2, "brief", None) == []
 
 
-def test_a_command_without_a_session_is_refused_before_any_request(tmp_path: Path) -> None:
-    transport = ScriptedTransport()
+def test_a_command_without_a_session_is_refused_after_asking_only_the_access_mode(
+    tmp_path: Path,
+) -> None:
+    transport = ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", body={"access_mode": "ACCOUNTS", "registration_open": True}
+    )
     context = command_context(terminal(tmp_path, transport=transport).environment)
 
     with pytest.raises(CliError) as caught:
         init_command.require_sign_in(context, context.client())
 
     assert (caught.value.code, caught.value.status) == ("NOT_SIGNED_IN", 3)
-    assert transport.sent == []
+    assert [request.path for request in transport.sent] == [f"{API}/auth/mode"]
+    assert transport.sent[0].header("authorization") is None
 
 
 def test_a_generation_already_running_is_followed_instead_of_a_new_one(tmp_path: Path) -> None:

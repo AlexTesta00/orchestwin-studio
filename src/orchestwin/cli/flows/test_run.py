@@ -22,6 +22,7 @@ from orchestwin.cli.browser import (
     open_page,
     resolve_target,
 )
+from orchestwin.cli.client import ensure_access
 from orchestwin.cli.console import ProgressOutcome
 from orchestwin.cli.errors import USAGE_STATUS, ApiFailure, CliError
 from orchestwin.cli.flows import (
@@ -310,9 +311,7 @@ def prepare(context: CommandContext, request: TestRequest) -> Prepared:
         raise CliError("PROJECT_NOT_LINKED")
     link = project.link()
     client = context.client()
-    session = context.sessions.read(client.studio)
-    if session is None or not session.signed_in:
-        raise CliError("NOT_SIGNED_IN", values={"studio": client.studio.origin})
+    ensure_access(context, client)
     summary = approved_folder(project)
     settings = test_settings.read_settings(project)
     application = chosen_application(context, project, request.application, settings)

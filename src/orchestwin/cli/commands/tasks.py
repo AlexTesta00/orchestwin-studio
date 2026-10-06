@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import tasks as tasks_api
 from orchestwin.cli.api import tests as tests_api
+from orchestwin.cli.client import ensure_access
 from orchestwin.cli.errors import SIGN_IN_STATUS, USAGE_STATUS, ApiFailure, CliError
 from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows import task_selection
@@ -110,6 +111,7 @@ def show_tasks(
     client = context.client()
     reason: str | None = None
     try:
+        ensure_access(context, client)
         items = tasks_api.tasks(client, link.project_id, every=every)
     except CliError as error:
         reason = offline_reason(error)
