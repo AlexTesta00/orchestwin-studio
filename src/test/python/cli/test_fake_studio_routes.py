@@ -19,6 +19,7 @@ from orchestwin.api import knowledge_alignment as alignment_api
 from orchestwin.api import twin_learning as twin_learning_api
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import (
+    AccessModeResponse,
     AuthApiSettings,
     AuthenticationResponse,
     UserResponse,
@@ -88,9 +89,11 @@ from orchestwin.api.user_modeling import (
     PersonaDecisionCommandPayload,
     PersonaProposalCommandPayload,
     PersonaVersionPayload,
+    ProfileRevisionCommandPayload,
     SnapshotGenerationCommandPayload,
     UserModelingReadinessPayload,
     UserModelingSnapshotVersionPayload,
+    UserTwinProfileDiffPayload,
 )
 from orchestwin.api.user_modeling_realignment import (
     UserModelingAlignmentPayload,
@@ -132,6 +135,7 @@ from .support.fake_studio import (
     DESIGN_CHANGE_FIELDS,
     EARLIER_FIELDS,
     ELEMENT_FIELDS,
+    LOCAL_OWNER_EMAIL,
     PLAN_FIELDS,
     PREFIX,
     PROPOSAL_APPLY_FIELDS,
@@ -216,6 +220,7 @@ def test_only_health_and_the_sign_in_are_open_without_a_token() -> None:
         ("POST", "/auth/register"),
         ("POST", "/auth/refresh"),
         ("POST", "/auth/logout"),
+        ("GET", "/auth/mode"),
     }
 
 
@@ -303,11 +308,16 @@ def test_the_fake_serves_every_area_that_the_commands_need(
         ("POST", project + "/alignment/proposals/{code}/apply"),
         ("POST", project + "/alignment/proposals/{code}/skip"),
         ("POST", project + "/design/change-requests"),
+        ("POST", project + "/brief-versions"),
+        ("POST", project + "/requirements/revisions"),
+        ("POST", project + "/design/revisions"),
+        ("POST", project + "/user-modeling/twins/{twin_id}/revisions"),
+        ("POST", project + "/user-modeling/revisions/{diff_id}/decision"),
     }
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 168
+    assert len(ROUTES) == 172
 
 
 def test_validation_routes_are_exactly_the_two_authorized_read_only_routes() -> None:
@@ -1011,6 +1021,165 @@ def test_the_added_routes_answer_like_the_real_application(real_client: TestClie
         assert client.call("GET", "/model-runtime/readiness") == (
             real_readiness.status_code,
             real_readiness.json(),
+        )
+        assert studio.errors == []
+
+
+def test_the_access_mode_of_the_fake_follows_its_option() -> None:
+    with pytest.raises(ValueError, match="access_mode"):
+        FakeStudio(access_mode="OPEN")
+    with FakeStudio(job_polls=0) as accounts:
+        client = _Client(accounts)
+        assert fits(AccessModeResponse, client.call("GET", "/auth/mode")) == {
+            "access_mode": "ACCOUNTS",
+            "registration_open": True,
+        }
+        assert client.call("GET", "/auth/me")[0] == 401
+        assert client.call("POST", "/auth/refresh")[0] == 401
+        assert accounts.errors == []
+    with FakeStudio(job_polls=0, access_mode="LOCAL_OWNER") as local:
+        client = _Client(local)
+        project = local.seed_project(
+            owner=LOCAL_OWNER_EMAIL, name="Calcolo mancia", through="brief"
+        )
+        assert fits(AccessModeResponse, client.call("GET", "/auth/mode")) == {
+            "access_mode": "LOCAL_OWNER",
+            "registration_open": False,
+        }
+        account = fits(UserResponse, client.call("GET", "/auth/me"))
+        assert account["email"] == LOCAL_OWNER_EMAIL
+        listed = client.call("GET", "/projects")
+        assert listed[0] == 200
+        assert [item["id"] for item in listed[1]] == [project.id]
+        body = {"email": EMAIL, "password": PASSWORD}
+        assert client.call("POST", "/auth/login", body) == (404, {"detail": "local_mode"})
+        assert client.call("POST", "/auth/register", body) == (404, {"detail": "local_mode"})
+        issued = fits(AuthenticationResponse, client.call("POST", "/auth/refresh"))
+        assert issued["user"]["email"] == LOCAL_OWNER_EMAIL
+        cookie = client.headers["set-cookie"].split(";", 1)[0]
+        rotated = client.call("POST", "/auth/refresh", headers={"Cookie": cookie})
+        assert rotated[0] == 200
+        assert client.headers["set-cookie"].split(";", 1)[0] != cookie
+        reused = client.call("POST", "/auth/refresh", headers={"Cookie": cookie})
+        assert (reused[0], reused[1]["user"]["email"]) == (200, LOCAL_OWNER_EMAIL)
+        client.token = str(issued["access_token"])
+        assert fits(UserResponse, client.call("GET", "/auth/me"))["email"] == LOCAL_OWNER_EMAIL
+        client.token = "not-a-valid-token"
+        assert client.call("GET", "/auth/me")[0] == 401
+        assert local.errors == []
+    with FakeStudio(
+        job_polls=0, access_mode="LOCAL_OWNER", local_owner_email="desk@example.com"
+    ) as named:
+        found = fits(UserResponse, _Client(named).call("GET", "/auth/me"))
+        assert found["email"] == "desk@example.com"
+        assert named.errors == []
+
+
+def test_the_revision_routes_used_by_push_fit_the_real_models() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        current = fits(
+            RequirementsSpecificationVersionPayload,
+            client.call("GET", base + "/requirements/current"),
+        )
+        specification = copy.deepcopy(current["specification"])
+        specification["requirements"][0]["statement"] = "The page shows the tip of each person."
+        body = {"specification": specification}
+        proposed = fits(
+            RequirementsRevisionPayload,
+            client.call("POST", base + "/requirements/revisions", body),
+            201,
+        )
+        assert proposed["status"] == "CREATED"
+        assert [item["operation"] for item in proposed["diff"]["operations"]] == ["REPLACE"]
+        assert client.call("POST", base + "/requirements/revisions", body) == (
+            409,
+            {"detail": {"code": "DIFF_ALREADY_PENDING"}},
+        )
+        decided = fits(
+            RequirementsRevisionPayload,
+            client.call(
+                "POST",
+                f"{base}/requirements/revisions/{proposed['diff']['id']}/decision",
+                {"decision": "APPROVE"},
+            ),
+        )
+        assert decided["version"]["version_number"] == current["version_number"] + 1
+        same = {"specification": decided["version"]["specification"]}
+        assert client.call("POST", base + "/requirements/revisions", same) == (
+            409,
+            {"detail": {"code": "INVALID_PROPOSAL"}},
+        )
+        other = {"specification": {**specification, "project_id": str(UUID(int=9))}}
+        assert client.call("POST", base + "/requirements/revisions", other) == (
+            422,
+            {"detail": {"code": "REQUIREMENTS_PROJECT_MISMATCH"}},
+        )
+
+        snapshot = fits(
+            UserModelingSnapshotVersionPayload,
+            client.call("GET", base + "/user-modeling/snapshots/current"),
+        )
+        twin = snapshot["snapshot"]["twin_versions"][0]
+        goals = next(
+            item
+            for item in twin["profile"]["observations"]
+            if item["observation_key"] == "user_twin.goals"
+        )
+        replacement = {
+            "field": "goals",
+            **{key: value for key, value in goals.items() if key != "observation_key"},
+            "value": {**goals["value"], "items": ["Pay the bill quickly"]},
+        }
+        path = f"{base}/user-modeling/twins/{twin['twin_id']}/revisions"
+        created = fits(
+            ProfileRevisionCommandPayload,
+            client.call("POST", path, {"replacements": [replacement]}),
+        )
+        fits(UserTwinProfileDiffPayload, (200, created["diff"]))
+        operation = created["diff"]["operations"][0]
+        assert (operation["field"], operation["before"], operation["after"]["value"]["items"]) == (
+            "goals",
+            goals,
+            ["Pay the bill quickly"],
+        )
+        assert client.call("POST", path, {"replacements": [replacement]}) == (
+            409,
+            {"detail": {"code": "DIFF_ALREADY_PENDING"}},
+        )
+        revision = f"{base}/user-modeling/revisions/{created['diff']['id']}/decision"
+        applied = fits(
+            ProfileRevisionCommandPayload,
+            client.call("POST", revision, {"decision": "APPROVE"}),
+        )
+        assert applied["snapshot_version"]["version_number"] == snapshot["version_number"] + 1
+        fits(UserModelingSnapshotVersionPayload, (200, applied["snapshot_version"]))
+        assert applied["twin_version"]["version_number"] == twin["version_number"] + 1
+        assert not project.approved("twins")
+        assert client.call("POST", revision, {"decision": "APPROVE"})[1]["status"] == "NO_CHANGE"
+        assert client.call("POST", path, {"replacements": [replacement]}) == (
+            409,
+            {"detail": {"code": "INVALID_REPLACEMENT"}},
+        )
+        again = {**replacement, "value": {**goals["value"], "items": ["Split the bill"]}}
+        second = client.call("POST", path, {"replacements": [again]})[1]["diff"]["id"]
+        refusal = f"{base}/user-modeling/revisions/{second}/decision"
+        assert client.call("POST", refusal, {"decision": "REJECT"}) == (
+            409,
+            {"detail": {"code": "DECISION_REJECTED"}},
+        )
+        rejected = fits(
+            ProfileRevisionCommandPayload,
+            client.call("POST", refusal, {"decision": "REJECT", "reason": "Not now"}),
+        )
+        assert (rejected["diff"]["status"], rejected["snapshot_version"]) == ("REJECTED", None)
+        assert client.call("POST", path, {"replacements": []})[0] == 422
+        unknown = f"{base}/user-modeling/twins/{UUID(int=9)}/revisions"
+        assert client.call("POST", unknown, {"replacements": [again]}) == (
+            404,
+            {"detail": {"code": "TWIN_NOT_FOUND"}},
         )
         assert studio.errors == []
 

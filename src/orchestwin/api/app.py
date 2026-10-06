@@ -61,7 +61,7 @@ from orchestwin.api.user_modeling_realignment import create_user_modeling_realig
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
 from orchestwin.api.validation import request_validation_error
 from orchestwin.api.workflow_inputs import create_workflow_inputs_router, protect_provided_consumers
-from orchestwin.config import ApplicationSettings, load_settings
+from orchestwin.config import AccessMode, ApplicationSettings, load_settings
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.real_runtime import RealModelRuntimeError
@@ -79,6 +79,7 @@ def create_app(
     resolved_settings = settings if settings is not None else load_settings()
     resolved_runtime = runtime if runtime is not None else create_default_runtime(resolved_settings)
     resolved_auth_settings = auth_settings if auth_settings is not None else AuthApiSettings()
+    local_owner_email = resolved_settings.resolved_local_owner_email()
     jobs = GenerationJobRegistry()
 
     @asynccontextmanager
@@ -93,6 +94,11 @@ def create_app(
                 await resolved_runtime.real_model_runtime.check_readiness(
                     resolved_runtime.database_runtime.session_factory
                 )
+            if (
+                resolved_settings.access_mode is AccessMode.LOCAL_OWNER
+                and resolved_runtime.identity_service is not None
+            ):
+                await resolved_runtime.identity_service.local_owner(email=local_owner_email)
             yield
         finally:
             try:
@@ -154,6 +160,9 @@ def create_app(
     application.state.proposal_evidence_store = resolved_runtime.proposal_evidence_store
     application.state.final_evaluator_runtime = resolved_runtime.final_evaluator_runtime
     application.state.identity_service = resolved_runtime.identity_service
+    application.state.access_mode = resolved_settings.access_mode
+    application.state.local_owner_email = local_owner_email
+    application.state.cors_allowed_origins = resolved_settings.cors_allowed_origins
     application.state.project_service = resolved_runtime.project_service
     application.state.clarification_service = resolved_runtime.clarification_service
     application.state.brief_gate_service = resolved_runtime.brief_gate_service

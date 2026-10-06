@@ -14,6 +14,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 def configure(
     models: Path | None = None,
+    access: str = "accounts",
+    local_owner: str | None = None,
 ):
     values = dotenv_values(ROOT / "compose.env")
     for key in ("ORCHESTWIN_POSTGRES_PASSWORD", "ORCHESTWIN_AUTH_JWT_SECRET"):
@@ -36,17 +38,29 @@ def configure(
     if models is not None:
         os.environ["ORCHESTWIN_MODEL_RUNTIME_MODE"] = "REAL_REQUIRED"
         os.environ["ORCHESTWIN_MODEL_RUNTIME_CONFIG_FILE"] = str(models.resolve())
+    os.environ["ORCHESTWIN_ACCESS_MODE"] = "LOCAL_OWNER" if access == "local" else "ACCOUNTS"
+    if local_owner is not None:
+        os.environ["ORCHESTWIN_LOCAL_OWNER_EMAIL"] = local_owner
 
 
-def main():
+def parse_arguments(arguments=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("migrate", "api", "check"))
     parser.add_argument("--models", type=Path)
-    args = parser.parse_args()
-    os.chdir(ROOT)
+    parser.add_argument("--access", choices=("accounts", "local"), default="accounts")
+    parser.add_argument("--local-owner")
+    args = parser.parse_args(arguments)
     if args.action != "migrate" and args.models is None:
         parser.error("--models must select an explicit real model configuration")
-    configure(args.models)
+    if args.local_owner is not None and args.access != "local":
+        parser.error("--local-owner requires --access local")
+    return args
+
+
+def main():
+    args = parse_arguments()
+    os.chdir(ROOT)
+    configure(args.models, args.access, args.local_owner)
     if args.action == "migrate":
         from orchestwin.persistence import load_database_settings
         from orchestwin.persistence.migrate import upgrade_database

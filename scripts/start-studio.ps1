@@ -9,6 +9,13 @@ if (-not (Test-Path -LiteralPath $node -PathType Leaf)) { throw 'Configure the N
 $node = (Resolve-Path -LiteralPath $node).ProviderPath
 # The API uses this same selected Node binary for syntax-only source validation.
 $env:PATH = [IO.Path]::GetDirectoryName($node) + [IO.Path]::PathSeparator + $env:PATH
+$access = [string]$settings.access
+if ([string]::IsNullOrWhiteSpace($access)) { $access = 'accounts' }
+if ($access -cnotin @('local', 'accounts')) { throw 'The access setting must be local or accounts.' }
+$accessArgs = @()
+$localOwner = [string]$settings.local_owner_email
+if ($access -ceq 'local') { $accessArgs = @('--access', 'local') }
+if ($access -ceq 'local' -and -not [string]::IsNullOrWhiteSpace($localOwner)) { $accessArgs += @('--local-owner', $localOwner) }
 function Test-DotenvKey([string]$path, [string]$name) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
     $present = $false
@@ -150,9 +157,9 @@ try {
         $hostedManifest | ConvertTo-Json | Set-Content -LiteralPath $models -Encoding ascii
         Write-Host 'Hosted model providers selected; no local proposer is required.'
     }
-    & $python scripts/studio_runtime.py check --models $models | Out-File -LiteralPath (Join-Path $session 'readiness.json') -Encoding ascii
+    & $python scripts/studio_runtime.py check --models $models @accessArgs | Out-File -LiteralPath (Join-Path $session 'readiness.json') -Encoding ascii
     if ($LASTEXITCODE -ne 0) { throw 'Real model readiness failed.' }
-    $children += Start-StudioProcess $python @('scripts/studio_runtime.py', 'api', '--models', (Quote-Argument $models)) 'api' $repo
+    $children += Start-StudioProcess $python (@('scripts/studio_runtime.py', 'api', '--models', (Quote-Argument $models)) + @($accessArgs | ForEach-Object { Quote-Argument $_ })) 'api' $repo
     $children += Start-StudioProcess $node @('node_modules/vite/bin/vite.js', 'preview', '--host', '127.0.0.1', '--port', '8080', '--strictPort') 'frontend' (Join-Path $repo 'frontend')
     $deadline = (Get-Date).AddSeconds(60)
     do {
@@ -162,6 +169,7 @@ try {
     } until ($ready -or (Get-Date) -gt $deadline)
     if (-not $ready) { throw 'API startup timed out.' }
     [ordered]@{session = $session; processes = @($children | ForEach-Object { @{id = $_.Id; started = $_.StartTime.ToUniversalTime().ToString('o')} })} | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath 'var/studio/active-session.json'
+    if ($access -ceq 'local') { Write-Host 'Local access: the Studio works with the account of this computer, without sign-in.' }
     Write-Host 'Studio ready: http://127.0.0.1:8080. Stop with ./scripts/stop-studio.ps1.'
 } catch {
     if (Test-Path -LiteralPath $session) {

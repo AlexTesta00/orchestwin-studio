@@ -12,6 +12,7 @@ import itertools
 import json
 import math
 import re
+import secrets
 import socketserver
 import threading
 import traceback
@@ -260,6 +261,7 @@ from orchestwin.twins.persistence.snapshots import (
 from orchestwin.twins.personas import PersonaProfileVersion
 from orchestwin.twins.representation import ArchetypeInput, archetype_payload, twin_view
 from orchestwin.twins.user_twins import (
+    UserTwinField,
     UserTwinProfileVersion,
     VersionedArtifactReference,
     create_user_modeling_snapshot,
@@ -311,6 +313,11 @@ STAGES = ("brief", "team", "twins", "requirements", "design")
 PROJECT_MODES = ("GREENFIELD_GENERATION", "BROWNFIELD_ASSESSMENT")
 JOB_STATUSES = ("RUNNING", "SUCCEEDED", "REJECTED", "FAILED")
 BILLINGS = ("SUBSCRIPTION", "API", "MIXED")
+ACCOUNTS = "ACCOUNTS"
+LOCAL_OWNER = "LOCAL_OWNER"
+ACCESS_MODES = (ACCOUNTS, LOCAL_OWNER)
+LOCAL_OWNER_EMAIL = "local-owner@example.com"
+LOCAL_MODE = "local_mode"
 REQUEST_OPERATIONS = (
     "PERSONA_PROPOSAL",
     "USER_TWIN_GENERATION",
@@ -1605,6 +1612,7 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/auth/register", "register", authenticated=False),
     Route("POST", "/auth/refresh", "refresh", authenticated=False),
     Route("POST", "/auth/logout", "logout", authenticated=False),
+    Route("GET", "/auth/mode", "access_mode", authenticated=False),
     Route("GET", "/auth/me", "me"),
     Route("GET", "/model-runtime/budget", "budget"),
     Route("GET", "/model-runtime/readiness", "readiness"),
@@ -1691,6 +1699,14 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}/user-modeling/gate/events", "twins_gate_events"),
     Route("GET", "/projects/{project_id}/user-modeling/context-alignment", "twins_alignment"),
     Route("POST", "/projects/{project_id}/user-modeling/context-alignment", "realign_twins"),
+    Route(
+        "POST", "/projects/{project_id}/user-modeling/twins/{twin_id}/revisions", "twin_revision"
+    ),
+    Route(
+        "POST",
+        "/projects/{project_id}/user-modeling/revisions/{diff_id}/decision",
+        "twin_revision_decision",
+    ),
     Route("GET", "/projects/{project_id}/user-twins/{twin_id}/conversation", "conversation"),
     Route(
         "POST",
@@ -1702,6 +1718,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}/requirements", "requirements_history"),
     Route("GET", "/projects/{project_id}/requirements/readiness", "requirements_readiness"),
     Route("POST", "/projects/{project_id}/requirements/change-requests", "requirements_change"),
+    Route("POST", "/projects/{project_id}/requirements/revisions", "requirements_revise"),
     Route("GET", "/projects/{project_id}/requirements/revisions", "requirements_revisions"),
     Route(
         "GET", "/projects/{project_id}/requirements/revisions/{diff_id}", "requirements_revision"
@@ -2427,6 +2444,7 @@ class FakeProject:
         self.personas: dict[str, list[dict[str, object]]] = {}
         self.snapshots: list[dict[str, object]] = []
         self.twins: dict[str, list[dict[str, object]]] = {}
+        self.twin_diffs: list[dict[str, object]] = []
         self.conversations: dict[str, TwinConversation] = {}
         self.requirements: list[dict[str, object]] = []
         self.requirement_diffs: list[dict[str, object]] = []
@@ -2704,9 +2722,13 @@ class FakeStudio:
         job_polls: int = 2,
         now: Callable[[], datetime] | None = None,
         directions: bool = False,
+        access_mode: str = ACCOUNTS,
+        local_owner_email: str = LOCAL_OWNER_EMAIL,
     ) -> None:
         if language not in LANGUAGES:
             raise ValueError("language must be it or en")
+        if access_mode not in ACCESS_MODES:
+            raise ValueError("access_mode must be ACCOUNTS or LOCAL_OWNER")
         if directions and not hosted:
             raise ValueError("directions need a hosted model")
         if isinstance(twins, bool) or not isinstance(twins, int) or not 1 <= twins <= MAX_TWINS:
@@ -2747,6 +2769,10 @@ class FakeStudio:
         self._server: _Server | None = None
         self._thread: threading.Thread | None = None
         self._routes = tuple((route, _compile(route.template)) for route in ROUTES)
+        self.access_mode = access_mode
+        self.local_owner_email = _registered_email(local_owner_email)
+        if access_mode == LOCAL_OWNER:
+            self.add_account(self.local_owner_email, secrets.token_urlsafe(48))
 
     @property
     def address(self) -> str:
@@ -3004,7 +3030,10 @@ class FakeStudio:
         route, parameters = matched
         user = None
         if route.authenticated:
-            user = self._bearer(headers.get("authorization"))
+            header = headers.get("authorization")
+            user = self._bearer(header)
+            if user is None and self.access_mode == LOCAL_OWNER and not _bearer_token(header):
+                user = self._local_owner()
             if user is None:
                 return _Answer(
                     401,
@@ -3051,15 +3080,16 @@ class FakeStudio:
         return None
 
     def _bearer(self, header: str | None) -> _Account | None:
-        if not header:
-            return None
-        scheme, _, token = header.partition(" ")
-        if scheme.casefold() != "bearer" or not token:
+        token = _bearer_token(header)
+        if token is None:
             return None
         access = self._access.get(token)
         if access is None or access.expires_at <= self._now():
             return None
         return self._accounts_by_id.get(access.account)
+
+    def _local_owner(self) -> _Account:
+        return self._accounts[self.local_owner_email]
 
     def _owned(self, call: _Call) -> FakeProject | None:
         project = self._projects.get(call.project_id)
@@ -3503,7 +3533,15 @@ class FakeStudio:
     def _route_health(self, call: _Call) -> _Answer:
         return _Answer(200, {"status": "ok"})
 
+    def _route_access_mode(self, call: _Call) -> _Answer:
+        return _Answer(
+            200,
+            {"access_mode": self.access_mode, "registration_open": self.access_mode == ACCOUNTS},
+        )
+
     def _route_login(self, call: _Call) -> _Answer:
+        if self.access_mode == LOCAL_OWNER:
+            raise _Refusal(404, LOCAL_MODE)
         fields = _Fields(call.json(), ("email", "password"))
         email = fields.text("email", minimum=1, maximum=320)
         password = fields.text("password", minimum=1, maximum=1024)
@@ -3514,6 +3552,8 @@ class FakeStudio:
         return self._signed_in(account, self._refresh_session(account, self._new_id()))
 
     def _route_register(self, call: _Call) -> _Answer:
+        if self.access_mode == LOCAL_OWNER:
+            raise _Refusal(404, LOCAL_MODE)
         try:
             fields = _Fields(call.json(), ("email", "password"))
             email = fields.text("email", minimum=3, maximum=320)
@@ -3542,20 +3582,30 @@ class FakeStudio:
     def _route_refresh(self, call: _Call) -> _Answer:
         token = call.cookie(COOKIE_NAME)
         session = self._sessions.get(token) if token else None
-        if session is None:
-            return self._refused_refresh("invalid_refresh_token")
-        if session.rotated or session.revoked:
-            for other in self._sessions.values():
-                if other.family == session.family:
-                    other.revoked = True
-            return self._refused_refresh("refresh_token_reuse_detected")
-        if session.expires_at <= self._now():
-            session.revoked = True
-            return self._refused_refresh("expired_refresh_token")
+        refusal = self._refresh_refusal(session)
+        if refusal is not None:
+            if self.access_mode == LOCAL_OWNER:
+                owner = self._local_owner()
+                return self._signed_in(owner, self._refresh_session(owner, self._new_id()))
+            return self._refused_refresh(refusal)
+        assert session is not None
         account = self._accounts_by_id[session.account]
         replacement = self._refresh_session(account, session.family)
         session.rotated = True
         return self._signed_in(account, replacement)
+
+    def _refresh_refusal(self, session: _RefreshSession | None) -> str | None:
+        if session is None:
+            return "invalid_refresh_token"
+        if session.rotated or session.revoked:
+            for other in self._sessions.values():
+                if other.family == session.family:
+                    other.revoked = True
+            return "refresh_token_reuse_detected"
+        if session.expires_at <= self._now():
+            session.revoked = True
+            return "expired_refresh_token"
+        return None
 
     def _route_logout(self, call: _Call) -> _Answer:
         token = call.cookie(COOKIE_NAME)
@@ -5370,6 +5420,175 @@ class FakeStudio:
             else [self._readable_snapshot(item) for item in project.snapshots],
         )
 
+    def _route_twin_revision(self, call: _Call) -> _Answer:
+        from orchestwin.api.user_modeling import (
+            ProfileObservationPayload,
+            ProfileRevisionProposalRequest,
+        )
+
+        fields = _Fields(call.json(), ("replacements",))
+        raw = fields.value("replacements")
+        fields.check()
+        try:
+            request = ProfileRevisionProposalRequest.model_validate({"replacements": raw})
+        except ValueError as error:
+            raise _Invalid([_error(("body", "replacements"), "value_error")]) from error
+        try:
+            replacements = request.to_domain()
+        except ValueError as error:
+            raise _Refusal(
+                422, {"code": "INVALID_PROFILE_REPLACEMENT", "message": str(error)}
+            ) from error
+        project = self._owned(call)
+        snapshot = None if project is None else project.snapshot
+        if project is None or snapshot is None:
+            raise _Refusal(404, {"code": "SNAPSHOT_NOT_FOUND"})
+        twin_id = call.params["twin_id"]
+        twin = next(
+            (
+                item
+                for item in snapshot["snapshot"]["twin_versions"]
+                if str(item["twin_id"]) == twin_id
+            ),
+            None,
+        )
+        if twin is None:
+            raise _Refusal(404, {"code": "TWIN_NOT_FOUND"})
+        if any(
+            diff["status"] == "PROPOSED"
+            and diff["base_snapshot_version_id"] == snapshot["id"]
+            and diff["twin_id"] == twin_id
+            for diff in project.twin_diffs
+        ):
+            raise _Refusal(409, {"code": "DIFF_ALREADY_PENDING"})
+        before = {
+            item["observation_key"]: ProfileObservationPayload.model_validate(item).model_dump(
+                mode="json"
+            )
+            for item in twin["profile"]["observations"]
+        }
+        order = list(UserTwinField)
+        operations = []
+        for name in sorted(replacements, key=order.index):
+            after = ProfileObservationPayload.from_domain(replacements[name]).model_dump(
+                mode="json"
+            )
+            previous = before.get(name.observation_key)
+            if previous != after:
+                operations.append({"field": name.value, "before": previous, "after": after})
+        if not operations:
+            raise _Refusal(409, {"code": "INVALID_REPLACEMENT"})
+        try:
+            _fake_twin_profile(_revised_profile(twin["profile"], operations))
+        except ValueError as error:
+            raise _Refusal(409, {"code": "INVALID_REPLACEMENT"}) from error
+        diff = {
+            "id": self._new_id(),
+            "project_id": project.id,
+            "base_snapshot_version_id": snapshot["id"],
+            "base_snapshot_version_number": snapshot["version_number"],
+            "base_snapshot_content_hash": snapshot["content_hash"],
+            "twin_id": twin_id,
+            "base_twin_version_id": twin["id"],
+            "base_twin_version_number": twin["version_number"],
+            "base_twin_content_hash": twin["content_hash"],
+            "proposal_hash": _digest(operations),
+            "status": "PROPOSED",
+            "operations": operations,
+            "created_by_user_id": call.account.id,
+            "created_at": _stamp(self._now()),
+            "decided_by_user_id": None,
+            "decided_at": None,
+            "decision_reason": None,
+            "applied_snapshot_version_id": None,
+        }
+        project.twin_diffs.append(diff)
+        return _Answer(200, _twin_revision_payload("CREATED", diff, None, None))
+
+    def _route_twin_revision_decision(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), ("decision", "reason"))
+        decision = fields.choice("decision", ("APPROVE", "REJECT"))
+        reason = fields.text("reason", required=False, nullable=True)
+        fields.check()
+        project = self._owned(call)
+        diff = _by_id([] if project is None else project.twin_diffs, call.params["diff_id"])
+        if project is None or diff is None:
+            raise _Refusal(404, {"code": "DIFF_NOT_FOUND"})
+        wanted = "APPROVED" if decision == "APPROVE" else "REJECTED"
+        if diff["status"] != "PROPOSED":
+            if diff["status"] == wanted:
+                return _Answer(200, _twin_revision_payload("NO_CHANGE", diff, None, None))
+            raise _Refusal(409, {"code": "DECISION_REJECTED"})
+        normalized = _blank_to_none(reason)
+        if decision == "REJECT" and normalized is None:
+            raise _Refusal(409, {"code": "DECISION_REJECTED"})
+        snapshot = project.snapshot
+        if snapshot is None:
+            raise _Refusal(404, {"code": "SNAPSHOT_NOT_FOUND"})
+        if (snapshot["id"], snapshot["version_number"], snapshot["content_hash"]) != (
+            diff["base_snapshot_version_id"],
+            diff["base_snapshot_version_number"],
+            diff["base_snapshot_content_hash"],
+        ):
+            raise _Refusal(409, {"code": "CONTEXT_CHANGED"})
+        version = None if decision == "REJECT" else self._revised_twins(project, diff, call.account)
+        diff["status"] = wanted
+        diff["decided_by_user_id"] = call.account.id
+        diff["decided_at"] = _stamp(self._now())
+        diff["decision_reason"] = normalized
+        if version is None:
+            return _Answer(200, _twin_revision_payload("APPLIED", diff, None, None))
+        diff["applied_snapshot_version_id"] = version["id"]
+        readable = self._readable_snapshot(version)
+        twin = next(
+            item
+            for item in readable["snapshot"]["twin_versions"]
+            if item["twin_id"] == diff["twin_id"]
+        )
+        return _Answer(200, _twin_revision_payload("APPLIED", diff, twin, readable))
+
+    def _revised_twins(
+        self, project: FakeProject, diff: Mapping[str, object], account: _Account
+    ) -> dict[str, object]:
+        previous = project.snapshot
+        if previous is None:
+            raise RuntimeError("a twin revision needs a snapshot")
+        body = copy.deepcopy(previous["snapshot"])
+        revised: list[dict[str, object]] = []
+        twins = []
+        for base in body["twin_versions"]:
+            if str(base["twin_id"]) != diff["twin_id"]:
+                twins.append(base)
+                continue
+            profile = _revised_profile(base["profile"], diff["operations"])
+            twin = {
+                **base,
+                "id": self._new_id(),
+                "version_number": int(base["version_number"]) + 1,
+                "based_on_version_number": base["version_number"],
+                "content_hash": _fake_twin_profile(profile).content_hash,
+                "created_by_user_id": account.id,
+                "created_at": _stamp(self._now()),
+                "profile": profile,
+            }
+            revised.append(twin)
+            twins.append(twin)
+        body["twin_versions"] = twins
+        version = {
+            "id": self._new_id(),
+            "project_id": project.id,
+            "version_number": int(previous["version_number"]) + 1,
+            "based_on_version_number": previous["version_number"],
+            "content_hash": _fake_modeling(body).content_hash,
+            "created_by_user_id": account.id,
+            "created_at": _stamp(self._now()),
+            "snapshot": body,
+        }
+        for twin in revised:
+            project.twins.setdefault(str(twin["twin_id"]), []).append(twin)
+        project.snapshots.append(version)
+        return version
+
     def _route_modeling_readiness(self, call: _Call) -> _Answer:
         project = self._owned(call)
         snapshot = None if project is None else project.snapshot
@@ -5956,6 +6175,43 @@ class FakeStudio:
             ),
             None,
         )
+
+    def _route_requirements_revise(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), ("specification",))
+        specification = fields.value("specification")
+        fields.check()
+        try:
+            payload = RequirementsSpecificationPayload.model_validate(specification)
+        except ValueError as error:
+            raise _Invalid([_error(("body", "specification"), "model_type")]) from error
+        if str(payload.project_id) != call.project_id:
+            raise _Refusal(422, {"code": "REQUIREMENTS_PROJECT_MISMATCH"})
+        try:
+            proposed = payload.to_domain()
+        except (TypeError, ValueError) as error:
+            raise _Refusal(422, {"code": "INVALID_REQUIREMENTS_SPECIFICATION"}) from error
+        project = self._owned(call)
+        current = None if project is None else project.specification
+        if project is None or current is None:
+            raise _Refusal(404, {"code": "SPECIFICATION_NOT_FOUND"})
+        if self._pending_requirements_diff(project) is not None:
+            raise _Refusal(409, {"code": "DIFF_ALREADY_PENDING"})
+        base = {
+            **current,
+            "specification": _fake_requirements(current["specification"]).to_snapshot(),
+        }
+        result = propose_requirements_diff(
+            base_version=stage_versions({"requirements": base})["requirements"],
+            proposed_specification=proposed,
+            diff_id=UUID(self._new_id()),
+            created_by_user_id=UUID(call.account.id),
+            created_at=self._now(),
+        )
+        if result.diff is None:
+            raise _Refusal(409, {"code": "INVALID_PROPOSAL"})
+        diff = RequirementsSpecificationDiffPayload.from_domain(result.diff).model_dump(mode="json")
+        project.requirement_diffs.append(diff)
+        return _Answer(201, _revision_payload("CREATED", diff, None))
 
     def _route_requirements_revisions(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -11921,6 +12177,15 @@ def _email_key(email: str) -> str | None:
         return None
 
 
+def _bearer_token(header: str | None) -> str | None:
+    if not header:
+        return None
+    scheme, _, token = header.partition(" ")
+    if scheme.casefold() != "bearer" or not token:
+        return None
+    return token
+
+
 def _registered_email(email: str) -> str:
     if not isinstance(email, str) or not 3 <= len(email) <= 320:
         raise ValueError("the real Studio registers only e-mail addresses of 3 to 320 characters")
@@ -13681,6 +13946,38 @@ def _revision_payload(
         "diff_persistence_status": None,
         "version_persistence_status": None,
     }
+
+
+def _twin_revision_payload(
+    status: str,
+    diff: Mapping[str, object],
+    twin: Mapping[str, object] | None,
+    snapshot: Mapping[str, object] | None,
+) -> dict[str, object]:
+    return {
+        "status": status,
+        "issue": None,
+        "proposal_issue": None,
+        "diff": diff,
+        "twin_version": twin,
+        "snapshot_version": snapshot,
+    }
+
+
+def _revised_profile(
+    profile: Mapping[str, object], operations: Sequence[Mapping[str, object]]
+) -> dict[str, object]:
+    revised = copy.deepcopy(dict(profile))
+    replaced = {
+        UserTwinField(str(item["field"])).observation_key: copy.deepcopy(item["after"])
+        for item in operations
+    }
+    observations = [
+        replaced.pop(str(item["observation_key"]), item) for item in revised["observations"]
+    ]
+    observations.extend(replaced.values())
+    revised["observations"] = observations
+    return revised
 
 
 def _design_revision_payload(
