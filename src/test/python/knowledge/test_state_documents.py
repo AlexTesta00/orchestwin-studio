@@ -455,7 +455,7 @@ DEVELOPMENT_ITALIAN = (
     "versione 2 e il design alla versione 3, alternativa DES-002.",
     "",
     "1 revisione è stata fatta con versioni precedenti dei requisiti o del design: "
-    "`ut align --recheck` fa riesaminare quel commit ai twin.",
+    "`ut verify --recheck` fa riesaminare quel commit ai twin.",
     "",
     "## Compiti aperti",
     "",
@@ -498,7 +498,7 @@ DEVELOPMENT_ENGLISH = (
     "3, alternative DES-002.",
     "",
     "1 review was made against earlier versions of the requirements or of the design: "
-    "`ut align --recheck` has the twins review that commit again.",
+    "`ut verify --recheck` has the twins review that commit again.",
     "",
     "## Open tasks",
     "",
@@ -547,7 +547,8 @@ INDEX_DEVELOPMENT = (
     "The Studio has recorded 3 changes (commits) of the code. The aligned point is commit "
     "`9d8e7f6`, decided on 2026-09-28 10:00+00:00. 2 changes are waiting after the aligned "
     "point. 1 review was made against earlier versions of the requirements or of the design: "
-    "`ut align --recheck` has the twins review that commit again. 4 tasks are open for the code. "
+    "`ut verify --recheck` has the twins review that commit again. 4 tasks are open for the "
+    "code. "
     "`state/state.md` explains the state in the language of the project; `state/state.json` and "
     "`twins/feedback/changes.json` hold the exact records.",
     "",
@@ -1410,12 +1411,12 @@ def test_several_stale_reviews_are_counted_in_both_texts() -> None:
     assert folder.manifest["state"]["stale_reviews"] == 2
     assert (
         "2 revisioni sono state fatte con versioni precedenti dei requisiti o del design: "
-        "`ut align --recheck` fa riesaminare quei commit ai twin."
+        "`ut verify --recheck` fa riesaminare quei commit ai twin."
     ) in folder.files[STATE_TEXT]
     assert folder.files[STATE_TEXT].count("Da riesaminare: rivisto con i requisiti") == 2
     sentence = (
         "2 reviews were made against earlier versions of the requirements or of the design: "
-        "`ut align --recheck` has the twins review those commits again."
+        "`ut verify --recheck` has the twins review those commits again."
     )
     assert sentence in english
     assert (

@@ -228,9 +228,9 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
         ),
         "stale_count": (
             "1 review was made against earlier versions of the requirements or of the design: "
-            "`ut align --recheck` has the twins review that commit again.",
+            "`ut verify --recheck` has the twins review that commit again.",
             "{count} reviews were made against earlier versions of the requirements or of the "
-            "design: `ut align --recheck` has the twins review those commits again.",
+            "design: `ut verify --recheck` has the twins review those commits again.",
         ),
         "tasks": "## Open tasks",
         "task": "- {code}: {text} ({details}).",
@@ -311,9 +311,9 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
         ),
         "stale_count": (
             "1 revisione è stata fatta con versioni precedenti dei requisiti o del design: "
-            "`ut align --recheck` fa riesaminare quel commit ai twin.",
+            "`ut verify --recheck` fa riesaminare quel commit ai twin.",
             "{count} revisioni sono state fatte con versioni precedenti dei requisiti o del "
-            "design: `ut align --recheck` fa riesaminare quei commit ai twin.",
+            "design: `ut verify --recheck` fa riesaminare quei commit ai twin.",
         ),
         "tasks": "## Compiti aperti",
         "task": "- {code}: {text} ({details}).",
