@@ -204,6 +204,10 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
             "and the tasks for the code. The exact records are in `{document}` and `{changes}`; "
             "the diff of a commit is never copied into the folder."
         ),
+        "push": (
+            "`ut push` sends the hand-made changes of this folder to the Studio: you approve the "
+            "differences and a new version is born."
+        ),
         "reference": "## Reference",
         "requirements": "- Requirements: version {number} (`{path}`).",
         "requirements_missing": "- Requirements: not approved yet.",
@@ -282,6 +286,10 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
             "nello Studio, le critiche dei twin, le decisioni del proprietario e i compiti per il "
             "codice. I dati esatti sono in `{document}` e in `{changes}`; il diff di un commit "
             "non viene mai copiato nella cartella."
+        ),
+        "push": (
+            "`ut push` invia allo Studio le modifiche fatte a mano in questa cartella: le "
+            "differenze si approvano e nasce una versione nuova."
         ),
         "reference": "## Riferimento",
         "requirements": "- Requisiti: versione {number} (`{path}`).",
@@ -1153,6 +1161,8 @@ def state_markdown(sources: KnowledgeSources, *, language: str | None) -> str:
         texts["title"].format(project=_inline(sources.project_name)),
         "",
         texts["intro"].format(document=STATE_DOCUMENT, changes=FEEDBACK_CHANGES),
+        "",
+        texts["push"],
         "",
         *_reference_lines(document, texts),
         *_aligned_lines(document, texts),

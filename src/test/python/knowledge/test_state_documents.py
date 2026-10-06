@@ -299,6 +299,9 @@ ITALIAN_TEXT = (
     "sono in `state/state.json` e in `twins/feedback/changes.json`; il diff di un commit non "
     "viene mai copiato nella cartella.",
     "",
+    "`ut push` invia allo Studio le modifiche fatte a mano in questa cartella: le differenze si "
+    "approvano e nasce una versione nuova.",
+    "",
     "## Riferimento",
     "",
     "- Requisiti: versione 2 (`requirements/requirements.md`).",
@@ -374,6 +377,9 @@ ENGLISH_TEXT = (
     "Studio, the critiques of the user twins, the decisions of the owner and the tasks for the "
     "code. The exact records are in `state/state.json` and `twins/feedback/changes.json`; the "
     "diff of a commit is never copied into the folder.",
+    "",
+    "`ut push` sends the hand-made changes of this folder to the Studio: you approve the "
+    "differences and a new version is born.",
     "",
     "## Reference",
     "",
@@ -594,6 +600,16 @@ INDEX_SECTION = (
     "evidence and the critiques of the twins. `ut test` runs the tests again.",
     "",
 )
+PUSH_LINE = {
+    "en": (
+        "`ut push` sends the hand-made changes of this folder to the Studio: you approve the "
+        "differences and a new version is born."
+    ),
+    "it": (
+        "`ut push` invia allo Studio le modifiche fatte a mano in questa cartella: le "
+        "differenze si approvano e nasce una versione nuova."
+    ),
+}
 NO_RUN = {
     "en": (
         "No run of the acceptance tests is recorded yet: `ut test` runs them on the application "
@@ -1053,6 +1069,24 @@ def test_the_state_text_is_written_in_english_otherwise(language: str | None) ->
     text = state_markdown(real_sources(state=state_sources()), language=language)
 
     assert text == "\n".join(ENGLISH_TEXT)
+
+
+@pytest.mark.parametrize(
+    ("language", "heading"), [("it", "## Riferimento"), ("en", "## Reference")]
+)
+def test_the_state_text_says_after_its_intro_how_hand_made_changes_reach_the_studio(
+    language: str, heading: str
+) -> None:
+    for text in (
+        state_markdown(real_sources(state=development_sources()), language=language),
+        state_markdown(partial_sources("brief"), language=language),
+    ):
+        lines = text.splitlines()
+
+        assert lines[3:7] == ["", PUSH_LINE[language], "", heading]
+        assert lines.count(PUSH_LINE[language]) == 1
+    assert PUSH_LINE["en"] not in state_markdown(partial_sources("brief"), language="it")
+    assert PUSH_LINE["it"] not in state_markdown(partial_sources("brief"), language="en")
 
 
 @pytest.mark.parametrize(("language", "words"), [("it", "it"), ("it-IT", "it"), ("IT", "it")])
