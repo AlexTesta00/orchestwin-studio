@@ -59,9 +59,10 @@ const NEXT_SENTENCES = Object.freeze({
   INIT: "next.init",
   DESIGN: "next.design",
   RECHECK: "next.recheck",
+  ALIGN: "next.align",
   CODE: "next.code",
   TASKS_FROM_TEST: "next.tasksFromTest",
-  ALIGN: "next.align",
+  VERIFY: "next.verify",
   FIRST_TEST: "next.firstTest",
   TEST: "next.test",
 });
@@ -584,6 +585,10 @@ function nextStep(state) {
   if (development.stale > 0) {
     return { kind: "RECHECK", command: "recheck", count: development.stale };
   }
+  const waiting = objectOf(project.alignment).waiting;
+  if (Number.isInteger(waiting) && waiting > 0) {
+    return { kind: "ALIGN", command: "alignPending", count: waiting };
+  }
   const open = listOf(objectOf(project.tasks).open).length;
   if (open > 0) {
     return { kind: "CODE", command: "code", count: open };
@@ -599,7 +604,7 @@ function nextStep(state) {
     };
   }
   if (development.pending > 0) {
-    return { kind: "ALIGN", command: "align", count: development.pending };
+    return { kind: "VERIFY", command: "verify", count: development.pending };
   }
   if (latest === null) {
     return { kind: "FIRST_TEST", command: "test", count: null };
@@ -762,6 +767,29 @@ function latestCommitCard(change, context) {
   ].join("");
 }
 
+function knowledgeBlock(alignment, context) {
+  if (alignment === null || alignment === undefined) {
+    return "";
+  }
+  const run = objectOf(alignment);
+  const to = typeof run.toCommit === "string" ? asCode(shortCommit(run.toCommit)) : null;
+  const from =
+    typeof run.fromCommit === "string" ? asCode(shortCommit(run.fromCommit)) : null;
+  const commits =
+    to === null
+      ? null
+      : from === null
+        ? context.t("knowledge.upTo", { to })
+        : context.t("knowledge.commits", { from, to });
+  const latest = [commits, context.date(run.finishedAt)].filter(Boolean).join(" · ");
+  const rows = latest === "" ? [] : [[context.t("knowledge.run"), rich(latest)]];
+  rows.push(
+    [context.t("knowledge.proposals"), escapeHtml(String(run.proposals ?? 0))],
+    [context.t("knowledge.waiting"), escapeHtml(String(run.waiting ?? 0))],
+  );
+  return `<h3>${escapeHtml(context.t("knowledge.title"))}</h3>${facts(rows)}`;
+}
+
 function developmentSection(state, context) {
   const development = state.development;
   const title = context.t("development.title");
@@ -825,8 +853,9 @@ function developmentSection(state, context) {
     content.push(`<h3>${escapeHtml(context.t("development.latest"))}</h3>`);
     content.push(latestCommitCard(development.latest, context));
   }
+  content.push(knowledgeBlock(state.alignment, context));
   content.push(
-    actions(["align", development.stale > 0 ? "recheck" : null], context),
+    actions(["verify", development.stale > 0 ? "recheck" : null, "align"], context),
   );
   return sectionOf("development", title, content);
 }

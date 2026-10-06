@@ -17,8 +17,10 @@ describe("commandLine", () => {
   it("writes the ut command of every button", () => {
     assert.equal(commandLine("status", "ut"), "ut status");
     assert.equal(commandLine("test", "ut"), "ut test");
+    assert.equal(commandLine("verify", "ut"), "ut verify");
+    assert.equal(commandLine("recheck", "ut"), "ut verify --recheck");
     assert.equal(commandLine("align", "ut"), "ut align");
-    assert.equal(commandLine("recheck", "ut"), "ut align --recheck");
+    assert.equal(commandLine("alignPending", "ut"), "ut align --pending");
     assert.equal(commandLine("code", "ut"), "ut code");
     assert.equal(commandLine("tasks", "ut"), "ut tasks");
     assert.equal(commandLine("twinsUpdate", "ut"), "ut twins update");
@@ -34,6 +36,7 @@ describe("commandLine", () => {
     }
     assert.deepEqual(Object.keys(ARGUMENTS).sort(), [
       "align",
+      "alignPending",
       "code",
       "design",
       "init",
@@ -44,6 +47,7 @@ describe("commandLine", () => {
       "tasksFromTest",
       "test",
       "twinsUpdate",
+      "verify",
     ]);
   });
 
@@ -57,7 +61,7 @@ describe("commandLine", () => {
   it("quotes a program that holds a space", () => {
     const program = path.join(os.tmpdir(), "tools dir", "ut");
     assert.equal(commandLine("test", program), `"${program}" test`);
-    assert.equal(commandLine("recheck", `  ${program}  `), `"${program}" align --recheck`);
+    assert.equal(commandLine("recheck", `  ${program}  `), `"${program}" verify --recheck`);
     assert.equal(commandLine("test", `"${program}"`), `"${program}" test`);
   });
 
@@ -92,7 +96,16 @@ describe("commandLine", () => {
 
 describe("costOf", () => {
   it("marks the commands that may spend, the coding agent and the free ones", () => {
-    for (const id of ["test", "align", "recheck", "twinsUpdate", "init", "design"]) {
+    for (const id of [
+      "test",
+      "verify",
+      "recheck",
+      "align",
+      "alignPending",
+      "twinsUpdate",
+      "init",
+      "design",
+    ]) {
       assert.equal(costOf(id), "SPENDS", id);
     }
     assert.equal(costOf("code"), "AGENT");

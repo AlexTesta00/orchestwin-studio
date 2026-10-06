@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const vscode = require("vscode");
+const { readAlignment } = require("../../src/alignment");
 const { languageOf, text } = require("../../src/messages");
 const { readProject } = require("../../src/project");
 const { escapeHtml, nextStep } = require("../../src/view");
@@ -437,7 +438,7 @@ async function panel(session) {
     first.html.includes(`<html lang="${session.language}">`),
     `the page is not in the language of the editor (${session.language})`,
   );
-  const step = nextStep(readProject(root)).kind;
+  const step = nextStep({ ...readProject(root), alignment: readAlignment(root) }).kind;
   expect(
     first.html.includes(`data-step="${step}"`),
     `the page does not show the next step ${step}`,
