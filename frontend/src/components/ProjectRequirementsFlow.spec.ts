@@ -564,7 +564,7 @@ function mountFlow(
       api,
       ...(options.sectionsMode === undefined ? {} : { sectionsMode: options.sectionsMode }),
     },
-    global: { plugins: [createAppI18n(locale)] },
+    global: { plugins: [createAppI18n(locale)], stubs: { AlignmentProposalsNotice: true } },
     ...(options.attach ? { attachTo: document.body } : {}),
   });
 }
@@ -703,7 +703,10 @@ describe("ProjectRequirementsFlow", () => {
     const api = readyApi(null, version);
     const wrapper = mount(ProjectRequirementsFlow, {
       props: { projectId: PROJECT_ID, locale: "en", autoLoad: true, authorize, api },
-      global: { plugins: [createAppI18n("en")], stubs: { ProjectDiagramsView: true } },
+      global: {
+        plugins: [createAppI18n("en")],
+        stubs: { ProjectDiagramsView: true, AlignmentProposalsNotice: true },
+      },
       attachTo: document.body,
     });
     await flushPromises();
@@ -1060,7 +1063,10 @@ describe("ProjectRequirementsFlow", () => {
     const api = readyApi(null, RICH_VERSION);
     const wrapper = mount(ProjectRequirementsFlow, {
       props: { projectId: PROJECT_ID, locale: "en", autoLoad: true, authorize, api },
-      global: { plugins: [createAppI18n("en")], stubs: { ProjectDiagramsView: true } },
+      global: {
+        plugins: [createAppI18n("en")],
+        stubs: { ProjectDiagramsView: true, AlignmentProposalsNotice: true },
+      },
       attachTo: document.body,
     });
     await flushPromises();
@@ -1423,7 +1429,10 @@ describe("ProjectRequirementsFlow", () => {
         authorize,
         api: new FakeApi(),
       },
-      global: { plugins: [createAppI18n("it")], stubs: { ProjectDiagramsView: true } },
+      global: {
+        plugins: [createAppI18n("it")],
+        stubs: { ProjectDiagramsView: true, AlignmentProposalsNotice: true },
+      },
     });
     await wrapper.get('[data-testid="generate-requirements"]').trigger("click");
     await flushPromises();
@@ -1782,7 +1791,10 @@ describe("ProjectRequirementsFlow and the titles first", () => {
         authorize,
         api: readyApi(null, RICH_VERSION),
       },
-      global: { plugins: [createAppI18n("it")], stubs: { ProjectDiagramsView: true } },
+      global: {
+        plugins: [createAppI18n("it")],
+        stubs: { ProjectDiagramsView: true, AlignmentProposalsNotice: true },
+      },
       attachTo: document.body,
     });
     await flushPromises();
@@ -2956,6 +2968,54 @@ describe("ProjectRequirementsFlow and a refused proposal", () => {
     expect(wrapper.text()).not.toContain("PROPOSAL_REJECTED");
     expect(wrapper.find('[data-testid="requirements-error"]').exists()).toBe(false);
     expect(requestChange).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it.each(["en", "it"] as const)(
+    "mounts in %s the proposals from the code in the Definition with the token of the page",
+    async (locale) => {
+      const wrapper = mountFlow(readyApi(), true, { locale });
+      await flushPromises();
+
+      const notice = wrapper.getComponent({ name: "AlignmentProposalsNotice" });
+      expect(notice.props("projectId")).toBe(PROJECT_ID);
+      expect(notice.props("section")).toBe("REQUIREMENTS");
+      expect(notice.props("locale")).toBe(locale);
+      const authorized = notice.props("authorize") as <T>(
+        operation: (accessToken: string) => Promise<T>,
+      ) => Promise<T>;
+      await expect(authorized(async (accessToken) => accessToken)).resolves.toBe("access-token");
+      expect(wrapper.find('[data-testid="requirements-pending-changes"]').exists()).toBe(false);
+      wrapper.unmount();
+    },
+  );
+
+  it("does not mount the proposals from the code before the first specification exists", async () => {
+    const wrapper = mountFlow(new FakeApi(), true);
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="requirements-empty"]').exists()).toBe(true);
+    expect(wrapper.findComponent({ name: "AlignmentProposalsNotice" }).exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("reloads the revisions above which the proposals sit when one of them is applied", async () => {
+    const api = readyApi();
+    const wrapper = mountFlow(api, true);
+    await flushPromises();
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
+
+    api.diffs = [DIFF];
+    const notice = wrapper.getComponent({ name: "AlignmentProposalsNotice" });
+    notice.vm.$emit("applied", { code: "ALN-001", section: "REQUIREMENTS", diffId: DIFF_ID });
+    await flushPromises();
+
+    const pending = wrapper.get('[data-testid="requirements-pending-changes"]');
+    expect(pending.findAll('[data-testid="requirements-pending-change"]')).toHaveLength(1);
+    expect(
+      notice.element.compareDocumentPosition(pending.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
     wrapper.unmount();
   });
 });

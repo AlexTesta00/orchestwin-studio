@@ -229,7 +229,7 @@ function mountPanel(
   jobs: GenerationJobsApi = jobsApi(),
 ) {
   return mount(ProjectAcceptanceTestsPanel, {
-    global: { plugins: [createAppI18n(locale)] },
+    global: { plugins: [createAppI18n(locale)], stubs: { AlignmentProposalsNotice: true } },
     props: {
       projectId: PROJECT_ID,
       locale,
@@ -983,6 +983,56 @@ describe("ProjectAcceptanceTestsPanel", () => {
     expect(spoken(second.get('[data-testid="acceptance-criterion-statement"]'))).toBe("—");
     second.unmount();
   });
+
+  it.each(["en", "it"] as const)(
+    "mounts in %s the proposals from the code for the tests with the token of the page",
+    async (locale) => {
+      const wrapper = mountPanel(testsApi(), locale);
+      await flushPromises();
+
+      const notice = wrapper.getComponent({ name: "AlignmentProposalsNotice" });
+      expect(notice.props("projectId")).toBe(PROJECT_ID);
+      expect(notice.props("section")).toBe("TESTS");
+      expect(notice.props("locale")).toBe(locale);
+      const authorized = notice.props("authorize") as <T>(
+        operation: (accessToken: string) => Promise<T>,
+      ) => Promise<T>;
+      await expect(authorized(async (accessToken) => accessToken)).resolves.toBe(TOKEN);
+      expect(wrapper.get('[data-testid="acceptance-state"]').element.contains(notice.element)).toBe(
+        true,
+      );
+      expect(wrapper.find('[data-testid="acceptance-plan-redo"]').exists()).toBe(false);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["en", "The test plan must be made again: ut test --plan new"],
+    ["it", "Il piano dei test va rifatto: ut test --plan new"],
+  ] as const)(
+    "says in %s that the test plan must be made again once a proposal is applied",
+    async (locale, sentence) => {
+      const wrapper = mountPanel(testsApi(), locale);
+      await flushPromises();
+
+      wrapper
+        .getComponent({ name: "AlignmentProposalsNotice" })
+        .vm.$emit("applied", { code: "ALN-003", section: "TESTS", diffId: null });
+      await flushPromises();
+
+      const redo = wrapper.get('[data-testid="acceptance-plan-redo"]');
+      expect(spoken(redo)).toBe(sentence);
+      expect(redo.findAll("code").map((item) => item.text())).toEqual(["ut test --plan new"]);
+      expect(wrapper.findAll('[data-testid="acceptance-criterion"]')).toHaveLength(6);
+      await expectAccessible(wrapper.element);
+
+      await wrapper.setProps({ projectId: SECOND_PROJECT_ID });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="acceptance-plan-redo"]').exists()).toBe(false);
+      wrapper.unmount();
+    },
+  );
 
   it("has no axe violations with a full run", async () => {
     const wrapper = mountPanel(testsApi(), "it");
