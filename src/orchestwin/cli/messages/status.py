@@ -30,6 +30,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "print a single JSON document, for other programs",
     },
     "status.studio": {"it": "Studio: {studio}", "en": "Studio: {studio}"},
+    "status.studio_local": {
+        "it": "Studio: {studio} (locale, senza accesso)",
+        "en": "Studio: {studio} (local, no sign-in)",
+    },
     "status.mode": {"it": "Modalità: {mode}", "en": "Mode: {mode}"},
     "status.mode_design_only": {"it": "solo design", "en": "design only"},
     "status.mode_design_and_code": {"it": "design e codice", "en": "design and code"},

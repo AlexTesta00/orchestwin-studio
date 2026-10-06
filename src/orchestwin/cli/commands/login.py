@@ -30,6 +30,10 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
             "STUDIO_NOT_RECOGNIZED",
             values={"address": studio.origin, "http_status": health.status},
         )
+    if client.local_access():
+        context.console.say("login.local_mode", studio=studio.origin)
+        _other_studio(context, studio)
+        return 0
     given = (arguments.email or "").strip()
     if arguments.password_stdin:
         password = context.console.read_line()
@@ -56,9 +60,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         email=shown if isinstance(shown, str) and shown else email,
         studio=studio.origin,
     )
-    linked = _linked_studio(context)
-    if linked is not None and linked != studio.origin:
-        context.console.say("login.other_studio", linked=linked)
+    _other_studio(context, studio)
     return 0
 
 
@@ -73,6 +75,12 @@ def _ask_email(context: CommandContext, studio: StudioAddress) -> str:
     session = context.sessions.read(studio)
     remembered = session.email if session is not None and session.email else None
     return context.console.ask("login.email", default=remembered)
+
+
+def _other_studio(context: CommandContext, studio: StudioAddress) -> None:
+    linked = _linked_studio(context)
+    if linked is not None and linked != studio.origin:
+        context.console.say("login.other_studio", linked=linked)
 
 
 def _linked_studio(context: CommandContext) -> str | None:

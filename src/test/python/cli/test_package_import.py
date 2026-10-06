@@ -17,7 +17,7 @@ from orchestwin.cli.project import ProjectFolder
 from .support.fake_studio import FakeProject, FakeStudio
 from .support.folders import valid_archive, valid_files
 from .support.terminal import TEST_PASSWORD, Run, link_folder, run_ut
-from .support.transports import NoNetwork
+from .support.transports import API, NoNetwork, ScriptedTransport
 
 EMAIL = "owner@example.com"
 IMPORTS = "/project-imports"
@@ -394,9 +394,14 @@ def test_the_import_needs_the_sign_in_after_the_checks(tmp_path: Path) -> None:
     archive = tmp_path / "cartella.zip"
     archive.write_bytes(valid_archive())
 
-    run = offline(tmp_path, "package", "import", str(archive), answers=["n"])
+    transport = ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", status=404, body={"detail": "Not Found"}
+    )
+
+    run = run_ut(["package", "import", str(archive)], tmp_path, transport=transport, answers=["n"])
 
     assert run.status == 3
     assert run.errors == (
         "You are not signed in to the Studio http://127.0.0.1:8000. Sign in with `ut login`.\n"
     )
+    assert [request.path for request in transport.sent] == [f"{API}/auth/mode"]

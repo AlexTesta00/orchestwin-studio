@@ -273,12 +273,19 @@ def test_the_whole_path_with_an_answers_file_asks_nothing(tmp_path: Path) -> Non
     assert "Risposta dal file: non lo so, lo propone il modello." in run.output
 
 
-def test_without_sign_in_nothing_is_asked_and_nothing_is_sent(tmp_path: Path) -> None:
-    run = run_ut(["init"], tmp_path, transport=ScriptedTransport())
+def test_without_sign_in_nothing_is_asked_and_only_the_access_mode_is_sent(
+    tmp_path: Path,
+) -> None:
+    transport = ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", body={"access_mode": "ACCOUNTS", "registration_open": True}
+    )
+
+    run = run_ut(["init"], tmp_path, transport=transport)
 
     assert run.status == 3
     assert "ut login" in run.errors
     assert run.output == ""
+    assert [request.path for request in transport.sent] == [f"{API}/auth/mode"]
 
 
 def test_a_refused_spending_leaves_nothing_behind(tmp_path: Path) -> None:

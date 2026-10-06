@@ -144,6 +144,7 @@ def sign_in(scene: Scene) -> None:
     assert say("login.done", email=TEST_EMAIL, studio=scene.origin) in run.output, run.transcript()
     assert [exchange.line() for exchange in run.exchanges] == [
         "GET /health -> 200",
+        "GET /auth/mode -> 200",
         "POST /auth/login -> 200",
     ], run.transcript()
     assert TEST_PASSWORD not in run.output + run.errors, "the password was written"
@@ -839,7 +840,9 @@ def sign_out(scene: Scene) -> None:
     assert renewal == 401, "the Studio still renews the session closed by ut logout"
     status = scene.ut("status")
     assert status.status == 0, status.transcript()
-    assert status.exchanges == (), status.transcript()
+    assert [exchange.line() for exchange in status.exchanges] == ["GET /auth/mode -> 200"], (
+        status.transcript()
+    )
     assert say("status.offline_not_signed_in", studio=scene.origin) in status.output, (
         status.transcript()
     )

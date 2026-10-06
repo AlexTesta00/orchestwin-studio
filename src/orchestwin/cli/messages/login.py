@@ -38,4 +38,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This folder is linked to a project of the Studio {linked}: the commands "
         "launched here use that Studio.",
     },
+    "login.local_mode": {
+        "it": "Lo Studio {studio} è locale e non chiede l'accesso: i comandi funzionano senza "
+        "`ut login`.",
+        "en": "The Studio {studio} is local and needs no sign-in: the commands work without "
+        "`ut login`.",
+    },
 }

@@ -7,7 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from orchestwin.cli.client import StudioClient, api_failure, refresh_cookie
+from orchestwin.cli.client import (
+    AUTH_TIMEOUT,
+    StudioClient,
+    api_failure,
+    ensure_access,
+    refresh_cookie,
+)
+from orchestwin.cli.context import CommandContext
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.http import Reply, multipart
 from orchestwin.cli.session import LOCK_FILE, SessionStore, StudioAddress, StudioSession
@@ -19,6 +26,7 @@ from .support.terminal import (
     TEST_PASSWORD,
     TEST_REFRESH_TOKEN,
     Terminal,
+    command_context,
     terminal,
 )
 from .support.transports import (
@@ -33,9 +41,12 @@ from .support.transports import (
 )
 
 LOCAL = StudioAddress.parse("http://127.0.0.1:8000")
+REMOTE = StudioAddress.parse("https://studio.example.test")
 RENEWED_ACCESS = "test-access-renewed-not-real"
 ROTATED_REFRESH = "test-refresh-rotated-not-real"
 RENEWED_UNTIL = START + timedelta(minutes=30)
+MODE_PATH = f"{API}/auth/mode"
+LOCAL_MODE = {"access_mode": "LOCAL_OWNER", "registration_open": False}
 
 
 def signed_in(
@@ -289,17 +300,152 @@ def test_a_get_gives_up_after_the_third_failure(tmp_path: Path) -> None:
     transport.assert_done()
 
 
-def test_nothing_is_sent_without_a_sign_in(tmp_path: Path) -> None:
-    transport = ScriptedTransport()
+def anonymous(tmp_path: Path, transport: ScriptedTransport, studio: StudioAddress) -> StudioClient:
     bundle = terminal(tmp_path, transport=transport)
-    client = StudioClient(LOCAL, bundle.environment, SessionStore(bundle.environment))
+    return StudioClient(studio, bundle.environment, SessionStore(bundle.environment))
+
+
+def context_and_client(
+    tmp_path: Path, transport: ScriptedTransport, studio: StudioAddress
+) -> tuple[CommandContext, StudioClient]:
+    context = command_context(terminal(tmp_path, transport=transport).environment)
+    return context, context.client(studio)
+
+
+def test_without_a_sign_in_only_the_access_mode_is_asked(tmp_path: Path) -> None:
+    transport = ScriptedTransport()
+    transport.expect("GET", MODE_PATH, status=404, body={"detail": "Not Found"})
+    client = anonymous(tmp_path, transport, LOCAL)
 
     with pytest.raises(CliError) as caught:
         client.get("/projects")
 
     assert caught.value.code == "NOT_SIGNED_IN"
     assert caught.value.status == 3
+    assert [request.path for request in transport.sent] == [MODE_PATH]
+    assert bearer(transport.sent[0]) is None
+
+
+def test_nothing_is_sent_to_a_studio_of_another_computer_without_a_sign_in(
+    tmp_path: Path,
+) -> None:
+    transport = ScriptedTransport()
+    client = anonymous(tmp_path, transport, REMOTE)
+
+    with pytest.raises(CliError) as caught:
+        client.get("/projects")
+
+    assert caught.value.code == "NOT_SIGNED_IN"
+    assert client.local_access() is False
     assert transport.sent == []
+
+
+def test_a_local_studio_is_asked_without_authorization_and_the_mode_is_kept(
+    tmp_path: Path,
+) -> None:
+    transport = ScriptedTransport().expect("GET", MODE_PATH, body=LOCAL_MODE)
+    transport.expect("GET", f"{API}/projects", body=[]).expect("GET", f"{API}/projects", body=[])
+    client = anonymous(tmp_path, transport, LOCAL)
+
+    assert client.get("/projects") == []
+    assert client.get("/projects") == []
+
+    assert client.access_mode() == "LOCAL_OWNER"
+    assert [request.path for request in transport.sent] == [
+        MODE_PATH,
+        f"{API}/projects",
+        f"{API}/projects",
+    ]
+    assert [bearer(request) for request in transport.sent] == [None, None, None]
+    transport.assert_done()
+
+
+def test_a_401_without_a_session_is_not_signed_in_and_nothing_is_renewed(
+    tmp_path: Path,
+) -> None:
+    transport = ScriptedTransport().expect("GET", MODE_PATH, body=LOCAL_MODE)
+    transport.expect(
+        "GET", f"{API}/projects", status=401, body={"detail": "invalid_authentication"}
+    )
+    client = anonymous(tmp_path, transport, LOCAL)
+
+    with pytest.raises(CliError) as caught:
+        client.get("/projects")
+
+    assert (caught.value.code, caught.value.status) == ("NOT_SIGNED_IN", 3)
+    assert transport.requests("POST", f"{API}/auth/refresh") == []
+    transport.assert_done()
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "mode"),
+    [
+        (200, LOCAL_MODE, "LOCAL_OWNER"),
+        (200, {"access_mode": "ACCOUNTS", "registration_open": True}, "ACCOUNTS"),
+        (404, {"detail": "Not Found"}, "ACCOUNTS"),
+        (500, b"Internal Server Error", "ACCOUNTS"),
+        (200, b"not a document", "ACCOUNTS"),
+        (200, ["LOCAL_OWNER"], "ACCOUNTS"),
+        (200, {"access_mode": "local"}, "ACCOUNTS"),
+    ],
+)
+def test_the_access_mode_is_local_only_when_the_studio_says_so(
+    tmp_path: Path, status: int, body: object, mode: str
+) -> None:
+    transport = ScriptedTransport().expect("GET", MODE_PATH, status=status, body=body)
+    client = anonymous(tmp_path, transport, LOCAL)
+
+    assert client.access_mode() == mode
+    assert client.access_mode() == mode
+    assert len(transport.sent) == 1
+    assert transport.sent[0].timeout == AUTH_TIMEOUT
+
+
+def test_a_session_keeps_the_bearer_and_never_asks_the_mode(tmp_path: Path) -> None:
+    transport = ScriptedTransport().expect("GET", f"{API}/projects", body=[])
+    client, _, _ = signed_in(tmp_path, transport)
+
+    assert client.get("/projects") == []
+
+    assert [request.path for request in transport.sent] == [f"{API}/projects"]
+    assert bearer(transport.sent[0]) == f"Bearer {TEST_ACCESS_TOKEN}"
+
+
+def test_ensure_access_names_the_session_or_the_local_studio(tmp_path: Path) -> None:
+    kept = ScriptedTransport()
+    client, _, bundle = signed_in(tmp_path / "kept", kept)
+    local = ScriptedTransport().expect("GET", MODE_PATH, body=LOCAL_MODE)
+    accounts = ScriptedTransport().expect("GET", MODE_PATH, status=404, body=b"")
+    remote = ScriptedTransport()
+
+    session_access = ensure_access(command_context(bundle.environment), client)
+    local_access = ensure_access(*context_and_client(tmp_path / "local", local, LOCAL))
+    with pytest.raises(CliError) as refused:
+        ensure_access(*context_and_client(tmp_path / "accounts", accounts, LOCAL))
+    with pytest.raises(CliError) as far:
+        ensure_access(*context_and_client(tmp_path / "remote", remote, REMOTE))
+
+    assert (session_access, local_access) == ("session", "local")
+    assert kept.sent == []
+    assert [request.path for request in local.sent] == [MODE_PATH]
+    assert (refused.value.code, refused.value.values["studio"]) == ("NOT_SIGNED_IN", LOCAL.origin)
+    assert (far.value.code, far.value.values["studio"]) == ("NOT_SIGNED_IN", REMOTE.origin)
+    assert remote.sent == []
+
+
+def test_a_local_studio_that_does_not_answer_is_tried_three_times(tmp_path: Path) -> None:
+    transport = ScriptedTransport()
+    for _ in range(3):
+        transport.expect("GET", MODE_PATH, unreachable=True)
+    transport.expect("GET", MODE_PATH, body=LOCAL_MODE)
+    client = anonymous(tmp_path, transport, LOCAL)
+
+    with pytest.raises(CliError) as caught:
+        client.get("/projects")
+
+    assert caught.value.code == "STUDIO_UNREACHABLE"
+    assert client.access_mode() == "LOCAL_OWNER"
+    assert len(transport.sent) == 4
 
 
 @pytest.mark.parametrize(

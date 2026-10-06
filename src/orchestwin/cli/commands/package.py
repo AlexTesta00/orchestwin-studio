@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import folder as knowledge
 from orchestwin.cli.api import packages
+from orchestwin.cli.client import ensure_access
 from orchestwin.cli.errors import NOT_VERIFIED_STATUS, SIGN_IN_STATUS, ApiFailure, CliError
 from orchestwin.cli.flows import package_import
 from orchestwin.cli.flows import publish as publish_flow
@@ -88,7 +89,7 @@ def state(context: CommandContext, project: ProjectFolder) -> int:
     local = local_folder(project.knowledge)
     _local_line(context, local, label)
     client = context.client()
-    latest, reason = _studio_latest(client, link.project_id)
+    latest, reason = _studio_latest(context, client, link.project_id)
     if reason is not None:
         console.say(STUDIO_KEYS[reason], studio=client.studio.origin)
     elif latest is None:
@@ -324,9 +325,10 @@ def _local_line(context: CommandContext, local: LocalFolder, label: str) -> None
 
 
 def _studio_latest(
-    client: StudioClient, project_id: str
+    context: CommandContext, client: StudioClient, project_id: str
 ) -> tuple[Mapping[str, object] | None, str | None]:
     try:
+        ensure_access(context, client)
         return packages.latest(client, project_id), None
     except CliError as error:
         reason = _offline_reason(error)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import urllib.parse
 from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -9,7 +10,7 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin import __version__
 from orchestwin.cli.errors import ApiFailure, CliError
-from orchestwin.cli.http import JSON_TYPE, SET_COOKIE, Reply
+from orchestwin.cli.http import JSON_TYPE, SET_COOKIE, Reply, is_loopback
 from orchestwin.cli.project import json_default
 from orchestwin.cli.session import (
     DEFAULT_COOKIE,
@@ -20,8 +21,13 @@ from orchestwin.cli.session import (
 )
 
 if TYPE_CHECKING:
+    from orchestwin.cli.context import CommandContext
     from orchestwin.cli.environment import Environment
 
+ACCOUNTS: Final = "ACCOUNTS"
+LOCAL_OWNER: Final = "LOCAL_OWNER"
+SESSION_ACCESS: Final = "session"
+LOCAL_ACCESS: Final = "local"
 REFRESH_MARGIN: Final = timedelta(seconds=60)
 GET_ATTEMPTS: Final = 3
 GET_RETRY_SECONDS: Final = 2.0
@@ -43,6 +49,17 @@ class StudioClient:
         self.studio = studio
         self._environment = environment
         self._sessions = sessions
+        self._access_mode: str | None = None
+
+    def access_mode(self) -> str:
+        if self._access_mode is None:
+            reply = self.request("GET", "/auth/mode", timeout=AUTH_TIMEOUT, authorized=False)
+            self._access_mode = _mode_of(reply)
+        return self._access_mode
+
+    def local_access(self) -> bool:
+        host = urllib.parse.urlsplit(self.studio.origin).hostname or ""
+        return is_loopback(host) and self.access_mode() == LOCAL_OWNER
 
     def sign_in(
         self,
@@ -118,6 +135,8 @@ class StudioClient:
         reply = self._exchange(verb, path, _bearer(headers, session), content, timeout, attempts)
         if reply.status != 401:
             return reply
+        if session is None:
+            raise CliError("NOT_SIGNED_IN", values={"studio": self.studio.origin})
         renewed = self._renew(session)
         return self._exchange(verb, path, _bearer(headers, renewed), content, timeout, attempts)
 
@@ -174,9 +193,11 @@ class StudioClient:
             timeout=timeout,
         )
 
-    def _current(self) -> StudioSession:
+    def _current(self) -> StudioSession | None:
         session = self._sessions.read(self.studio)
         if session is None or not session.signed_in:
+            if self.local_access():
+                return None
             raise CliError("NOT_SIGNED_IN", values={"studio": self.studio.origin})
         if self._fresh(session):
             return session
@@ -238,7 +259,29 @@ class StudioClient:
         return renewed
 
 
-def _bearer(headers: Mapping[str, str], session: StudioSession) -> dict[str, str]:
+def ensure_access(context: CommandContext, client: StudioClient) -> str:
+    session = context.sessions.read(client.studio)
+    if session is not None and session.signed_in:
+        return SESSION_ACCESS
+    if client.local_access():
+        return LOCAL_ACCESS
+    raise CliError("NOT_SIGNED_IN", values={"studio": client.studio.origin})
+
+
+def _mode_of(reply: Reply) -> str:
+    if not reply.ok:
+        return ACCOUNTS
+    try:
+        document = reply.json()
+    except ApiFailure:
+        return ACCOUNTS
+    found = document.get("access_mode") if isinstance(document, dict) else None
+    return LOCAL_OWNER if found == LOCAL_OWNER else ACCOUNTS
+
+
+def _bearer(headers: Mapping[str, str], session: StudioSession | None) -> dict[str, str]:
+    if session is None:
+        return dict(headers)
     return {**headers, "Authorization": f"Bearer {session.access_token}"}
 
 
