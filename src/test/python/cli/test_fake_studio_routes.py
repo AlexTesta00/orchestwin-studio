@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel, SecretStr
 
 from orchestwin.api import acceptance_tests as acceptance_api
+from orchestwin.api import knowledge_alignment as alignment_api
 from orchestwin.api import twin_learning as twin_learning_api
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import (
@@ -33,6 +34,8 @@ from orchestwin.api.clarification import (
     ProjectBriefGateSubmissionResponse,
 )
 from orchestwin.api.design import (
+    DesignChangePayload,
+    DesignChangeRequest,
     DesignGateDecisionPayload,
     DesignGateSubmissionPayload,
     DesignGenerationPayload,
@@ -114,6 +117,7 @@ from orchestwin.identity.tokens import AccessTokenSettings, JwtAccessTokenServic
 from orchestwin.models.design import DesignProposalIssueCode
 from orchestwin.projects import acceptance_tests as acceptance_domain
 from orchestwin.projects import code_changes as changes_domain
+from orchestwin.projects import knowledge_alignment as alignment_domain
 from orchestwin.projects import twin_learning as learning_domain
 from orchestwin.projects.code_changes import (
     alignment_verdict_from_snapshot,
@@ -122,11 +126,17 @@ from orchestwin.projects.code_changes import (
 )
 
 from .support.fake_studio import (
+    ALIGNMENT_RUN_FIELDS,
+    ALIGNMENT_TEXTS,
     COSTS,
+    DESIGN_CHANGE_FIELDS,
     EARLIER_FIELDS,
     ELEMENT_FIELDS,
     PLAN_FIELDS,
     PREFIX,
+    PROPOSAL_APPLY_FIELDS,
+    PROPOSAL_SKIP_FIELDS,
+    PROPOSAL_STATUS_FILTERS,
     ROUTES,
     SNAPSHOT_FIELDS,
     FakeProject,
@@ -286,11 +296,18 @@ def test_the_fake_serves_every_area_that_the_commands_need(
         ("POST", project + "/evidence/{evidence_id}/retire"),
         ("DELETE", project + "/evidence/{evidence_id}/text"),
         ("PUT", project + "/evidence/{evidence_id}/text"),
+        ("POST", project + "/alignment/runs"),
+        ("GET", project + "/alignment/runs"),
+        ("GET", project + "/alignment/runs/{run_id}"),
+        ("GET", project + "/alignment/proposals"),
+        ("POST", project + "/alignment/proposals/{code}/apply"),
+        ("POST", project + "/alignment/proposals/{code}/skip"),
+        ("POST", project + "/design/change-requests"),
     }
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 161
+    assert len(ROUTES) == 168
 
 
 def test_validation_routes_are_exactly_the_two_authorized_read_only_routes() -> None:
@@ -5338,3 +5355,798 @@ def test_a_directed_fake_binds_the_choices_of_each_alternative_to_its_direction(
         canonical_design(package, codes)
     with pytest.raises(ValueError, match="hosted"):
         FakeStudio(hosted=False, directions=True)
+
+
+ALIGNMENT_RUN_KEYS = [
+    "id",
+    "project_id",
+    "from_commit",
+    "to_commit",
+    "commits",
+    "locale",
+    "requirements_version_number",
+    "design_version_number",
+    "alternative_code",
+    "summary",
+    "created_at",
+    "cost_microusd",
+    "generation_ids",
+    "proposals",
+]
+PROPOSAL_KEYS = [
+    "id",
+    "run_id",
+    "code",
+    "section",
+    "title",
+    "request",
+    "rationale",
+    "subjects",
+    "origin",
+    "status",
+    "created_at",
+    "decided_at",
+    "decision_note",
+    "applied_text",
+    "applied_diff_id",
+]
+NO_RUN = "00000000-0000-4000-8000-000000000000"
+RUN_REFUSALS = (
+    ({"to_commit": "abc", "commits": ["a" * 40]}, ["body", "to_commit"], "string_pattern_mismatch"),
+    ({"to_commit": 7, "commits": ["a" * 40]}, ["body", "to_commit"], "string_type"),
+    ({"commits": ["a" * 40]}, ["body", "to_commit"], "missing"),
+    ({"to_commit": "a" * 40}, ["body", "commits"], "missing"),
+    ({"to_commit": "a" * 40, "commits": None}, ["body", "commits"], "list_type"),
+    ({"to_commit": "a" * 40, "commits": []}, ["body", "commits"], "too_short"),
+    ({"to_commit": "a" * 40, "commits": ["a" * 40] * 51}, ["body", "commits"], "too_long"),
+    (
+        {"to_commit": "a" * 40, "commits": ["z" * 40]},
+        ["body", "commits", 0],
+        "string_pattern_mismatch",
+    ),
+    (
+        {"to_commit": "a" * 40, "commits": ["a" * 40], "from_commit": "nope"},
+        ["body", "from_commit"],
+        "string_pattern_mismatch",
+    ),
+    (
+        {"to_commit": "a" * 40, "commits": ["a" * 40], "locale": "x"},
+        ["body", "locale"],
+        "string_too_short",
+    ),
+    (
+        {"to_commit": "a" * 40, "commits": ["a" * 40], "locale": "french"},
+        ["body", "locale"],
+        "string_pattern_mismatch",
+    ),
+    (
+        {"to_commit": "a" * 40, "commits": ["a" * 40], "again": True},
+        ["body", "again"],
+        "extra_forbidden",
+    ),
+    ({"to_commit": "a" * 40, "commits": ["a" * 40, "a" * 40]}, ["body"], "value_error"),
+    ({"to_commit": "b" * 40, "commits": ["a" * 40]}, ["body"], "value_error"),
+    (
+        {"to_commit": "a" * 40, "commits": ["a" * 40], "from_commit": "a" * 40},
+        ["body"],
+        "value_error",
+    ),
+    (None, ["body"], "missing"),
+)
+APPLY_REFUSALS = (
+    ({"text": "x" * 2001}, ["body", "text"], "string_too_long"),
+    ({"text": 5}, ["body", "text"], "string_type"),
+    ({"locale": "x"}, ["body", "locale"], "string_too_short"),
+    ({"locale": "french"}, ["body", "locale"], "string_pattern_mismatch"),
+    ({"reason": "x"}, ["body", "reason"], "extra_forbidden"),
+    (None, ["body"], "missing"),
+)
+SKIP_REFUSALS = (
+    ({"reason": "r" * 301}, ["body", "reason"], "string_too_long"),
+    ({"reason": 1}, ["body", "reason"], "string_type"),
+    ({"note": "x"}, ["body", "note"], "extra_forbidden"),
+    (None, ["body"], "missing"),
+)
+DESIGN_CHANGE_REFUSALS = (
+    ({"request": ""}, ["body", "request"], "value_error"),
+    ({"request": "   "}, ["body", "request"], "value_error"),
+    ({"request": "r" * 1001}, ["body", "request"], "value_error"),
+    ({"request": 5}, ["body", "request"], "string_type"),
+    ({}, ["body", "request"], "missing"),
+    ({"request": "ok", "locale": "it-IT"}, ["body", "locale"], "extra_forbidden"),
+    (None, ["body"], "missing"),
+)
+
+
+def chosen_alternative(project: FakeProject) -> dict:
+    package = project.current("design")["package"]
+    return next(
+        item
+        for item in package["alternatives"]
+        if item["id"] == package["owner_selected_alternative_id"]
+    )
+
+
+def latest_run_of(run: Mapping[str, object]) -> dict[str, object]:
+    return {key: run[key] for key in alignment_api.LATEST_RUN_KEYS}
+
+
+@pytest.mark.parametrize("language", ["it", "en"])
+def test_an_alignment_run_proposes_updates_from_the_recorded_diff(language: str) -> None:
+    with FakeStudio(language=language, job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        first, second = commit_of("first"), commit_of("second")
+        record(client, base, first)
+        record(client, base, second, "Show the shares", parent=first, diff="")
+        reference = client.call("GET", base + "/alignment")[1]["reference"]
+        spent = studio.spent_microusd
+        status, created = client.call(
+            "POST",
+            base + "/alignment/runs",
+            {
+                "locale": LOCALE[language],
+                "to_commit": second.upper()[:12],
+                "commits": [first, second.upper()],
+            },
+        )
+        assert status == 201, created
+        assert list(created) == ["run"]
+        run = created["run"]
+        assert list(run) == ALIGNMENT_RUN_KEYS
+        assert (run["from_commit"], run["to_commit"], run["commits"], run["locale"]) == (
+            None,
+            second,
+            [first, second],
+            LOCALE[language],
+        )
+        assert (
+            run["requirements_version_number"],
+            run["design_version_number"],
+            run["alternative_code"],
+        ) == (
+            reference["requirements"]["version_number"],
+            reference["design"]["version_number"],
+            reference["design"]["alternative_code"],
+        )
+        assert run["cost_microusd"] == COSTS["KNOWLEDGE_ALIGNMENT"] == studio.spent_microusd - spent
+        assert len(run["generation_ids"]) == 1
+        assert project.usage[0]["purpose"] == "KNOWLEDGE_ALIGNMENT"
+        assert project.usage[0]["generation_id"] == run["generation_ids"][0]
+        assert datetime.fromisoformat(run["created_at"]).utcoffset() == timedelta(0)
+        assert run["summary"] == ALIGNMENT_TEXTS[language]["summary"].format(
+            count=2, line="Show the shares"
+        )
+        proposals = run["proposals"]
+        assert [(item["code"], item["section"], item["status"]) for item in proposals] == [
+            ("ALN-001", "REQUIREMENTS", "PROPOSED"),
+            ("ALN-002", "DESIGN", "PROPOSED"),
+            ("ALN-003", "TESTS", "PROPOSED"),
+        ]
+        requirement, design_update, tests = proposals
+        for item in proposals:
+            assert list(item) == PROPOSAL_KEYS
+            assert (item["run_id"], item["created_at"]) == (run["id"], run["created_at"])
+            assert item["title"] and item["rationale"]
+            assert item["decided_at"] is item["decision_note"] is None
+            assert item["applied_text"] is item["applied_diff_id"] is None
+            assert "Add the split of the bill" in item["title"]
+        excerpt = DIFF.rstrip("\n")
+        assert requirement["subjects"] == {
+            "requirements": ["REQ-003"],
+            "screens": [],
+            "criteria": [],
+        }
+        assert requirement["origin"] == {
+            "commits": [first],
+            "files": [FILE["path"]],
+            "excerpt": excerpt,
+        }
+        assert FILE["path"] in requirement["request"] and "REQ-003" in requirement["request"]
+        assert design_update["subjects"] == {
+            "requirements": [],
+            "screens": ["SCR-001"],
+            "criteria": [],
+        }
+        assert design_update["origin"] == requirement["origin"]
+        assert tests["subjects"] == {"requirements": [], "screens": [], "criteria": ["AC-001"]}
+        assert tests["origin"] == requirement["origin"]
+        assert alignment_domain.run_from_snapshot(run).to_snapshot() == run
+        assert project.alignment_runs() == [run]
+        listed = {key: value for key, value in run.items() if key != "proposals"}
+        assert client.call("GET", base + "/alignment/runs") == (
+            200,
+            {"items": [{**listed, "waiting": 3, "proposals_count": 3}]},
+        )
+        assert client.call("GET", f"{base}/alignment/runs/{run['id']}") == (200, {"run": run})
+        assert client.call("GET", f"{base}/alignment/runs/{NO_RUN}") == (
+            404,
+            refused("KNOWLEDGE_ALIGNMENT_RUN_NOT_FOUND"),
+        )
+        waiting = client.call("GET", base + "/alignment/proposals")
+        assert waiting == (
+            200,
+            {"items": [tests, design_update, requirement], "latest_run": latest_run_of(run)},
+        )
+        assert client.call("GET", base + "/alignment/proposals?status=all") == waiting
+        assert client.call("GET", base + "/alignment/proposals?status=waiting") == waiting
+        assert project.alignment_proposals() == [tests, design_update, requirement]
+        third = commit_of("third")
+        record(client, base, third, "Rename a variable", parent=second, diff="")
+        status, empty = client.call(
+            "POST",
+            base + "/alignment/runs",
+            {"from_commit": second, "to_commit": third, "commits": [third]},
+        )
+        assert status == 201, empty
+        assert (empty["run"]["from_commit"], empty["run"]["proposals"]) == (second, [])
+        assert empty["run"]["summary"] == ALIGNMENT_TEXTS[language]["summary_empty"]
+        fourth = commit_of("fourth")
+        record(client, base, fourth, "Round the shares", parent=third)
+        status, more = client.call(
+            "POST",
+            base + "/alignment/runs",
+            {"from_commit": third, "to_commit": fourth, "commits": [fourth]},
+        )
+        assert status == 201, more
+        assert [item["code"] for item in more["run"]["proposals"]] == [
+            "ALN-004",
+            "ALN-005",
+            "ALN-006",
+        ]
+        assert more["run"]["proposals"][0]["origin"]["commits"] == [fourth]
+        runs = client.call("GET", base + "/alignment/runs")[1]["items"]
+        assert [item["id"] for item in runs] == [more["run"]["id"], empty["run"]["id"], run["id"]]
+        assert [(item["waiting"], item["proposals_count"]) for item in runs] == [
+            (3, 3),
+            (0, 0),
+            (3, 3),
+        ]
+        _, listed_proposals = client.call("GET", base + "/alignment/proposals")
+        assert listed_proposals["latest_run"] == latest_run_of(more["run"])
+        assert [item["code"] for item in listed_proposals["items"]] == [
+            "ALN-006",
+            "ALN-005",
+            "ALN-004",
+            "ALN-003",
+            "ALN-002",
+            "ALN-001",
+        ]
+        assert studio.spent_microusd - spent == 3 * COSTS["KNOWLEDGE_ALIGNMENT"]
+        other = stranger(studio)
+        for method, path, body in (
+            ("GET", "/alignment/runs", None),
+            ("GET", f"/alignment/runs/{run['id']}", None),
+            ("GET", "/alignment/proposals", None),
+            ("POST", "/alignment/runs", {"to_commit": first, "commits": [first]}),
+            ("POST", "/alignment/proposals/ALN-001/apply", {}),
+            ("POST", "/alignment/proposals/ALN-001/skip", {}),
+        ):
+            assert other.call(method, base + path, body) == (404, refused("PROJECT_NOT_FOUND")), (
+                path
+            )
+        assert studio.errors == []
+
+
+def test_the_refusals_of_an_alignment_run_come_in_the_order_of_the_contract() -> None:
+    exceeded = {"detail": {"code": "GENERATION_BUDGET_EXCEEDED", "stage": "MODEL_PROPOSAL"}}
+    with FakeStudio(budget_usd=0.7, job_polls=0) as studio:
+        client = signed(studio)
+        twins = studio.seed_project(owner=EMAIL, name="Solo twin", through="twins")
+        requirements = studio.seed_project(
+            owner=EMAIL, name="Solo requisiti", through="requirements"
+        )
+        design = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        commit = commit_of("refusals")
+        for project in (twins, requirements, design):
+            record(client, f"/projects/{project.id}", commit)
+        body = {"to_commit": commit, "commits": [commit]}
+        unknown = {"to_commit": "f" * 40, "commits": ["f" * 40]}
+        assert client.call("POST", f"/projects/{twins.id}/alignment/runs", unknown) == (
+            404,
+            refused("CODE_CHANGE_NOT_FOUND"),
+        )
+        assert client.call("POST", f"/projects/{twins.id}/alignment/runs", body) == (
+            409,
+            refused("REQUIREMENTS_APPROVAL_REQUIRED"),
+        )
+        assert client.call("POST", f"/projects/{requirements.id}/alignment/runs", body) == (
+            409,
+            refused("DESIGN_APPROVAL_REQUIRED"),
+        )
+        base = f"/projects/{design.id}"
+        similar = ("abcdef1" + "0" * 33, "abcdef1" + "1" * 33)
+        for item in similar:
+            record(client, base, item)
+        ambiguous = {"to_commit": "abcdef1", "commits": ["abcdef1"]}
+        assert client.call("POST", base + "/alignment/runs", ambiguous) == (
+            409,
+            refused("CODE_CHANGE_AMBIGUOUS"),
+        )
+        assert (design.alignment_runs(), studio.spent_microusd) == ([], 0)
+        twice = {"to_commit": similar[0], "commits": ["abcdef10", similar[0]]}
+        assert client.call("POST", base + "/alignment/runs", twice) == (
+            422,
+            {"detail": "invalid_request"},
+        )
+        assert (design.alignment_runs(), studio.spent_microusd) == (
+            [],
+            COSTS["KNOWLEDGE_ALIGNMENT"],
+        )
+        assert client.call("POST", base + "/alignment/runs", body)[0] == 201
+        assert studio.spent_microusd == 2 * COSTS["KNOWLEDGE_ALIGNMENT"]
+        assert client.call("POST", base + "/alignment/runs", body) == (402, exceeded)
+        started = client.call("POST", base + "/alignment/runs", body, headers=PREFER)
+        job = poll(client, base, started[1]["job_id"])
+        assert (job["status"], job["response"]) == (
+            "FAILED",
+            {"status_code": 402, "body": exceeded},
+        )
+        assert len(design.alignment_runs()) == 1
+        assert studio.spent_microusd == 2 * COSTS["KNOWLEDGE_ALIGNMENT"]
+        assert studio.errors == []
+    with FakeStudio(hosted=False, job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        commit = commit_of("no model")
+        record(client, base, commit)
+        assert client.call(
+            "POST", base + "/alignment/runs", {"to_commit": commit, "commits": [commit]}
+        ) == (503, refused("KNOWLEDGE_ALIGNMENT_MODEL_NOT_CONFIGURED"))
+        assert client.call("GET", base + "/alignment/runs") == (200, {"items": []})
+        assert client.call("GET", base + "/alignment/proposals") == (
+            200,
+            {"items": [], "latest_run": None},
+        )
+        assert (project.alignment_runs(), studio.spent_microusd) == ([], 0)
+        assert studio.errors == []
+
+
+def test_an_alignment_run_with_prefer_runs_as_a_request_job() -> None:
+    first, second = commit_of("job first"), commit_of("job second")
+    body = {"locale": "en-US", "from_commit": None, "to_commit": second, "commits": [first, second]}
+    with FakeStudio(language="en", job_polls=2) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Tip calculator", through="design")
+        base = f"/projects/{project.id}"
+        record(client, base, first)
+        record(client, base, second, "Show the shares", parent=first)
+        path = base + "/alignment/runs"
+        status, started = client.call("POST", path, body, headers=PREFER)
+        assert (status, client.headers["preference-applied"]) == (202, "respond-async")
+        assert (started["kind"], started["operation"], started["status"]) == (
+            "REQUEST",
+            "KNOWLEDGE_ALIGNMENT",
+            "RUNNING",
+        )
+        assert studio._jobs[started["job_id"]].key == request_key(
+            GenerationOperation.KNOWLEDGE_ALIGNMENT,
+            {"project_id": project.id},
+            alignment_api.KnowledgeAlignmentRequest.model_validate(body),
+        )
+        assert client.call("POST", path, body, headers=PREFER)[1]["job_id"] == started["job_id"]
+        job_path = f"{base}/generation-jobs/{started['job_id']}"
+        statuses = [client.call("GET", job_path)[1]["status"] for _ in range(3)]
+        assert statuses == ["RUNNING", "RUNNING", "SUCCEEDED"]
+        _, finished = client.call("GET", job_path)
+        assert finished["response"] == {
+            "status_code": 201,
+            "body": {"run": project.alignment_runs()[0]},
+        }
+        assert project.alignment_runs()[0]["locale"] == "en-US"
+        assert [item["code"] for item in project.alignment_runs()[0]["proposals"]] == [
+            "ALN-001",
+            "ALN-002",
+            "ALN-003",
+        ]
+        assert studio.errors == []
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        record(client, base, first)
+        record(client, base, second, parent=first)
+        path = base + "/alignment/runs"
+        studio.fail_job("KNOWLEDGE_ALIGNMENT", code="TIMEOUT")
+        failed = poll(client, base, client.call("POST", path, body, headers=PREFER)[1]["job_id"])
+        assert (failed["status"], failed["response"]) == (
+            "FAILED",
+            {
+                "status_code": 503,
+                "body": {"detail": {"code": "TIMEOUT", "stage": "MODEL_PROPOSAL"}},
+            },
+        )
+        studio.lose_job("KNOWLEDGE_ALIGNMENT")
+        lost = client.call("POST", path, body, headers=PREFER)[1]
+        assert client.call("GET", f"{base}/generation-jobs/{lost['job_id']}") == (
+            404,
+            refused("GENERATION_JOB_NOT_FOUND"),
+        )
+        assert (project.alignment_runs(), studio.spent_microusd) == ([], 0)
+        assert studio.errors == []
+
+
+def test_a_seeded_alignment_run_is_decided_by_apply_and_skip() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        spent = studio.spent_microusd
+        run = project.seed_alignment_run()
+        assert (studio.spent_microusd, run["cost_microusd"], run["generation_ids"]) == (
+            spent,
+            0,
+            [],
+        )
+        assert [item["commit"] for item in project.changes()] == run["commits"]
+        assert (len(run["commits"]), run["from_commit"]) == (1, None)
+        assert [item["code"] for item in run["proposals"]] == ["ALN-001", "ALN-002", "ALN-003"]
+        assert studio.alignment_runs(project.id) == [run]
+        assert alignment_domain.run_from_snapshot(run).to_snapshot() == run
+        requirement = run["proposals"][0]
+        codes = [
+            item["code"]
+            for item in project.current("requirements")["specification"]["requirements"]
+        ]
+        assert requirement["subjects"]["requirements"] == ["REQ-003"]
+        assert "REQ-003" in codes
+        status, applied = client.call("POST", f"{base}/alignment/proposals/aln-001/apply", {})
+        assert status == 200, applied
+        assert list(applied) == ["proposal", "revision"]
+        proposal, revision = applied["proposal"], applied["revision"]
+        fits(RequirementsRevisionPayload, (200, revision))
+        assert revision["status"] == "CREATED"
+        assert (
+            proposal["status"],
+            proposal["applied_text"],
+            proposal["applied_diff_id"],
+            proposal["decision_note"],
+        ) == ("APPLIED", requirement["request"], revision["diff"]["id"], None)
+        assert proposal["decided_at"] is not None
+        assert proposal == {
+            **requirement,
+            **{
+                key: proposal[key]
+                for key in ("status", "decided_at", "applied_text", "applied_diff_id")
+            },
+        }
+        assert alignment_domain.proposal_from_snapshot(proposal).to_snapshot() == proposal
+        assert studio.spent_microusd - spent == COSTS["REQUIREMENTS_CHANGE"]
+        pending = client.call("GET", base + "/requirements/revisions")[1]
+        assert [(item["id"], item["status"]) for item in pending] == [
+            (revision["diff"]["id"], "PROPOSED")
+        ]
+        added = pending[0]["proposed_specification"]["requirements"][-1]
+        assert added["statement"] == " ".join(requirement["request"].split())
+        for action in ("apply", "skip"):
+            assert client.call("POST", f"{base}/alignment/proposals/ALN-001/{action}", {}) == (
+                409,
+                refused("ALIGNMENT_PROPOSAL_DECIDED"),
+            )
+        text = "Mostra il totale in alto."
+        status, applied = client.call(
+            "POST", f"{base}/alignment/proposals/ALN-002/apply", {"text": f"  {text}  "}
+        )
+        assert status == 200, applied
+        design_revision = applied["revision"]
+        fits(DesignChangePayload, (200, design_revision))
+        fits(DesignRevisionPayload, (200, design_revision["revision"]))
+        diff = design_revision["revision"]["diff"]
+        fits(DesignPackageDiffPayload, (200, diff))
+        chosen = chosen_alternative(project)
+        assert design_revision["changes"] == [
+            ALIGNMENT_TEXTS["it"]["design_change"].format(title=chosen["title"], request=text)
+        ]
+        assert (applied["proposal"]["status"], applied["proposal"]["applied_text"]) == (
+            "APPLIED",
+            text,
+        )
+        assert applied["proposal"]["applied_diff_id"] == diff["id"]
+        proposed = next(
+            item for item in diff["proposed_package"]["alternatives"] if item["id"] == chosen["id"]
+        )
+        assert proposed["summary"] == f"{chosen['summary']} {text}"
+        assert [
+            (item["id"], item["status"])
+            for item in client.call("GET", base + "/design/revisions")[1]
+        ] == [(diff["id"], "PROPOSED")]
+        assert (
+            studio.spent_microusd - spent == COSTS["REQUIREMENTS_CHANGE"] + COSTS["DESIGN_CHANGE"]
+        )
+        status, skipped = client.call(
+            "POST", f"{base}/alignment/proposals/ALN-003/skip", {"reason": "  Già coperto  "}
+        )
+        assert status == 200, skipped
+        assert list(skipped) == ["proposal"]
+        assert (
+            skipped["proposal"]["status"],
+            skipped["proposal"]["decision_note"],
+            skipped["proposal"]["applied_text"],
+            skipped["proposal"]["applied_diff_id"],
+        ) == ("SKIPPED", "Già coperto", None, None)
+        assert client.call("GET", base + "/alignment/proposals") == (
+            200,
+            {"items": [], "latest_run": latest_run_of(run)},
+        )
+        everything = client.call("GET", base + "/alignment/proposals?status=all")[1]["items"]
+        assert [(item["code"], item["status"]) for item in everything] == [
+            ("ALN-003", "SKIPPED"),
+            ("ALN-002", "APPLIED"),
+            ("ALN-001", "APPLIED"),
+        ]
+        assert project.alignment_proposals() == everything
+        assert studio.alignment_proposals(project.id) == everything
+        listed = client.call("GET", base + "/alignment/runs")[1]["items"][0]
+        assert (listed["waiting"], listed["proposals_count"]) == (0, 3)
+        for code in ("ALN-009", "TSK-001", "nope"):
+            for action in ("apply", "skip"):
+                assert client.call("POST", f"{base}/alignment/proposals/{code}/{action}", {}) == (
+                    404,
+                    refused("ALIGNMENT_PROPOSAL_NOT_FOUND"),
+                ), (code, action)
+        second = project.seed_alignment_run(
+            proposals=[
+                {
+                    "section": "TESTS",
+                    "title": "Copri il resto",
+                    "request": "Aggiungi un percorso per il resto.",
+                },
+                {
+                    "section": "REQUIREMENTS",
+                    "title": "Resto",
+                    "request": "Il sistema mostra il resto.",
+                    "rationale": "Il codice calcola il resto.",
+                    "subjects": {"requirements": ["REQ-001"], "screens": [], "criteria": []},
+                },
+                {"section": "DESIGN", "title": "Totale", "request": "Mostra il totale."},
+            ]
+        )
+        assert [(item["code"], item["section"]) for item in second["proposals"]] == [
+            ("ALN-004", "TESTS"),
+            ("ALN-005", "REQUIREMENTS"),
+            ("ALN-006", "DESIGN"),
+        ]
+        assert second["proposals"][0]["rationale"] == ALIGNMENT_TEXTS["it"]["rationale"]
+        assert second["proposals"][0]["origin"] == {
+            "commits": run["commits"],
+            "files": [FILE["path"]],
+            "excerpt": "diff --git a/src/app.js b/src/app.js\n+// REQ-003 splits the bill",
+        }
+        assert second["proposals"][1]["subjects"]["requirements"] == ["REQ-001"]
+        assert second["proposals"][1]["rationale"] == "Il codice calcola il resto."
+        assert alignment_domain.run_from_snapshot(second).to_snapshot() == second
+        status, tested = client.call(
+            "POST",
+            f"{base}/alignment/proposals/ALN-004/apply",
+            {"text": "Aggiungi due percorsi."},
+            headers=PREFER,
+        )
+        assert status == 200, tested
+        assert "preference-applied" not in client.headers
+        assert tested["revision"] is None
+        assert (
+            tested["proposal"]["status"],
+            tested["proposal"]["applied_text"],
+            tested["proposal"]["applied_diff_id"],
+        ) == ("APPLIED", "Aggiungi due percorsi.", None)
+        assert client.call("POST", f"{base}/alignment/proposals/ALN-005/apply", {}) == (
+            409,
+            refused("REQUIREMENTS_REVISION_PENDING"),
+        )
+        assert client.call(
+            "POST", f"{base}/alignment/proposals/ALN-006/apply", {"text": "d" * 1500}
+        ) == (422, {"detail": "invalid_request"})
+        assert client.call("POST", f"{base}/alignment/proposals/ALN-006/apply", {}) == (
+            409,
+            refused("DESIGN_REVISION_PENDING"),
+        )
+        waiting = client.call("GET", base + "/alignment/proposals")[1]
+        assert [(item["code"], item["status"]) for item in waiting["items"]] == [
+            ("ALN-006", "PROPOSED"),
+            ("ALN-005", "PROPOSED"),
+        ]
+        assert waiting["latest_run"] == latest_run_of(second)
+        assert (
+            studio.spent_microusd - spent == COSTS["REQUIREMENTS_CHANGE"] + COSTS["DESIGN_CHANGE"]
+        )
+        with pytest.raises(ValueError):
+            project.seed_alignment_run(
+                proposals=[{"section": "NOTES", "title": "x", "request": "y"}]
+            )
+        assert studio.errors == []
+
+
+def test_an_applied_proposal_with_prefer_runs_as_a_request_job() -> None:
+    with FakeStudio(job_polls=2) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        project.seed_alignment_run()
+        path = f"{base}/alignment/proposals/ALN-001/apply"
+        status, started = client.call("POST", path, {}, headers=PREFER)
+        assert (status, client.headers["preference-applied"]) == (202, "respond-async")
+        assert (started["kind"], started["operation"], started["status"]) == (
+            "REQUEST",
+            "REQUIREMENTS_CHANGE",
+            "RUNNING",
+        )
+        assert studio._jobs[started["job_id"]].key == request_key(
+            GenerationOperation.REQUIREMENTS_CHANGE,
+            {"project_id": project.id, "code": "ALN-001"},
+            alignment_api.ProposalApplyRequest.model_validate({}),
+        )
+        assert client.call("POST", path, {}, headers=PREFER)[1]["job_id"] == started["job_id"]
+        finished = poll(client, base, started["job_id"])
+        assert finished["status"] == "SUCCEEDED"
+        assert finished["response"]["status_code"] == 200
+        answered = finished["response"]["body"]
+        assert list(answered) == ["proposal", "revision"]
+        assert answered["proposal"]["status"] == "APPLIED"
+        assert answered["revision"]["diff"]["id"] == answered["proposal"]["applied_diff_id"]
+        assert project.alignment_proposals()[-1] == answered["proposal"]
+        body = {"text": "Mostra il totale."}
+        design_path = f"{base}/alignment/proposals/ALN-002/apply"
+        status, design_job = client.call("POST", design_path, body, headers=PREFER)
+        assert (status, design_job["operation"]) == (202, "DESIGN_CHANGE")
+        assert studio._jobs[design_job["job_id"]].key == request_key(
+            GenerationOperation.DESIGN_CHANGE,
+            {"project_id": project.id, "code": "ALN-002"},
+            alignment_api.ProposalApplyRequest.model_validate(body),
+        )
+        designed = poll(client, base, design_job["job_id"])
+        assert designed["status"] == "SUCCEEDED"
+        assert designed["response"]["body"]["revision"]["changes"] == [
+            ALIGNMENT_TEXTS["it"]["design_change"].format(
+                title=chosen_alternative(project)["title"], request="Mostra il totale."
+            )
+        ]
+        assert designed["response"]["body"]["proposal"]["applied_text"] == "Mostra il totale."
+        repeated = poll(client, base, client.call("POST", path, {}, headers=PREFER)[1]["job_id"])
+        assert (repeated["status"], repeated["response"]) == (
+            "FAILED",
+            {"status_code": 409, "body": refused("ALIGNMENT_PROPOSAL_DECIDED")},
+        )
+        assert studio.spent_microusd == COSTS["REQUIREMENTS_CHANGE"] + COSTS["DESIGN_CHANGE"]
+        assert studio.errors == []
+
+
+def test_a_design_change_from_words_creates_a_pending_revision() -> None:
+    request = "Show the total above the shares."
+    with FakeStudio(language="en", job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Tip calculator", through="design")
+        base = f"/projects/{project.id}"
+        current = project.current("design")
+        chosen = chosen_alternative(project)
+        spent = studio.spent_microusd
+        reply = client.call("POST", base + "/design/change-requests", {"request": f"  {request}  "})
+        payload = fits(DesignChangePayload, reply, 201)
+        fits(DesignRevisionPayload, (200, payload["revision"]))
+        diff = fits(DesignPackageDiffPayload, (200, payload["revision"]["diff"]))
+        assert payload["changes"] == [
+            ALIGNMENT_TEXTS["en"]["design_change"].format(title=chosen["title"], request=request)
+        ]
+        assert (payload["revision"]["status"], diff["status"], diff["base_version_id"]) == (
+            "CREATED",
+            "PROPOSED",
+            current["id"],
+        )
+        proposed = next(
+            item for item in diff["proposed_package"]["alternatives"] if item["id"] == chosen["id"]
+        )
+        assert proposed["summary"] == f"{chosen['summary']} {request}"
+        assert [item["artifact_kind"] for item in diff["changes"]] == ["ALTERNATIVE"]
+        assert studio.spent_microusd - spent == COSTS["DESIGN_CHANGE"]
+        assert project.usage[0]["purpose"] == "DESIGN_CHANGE"
+        assert client.call("GET", base + "/design/revisions") == (200, [diff])
+        assert client.call("POST", base + "/design/change-requests", {"request": "Other"}) == (
+            409,
+            refused("DESIGN_REVISION_PENDING"),
+        )
+        approved = client.call(
+            "POST", f"{base}/design/revisions/{diff['id']}/decision", {"decision": "APPROVE"}
+        )
+        assert approved[0] == 200, approved
+        assert chosen_alternative(project)["summary"] == proposed["summary"]
+        assert client.call("POST", base + "/design/change-requests", {"request": request}) == (
+            409,
+            refused("DESIGN_UNCHANGED"),
+        )
+        assert studio.spent_microusd - spent == 2 * COSTS["DESIGN_CHANGE"]
+        body = {"request": "Name each person."}
+        status, started = client.call(
+            "POST", base + "/design/change-requests", body, headers=PREFER
+        )
+        assert (status, started["operation"]) == (202, "DESIGN_CHANGE")
+        assert studio._jobs[started["job_id"]].key == request_key(
+            GenerationOperation.DESIGN_CHANGE,
+            {"project_id": project.id},
+            DesignChangeRequest.model_validate(body),
+        )
+        finished = poll(client, base, started["job_id"])
+        assert finished["status"] == "SUCCEEDED"
+        assert finished["response"]["status_code"] == 201
+        again = finished["response"]["body"]
+        assert again["revision"]["diff"]["base_version_number"] == current["version_number"] + 1
+        assert again["changes"] == [
+            ALIGNMENT_TEXTS["en"]["design_change"].format(
+                title=chosen["title"], request="Name each person."
+            )
+        ]
+        early = studio.seed_project(owner=EMAIL, name="No design", through="requirements")
+        assert client.call(
+            "POST", f"/projects/{early.id}/design/change-requests", {"request": request}
+        ) == (404, refused("DESIGN_PACKAGE_NOT_FOUND"))
+        other = stranger(studio)
+        assert other.call("POST", base + "/design/change-requests", {"request": request}) == (
+            404,
+            refused("PROJECT_NOT_FOUND"),
+        )
+        assert studio.errors == []
+    with FakeStudio(hosted=False, job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Tip calculator", through="design")
+        base = f"/projects/{project.id}"
+        assert client.call("POST", base + "/design/change-requests", {"request": request}) == (
+            503,
+            refused("DESIGN_CHANGE_MODEL_NOT_CONFIGURED"),
+        )
+        assert client.call("GET", base + "/design/revisions") == (200, [])
+        assert studio.spent_microusd == 0
+        assert studio.errors == []
+
+
+def test_invalid_knowledge_alignment_requests_answer_like_the_real_application(
+    real_client: TestClient,
+) -> None:
+    apply = "/alignment/proposals/ALN-001/apply"
+    skip = "/alignment/proposals/ALN-001/skip"
+    cases = [
+        *(("POST", "/alignment/runs", *item) for item in RUN_REFUSALS),
+        *(("POST", apply, *item) for item in APPLY_REFUSALS),
+        *(("POST", skip, *item) for item in SKIP_REFUSALS),
+        ("GET", "/alignment/proposals?status=maybe", None, ["query", "status"], "literal_error"),
+        ("GET", "/alignment/runs/not-a-uuid", None, ["path", "run_id"], "uuid_parsing"),
+    ]
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="brief")
+        base = f"/projects/{project.id}"
+        for method, path, body, location, kind in cases:
+            real = real_client.request(method, PREFIX + base + path, json=body)
+            assert real.status_code == 422, (path, body, real.text)
+            assert real.json() == invalid(location, kind), (path, body)
+            assert client.call(method, base + path, body) == (422, real.json()), (path, body)
+        for body, location, kind in DESIGN_CHANGE_REFUSALS:
+            real = real_client.post(PREFIX + base + "/design/change-requests", json=body)
+            assert real.status_code == 503, (body, real.text)
+            assert client.call("POST", base + "/design/change-requests", body) == (
+                422,
+                invalid(location, kind),
+            ), body
+        assert project.alignment_runs() == []
+        assert studio.errors == []
+
+
+def test_the_fields_of_the_alignment_requests_are_those_of_the_real_requests() -> None:
+    for fields, model in (
+        (ALIGNMENT_RUN_FIELDS, alignment_api.KnowledgeAlignmentRequest),
+        (PROPOSAL_APPLY_FIELDS, alignment_api.ProposalApplyRequest),
+        (PROPOSAL_SKIP_FIELDS, alignment_api.ProposalSkipRequest),
+        (DESIGN_CHANGE_FIELDS, DesignChangeRequest),
+    ):
+        assert fields == tuple(model.model_fields), model.__name__
+    assert PROPOSAL_STATUS_FILTERS == alignment_api.PROPOSAL_STATUS_FILTERS
+    assert {"KNOWLEDGE_ALIGNMENT", "DESIGN_CHANGE"} <= {item.value for item in GenerationOperation}
+    assert alignment_api.LATEST_RUN_KEYS == (
+        "id",
+        "from_commit",
+        "to_commit",
+        "created_at",
+        "requirements_version_number",
+        "design_version_number",
+        "alternative_code",
+        "summary",
+    )

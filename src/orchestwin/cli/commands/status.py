@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import folder as knowledge
+from orchestwin.cli.api import alignment as alignment_api
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import projects as project_api
 from orchestwin.cli.api import sections as sections_api
@@ -15,7 +16,8 @@ from orchestwin.cli.api import usage
 from orchestwin.cli.commands import sections as sections_command
 from orchestwin.cli.costs import usd_text
 from orchestwin.cli.errors import SIGN_IN_STATUS, ApiFailure, CliError
-from orchestwin.cli.flows import design_state
+from orchestwin.cli.flows import align_knowledge, design_state
+from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows.test_report import moment_text
 from orchestwin.cli.messages import known
 from orchestwin.cli.project import STEP_STAGES, read_json
@@ -78,6 +80,18 @@ class TwinLearning:
 
 
 @dataclass(frozen=True, slots=True)
+class KnowledgeAlignment:
+    latest_run: Mapping[str, object] | None
+    waiting: int
+
+    def document(self) -> dict[str, object]:
+        return {
+            "latest_run": None if self.latest_run is None else dict(self.latest_run),
+            "waiting": self.waiting,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class Report:
     source: str
     reason: str | None
@@ -103,6 +117,7 @@ class Report:
     learning: tuple[TwinLearning, ...] | None = None
     billing: str = usage.API_BILLING
     sections: Sections | None = None
+    knowledge: KnowledgeAlignment | None = None
 
     @property
     def folder_current(self) -> bool:
@@ -169,6 +184,7 @@ class Report:
                 {"twins": [twin.document() for twin in self.learning]} if self.learning else None
             ),
             "sections": None if self.sections is None else dict(self.sections.document),
+            "knowledge_alignment": None if self.knowledge is None else self.knowledge.document(),
         }
 
 
@@ -185,6 +201,7 @@ class _Studio:
     learning: tuple[TwinLearning, ...] | None = None
     billing: str = usage.API_BILLING
     sections: Sections | None = None
+    knowledge: KnowledgeAlignment | None = None
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -248,6 +265,9 @@ def project_report(context: CommandContext, project: ProjectFolder, *, offline: 
         learning=found.learning if found.learning is not None else local_learning(project),
         billing=found.billing,
         sections=found.sections,
+        knowledge=found.knowledge
+        if found.knowledge is not None
+        else folder_knowledge(project, found.steps),
     )
 
 
@@ -272,6 +292,8 @@ def show(context: CommandContext, report: Report) -> None:
     _folder_lines(context, report)
     if report.alignment is not None:
         show_alignment(context, report.alignment, stale_reviews=report.stale_reviews)
+    if report.knowledge is not None:
+        show_knowledge(context, report.knowledge)
     if report.tests is not None:
         show_tests(context, report.tests)
     show_learning(context, report.learning)
@@ -346,6 +368,57 @@ def show_alignment(
         stale = context.text("status.stale_reviews", count=stale_reviews)
         line = f"{line} {stale}"
     context.console.write(line)
+
+
+def show_knowledge(context: CommandContext, knowledge: KnowledgeAlignment) -> None:
+    latest = knowledge.latest_run
+    if latest is None:
+        return
+    context.console.say(
+        "status.knowledge",
+        commit=str(latest.get("to_commit") or "")[:SHORT_COMMIT],
+        date=git.commit_date(str(latest.get("created_at") or "")),
+        count=knowledge.waiting,
+    )
+
+
+def studio_knowledge(client: StudioClient, project_id: str) -> KnowledgeAlignment | None:
+    try:
+        document = alignment_api.proposals(client, project_id)
+    except ApiFailure as failure:
+        if failure.http_status in changes_api.MISSING_ROUTE or failure.http_status >= SERVER_ERROR:
+            return None
+        raise
+    return KnowledgeAlignment(
+        alignment_api.latest_run(document), len(alignment_api.waiting(document))
+    )
+
+
+def local_knowledge(project: ProjectFolder) -> KnowledgeAlignment | None:
+    latest = align_knowledge.read_latest(project)
+    if latest is None:
+        return None
+    run_id = str(latest["run_id"])
+    run = align_knowledge.read_run(project, run_id)
+    if run is not None:
+        found = {key: run.get(key) for key in alignment_api.LATEST_RUN_KEYS}
+    else:
+        found = {
+            **dict.fromkeys(alignment_api.LATEST_RUN_KEYS),
+            "id": run_id,
+            "from_commit": latest.get("from_commit"),
+            "to_commit": latest.get("to_commit"),
+            "created_at": latest.get("finished_at"),
+        }
+    waiting = latest.get("waiting")
+    valid = isinstance(waiting, int) and not isinstance(waiting, bool) and waiting >= 0
+    return KnowledgeAlignment(found, waiting if valid else 0)
+
+
+def folder_knowledge(
+    project: ProjectFolder, steps: tuple[project_api.StepState, ...]
+) -> KnowledgeAlignment | None:
+    return local_knowledge(project) if _design_approved(steps) else None
 
 
 def show_learning(context: CommandContext, learning: tuple[TwinLearning, ...] | None) -> None:
@@ -558,6 +631,7 @@ def _studio_facts(
         approved = _design_approved(steps)
         development = changes_api.development(client, link.project_id) if approved else None
         tests = tests_api.summary(client, link.project_id) if approved else None
+        knowledge = studio_knowledge(client, link.project_id) if approved else None
         learning = studio_learning(client, link.project_id) if _twins_approved(steps) else None
         has_budget, spent, remaining, billing = _spending(client, link.project_id)
     except CliError as error:
@@ -577,6 +651,7 @@ def _studio_facts(
         learning=learning,
         billing=billing,
         sections=sections,
+        knowledge=knowledge,
     )
 
 
@@ -679,6 +754,7 @@ def _folder_report(
         tests=local_tests(project),
         stale_reviews=0 if alignment is None else local_stale_reviews(project),
         learning=local_learning(project),
+        knowledge=folder_knowledge(project, steps),
     )
 
 

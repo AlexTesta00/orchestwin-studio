@@ -82,14 +82,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "open tasks for the code: {tasks}.",
     },
     "status.alignment_none": {
-        "it": "Sviluppo: nessun commit registrato finora. Dopo il primo commit lancia `ut align`.",
-        "en": "Development: no commit recorded yet. After your first commit launch `ut align`.",
+        "it": "Sviluppo: nessun commit registrato finora. Dopo il primo commit lancia `ut verify`.",
+        "en": "Development: no commit recorded yet. After your first commit launch `ut verify`.",
+    },
+    "status.knowledge": {
+        "it": "Conoscenza: allineata al codice fino al commit {commit} ({date}); proposte in "
+        "attesa: {count}.",
+        "en": "Knowledge: aligned with the code up to commit {commit} ({date}); proposals "
+        "waiting: {count}.",
     },
     "status.stale_reviews": {
         "it": "Esami da rifare perché i requisiti o il design sono cambiati: {count} "
-        "(`ut align --recheck`).",
+        "(`ut verify --recheck`).",
         "en": "Reviews to do again because the requirements or the design changed: {count} "
-        "(`ut align --recheck`).",
+        "(`ut verify --recheck`).",
     },
     "status.learning": {
         "it": "Cosa hanno imparato i twin durante lo sviluppo: {twins}.",

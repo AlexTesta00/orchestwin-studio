@@ -22,7 +22,10 @@ if TYPE_CHECKING:
 
 TESTS_FOLDER: Final = "tests"
 PLAN_NAME: Final = "plan.json"
+REDO_NAME: Final = "redo.json"
 SCHEMA_VERSION: Final = 1
+REDO_SCHEMA_VERSION: Final = 1
+REDO_KEY: Final = "test.plan_redo"
 LIMIT_SECONDS: Final = 900.0
 PAYMENT_REQUIRED: Final = 402
 MICRO_USD: Final = 1_000_000
@@ -155,6 +158,51 @@ def save_plan(project: ProjectFolder, saved: SavedPlan) -> Path:
     return path
 
 
+def redo_file(project: ProjectFolder) -> Path:
+    return tests_folder(project) / REDO_NAME
+
+
+def read_redo(project: ProjectFolder) -> tuple[dict[str, str], ...] | None:
+    path = redo_file(project)
+    if not path.is_file():
+        return None
+    return redo_entries(read_json(path))
+
+
+def redo_entries(document: object) -> tuple[dict[str, str], ...]:
+    if not isinstance(document, Mapping) or document.get("schema_version") != REDO_SCHEMA_VERSION:
+        return ()
+    found: dict[str, dict[str, str]] = {}
+    for item in tests_api.mappings(document.get("proposals")):
+        code = item.get("code")
+        request = item.get("request")
+        if isinstance(code, str) and code and isinstance(request, str):
+            found[code] = {"code": code, "request": request}
+    return tuple(found.values())
+
+
+def mark_redo(
+    project: ProjectFolder, proposals: Sequence[Mapping[str, object]], *, written_at: str
+) -> Path:
+    entries = {item["code"]: item for item in read_redo(project) or ()}
+    for item in proposals:
+        code = item.get("code")
+        if isinstance(code, str) and code:
+            entries[code] = {"code": code, "request": str(item.get("request") or "")}
+    path = redo_file(project)
+    document = {
+        "schema_version": REDO_SCHEMA_VERSION,
+        "written_at": written_at,
+        "proposals": list(entries.values()),
+    }
+    write_atomically(path, json_bytes(document))
+    return path
+
+
+def clear_redo(project: ProjectFolder) -> None:
+    redo_file(project).unlink(missing_ok=True)
+
+
 def saved_plan_from(document: object) -> SavedPlan | None:
     if not isinstance(document, Mapping) or document.get("schema_version") != SCHEMA_VERSION:
         return None
@@ -270,9 +318,13 @@ def decide(
     criteria: Sequence[str],
     *,
     new: bool,
+    redo: Sequence[Mapping[str, object]] | None = None,
 ) -> PlanChoice:
     if new or saved is None:
         return PlanChoice(reuse=False)
+    if redo is not None:
+        codes = ", ".join(str(item.get("code") or "") for item in redo if item.get("code"))
+        return PlanChoice(reuse=False, key=REDO_KEY, values={"codes": codes or "-"})
     requirements, design = saved.reference()
     if (requirements, design) != tuple(versions):
         return PlanChoice(

@@ -937,7 +937,7 @@ def test_the_status_names_the_latest_run_from_the_studio_and_from_the_folder(
     }
     assert document["tests"] == expected
     assert offline["tests"] == expected
-    assert list(document)[-3:] == ["tests", "learning", "sections"]
+    assert list(document)[-4:] == ["tests", "learning", "sections", "knowledge_alignment"]
     assert document["sections"]["sections"][0]["key"] == "BRIEF"
     assert offline["sections"] is None
 

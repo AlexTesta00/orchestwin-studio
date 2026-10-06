@@ -42,7 +42,7 @@ DOWNLOAD_FOLDER: Final = "DOWNLOAD_FOLDER"
 UPDATE_SECTIONS: Final = "UPDATE_SECTIONS"
 PREPARE_TWINS: Final = "PREPARE_TWINS"
 PREPARE_DESIGN: Final = "PREPARE_DESIGN"
-ALIGN_COMMAND: Final = "ut align"
+VERIFY_COMMAND: Final = "ut verify"
 NEXT_COMMANDS: Final[Mapping[str, str]] = MappingProxyType(
     {
         "DESCRIBE_IDEA": "ut init",
@@ -69,7 +69,7 @@ class StepState:
 
 def next_command(action: str, *, folder_current: bool = False) -> str | None:
     if action == DOWNLOAD_FOLDER and folder_current:
-        return ALIGN_COMMAND
+        return VERIFY_COMMAND
     return NEXT_COMMANDS.get(action)
 
 

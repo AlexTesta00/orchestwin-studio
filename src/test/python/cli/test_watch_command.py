@@ -135,7 +135,7 @@ def test_watch_records_each_new_commit_until_ctrl_c(tmp_path: Path) -> None:
         "New commits: 1.",
         "- 3333333  2026-09-29 10:15  Round the tip  (files: 1)",
         "",
-        "Watching ended. The recorded commits wait for your decision with `ut align`.",
+        "Watching ended. The recorded commits wait for your decision with `ut verify`.",
     ]
     assert run.slept == 30.0
     assert [change["commit"] for change in changes] == [THIRD, SECOND]
@@ -168,10 +168,10 @@ def test_the_twins_review_until_the_cap_and_the_commits_are_still_recorded(
     assert "Credit left in the Studio: 60.00 USD." in lines
     assert "Checking every 2 seconds. Stop me with Ctrl+C." in lines
     assert "Review of commit 2222222: Show the tip" in lines
-    assert "You take the decision on this commit with `ut align`." in lines
+    assert "You take the decision on this commit with `ut verify`." in lines
     assert (
         "The next review would go over 1.00 USD of estimated spending: the twins stop "
-        "reviewing, the commits are still recorded. Have the others reviewed with `ut align`."
+        "reviewing, the commits are still recorded. Have the others reviewed with `ut verify`."
         in lines
     )
     assert "Review of commit 3333333" not in run.output
@@ -205,7 +205,7 @@ def test_on_the_subscription_the_cap_still_stops_the_reviews(tmp_path: Path) -> 
     assert (
         "The next review would go over 1.00 USD of reviews at paid prices (--max-usd): the twins "
         "stop reviewing, the commits are still recorded. Have the others reviewed with "
-        "`ut align`." in lines
+        "`ut verify`." in lines
     )
     assert "estimated spending" not in run.output
     assert [item["commit"] for item in runs] == [SECOND]
@@ -251,14 +251,14 @@ def test_after_an_aligned_point_the_first_check_takes_the_commits_after_it(
             repository(current.root, [FIRST], [], interrupt=False), [first], since=None
         )
         aligned.expect(git_command("status", "--porcelain", "-z"), repeat=True)
-        align = current.ut("align", processes=aligned, answers=["y", ""])
+        verify = current.ut("verify", processes=aligned, answers=["y", ""])
         later = commit(SECOND, "Show the tip", FIRST)
         processes = repository(current.root, [SECOND], [(FIRST, [later])], interrupt=False)
 
         run = current.ut("watch", "--once", processes=processes)
         changes = current.project.changes()
 
-    assert align.status == 0, align.errors
+    assert verify.status == 0, verify.errors
     assert run.status == 0, run.errors
     lines = run.output.splitlines()
     assert "Aligned point: commit 1111111. I record the commits that come after it." in lines
@@ -419,7 +419,7 @@ def test_without_an_aligned_point_the_watch_starts_after_the_last_recorded_commi
             repository(current.root, [FIRST], [], interrupt=False), [first], since=None
         )
         before.expect(git_command("status", "--porcelain", "-z"), repeat=True)
-        align = current.ut("align", processes=before, answers=["y", "later"])
+        verify = current.ut("verify", processes=before, answers=["y", "later"])
         second = commit(SECOND, "Show the tip", FIRST)
         processes = repository(current.root, [SECOND], [(FIRST, [second])], interrupt=False)
         processes.expect(RESOLVE_FIRST, output=f"{FIRST}\n")
@@ -427,7 +427,7 @@ def test_without_an_aligned_point_the_watch_starts_after_the_last_recorded_commi
         run = current.ut("watch", "--once", processes=processes)
         changes = current.project.changes()
 
-    assert align.status == 0, align.errors
+    assert verify.status == 0, verify.errors
     assert run.status == 0, run.errors
     lines = run.output.splitlines()
     assert (
@@ -559,10 +559,10 @@ def test_ctrl_c_during_a_review_leaves_it_running_in_the_studio(tmp_path: Path) 
     assert run.status == 0, run.errors
     lines = run.output.splitlines()
     assert (
-        "Review of commit 2222222: the review goes on in the Studio; `ut align` finds it." in lines
+        "Review of commit 2222222: the review goes on in the Studio; `ut verify` finds it." in lines
     )
     assert lines[-1] == (
-        "Watching ended. The recorded commits wait for your decision with `ut align`."
+        "Watching ended. The recorded commits wait for your decision with `ut verify`."
     )
     assert transport.requests("POST", f"{BASE}/code-changes/{SECOND}/reviews")[0].json() == {
         "locale": "en-US",

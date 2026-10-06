@@ -9,18 +9,18 @@ from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import twin_learning as learning_api
 from orchestwin.cli.errors import BUDGET_CODES, SPENDING_STATUS, ApiFailure, CliError
 from orchestwin.cli.flows import publish
-from orchestwin.cli.flows.align_review import titles
 from orchestwin.cli.flows.code_order import project_language
 from orchestwin.cli.flows.design_state import wrapped
 from orchestwin.cli.flows.review import review_locale
 from orchestwin.cli.flows.test_plan import budget_error
+from orchestwin.cli.flows.verify_review import titles
 from orchestwin.cli.messages import known
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
-    from orchestwin.cli.flows.align_review import Titles
     from orchestwin.cli.flows.twin_selection import Twin
+    from orchestwin.cli.flows.verify_review import Titles
     from orchestwin.cli.project import ProjectFolder
 
 LIMIT_SECONDS: Final = 900.0

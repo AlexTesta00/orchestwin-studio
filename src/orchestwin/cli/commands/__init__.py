@@ -19,6 +19,7 @@ from orchestwin.cli.commands import (
     test,
     twins,
     validation,
+    verify,
     watch,
     why,
 )
@@ -35,6 +36,7 @@ COMMANDS = (
     evidence,
     archetypes,
     package,
+    verify,
     align,
     watch,
     mcp,

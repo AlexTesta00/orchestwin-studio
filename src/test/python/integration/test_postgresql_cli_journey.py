@@ -444,6 +444,7 @@ def show_the_state(scene: Scene) -> None:
                 for twin in twins
             ]
         },
+        "knowledge_alignment": None,
     }, as_json.transcript()
     assert isinstance(sections, Mapping), as_json.transcript()
     assert sections["first_pass_complete"] is False, as_json.transcript()

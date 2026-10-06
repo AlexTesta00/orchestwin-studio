@@ -23,7 +23,7 @@ from src.test.python.integration.cli_journey_support import (
     journey_scene,
     stay_on_the_studio,
 )
-from src.test.python.integration.test_postgresql_cli_alignment import approve_the_design
+from src.test.python.integration.test_postgresql_cli_verify import approve_the_design
 
 pytestmark = pytest.mark.integration
 

@@ -86,6 +86,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Il piano dei test salvato non copre {codes}: serve un piano nuovo.",
         "en": "The saved test plan does not cover {codes}: a new plan is needed.",
     },
+    "test.plan_redo": {
+        "it": "Il piano dei test salvato non vale più: dalle modifiche del codice sono stati "
+        "approvati aggiornamenti a ciò che i test devono coprire ({codes}). Serve un piano nuovo.",
+        "en": "The saved test plan no longer holds: updates to what the tests must cover were "
+        "approved from the code changes ({codes}). A new plan is needed.",
+    },
     "test.plan_requested": {
         "it": "Lo Studio scrive ora un piano dei test: il modello legge la pagina come si apre e "
         "scrive i percorsi per i criteri di accettazione.",

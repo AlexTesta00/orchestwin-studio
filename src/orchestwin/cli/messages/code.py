@@ -174,9 +174,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "code.changes_no_git": {
         "it": "Non posso elencare i file cambiati: questa cartella non è in un repository git, "
-        "oppure git manca. `ut align` ha bisogno di un repository git (`git init`).",
+        "oppure git manca. `ut verify` ha bisogno di un repository git (`git init`).",
         "en": "The changed files cannot be listed: this folder is not in a git repository, or "
-        "git is missing. `ut align` needs a git repository (`git init`).",
+        "git is missing. `ut verify` needs a git repository (`git init`).",
     },
     "code.changes_failed": {
         "it": "Non posso elencare i file cambiati: git ha risposto {detail}.",
@@ -190,9 +190,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "code.next_steps": {
         "it": "Prossimi passi: guarda le modifiche e registrale in un commit; `ut test` verifica "
-        "i criteri di accettazione sull'applicazione; `ut align` fa esaminare il commit ai twin.",
+        "i criteri di accettazione sull'applicazione; con `ut verify` i twin esaminano il commit "
+        "e il modello dice se codice, Definizione e Design sono allineati; decidi tu.",
         "en": "Next steps: look at the changes and commit them; `ut test` verifies the "
-        "acceptance criteria on the application; `ut align` has the twins examine the commit.",
+        "acceptance criteria on the application; with `ut verify` the twins review the commit "
+        "and the model says whether code, Definition and Design are aligned; you decide.",
     },
     "code.next_steps_failed": {
         "it": "L'ordine di lavoro e la configurazione MCP restano in {folder}. Rilancia `ut code` "

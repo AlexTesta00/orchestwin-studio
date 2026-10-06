@@ -267,6 +267,8 @@ def test_the_estimates_of_the_contract() -> None:
         "TEST_PLAN",
         "TEST_REVIEW",
         "TWIN_UPDATE",
+        "KNOWLEDGE_ALIGNMENT",
+        "DESIGN_CHANGE",
     }
 
 
