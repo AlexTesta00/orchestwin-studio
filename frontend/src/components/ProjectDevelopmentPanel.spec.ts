@@ -1455,6 +1455,7 @@ describe("ProjectDevelopmentPanel", () => {
         commits: "from a1a1a1a to c0ffee1",
         terminal:
           "Proposals are made from the terminal with ut align; you decide them here and in the sections.",
+        push: "The hand-made changes of the knowledge folder go back to the Studio from the terminal with ut push: you approve the differences and a new version is born.",
       },
     ],
     [
@@ -1464,6 +1465,7 @@ describe("ProjectDevelopmentPanel", () => {
         labels: ["Commit", "Data", "Proposte", "In attesa di decisione"],
         commits: "da a1a1a1a a c0ffee1",
         terminal: "Le proposte si fanno dal terminale con ut align; qui e nelle sezioni le decidi.",
+        push: "Le modifiche fatte a mano nella cartella di conoscenza tornano nello Studio dal terminale con ut push: approvi le differenze e nasce una versione nuova.",
       },
     ],
   ] as const)(
@@ -1494,6 +1496,10 @@ describe("ProjectDevelopmentPanel", () => {
       const terminal = block.get('[data-testid="development-knowledge-terminal"]');
       expect(spoken(terminal)).toBe(expected.terminal);
       expect(terminal.findAll("code").map((item) => item.text())).toEqual(["ut align"]);
+      const push = block.get('[data-testid="development-knowledge-push"]');
+      expect(spoken(push)).toBe(expected.push);
+      expect(push.findAll("code").map((item) => item.text())).toEqual(["ut push"]);
+      expect(terminal.element.nextElementSibling).toBe(push.element);
       const review = wrapper.get('[data-testid="development-run"]').element;
       expect(review.compareDocumentPosition(block.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
         Node.DOCUMENT_POSITION_FOLLOWING,
@@ -1530,7 +1536,7 @@ describe("ProjectDevelopmentPanel", () => {
     ["en", "The knowledge has not been compared with the code yet."],
     ["it", "La conoscenza non è ancora stata confrontata con il codice."],
   ] as const)(
-    "says in %s that the knowledge was never compared with the code and still names ut align",
+    "says in %s that the knowledge was never compared with the code and still names ut align and ut push",
     async (locale, sentence) => {
       const wrapper = mountPanel(developmentApi(), locale);
       await flushPromises();
@@ -1541,6 +1547,7 @@ describe("ProjectDevelopmentPanel", () => {
       expect(block.get('[data-testid="development-knowledge-terminal"] code').text()).toBe(
         "ut align",
       );
+      expect(block.get('[data-testid="development-knowledge-push"] code').text()).toBe("ut push");
       wrapper.unmount();
     },
   );

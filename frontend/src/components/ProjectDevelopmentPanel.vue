@@ -182,6 +182,8 @@ const messages = {
     knowledgeNone: "The knowledge has not been compared with the code yet.",
     knowledgeTerminal:
       "Proposals are made from the terminal with `ut align`; you decide them here and in the sections.",
+    knowledgePush:
+      "The hand-made changes of the knowledge folder go back to the Studio from the terminal with `ut push`: you approve the differences and a new version is born.",
     technical: "Development state",
     technicalChanges: "Recorded commits",
     technicalPending: "Pending commits",
@@ -296,6 +298,8 @@ const messages = {
     knowledgeNone: "La conoscenza non è ancora stata confrontata con il codice.",
     knowledgeTerminal:
       "Le proposte si fanno dal terminale con `ut align`; qui e nelle sezioni le decidi.",
+    knowledgePush:
+      "Le modifiche fatte a mano nella cartella di conoscenza tornano nello Studio dal terminale con `ut push`: approvi le differenze e nasce una versione nuova.",
     technical: "Stato dello sviluppo",
     technicalChanges: "Commit registrati",
     technicalPending: "Commit in attesa",
@@ -1292,6 +1296,19 @@ watch(() => props.projectId, readKnowledge, { immediate: true });
             data-testid="development-knowledge-terminal"
           >
             <template v-for="part in commandParts(copy.knowledgeTerminal)" :key="part.key">
+              <code
+                v-if="part.command"
+                class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                >{{ part.text }}</code
+              >
+              <template v-else>{{ part.text }}</template>
+            </template>
+          </p>
+          <p
+            class="m-0 mt-2 text-sm leading-normal text-on-night-2"
+            data-testid="development-knowledge-push"
+          >
+            <template v-for="part in commandParts(copy.knowledgePush)" :key="part.key">
               <code
                 v-if="part.command"
                 class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"

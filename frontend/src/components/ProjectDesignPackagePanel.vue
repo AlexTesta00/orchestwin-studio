@@ -43,6 +43,7 @@ const DEVELOPMENT_STEPS = [
   { key: "test", command: "ut test --static ." },
   { key: "verify", command: "ut verify" },
   { key: "align", command: "ut align" },
+  { key: "push", command: "ut push" },
   { key: "learn", command: "ut twins update" },
   { key: "status", command: "ut status" },
 ] as const;
@@ -165,6 +166,7 @@ const messages = {
         "The twins review the commits and the model says whether code, Definition and Design are aligned; you decide.",
       align:
         "Reads the code changes and proposes updates to the Definition, the Design and the test plan: you approve them one by one.",
+      push: "Sends the hand-made changes of the knowledge folder to the Studio: you see the differences, approve them, and a new version is born.",
       learn: "Have the twins propose what they learned from the development.",
       status: "See where the project stands.",
     },
@@ -181,7 +183,7 @@ const messages = {
     ],
     history: "Versions of the folder",
     historyIntro:
-      "A new version is created only when something has changed. Every version can be downloaded again exactly as it was.",
+      "A new version is created only when something has changed. Every version can be downloaded again exactly as it was. The project's `orchestwin/` folder is the source of truth: hand-made changes come back to the Studio with `ut push` as versions supplied by you.",
     loadingHistory: "Loading the versions…",
     noHistory: "No version has been prepared yet.",
     version: "Version {number}",
@@ -274,6 +276,7 @@ const messages = {
         "I twin esaminano i commit e il modello dice se codice, Definizione e Design sono allineati; decidi tu.",
       align:
         "Legge le modifiche del codice e propone aggiornamenti alla Definizione, al Design e al piano dei test: li approvi uno per uno.",
+      push: "Invia allo Studio le modifiche fatte a mano nella cartella di conoscenza: vedi le differenze, le approvi e nasce una versione nuova.",
       learn: "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
       status: "Guarda a che punto è il progetto.",
     },
@@ -290,7 +293,7 @@ const messages = {
     ],
     history: "Versioni della cartella",
     historyIntro:
-      "Una nuova versione nasce solo quando cambia qualcosa. Ognuna si riscarica esattamente com'era.",
+      "Una nuova versione nasce solo quando cambia qualcosa. Ognuna si riscarica esattamente com'era. La cartella `orchestwin/` del progetto è la fonte di verità: le modifiche fatte a mano tornano nello Studio con `ut push` come versioni fornite da te.",
     loadingHistory: "Carico le versioni…",
     noHistory: "Non hai ancora preparato nessuna versione.",
     version: "Versione {number}",
@@ -407,7 +410,8 @@ const terminalSteps = computed(() => {
     folder: folderName.value,
     project: props.projectId,
   };
-  return TERMINAL_STEPS.map((step) => ({
+  const steps = TERMINAL_STEPS.filter((step) => step.key !== "login" || !auth.isLocal);
+  return steps.map((step) => ({
     key: step.key,
     text: copy.value.terminalSteps[step.key],
     command: fill(
@@ -1039,8 +1043,18 @@ watch(() => props.projectId, loadHistory, { immediate: true });
           <h2 id="package-history-title" class="m-0 text-base leading-tight font-semibold">
             {{ copy.history }}
           </h2>
-          <p class="m-0 mt-0.5 text-sm leading-normal text-on-night-3">
-            {{ copy.historyIntro }}
+          <p
+            class="m-0 mt-0.5 text-sm leading-normal text-on-night-3"
+            data-testid="package-history-intro"
+          >
+            <template v-for="part in commandParts(copy.historyIntro)" :key="part.key">
+              <code
+                v-if="part.command"
+                class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                >{{ part.text }}</code
+              >
+              <template v-else>{{ part.text }}</template>
+            </template>
           </p>
         </div>
         <div

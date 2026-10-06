@@ -13,6 +13,7 @@ import { suppliedPrototype } from "@/test/workflowInputsFixtures";
 import type { ProvidedPrototype } from "@/types/workflowInputs";
 
 import { KnowledgePackagesApiError, type KnowledgePackagesApi } from "../api/knowledgePackages";
+import { useAuthStore } from "../stores/auth";
 import { useDesignStore } from "../stores/design";
 import { useUserModelingStore } from "../stores/userModeling";
 import type { DeclarativePrototypePayload, DesignAlternativePayload } from "../types/design";
@@ -607,6 +608,36 @@ describe("ProjectDesignPackagePanel", () => {
     },
   );
 
+  it.each([
+    [
+      "en",
+      "A new version is created only when something has changed. Every version can be downloaded again exactly as it was. The project's orchestwin/ folder is the source of truth: hand-made changes come back to the Studio with ut push as versions supplied by you.",
+    ],
+    [
+      "it",
+      "Una nuova versione nasce solo quando cambia qualcosa. Ognuna si riscarica esattamente com'era. La cartella orchestwin/ del progetto è la fonte di verità: le modifiche fatte a mano tornano nello Studio con ut push come versioni fornite da te.",
+    ],
+  ] as const)(
+    "says in %s above the versions that the folder is the source of truth and names ut push",
+    async (locale, expected) => {
+      for (const stages of [STAGES, approvedUpTo(1)]) {
+        const { wrapper } = mountPanel(knowledgeApi(), { locale, stages });
+        await flushPromises();
+
+        const intro = wrapper.get('[data-testid="package-history-intro"]');
+        expect(spoken(intro)).toBe(expected);
+        expect(intro.findAll("code").map((item) => item.text())).toEqual([
+          "orchestwin/",
+          "ut push",
+        ]);
+        expect(wrapper.get('[data-testid="package-history"]').element.contains(intro.element)).toBe(
+          true,
+        );
+        wrapper.unmount();
+      }
+    },
+  );
+
   it("opens the development outside the Studio below the versions once the design is approved", async () => {
     const approved = mountPanel(knowledgeApi(), { locale: "it" });
     await flushPromises();
@@ -1112,6 +1143,52 @@ describe("ProjectDesignPackagePanel", () => {
   });
 
   it.each([
+    [
+      "it",
+      [
+        "Crea una cartella vuota per il progetto ed entraci.",
+        "Collega la cartella a questo progetto: ut scarica qui la cartella di conoscenza.",
+        "Apri la cartella in Visual Studio Code: il pannello OrchesTwin mostra lo stato del progetto e lancia gli stessi comandi.",
+      ],
+    ],
+    [
+      "en",
+      [
+        "Create an empty folder for the project and go into it.",
+        "Link the folder to this project: ut downloads the knowledge folder here.",
+        "Open the folder in Visual Studio Code: the OrchesTwin panel shows the state of the project and runs the same commands.",
+      ],
+    ],
+  ] as const)(
+    "leaves out in %s the sign-in from the terminal when the Studio is local",
+    async (locale, sentences) => {
+      const auth = useAuthStore();
+      auth.accessMode = "LOCAL_OWNER";
+      expect(auth.isLocal).toBe(true);
+      const { wrapper } = mountPanel(knowledgeApi(), {
+        locale,
+        studioAddress: "http://127.0.0.1:8000",
+      });
+      await flushPromises();
+
+      const steps = wrapper.findAll('[data-testid="package-cli-step"]');
+      expect(steps.map((step) => spoken(step.get('[data-testid="package-cli-text"]')))).toEqual(
+        sentences,
+      );
+      expect(steps.map((step) => step.get('[aria-hidden="true"]').text())).toEqual(["1", "2", "3"]);
+      expect(commands(wrapper, "package-cli-step")).toEqual([
+        "mkdir lista-ospiti-workshop; cd lista-ospiti-workshop",
+        `ut init --project ${PROJECT_ID} --mode design-code`,
+        "code .",
+      ]);
+      expect(commands(wrapper, "package-development-step")).toContain("ut push");
+      expect(wrapper.findAll('[data-testid="command-line"]')).toHaveLength(11);
+      expect(wrapper.text()).not.toContain("ut login");
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
     ["it", "  Caffè & Città — Prenotazioni 2026!  ", "caffe-citta-prenotazioni-2026"],
     ["en", "L'Agenda dell'Università: ÈLITE", "l-agenda-dell-universita-elite"],
     [
@@ -1156,6 +1233,7 @@ describe("ProjectDesignPackagePanel", () => {
         "Verifica i criteri di accettazione nei browser di questo computer (con --url se l'applicazione ha un suo indirizzo).",
         "I twin esaminano i commit e il modello dice se codice, Definizione e Design sono allineati; decidi tu.",
         "Legge le modifiche del codice e propone aggiornamenti alla Definizione, al Design e al piano dei test: li approvi uno per uno.",
+        "Invia allo Studio le modifiche fatte a mano nella cartella di conoscenza: vedi le differenze, le approvi e nasce una versione nuova.",
         "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
         "Guarda a che punto è il progetto.",
       ],
@@ -1169,6 +1247,7 @@ describe("ProjectDesignPackagePanel", () => {
         "Check the acceptance criteria in the browsers of this computer (with --url if the application has an address of its own).",
         "The twins review the commits and the model says whether code, Definition and Design are aligned; you decide.",
         "Reads the code changes and proposes updates to the Definition, the Design and the test plan: you approve them one by one.",
+        "Sends the hand-made changes of the knowledge folder to the Studio: you see the differences, approve them, and a new version is born.",
         "Have the twins propose what they learned from the development.",
         "See where the project stands.",
       ],
@@ -1192,6 +1271,7 @@ describe("ProjectDesignPackagePanel", () => {
         "ut test --static .",
         "ut verify",
         "ut align",
+        "ut push",
         "ut twins update",
         "ut status",
       ]);
@@ -1201,6 +1281,7 @@ describe("ProjectDesignPackagePanel", () => {
       expect(items[2]!.get('[data-testid="package-development-text"] code').text()).toBe("--url");
       expect(items[3]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
       expect(items[4]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
+      expect(items[5]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
       wrapper.unmount();
     },
   );
@@ -1298,7 +1379,7 @@ describe("ProjectDesignPackagePanel", () => {
   });
 
   it.each([
-    { name: "the chosen design", options: {}, count: 11 },
+    { name: "the chosen design", options: {}, count: 12 },
     {
       name: "a supplied design",
       options: {
