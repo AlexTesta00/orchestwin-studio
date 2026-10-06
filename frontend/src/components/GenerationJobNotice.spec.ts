@@ -173,6 +173,53 @@ describe("GenerationJobNotice", () => {
     },
   );
 
+  it.each([
+    [
+      "KNOWLEDGE_ALIGNMENT",
+      "en",
+      "The Studio is generating the alignment of the knowledge to the code.",
+      "The generation of the alignment of the knowledge to the code did not succeed.",
+    ],
+    [
+      "KNOWLEDGE_ALIGNMENT",
+      "it",
+      "Lo Studio sta generando l'allineamento della conoscenza al codice.",
+      "La generazione dell'allineamento della conoscenza al codice non è riuscita.",
+    ],
+    [
+      "DESIGN_CHANGE",
+      "en",
+      "The Studio is generating the change to the design from the words.",
+      "The generation of the change to the design from the words did not succeed.",
+    ],
+    [
+      "DESIGN_CHANGE",
+      "it",
+      "Lo Studio sta generando la modifica del design dalle parole.",
+      "La generazione della modifica del design dalle parole non è riuscita.",
+    ],
+  ] as const)(
+    "names the %s started by ut align or by a proposal in %s",
+    (operation, locale, running, failed) => {
+      const started = mount(GenerationJobNotice, { props: { job: job({ operation }), locale } });
+      const stopped = mount(GenerationJobNotice, {
+        props: {
+          job: null,
+          failure: { operation, code: "PROVIDER_UNAVAILABLE", lost: false },
+          locale,
+        },
+      });
+
+      expect(
+        started.get("[data-testid='generation-job-notice']").attributes("data-operation"),
+      ).toBe(operation);
+      expect(started.get("[role='status']").text()).toBe(running);
+      expect(stopped.get("[data-testid='generation-job-failure']").text()).toContain(failed);
+      started.unmount();
+      stopped.unmount();
+    },
+  );
+
   it("says in plain words that an interrupted generation can be started again", async () => {
     const wrapper = mount(GenerationJobNotice, {
       props: {
