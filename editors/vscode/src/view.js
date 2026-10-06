@@ -855,7 +855,7 @@ function developmentSection(state, context) {
   }
   content.push(knowledgeBlock(state.alignment, context));
   content.push(
-    actions(["verify", development.stale > 0 ? "recheck" : null, "align"], context),
+    actions(["verify", development.stale > 0 ? "recheck" : null, "align", "push"], context),
   );
   return sectionOf("development", title, content);
 }

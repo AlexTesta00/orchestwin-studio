@@ -8,6 +8,7 @@
   "command.verify": "Review the commits with the twins (ut verify, may spend)",
   "command.recheck": "Review again the commits of an earlier design (ut verify --recheck, may spend)",
   "command.align": "Align the knowledge to the code (ut align, may spend)",
+  "command.push": "Send the folder changes to the Studio (ut push)",
   "command.code": "Start the coding agent on the open tasks (ut code, on your own account)",
   "command.tasks": "List the tasks for the code (ut tasks)",
   "command.twinsUpdate": "Let the twins learn from the development (ut twins update, may spend)",
