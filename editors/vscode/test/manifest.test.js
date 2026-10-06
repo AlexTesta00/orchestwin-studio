@@ -14,6 +14,7 @@ const COMMANDS = [
   "orchestwin.verify",
   "orchestwin.recheck",
   "orchestwin.align",
+  "orchestwin.push",
   "orchestwin.code",
   "orchestwin.tasks",
   "orchestwin.twinsUpdate",
@@ -123,6 +124,11 @@ describe("the manifest of the extension", () => {
       }
     }
     assert.notEqual(english["command.test"], italian["command.test"]);
+    assert.equal(english["command.push"], "Send the folder changes to the Studio (ut push)");
+    assert.equal(
+      italian["command.push"],
+      "Invia le modifiche della cartella allo Studio (ut push)",
+    );
   });
 
   it("names only files that exist", () => {

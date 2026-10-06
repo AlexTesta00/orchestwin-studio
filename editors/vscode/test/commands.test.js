@@ -21,6 +21,7 @@ describe("commandLine", () => {
     assert.equal(commandLine("recheck", "ut"), "ut verify --recheck");
     assert.equal(commandLine("align", "ut"), "ut align");
     assert.equal(commandLine("alignPending", "ut"), "ut align --pending");
+    assert.equal(commandLine("push", "ut"), "ut push");
     assert.equal(commandLine("code", "ut"), "ut code");
     assert.equal(commandLine("tasks", "ut"), "ut tasks");
     assert.equal(commandLine("twinsUpdate", "ut"), "ut twins update");
@@ -41,6 +42,7 @@ describe("commandLine", () => {
       "design",
       "init",
       "publish",
+      "push",
       "recheck",
       "status",
       "tasks",
@@ -109,7 +111,7 @@ describe("costOf", () => {
       assert.equal(costOf(id), "SPENDS", id);
     }
     assert.equal(costOf("code"), "AGENT");
-    for (const id of ["status", "tasks", "tasksFromTest", "publish"]) {
+    for (const id of ["status", "tasks", "tasksFromTest", "publish", "push"]) {
       assert.equal(costOf(id), "FREE", id);
     }
     assert.equal(costOf("openReport"), null);

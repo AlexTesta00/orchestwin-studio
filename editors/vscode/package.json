@@ -73,6 +73,11 @@
         "category": "OrchesTwin"
       },
       {
+        "command": "orchestwin.push",
+        "title": "%command.push%",
+        "category": "OrchesTwin"
+      },
+      {
         "command": "orchestwin.code",
         "title": "%command.code%",
         "category": "OrchesTwin"

@@ -334,6 +334,7 @@ describe("the extension", () => {
       "orchestwin.verify": "ut verify",
       "orchestwin.recheck": "ut verify --recheck",
       "orchestwin.align": "ut align",
+      "orchestwin.push": "ut push",
       "orchestwin.code": "ut code",
       "orchestwin.tasks": "ut tasks",
       "orchestwin.twinsUpdate": "ut twins update",

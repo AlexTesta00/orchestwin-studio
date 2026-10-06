@@ -32,6 +32,7 @@ const TERMINAL_COMMANDS = Object.freeze({
   "orchestwin.verify": "verify",
   "orchestwin.recheck": "recheck",
   "orchestwin.align": "align",
+  "orchestwin.push": "push",
   "orchestwin.code": "code",
   "orchestwin.tasks": "tasks",
   "orchestwin.twinsUpdate": "twinsUpdate",

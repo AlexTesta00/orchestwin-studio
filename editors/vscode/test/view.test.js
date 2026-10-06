@@ -352,9 +352,9 @@ describe("renderPanel", () => {
       assert.ok(first.text.includes(text(language, "cost.SPENDS")));
       assert.deepEqual(
         buttons(html)
-          .slice(1, 4)
+          .slice(1, 5)
           .map((button) => button.command),
-        ["verify", "align", "code"],
+        ["verify", "align", "push", "code"],
       );
       const without = plain(render(states.complete, language));
       assert.ok(!without.includes(text(language, "knowledge.run")));
@@ -446,6 +446,7 @@ describe("renderPanel", () => {
         "verify",
         "recheck",
         "align",
+        "push",
         "code",
         "tasks",
         "test",
@@ -458,6 +459,7 @@ describe("renderPanel", () => {
         "code",
         "verify",
         "align",
+        "push",
         "code",
         "tasks",
         "test",
@@ -519,6 +521,28 @@ describe("renderPanel", () => {
           }
         }
       }
+    }
+  });
+
+  it("offers to send the folder changes to the Studio right after ut align, for free", () => {
+    assert.equal(text("en", "action.push"), "Send the folder changes to the Studio");
+    assert.equal(text("it", "action.push"), "Invia le modifiche della cartella allo Studio");
+    for (const language of LANGUAGES) {
+      const html = render(states.complete, language);
+      const found = buttons(html);
+      const commands = found.map((button) => button.command);
+      const push = found[commands.indexOf("push")];
+      assert.equal(commands.indexOf("push"), commands.indexOf("align") + 1);
+      assert.equal(push.primary, false);
+      assert.ok(push.text.includes(text(language, "action.push")));
+      assert.ok(push.text.includes("ut push"));
+      assert.ok(push.text.includes(text(language, "cost.FREE")));
+      const development = html.slice(
+        html.indexOf('id="development-title"'),
+        html.indexOf('id="tasks-title"'),
+      );
+      assert.ok(development.includes('data-command="push"'));
+      assert.ok(!plain(render(states.partial, language)).includes("ut push"));
     }
   });
 
