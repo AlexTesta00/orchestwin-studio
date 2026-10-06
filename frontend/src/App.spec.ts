@@ -1,9 +1,10 @@
 import { createPinia } from "pinia";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App.vue";
+import { apiClient, ApiError } from "./api/client";
 import { createAppI18n, type SupportedLocale } from "./i18n";
 import { createAppRouter } from "./router";
 import { useAuthStore } from "./stores/auth";
@@ -21,10 +22,15 @@ async function mountApplication(
   authenticated = false,
   email = "owner@example.com",
   stubPages = false,
+  local = false,
 ) {
   const router = createAppRouter(createMemoryHistory());
   const i18n = createAppI18n(initialLocale);
   const pinia = createPinia();
+
+  if (local) {
+    useAuthStore(pinia).$patch({ accessMode: "LOCAL_OWNER" });
+  }
 
   if (authenticated) {
     useAuthStore(pinia).$patch({
@@ -146,4 +152,117 @@ describe("App", () => {
       await expectAccessible(wrapper.element, { page: true });
     },
   );
+
+  it.each([
+    ["it", "Studio locale", "Account di chi usa questo computer, senza registrazione"],
+    ["en", "Local Studio", "The account of whoever uses this computer, no registration"],
+  ] as const)(
+    "names the local Studio in %s in place of the sign in links and the exit",
+    async (locale, name, title) => {
+      const { wrapper } = await mountApplication(
+        "/",
+        locale,
+        true,
+        "maria.bianchi@example.com",
+        true,
+        true,
+      );
+      const badge = wrapper.get('[data-testid="local-studio-badge"]');
+
+      expect(badge.element.tagName).toBe("SPAN");
+      expect(badge.text()).toBe(name);
+      expect(badge.attributes("title")).toBe(title);
+      expect(wrapper.get('[data-testid="user-initials"] [aria-hidden="true"]').text()).toBe("MB");
+      expect(wrapper.find('[data-testid="projects-link"]').exists()).toBe(true);
+      for (const hook of ["login-link", "register-link", "logout-button"]) {
+        expect(wrapper.find(`[data-testid="${hook}"]`).exists()).toBe(false);
+      }
+    },
+  );
+
+  it("hides the sign in links of a local Studio that has not opened the session yet", async () => {
+    const { wrapper } = await mountApplication("/", "en", false, undefined, true, true);
+
+    expect(wrapper.get('[data-testid="local-studio-badge"]').text()).toBe("Local Studio");
+    for (const hook of [
+      "login-link",
+      "register-link",
+      "logout-button",
+      "user-initials",
+      "projects-link",
+    ]) {
+      expect(wrapper.find(`[data-testid="${hook}"]`).exists()).toBe(false);
+    }
+  });
+
+  it("shows no local Studio badge in a Studio with accounts", async () => {
+    const anonymous = await mountApplication("/", "en", false, undefined, true);
+    const signedIn = await mountApplication("/", "en", true, undefined, true);
+
+    expect(anonymous.wrapper.find('[data-testid="local-studio-badge"]').exists()).toBe(false);
+    expect(signedIn.wrapper.find('[data-testid="local-studio-badge"]').exists()).toBe(false);
+    expect(signedIn.wrapper.get('[data-testid="logout-button"]').text()).toBe("Log out");
+  });
+
+  it.each([
+    ["it", true, "Apri i progetti"],
+    ["en", true, "Open the projects"],
+    ["en", false, "Open the projects"],
+  ] as const)(
+    "opens the projects from every home page entry of a local Studio in %s, session open: %s",
+    async (locale, authenticated, label) => {
+      const { wrapper } = await mountApplication(
+        "/",
+        locale,
+        authenticated,
+        undefined,
+        false,
+        true,
+      );
+
+      for (const hook of ["home-enter", "home-enter-path", "home-enter-closing"]) {
+        const entry = wrapper.get(`[data-testid="${hook}"]`);
+        expect(entry.attributes("href")).toBe("/projects");
+        expect(entry.text()).toBe(label);
+      }
+    },
+  );
+
+  it("keeps the usual entry of the home page in a Studio with accounts", async () => {
+    const { wrapper } = await mountApplication("/", "it");
+    const entry = wrapper.get('[data-testid="home-enter"]');
+
+    expect(entry.attributes("href")).toBe("/register");
+    expect(entry.text()).toBe("Entra nello Studio");
+  });
+
+  it.each([
+    ["/login", "it", "Lo Studio è locale e non chiede l'accesso: apri i progetti."],
+    ["/register", "it", "Lo Studio è locale e non chiede l'accesso: apri i progetti."],
+    ["/login", "en", "The Studio is local and needs no sign-in: open the projects."],
+    ["/register", "en", "The Studio is local and needs no sign-in: open the projects."],
+  ] as const)(
+    "explains on %s in %s that a local Studio needs no sign-in",
+    async (path, locale, sentence) => {
+      const refusal = new ApiError(404, "local_mode");
+      const login = vi.spyOn(apiClient, "login").mockRejectedValue(refusal);
+      const register = vi.spyOn(apiClient, "register").mockRejectedValue(refusal);
+      const { wrapper } = await mountApplication(path, locale, false, undefined, false, true);
+      await flushPromises();
+
+      await wrapper.get('input[name="email"]').setValue("owner@example.com");
+      await wrapper.get('input[name="password"]').setValue("Abcdefg1!");
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+
+      expect(wrapper.get('form [role="alert"]').text()).toBe(sentence);
+      expect(login.mock.calls.length + register.mock.calls.length).toBe(1);
+    },
+  );
+
+  it("has no axe violations in the shell of a local Studio", { timeout: 30000 }, async () => {
+    const { wrapper } = await mountApplication("/", "it", true, undefined, false, true);
+    await flushPromises();
+    await expectAccessible(wrapper.element, { page: true });
+  });
 });

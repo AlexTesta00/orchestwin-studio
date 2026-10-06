@@ -3,6 +3,7 @@ import { createMemoryHistory } from "vue-router";
 import { describe, expect, it } from "vitest";
 
 import type {
+  AccessModeResponse,
   AuthenticationApi,
   AuthenticationInput,
   AuthenticationResponse,
@@ -25,6 +26,10 @@ const USER: UserResponse = {
 const PROJECT_PATH = "/projects/00000000-0000-4000-8000-000000000002";
 
 class AnonymousApi implements AuthenticationApi {
+  public async accessMode(): Promise<AccessModeResponse> {
+    return { access_mode: "ACCOUNTS", registration_open: true };
+  }
+
   public async register(input: AuthenticationInput): Promise<AuthenticationResponse> {
     void input;
 
@@ -74,6 +79,32 @@ class SignedInApi extends AnonymousApi {
       expires_at: "2026-08-10T12:15:00Z",
       user: this.account,
     };
+  }
+}
+
+class LocalApi extends SignedInApi {
+  public refreshCalls = 0;
+  private failures: number;
+
+  public constructor(guidanceMode: GuidanceMode | null, failures = 0) {
+    super(guidanceMode);
+
+    this.failures = failures;
+  }
+
+  public override async accessMode(): Promise<AccessModeResponse> {
+    return { access_mode: "LOCAL_OWNER", registration_open: false };
+  }
+
+  public override async refresh(): Promise<AuthenticationResponse> {
+    this.refreshCalls += 1;
+
+    if (this.failures > 0) {
+      this.failures -= 1;
+      throw new Error("studio unavailable");
+    }
+
+    return super.refresh();
   }
 }
 
@@ -158,5 +189,83 @@ describe("authentication router guard", () => {
     await router.push("/");
 
     expect(router.currentRoute.value.name).toBe("overview");
+  });
+
+  it.each(["/login", "/register"])(
+    "keeps %s open for a guest of a Studio with accounts",
+    async (path) => {
+      const { router, auth } = await open(new AnonymousApi(), path);
+
+      expect(auth.accessMode).toBe("ACCOUNTS");
+      expect(auth.isLocal).toBe(false);
+      expect(router.currentRoute.value.path).toBe(path);
+    },
+  );
+
+  it.each(["/login", "/register"])(
+    "sends %s of a local Studio to the projects with the session it opens by itself",
+    async (path) => {
+      const api = new LocalApi("GUIDED");
+      const { router, auth } = await open(api, path);
+
+      expect(auth.isLocal).toBe(true);
+      expect(auth.isAuthenticated).toBe(true);
+      expect(router.currentRoute.value.name).toBe("projects");
+      expect(api.refreshCalls).toBe(1);
+    },
+  );
+
+  it("keeps the choice of the mode for the account of a local Studio", async () => {
+    const { router } = await open(new LocalApi(null), "/login");
+
+    expect(router.currentRoute.value.name).toBe("guidance-choice");
+    expect(router.currentRoute.value.query.redirect).toBe("/projects");
+  });
+
+  it("opens the session of a local Studio again before showing the sign in page", async () => {
+    const api = new LocalApi("EXPERT", 1);
+    const { router, auth } = await open(api, "/");
+
+    expect(router.currentRoute.value.name).toBe("overview");
+    expect(auth.isLocal).toBe(true);
+    expect(auth.isAuthenticated).toBe(false);
+
+    await router.push("/login");
+
+    expect(router.currentRoute.value.name).toBe("projects");
+    expect(auth.isAuthenticated).toBe(true);
+    expect(api.refreshCalls).toBe(2);
+  });
+
+  it("keeps the page asked for once a local Studio answers again", async () => {
+    const api = new LocalApi(null, 1);
+    const { router, auth } = await open(api, "/");
+
+    await router.push(PROJECT_PATH);
+
+    expect(auth.isAuthenticated).toBe(true);
+    expect(router.currentRoute.value.name).toBe("guidance-choice");
+    expect(router.currentRoute.value.query.redirect).toBe(PROJECT_PATH);
+    expect(api.refreshCalls).toBe(2);
+  });
+
+  it("leaves the public pages open while a local Studio does not open the session", async () => {
+    const api = new LocalApi("GUIDED", Number.POSITIVE_INFINITY);
+    const { router, auth } = await open(api, "/projects");
+
+    expect(auth.isLocal).toBe(true);
+    expect(auth.isAuthenticated).toBe(false);
+    expect(auth.errorDetail).toBeNull();
+    expect(router.currentRoute.value.name).toBe("login");
+    expect(router.currentRoute.value.query.redirect).toBe("/projects");
+
+    await router.push("/register");
+
+    expect(router.currentRoute.value.name).toBe("register");
+
+    await router.push("/");
+
+    expect(router.currentRoute.value.name).toBe("overview");
+    expect(api.refreshCalls).toBe(4);
   });
 });

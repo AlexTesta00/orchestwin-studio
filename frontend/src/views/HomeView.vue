@@ -115,7 +115,10 @@ const auth = useAuthStore();
 const { t, locale } = useI18n({ useScope: "global" });
 
 const copy = computed(() => messages[locale.value === "it" ? "it" : "en"]);
-const entryTarget = computed(() => (auth.isAuthenticated ? "/projects" : "/register"));
+const entryTarget = computed(() =>
+  auth.isAuthenticated || auth.isLocal ? "/projects" : "/register",
+);
+const entryLabel = computed(() => (auth.isLocal ? t("home.openProjects") : t("home.enter")));
 
 const reducedMotion =
   typeof window === "undefined" ||
@@ -283,7 +286,7 @@ onBeforeUnmount(() => {
         </p>
         <div data-reveal="up" data-delay="400" class="flex flex-wrap gap-2.5">
           <UiButton :to="entryTarget" variant="pill" size="lg" data-testid="home-enter">
-            {{ t("home.enter") }}
+            {{ entryLabel }}
           </UiButton>
           <UiButton
             variant="outline"
@@ -558,7 +561,7 @@ onBeforeUnmount(() => {
             class="inline-flex min-h-11 items-center font-mono text-xs font-semibold tracking-eyebrow text-on-night uppercase underline underline-offset-[6px] hover:text-petrol-on-night-2"
             data-testid="home-enter-path"
           >
-            {{ t("home.enter") }}
+            {{ entryLabel }}
           </RouterLink>
         </div>
       </div>
@@ -594,7 +597,7 @@ onBeforeUnmount(() => {
           {{ t("home.closing.text") }}
         </p>
         <UiButton :to="entryTarget" variant="pill" size="lg" data-testid="home-enter-closing">
-          {{ t("home.enter") }}
+          {{ entryLabel }}
         </UiButton>
       </div>
     </UiSurface>

@@ -79,6 +79,8 @@ const messages = {
     close: "Close",
     closeLabel: "Close primary navigation",
     label: "Primary navigation",
+    localStudio: "Local Studio",
+    localStudioTitle: "The account of whoever uses this computer, no registration",
     login: "Log in",
     logout: "Log out",
     menu: "Menu",
@@ -125,6 +127,7 @@ const messages = {
       invalid_authentication: "The email or password is not valid.",
       email_already_registered: "An account already uses this email address.",
       invalid_registration: "The registration data is not valid.",
+      local_mode: "The Studio is local and needs no sign-in: open the projects.",
       invalid_refresh_token: "Your session is no longer valid. Please log in again.",
       expired_refresh_token: "Your session expired. Please log in again.",
       refresh_token_reuse_detected:
@@ -138,6 +141,7 @@ const messages = {
     title: "An idea becomes an application. You decide at every step.",
     lead: "OrchesTwin Studio orchestrates AI across six governed steps: it looks at the project from the perspectives it needs, builds synthetic users from your brief, writes the requirements, explores the design and hands you a dossier for building the application with your own tools. Every step closes with your approval.",
     enter: "Enter the Studio",
+    openProjects: "Open the projects",
     twinsLink: "How twins work",
     rules: {
       one: {
