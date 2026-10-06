@@ -96,6 +96,7 @@ from orchestwin.projects.clarification_application import (
     ProjectClarificationApplicationService,
 )
 from orchestwin.projects.code_change_state import SqlAlchemyProjectStateQueryService
+from orchestwin.projects.design_change_application import DesignChangeApplication
 from orchestwin.projects.design_realignment_service import DesignRealignmentService
 from orchestwin.projects.design_runtime import build_design_services
 from orchestwin.projects.owner_requirements import OwnerRequirementsService
@@ -219,6 +220,7 @@ class ApplicationRuntime:
     requirements_change_service: LocalRequirementsChangeService | None = None
     design_generation_service: DesignGenerationService | None = None
     design_revision_service: DesignRevisionService | None = None
+    design_change_service: DesignChangeApplication | None = None
     design_query_service: DesignQueryService | None = None
     design_gate_service: DesignGateService | None = None
     artifact_graph_query_service: ArtifactGraphQueryService | None = None
@@ -324,6 +326,16 @@ def create_default_runtime(
     design = build_design_services(
         database_runtime.session_factory,
         **({"proposal_runtime": real_models.design} if real_models is not None else {}),
+    )
+    design_change_service = DesignChangeApplication(
+        proposal_evidence_store=proposal_evidence_store,
+        generator=(
+            None if real_models is None else real_models.user_modeling.proposal_port.generator
+        ),
+        project_service=project_service,
+        requirements_query_service=requirements.queries,
+        uow_factory=design_runtime.ManagedDesignUnitOfWorkFactory(database_runtime.session_factory),
+        revisions=design.revisions,
     )
     artifact_graph_query_service = SqlAlchemyArtifactGraphQueryService(
         database_runtime.session_factory
@@ -438,6 +450,7 @@ def create_default_runtime(
         requirements_change_service=requirements.changes,
         design_generation_service=design.generation,
         design_revision_service=design.revisions,
+        design_change_service=design_change_service,
         design_query_service=design.queries,
         design_gate_service=design.gate,
         artifact_graph_query_service=artifact_graph_query_service,

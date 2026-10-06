@@ -756,6 +756,8 @@ SECTION_CASES = [
     ("proposal-user-twin-evaluation-v1", "DESIGN_TWIN_REVIEW", "DESIGN", "DESIGN_TWIN_REVIEW"),
     ("proposal-user-twin-evaluation-v1", "CODE_CHANGE_REVIEW", "PACKAGE", "CODE_CHANGE_REVIEW"),
     ("proposal-user-twin-evaluation-v1", "CODE_ALIGNMENT", "PACKAGE", "CODE_ALIGNMENT"),
+    ("proposal-requirements-v1", "KNOWLEDGE_ALIGNMENT", "PACKAGE", "KNOWLEDGE_ALIGNMENT"),
+    ("proposal-design-v1", "DESIGN_CHANGE", "DESIGN", "DESIGN_CHANGE"),
     ("proposal-user-twin-evaluation-v1", "NEW_PURPOSE", "DESIGN", "NEW_PURPOSE"),
     ("proposal-personas-v1", None, "USER_TWINS", "personas"),
     ("proposal-user-twins-v1", "", "USER_TWINS", "user-twins"),
