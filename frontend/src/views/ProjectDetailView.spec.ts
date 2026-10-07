@@ -284,14 +284,19 @@ describe("progressive project workspace", () => {
       { label: "Definition", version: 1, approved: true },
       { label: "Design & Evaluation", version: 1, approved: true },
     ]);
+    const dossier = wrapper.findComponent({ name: "ProjectDesignPackagePanel" });
+    expect(dossier.props("active")).toBe(true);
     await wrapper.get('[data-stage="0"]').trigger("click");
     await flushPromises();
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
+    expect(dossier.props("active")).toBe(false);
     await wrapper.get('[data-stage="4"]').trigger("click");
     expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(false);
+    expect(dossier.props("active")).toBe(false);
     await wrapper.get('[data-stage="5"]').trigger("click");
     expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(dossier.props("active")).toBe(true);
     expect(wrapper.get('[data-testid="technical-details"]').attributes("open")).toBeUndefined();
     wrapper.unmount();
     const reloaded = mountWorkspace(pinia);

@@ -483,6 +483,19 @@ describe("ProjectAcceptanceTestsPanel", () => {
     wrapper.unmount();
   });
 
+  it("lets the table of the criteria scroll in its own box instead of widening the section", async () => {
+    const wrapper = mountPanel(testsApi());
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="acceptance-state"]').classes()).toEqual(
+      expect.arrayContaining(["grid", "grid-cols-1"]),
+    );
+    expect(wrapper.get('[data-testid="acceptance-criteria"]').classes()).toContain(
+      "overflow-x-auto",
+    );
+    wrapper.unmount();
+  });
+
   it("shows the critiques of the twins with their verdict, summary and findings", async () => {
     const wrapper = mountPanel(testsApi());
     await flushPromises();

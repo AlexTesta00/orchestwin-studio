@@ -1295,6 +1295,7 @@ onUnmounted(() => {
               :stages="stageSummaries"
               :authorize="authorized"
               :locale="locale === 'it' ? 'it' : 'en'"
+              :active="activeStage === 5"
               :sections-mode="sectionsMode"
               :provided-prototype="providedPrototype"
               :provided-design-approved="providedDesignApproved"

@@ -305,6 +305,32 @@ const EMPTY: AlignmentPayload = {
   tasks: [],
 };
 
+const DESIGN_AHEAD: AlignmentPayload = {
+  ...ALIGNMENT,
+  reference: {
+    ...ALIGNMENT.reference,
+    design: { ...ALIGNMENT.reference.design!, version_number: 6 },
+  },
+  aligned: { ...ALIGNMENT.aligned!, design_version_number: 3 },
+};
+
+const DESIGN_REACHED: AlignmentPayload = {
+  ...DESIGN_AHEAD,
+  aligned: { ...ALIGNMENT.aligned!, design_version_number: 6 },
+};
+
+const NOT_ALIGNED: AlignmentPayload = { ...EMPTY, reference: DESIGN_AHEAD.reference };
+
+const UNKNOWN_ALIGNED_DESIGN: AlignmentPayload = {
+  ...DESIGN_AHEAD,
+  aligned: { ...ALIGNMENT.aligned!, design_version_number: null },
+};
+
+const NO_APPROVED_DESIGN: AlignmentPayload = {
+  ...DESIGN_AHEAD,
+  reference: { ...ALIGNMENT.reference, design: null },
+};
+
 const LEARNING: TwinLearningPayload = {
   project_id: PROJECT_ID,
   update_available: true,
@@ -457,6 +483,7 @@ interface Extras {
   learning?: TwinLearningApi;
   jobs?: GenerationJobsApi;
   alignment?: KnowledgeAlignmentApi;
+  active?: boolean;
 }
 
 function mountPanel(api: CodeChangesApi, locale: Locale = "en", extras: Extras = {}) {
@@ -470,6 +497,7 @@ function mountPanel(api: CodeChangesApi, locale: Locale = "en", extras: Extras =
       learningApi: extras.learning ?? learningApi(),
       jobsApi: extras.jobs ?? jobsApi(),
       alignmentApi: extras.alignment ?? alignmentApi(),
+      ...(extras.active === undefined ? {} : { active: extras.active }),
     },
     attachTo: document.body,
   });
@@ -544,6 +572,58 @@ describe("ProjectDevelopmentPanel", () => {
     );
     expect(wrapper.find('[data-testid="development-no-model"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="development-empty"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      "The design is at version 6, the code is aligned with version 3: from the terminal ut align --from-design brings the code up to the current design.",
+    ],
+    [
+      "it",
+      "Il design è alla versione 6, il codice è allineato alla versione 3: dal terminale ut align --from-design porta il codice al design attuale.",
+    ],
+  ] as const)(
+    "says in %s right after the aligned point that the design is ahead of the code",
+    async (locale, sentence) => {
+      const wrapper = mountPanel(developmentApi({ alignment: async () => DESIGN_AHEAD }), locale);
+      await flushPromises();
+
+      const notice = wrapper.get('[data-testid="development-design-ahead"]');
+      expect(spoken(notice)).toBe(sentence);
+      expect(notice.findAll("code").map((item) => item.text())).toEqual(["ut align --from-design"]);
+      const reference = wrapper.get('[data-testid="development-reference"]').element;
+      expect(reference.parentElement?.nextElementSibling).toBe(notice.element);
+      await expectAccessible(wrapper.element);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["at the same version", DESIGN_REACHED],
+    ["before any commit is aligned", NOT_ALIGNED],
+    ["when the aligned point names no design version", UNKNOWN_ALIGNED_DESIGN],
+    ["when no design is approved", NO_APPROVED_DESIGN],
+  ] as const)(
+    "says nothing about the design being ahead of the code %s",
+    async (_case, payload) => {
+      const wrapper = mountPanel(developmentApi({ alignment: async () => payload }));
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="development-reference"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="development-design-ahead"]').exists()).toBe(false);
+      wrapper.unmount();
+    },
+  );
+
+  it("keeps its content as wide as the section, whatever a long word inside it holds", async () => {
+    const wrapper = mountPanel(developmentApi());
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="development-state"]').classes()).toEqual(
+      expect.arrayContaining(["grid", "grid-cols-1"]),
+    );
     wrapper.unmount();
   });
 
@@ -1446,6 +1526,244 @@ describe("ProjectDevelopmentPanel", () => {
     wrapper.unmount();
   });
 
+  it("announces an alignment of the knowledge started from the terminal and shows its run when it ends", async () => {
+    vi.useFakeTimers();
+    const alignment = alignmentApi();
+    const jobs = jobsApi([generation("KNOWLEDGE_ALIGNMENT")], [finished("KNOWLEDGE_ALIGNMENT")]);
+    const wrapper = mountPanel(developmentApi(), "en", { jobs, alignment });
+    await vi.advanceTimersByTimeAsync(50);
+
+    const notice = wrapper.get(
+      '[data-testid="development-job"] [data-testid="generation-job-notice"]',
+    );
+    expect(notice.attributes("data-operation")).toBe("KNOWLEDGE_ALIGNMENT");
+    expect(notice.get('[role="status"]').text()).toBe(
+      "The Studio is generating the alignment of the knowledge to the code.",
+    );
+    expect(wrapper.find('[data-testid="development-knowledge-none"]').exists()).toBe(true);
+
+    alignment.runs.mockResolvedValueOnce({ items: [KNOWLEDGE_RUN] });
+    await vi.advanceTimersByTimeAsync(2050);
+
+    expect(wrapper.find('[data-testid="development-job"]').exists()).toBe(false);
+    expect(alignment.runs).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('[data-testid="development-knowledge-waiting"]').text()).toBe("1");
+    wrapper.unmount();
+  });
+
+  it("reads the whole section again every 20 seconds while the page is visible", async () => {
+    vi.useFakeTimers();
+    const api = developmentApi();
+    const learning = learningApi(async () => LEARNING);
+    const jobs = jobsApi();
+    const alignment = alignmentApi();
+    const wrapper = mountPanel(api, "en", { learning, jobs, alignment });
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(api.alignment).toHaveBeenCalledTimes(1);
+    expect(alignment.runs).toHaveBeenCalledTimes(1);
+    expect(jobs.list).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(19900);
+
+    expect(api.alignment).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(api.alignment).toHaveBeenCalledTimes(2);
+    expect(api.changes).toHaveBeenCalledTimes(2);
+    expect(api.tasks).toHaveBeenCalledTimes(2);
+    expect(api.reviews).toHaveBeenCalledTimes(2);
+    expect(learning.overview).toHaveBeenCalledTimes(2);
+    expect(alignment.runs).toHaveBeenCalledTimes(2);
+    expect(jobs.list).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(20000);
+
+    expect(api.alignment).toHaveBeenCalledTimes(3);
+    expect(alignment.runs).toHaveBeenCalledTimes(3);
+    expect(jobs.list).toHaveBeenCalledTimes(3);
+    wrapper.unmount();
+  });
+
+  it("reads nothing while the page is hidden and reads the section again when the page comes back", async () => {
+    vi.useFakeTimers();
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    const api = developmentApi();
+    const jobs = jobsApi();
+    const alignment = alignmentApi();
+    const wrapper = mountPanel(api, "en", { jobs, alignment });
+    await vi.advanceTimersByTimeAsync(60050);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(api.alignment).toHaveBeenCalledTimes(1);
+    expect(api.changes).toHaveBeenCalledTimes(1);
+    expect(alignment.runs).toHaveBeenCalledTimes(1);
+    expect(jobs.list).toHaveBeenCalledTimes(1);
+
+    visibility.mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(api.alignment).toHaveBeenCalledTimes(2);
+    expect(alignment.runs).toHaveBeenCalledTimes(2);
+    expect(jobs.list).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it("skips a timed reading while the previous one still waits for the Studio", async () => {
+    vi.useFakeTimers();
+    const alignment = vi
+      .fn<CodeChangesApi["alignment"]>()
+      .mockResolvedValueOnce(ALIGNMENT)
+      .mockImplementationOnce(() => new Promise<never>(() => undefined));
+    const wrapper = mountPanel(developmentApi({ alignment }));
+    await vi.advanceTimersByTimeAsync(20050);
+
+    expect(alignment).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('[data-testid="development-refresh"]').attributes("disabled")).toBeDefined();
+
+    await vi.advanceTimersByTimeAsync(40000);
+
+    expect(alignment).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it("stops reading the section again once it is closed", async () => {
+    vi.useFakeTimers();
+    const api = developmentApi();
+    const jobs = jobsApi();
+    const alignment = alignmentApi();
+    const wrapper = mountPanel(api, "en", { jobs, alignment });
+    await vi.advanceTimersByTimeAsync(50);
+
+    wrapper.unmount();
+    await vi.advanceTimersByTimeAsync(60000);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(api.alignment).toHaveBeenCalledTimes(1);
+    expect(alignment.runs).toHaveBeenCalledTimes(1);
+    expect(jobs.list).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads nothing on its own while its step is not shown and reads once as soon as it is shown again", async () => {
+    vi.useFakeTimers();
+    const api = developmentApi();
+    const jobs = jobsApi();
+    const alignment = alignmentApi();
+    const wrapper = mountPanel(api, "en", { jobs, alignment, active: false });
+    await vi.advanceTimersByTimeAsync(60050);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(api.alignment).toHaveBeenCalledTimes(1);
+    expect(alignment.runs).toHaveBeenCalledTimes(1);
+    expect(jobs.list).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({ active: true });
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(api.alignment).toHaveBeenCalledTimes(2);
+    expect(api.changes).toHaveBeenCalledTimes(2);
+    expect(api.reviews).toHaveBeenCalledTimes(2);
+    expect(alignment.runs).toHaveBeenCalledTimes(2);
+    expect(jobs.list).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(19000);
+
+    expect(api.alignment).toHaveBeenCalledTimes(2);
+
+    await wrapper.setProps({ active: false });
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(api.alignment).toHaveBeenCalledTimes(2);
+
+    await wrapper.setProps({ active: true });
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(api.alignment).toHaveBeenCalledTimes(3);
+    expect(alignment.runs).toHaveBeenCalledTimes(3);
+    expect(jobs.list).toHaveBeenCalledTimes(3);
+    wrapper.unmount();
+  });
+
+  it("waits for the next timed reading when its step is shown right after a reading, as while the project page opens", async () => {
+    vi.useFakeTimers();
+    const api = developmentApi();
+    const wrapper = mountPanel(api, "en", { active: false });
+    await vi.advanceTimersByTimeAsync(50);
+
+    await wrapper.setProps({ active: true });
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(api.alignment).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(19900);
+
+    expect(api.alignment).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it("keeps the notice of a failed reading in place while the timed readings fail and clears it after one that succeeds", async () => {
+    vi.useFakeTimers();
+    let fail = true;
+    const alignment = vi.fn<CodeChangesApi["alignment"]>(async () => {
+      if (fail) {
+        throw new TypeError("Failed to fetch");
+      }
+      return ALIGNMENT;
+    });
+    const wrapper = mountPanel(developmentApi({ alignment }));
+    await vi.advanceTimersByTimeAsync(50);
+
+    const notice = wrapper.get('[data-testid="development-error"]').element;
+    const mutations: MutationRecord[] = [];
+    const observer = new MutationObserver((records) => mutations.push(...records));
+    observer.observe(wrapper.get('[data-testid="development-state"]').element, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    await vi.advanceTimersByTimeAsync(20000);
+    await vi.advanceTimersByTimeAsync(20000);
+    mutations.push(...observer.takeRecords());
+    observer.disconnect();
+
+    expect(alignment).toHaveBeenCalledTimes(3);
+    expect(wrapper.get('[data-testid="development-error"]').element).toBe(notice);
+    expect(mutations).toEqual([]);
+    expect(wrapper.find('[data-testid="development-loading"]').exists()).toBe(false);
+
+    fail = false;
+    await vi.advanceTimersByTimeAsync(20000);
+
+    expect(alignment).toHaveBeenCalledTimes(4);
+    expect(wrapper.find('[data-testid="development-error"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="development-change"]')).toHaveLength(2);
+    wrapper.unmount();
+  });
+
+  it("still takes the notice away at once when the owner asks to read again with the control", async () => {
+    const alignment = vi
+      .fn<CodeChangesApi["alignment"]>()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockImplementationOnce(() => new Promise<never>(() => undefined));
+    const wrapper = mountPanel(developmentApi({ alignment }));
+    await flushPromises();
+    expect(wrapper.find('[data-testid="development-error"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="development-refresh"]').trigger("click");
+
+    expect(alignment).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('[data-testid="development-error"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="development-loading"]').text()).toBe(
+      "Loading the development state…",
+    );
+    wrapper.unmount();
+  });
+
   it.each([
     [
       "en",
@@ -1454,7 +1772,7 @@ describe("ProjectDevelopmentPanel", () => {
         labels: ["Commits", "Date", "Proposals", "Waiting for a decision"],
         commits: "from a1a1a1a to c0ffee1",
         terminal:
-          "Proposals are made from the terminal with ut align; you decide them here and in the sections.",
+          "Proposals are made from the terminal with ut align; you decide them here and in the sections. In the other direction, ut align --from-design brings the code up to a design that changed after the code was written.",
         push: "The hand-made changes of the knowledge folder go back to the Studio from the terminal with ut push: you approve the differences and a new version is born.",
       },
     ],
@@ -1464,7 +1782,8 @@ describe("ProjectDevelopmentPanel", () => {
         title: "Allineamento della conoscenza",
         labels: ["Commit", "Data", "Proposte", "In attesa di decisione"],
         commits: "da a1a1a1a a c0ffee1",
-        terminal: "Le proposte si fanno dal terminale con ut align; qui e nelle sezioni le decidi.",
+        terminal:
+          "Le proposte si fanno dal terminale con ut align; qui e nelle sezioni le decidi. Nella direzione contraria, ut align --from-design porta il codice a un design cambiato dopo che il codice è stato scritto.",
         push: "Le modifiche fatte a mano nella cartella di conoscenza tornano nello Studio dal terminale con ut push: approvi le differenze e nasce una versione nuova.",
       },
     ],
@@ -1495,7 +1814,10 @@ describe("ProjectDevelopmentPanel", () => {
       expect(block.find('[data-testid="development-knowledge-none"]').exists()).toBe(false);
       const terminal = block.get('[data-testid="development-knowledge-terminal"]');
       expect(spoken(terminal)).toBe(expected.terminal);
-      expect(terminal.findAll("code").map((item) => item.text())).toEqual(["ut align"]);
+      expect(terminal.findAll("code").map((item) => item.text())).toEqual([
+        "ut align",
+        "ut align --from-design",
+      ]);
       const push = block.get('[data-testid="development-knowledge-push"]');
       expect(spoken(push)).toBe(expected.push);
       expect(push.findAll("code").map((item) => item.text())).toEqual(["ut push"]);
