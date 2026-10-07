@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import ProjectTwinLearningBlock from "./ProjectTwinLearningBlock.vue";
@@ -54,6 +54,7 @@ const props = withDefaults(
   defineProps<{
     projectId: string;
     locale?: Locale;
+    active?: boolean;
     authorize?: AuthorizedRequest;
     api?: CodeChangesApi;
     learningApi?: TwinLearningApi | undefined;
@@ -62,6 +63,7 @@ const props = withDefaults(
   }>(),
   {
     locale: "en",
+    active: true,
     learningApi: undefined,
     jobsApi: undefined,
     alignmentApi: undefined,
@@ -96,6 +98,8 @@ const messages = {
     designMissing: "not approved yet",
     alignedValue: "commit {commit} · {date}",
     noAligned: "No commit aligned yet",
+    designAhead:
+      "The design is at version {current}, the code is aligned with version {aligned}: from the terminal `ut align --from-design` brings the code up to the current design.",
     pendingTitle: "Pending commits ({count})",
     pendingIntro: "The commits recorded after the aligned point.",
     noPending: "No commit after the aligned point.",
@@ -181,7 +185,7 @@ const messages = {
     knowledgeWaiting: "Waiting for a decision",
     knowledgeNone: "The knowledge has not been compared with the code yet.",
     knowledgeTerminal:
-      "Proposals are made from the terminal with `ut align`; you decide them here and in the sections.",
+      "Proposals are made from the terminal with `ut align`; you decide them here and in the sections. In the other direction, `ut align --from-design` brings the code up to a design that changed after the code was written.",
     knowledgePush:
       "The hand-made changes of the knowledge folder go back to the Studio from the terminal with `ut push`: you approve the differences and a new version is born.",
     technical: "Development state",
@@ -212,6 +216,8 @@ const messages = {
     designMissing: "non ancora approvato",
     alignedValue: "commit {commit} · {date}",
     noAligned: "Nessun commit ancora allineato",
+    designAhead:
+      "Il design è alla versione {current}, il codice è allineato alla versione {aligned}: dal terminale `ut align --from-design` porta il codice al design attuale.",
     pendingTitle: "Commit in attesa ({count})",
     pendingIntro: "I commit registrati dopo il punto allineato.",
     noPending: "Nessun commit dopo il punto allineato.",
@@ -297,7 +303,7 @@ const messages = {
     knowledgeWaiting: "In attesa di decisione",
     knowledgeNone: "La conoscenza non è ancora stata confrontata con il codice.",
     knowledgeTerminal:
-      "Le proposte si fanno dal terminale con `ut align`; qui e nelle sezioni le decidi.",
+      "Le proposte si fanno dal terminale con `ut align`; qui e nelle sezioni le decidi. Nella direzione contraria, `ut align --from-design` porta il codice a un design cambiato dopo che il codice è stato scritto.",
     knowledgePush:
       "Le modifiche fatte a mano nella cartella di conoscenza tornano nello Studio dal terminale con `ut push`: approvi le differenze e nasce una versione nuova.",
     technical: "Stato dello sviluppo",
@@ -337,9 +343,12 @@ const SEVERITY_STYLES: Readonly<Record<FindingSeverity, string>> = {
 
 const SHORT_COMMIT = 7;
 
+const REFRESH_MILLISECONDS = 20000;
+
 const DEVELOPMENT_OPERATIONS: readonly GenerationOperation[] = [
   "CODE_CHANGE_REVIEW",
   "TWIN_UPDATE",
+  "KNOWLEDGE_ALIGNMENT",
 ];
 
 const auth = useAuthStore();
@@ -353,6 +362,8 @@ const copy = computed(() => messages[props.locale]);
 const intlLocale = computed(() => (props.locale === "it" ? "it-IT" : "en-GB"));
 const failure = ref<{ operation: "load" | "run"; code: string | null } | null>(null);
 let refreshes = 0;
+let lastReadAt = 0;
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 const { job: runningJob, recheck } = useGenerationResume({
   projectId: () => props.projectId,
@@ -466,6 +477,14 @@ const alignedText = computed(() => {
         commit: shortCommit(value.commit),
         date: formatDate(value.decided_at),
       });
+});
+
+const designAhead = computed(() => {
+  const current = alignment.value?.reference.design?.version_number;
+  const aligned = alignment.value?.aligned?.design_version_number;
+  return typeof current === "number" && typeof aligned === "number" && current > aligned
+    ? { current, aligned }
+    : null;
 });
 
 const pendingRows = computed(() =>
@@ -720,9 +739,14 @@ function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): P
 }
 
 async function refresh(): Promise<void> {
+  failure.value = null;
+  await readState();
+}
+
+async function readState(): Promise<void> {
   const projectId = props.projectId;
   const attempt = ++refreshes;
-  failure.value = null;
+  lastReadAt = Date.now();
 
   let latest: CodeChangePayload | undefined;
   try {
@@ -730,21 +754,36 @@ async function refresh(): Promise<void> {
     latest = snapshot.changes.find((change) => change.review !== null);
   } catch {
     if (attempt === refreshes) {
-      failure.value = { operation: "load", code: store.error?.code ?? null };
+      fail("load");
     }
     return;
   }
 
-  if (attempt !== refreshes || latest === undefined) {
+  if (attempt !== refreshes) {
     return;
   }
 
-  try {
-    await store.loadRun(projectId, latest.commit, authorizedRequest, props.api);
-  } catch {
-    if (attempt === refreshes) {
-      failure.value = { operation: "run", code: store.error?.code ?? null };
+  if (latest !== undefined) {
+    try {
+      await store.loadRun(projectId, latest.commit, authorizedRequest, props.api);
+    } catch {
+      if (attempt === refreshes) {
+        fail("run");
+      }
+      return;
     }
+  }
+
+  if (attempt === refreshes) {
+    failure.value = null;
+  }
+}
+
+function fail(operation: "load" | "run"): void {
+  const code = store.error?.code ?? null;
+  const shown = failure.value;
+  if (shown === null || shown.operation !== operation || shown.code !== code) {
+    failure.value = { operation, code };
   }
 }
 
@@ -772,8 +811,39 @@ async function readAgainAndCheck(): Promise<void> {
   await Promise.all([readAgain(), recheck()]);
 }
 
+async function readAgainQuietly(): Promise<void> {
+  await Promise.all([readState(), readLearning(), readKnowledge(), recheck()]);
+}
+
+function readWhenVisible(): void {
+  if (props.active && document.visibilityState === "visible" && !busy.value) {
+    void readAgainQuietly();
+  }
+}
+
 watch(() => props.projectId, refresh, { immediate: true });
 watch(() => props.projectId, readKnowledge, { immediate: true });
+watch(
+  () => props.active,
+  (active) => {
+    if (active && Date.now() - lastReadAt >= REFRESH_MILLISECONDS) {
+      readWhenVisible();
+    }
+  },
+);
+
+onMounted(() => {
+  refreshTimer = setInterval(readWhenVisible, REFRESH_MILLISECONDS);
+  document.addEventListener("visibilitychange", readWhenVisible);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer !== null) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  document.removeEventListener("visibilitychange", readWhenVisible);
+});
 </script>
 
 <template>
@@ -822,7 +892,7 @@ watch(() => props.projectId, readKnowledge, { immediate: true });
     </div>
 
     <div
-      class="mt-5 grid gap-5"
+      class="mt-5 grid grid-cols-1 gap-5"
       aria-live="polite"
       :aria-busy="busy ? 'true' : undefined"
       data-testid="development-state"
@@ -886,6 +956,24 @@ watch(() => props.projectId, readKnowledge, { immediate: true });
             <dd class="m-0" data-testid="development-aligned">{{ alignedText }}</dd>
           </dl>
         </div>
+
+        <p
+          v-if="designAhead !== null"
+          class="m-0 rounded-field border border-warn-on-night/40 bg-warn-on-night/8 px-4 py-3 text-sm leading-normal text-warn-on-night"
+          data-testid="development-design-ahead"
+        >
+          <template
+            v-for="part in commandParts(fill(copy.designAhead, designAhead))"
+            :key="part.key"
+          >
+            <code
+              v-if="part.command"
+              class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+              >{{ part.text }}</code
+            >
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </p>
 
         <p
           v-if="changes.length === 0"

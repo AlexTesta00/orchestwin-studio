@@ -549,7 +549,7 @@ watch(() => props.projectId, load, { immediate: true });
     </div>
 
     <div
-      class="mt-5 grid gap-5"
+      class="mt-5 grid grid-cols-1 gap-5"
       aria-live="polite"
       :aria-busy="loading ? 'true' : undefined"
       data-testid="acceptance-state"

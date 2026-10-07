@@ -154,6 +154,7 @@ interface MountOptions {
   sectionsMode?: boolean;
   providedPrototype?: ProvidedPrototype;
   providedDesignApproved?: boolean;
+  active?: boolean;
 }
 
 function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
@@ -178,6 +179,7 @@ function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
       ...(options.providedDesignApproved === undefined
         ? {}
         : { providedDesignApproved: options.providedDesignApproved }),
+      ...(options.active === undefined ? {} : { active: options.active }),
     },
     slots: options.preview === undefined ? {} : { preview: options.preview },
     attachTo: document.body,
@@ -646,6 +648,7 @@ describe("ProjectDesignPackagePanel", () => {
     expect(panel.exists()).toBe(true);
     expect(panel.props("projectId")).toBe(PROJECT_ID);
     expect(panel.props("locale")).toBe("it");
+    expect(panel.props("active")).toBe(true);
     const authorize = panel.props("authorize") as <T>(
       operation: (accessToken: string) => Promise<T>,
     ) => Promise<T>;
@@ -661,6 +664,29 @@ describe("ProjectDesignPackagePanel", () => {
     expect(waiting.wrapper.findComponent({ name: "ProjectDevelopmentPanel" }).exists()).toBe(false);
     expect(waiting.wrapper.find('[data-testid="package-terminal"]').exists()).toBe(false);
     waiting.wrapper.unmount();
+  });
+
+  it("keeps its single column as wide as the page, whatever the panels below it hold", async () => {
+    const { wrapper } = mountPanel(knowledgeApi());
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="design-package"]').classes()).toEqual(
+      expect.arrayContaining(["grid", "grid-cols-1"]),
+    );
+    wrapper.unmount();
+  });
+
+  it("tells the development outside the Studio when its step is not the one shown", async () => {
+    const { wrapper } = mountPanel(knowledgeApi(), { active: false });
+    await flushPromises();
+
+    const panel = wrapper.findComponent({ name: "ProjectDevelopmentPanel" });
+    expect(panel.props("active")).toBe(false);
+
+    await wrapper.setProps({ active: true });
+
+    expect(panel.props("active")).toBe(true);
+    wrapper.unmount();
   });
 
   it("shows the acceptance tests right after the development outside the Studio once the design is approved", async () => {
@@ -1182,7 +1208,7 @@ describe("ProjectDesignPackagePanel", () => {
         "code .",
       ]);
       expect(commands(wrapper, "package-development-step")).toContain("ut push");
-      expect(wrapper.findAll('[data-testid="command-line"]')).toHaveLength(11);
+      expect(wrapper.findAll('[data-testid="command-line"]')).toHaveLength(12);
       expect(wrapper.text()).not.toContain("ut login");
       wrapper.unmount();
     },
@@ -1233,6 +1259,7 @@ describe("ProjectDesignPackagePanel", () => {
         "Verifica i criteri di accettazione nei browser di questo computer (con --url se l'applicazione ha un suo indirizzo).",
         "I twin esaminano i commit e il modello dice se codice, Definizione e Design sono allineati; decidi tu.",
         "Legge le modifiche del codice e propone aggiornamenti alla Definizione, al Design e al piano dei test: li approvi uno per uno.",
+        "Quando il design cambia nello Studio dopo che il codice esiste, porta il codice al design attuale: il tuo agente riceve un ordine di lavoro limitato a ciò che è cambiato.",
         "Invia allo Studio le modifiche fatte a mano nella cartella di conoscenza: vedi le differenze, le approvi e nasce una versione nuova.",
         "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
         "Guarda a che punto è il progetto.",
@@ -1247,6 +1274,7 @@ describe("ProjectDesignPackagePanel", () => {
         "Check the acceptance criteria in the browsers of this computer (with --url if the application has an address of its own).",
         "The twins review the commits and the model says whether code, Definition and Design are aligned; you decide.",
         "Reads the code changes and proposes updates to the Definition, the Design and the test plan: you approve them one by one.",
+        "When the design changes in the Studio after the code exists, bring the code up to the current design: your agent receives a work order limited to what changed.",
         "Sends the hand-made changes of the knowledge folder to the Studio: you see the differences, approve them, and a new version is born.",
         "Have the twins propose what they learned from the development.",
         "See where the project stands.",
@@ -1271,6 +1299,7 @@ describe("ProjectDesignPackagePanel", () => {
         "ut test --static .",
         "ut verify",
         "ut align",
+        "ut align --from-design",
         "ut push",
         "ut twins update",
         "ut status",
@@ -1282,6 +1311,40 @@ describe("ProjectDesignPackagePanel", () => {
       expect(items[3]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
       expect(items[4]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
       expect(items[5]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
+      expect(items[6]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    [
+      "en",
+      "Copy",
+      "When the design changes in the Studio after the code exists, bring the code up to the current design: your agent receives a work order limited to what changed.",
+    ],
+    [
+      "it",
+      "Copia",
+      "Quando il design cambia nello Studio dopo che il codice esiste, porta il codice al design attuale: il tuo agente riceve un ordine di lavoro limitato a ciò che è cambiato.",
+    ],
+  ] as const)(
+    "lists in %s the command that brings the code up to a changed design right after ut align",
+    async (locale, copyLabel, sentence) => {
+      const { wrapper } = mountPanel(knowledgeApi(), { locale });
+      await flushPromises();
+
+      const list = commands(wrapper, "package-development-step");
+      const position = list.indexOf("ut align --from-design");
+      expect(list.slice(position - 1, position + 2)).toEqual([
+        "ut align",
+        "ut align --from-design",
+        "ut push",
+      ]);
+      const step = wrapper.findAll('[data-testid="package-development-step"]')[position]!;
+      expect(spoken(step.get('[data-testid="package-development-text"]'))).toBe(sentence);
+      expect(step.get('[data-testid="command-copy"]').attributes("aria-label")).toBe(
+        `${copyLabel}: ut align --from-design`,
+      );
       wrapper.unmount();
     },
   );
@@ -1379,7 +1442,7 @@ describe("ProjectDesignPackagePanel", () => {
   });
 
   it.each([
-    { name: "the chosen design", options: {}, count: 12 },
+    { name: "the chosen design", options: {}, count: 13 },
     {
       name: "a supplied design",
       options: {

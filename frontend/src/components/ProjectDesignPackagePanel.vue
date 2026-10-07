@@ -43,6 +43,7 @@ const DEVELOPMENT_STEPS = [
   { key: "test", command: "ut test --static ." },
   { key: "verify", command: "ut verify" },
   { key: "align", command: "ut align" },
+  { key: "alignDesign", command: "ut align --from-design" },
   { key: "push", command: "ut push" },
   { key: "learn", command: "ut twins update" },
   { key: "status", command: "ut status" },
@@ -60,6 +61,7 @@ const props = withDefaults(
     sectionsMode?: boolean;
     providedPrototype?: ProvidedPrototype | null;
     providedDesignApproved?: boolean;
+    active?: boolean;
   }>(),
   {
     locale: "en",
@@ -67,6 +69,7 @@ const props = withDefaults(
     sectionsMode: false,
     providedPrototype: null,
     providedDesignApproved: false,
+    active: true,
   },
 );
 
@@ -166,6 +169,8 @@ const messages = {
         "The twins review the commits and the model says whether code, Definition and Design are aligned; you decide.",
       align:
         "Reads the code changes and proposes updates to the Definition, the Design and the test plan: you approve them one by one.",
+      alignDesign:
+        "When the design changes in the Studio after the code exists, bring the code up to the current design: your agent receives a work order limited to what changed.",
       push: "Sends the hand-made changes of the knowledge folder to the Studio: you see the differences, approve them, and a new version is born.",
       learn: "Have the twins propose what they learned from the development.",
       status: "See where the project stands.",
@@ -276,6 +281,8 @@ const messages = {
         "I twin esaminano i commit e il modello dice se codice, Definizione e Design sono allineati; decidi tu.",
       align:
         "Legge le modifiche del codice e propone aggiornamenti alla Definizione, al Design e al piano dei test: li approvi uno per uno.",
+      alignDesign:
+        "Quando il design cambia nello Studio dopo che il codice esiste, porta il codice al design attuale: il tuo agente riceve un ordine di lavoro limitato a ciò che è cambiato.",
       push: "Invia allo Studio le modifiche fatte a mano nella cartella di conoscenza: vedi le differenze, le approvi e nasce una versione nuova.",
       learn: "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
       status: "Guarda a che punto è il progetto.",
@@ -612,7 +619,11 @@ watch(() => props.projectId, loadHistory, { immediate: true });
 </script>
 
 <template>
-  <div class="grid gap-4 text-on-night" data-surface="night" data-testid="design-package">
+  <div
+    class="grid grid-cols-1 gap-4 text-on-night"
+    data-surface="night"
+    data-testid="design-package"
+  >
     <UiAgentMessage
       v-if="!guidance.expert"
       :role-label="copy.agentRole"
@@ -1144,6 +1155,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
       v-if="designApproved && !providedDesignApproved"
       :project-id="projectId"
       :locale="locale"
+      :active="active"
       :authorize="authorizedRequest"
     />
 
