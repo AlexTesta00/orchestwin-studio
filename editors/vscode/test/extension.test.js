@@ -317,10 +317,12 @@ describe("the extension", () => {
     ]);
     session.created[0].close();
     session.view.send({ command: "align" });
+    session.view.send({ command: "alignDesign" });
     session.view.send({ command: "tasksFromTest" });
     assert.equal(session.created.length, 2);
     assert.deepEqual(session.created[1].sent, [
       ["ut align", true],
+      ["ut align --from-design", true],
       ["ut tasks from-test", true],
     ]);
     assert.equal(session.created[1].options.cwd, root);
@@ -334,6 +336,7 @@ describe("the extension", () => {
       "orchestwin.verify": "ut verify",
       "orchestwin.recheck": "ut verify --recheck",
       "orchestwin.align": "ut align",
+      "orchestwin.alignDesign": "ut align --from-design",
       "orchestwin.push": "ut push",
       "orchestwin.code": "ut code",
       "orchestwin.tasks": "ut tasks",
@@ -373,6 +376,7 @@ describe("the extension", () => {
       ".orchestwin/project.json",
       ".orchestwin/tests/latest.json",
       ".orchestwin/code/latest.json",
+      ".orchestwin/code/design.json",
       ".orchestwin/align/latest.json",
       ".vscode/mcp.json",
       "orchestwin/**",
@@ -427,7 +431,7 @@ describe("the extension", () => {
     const project = fixtures.writeCompleteProject(path.join(base, "aligned"), "old");
     session = start({ folders: [project] });
     assert.ok(!session.view.webview.html.includes(text("en", "knowledge.run")));
-    assert.ok(session.view.webview.html.includes('data-step="CODE"'));
+    assert.ok(session.view.webview.html.includes('data-step="DESIGN_AHEAD"'));
     fixtures.writeJson(project, ".orchestwin/align/latest.json", {
       schema_version: 1,
       run_id: "0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
@@ -452,7 +456,19 @@ describe("the extension", () => {
     session.timers.run();
     assert.equal(session.view.htmls.length, 3);
     assert.ok(!session.view.webview.html.includes(text("en", "knowledge.run")));
+    assert.ok(session.view.webview.html.includes('data-step="DESIGN_AHEAD"'));
+  });
+
+  it("moves to the next step once a run of the agent records the current design", () => {
+    const project = fixtures.writeCompleteProject(path.join(base, "design point"), "old");
+    session = start({ folders: [project] });
+    assert.ok(session.view.webview.html.includes('data-step="DESIGN_AHEAD"'));
+    fixtures.writeDesignPoint(project, 5);
+    session.watchers[0].fire("create");
+    session.timers.run();
+    assert.equal(session.view.htmls.length, 2);
     assert.ok(session.view.webview.html.includes('data-step="CODE"'));
+    assert.equal(session.created.length, 0);
   });
 
   it("renders again on the refresh command and when the folders of the workspace change", () => {

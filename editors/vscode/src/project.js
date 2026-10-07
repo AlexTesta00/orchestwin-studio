@@ -37,6 +37,7 @@ const LOCAL_FILES = Object.freeze({
   link: ".orchestwin/project.json",
   tests: ".orchestwin/tests/latest.json",
   code: ".orchestwin/code/latest.json",
+  designPoint: ".orchestwin/code/design.json",
 });
 const TESTS_FOLDER = ".orchestwin/tests";
 const RUN_FILE = "run.json";
@@ -73,6 +74,15 @@ function textOf(value) {
 
 function countOf(value) {
   return Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function versionOf(value) {
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function highestVersion(values) {
+  const versions = values.map(versionOf).filter((version) => version !== null);
+  return versions.length === 0 ? null : Math.max(...versions);
 }
 
 function oneOf(value, allowed) {
@@ -157,6 +167,7 @@ function emptyDevelopment(problem) {
     available: false,
     problem,
     aligned: null,
+    alignedDesign: null,
     recorded: 0,
     pending: 0,
     staleKnown: false,
@@ -295,7 +306,14 @@ function changeOf(change) {
   };
 }
 
-function developmentOf(stateDocument, manifest) {
+function designPointOf(found) {
+  if (found.status !== "OK" || found.value.schema_version !== 1) {
+    return null;
+  }
+  return versionOf(found.value.design_version_number);
+}
+
+function developmentOf(stateDocument, manifest, designPoint) {
   if (stateDocument.status !== "OK") {
     return emptyDevelopment(stateDocument.status);
   }
@@ -309,6 +327,7 @@ function developmentOf(stateDocument, manifest) {
       : {
           commit: alignedCommit,
           decidedAt: textOf(alignedDocument.decided_at),
+          design: countOf(alignedDocument.design_version_number),
         };
   let pending = 0;
   for (const change of changes) {
@@ -329,6 +348,7 @@ function developmentOf(stateDocument, manifest) {
     available: true,
     problem: null,
     aligned,
+    alignedDesign: highestVersion([objectOf(aligned).design, designPoint]),
     recorded: changes.length,
     pending,
     staleKnown: flagged || counted !== null,
@@ -784,7 +804,11 @@ function readLinkedProject(root) {
         state.reference.direction = direction;
       }
     }
-    state.development = developmentOf(documents.state, manifest.value);
+    state.development = developmentOf(
+      documents.state,
+      manifest.value,
+      designPointOf(reader.read(LOCAL_FILES.designPoint)),
+    );
     state.tasks = tasksOf(documents.state);
     state.tests = testsOf(
       root,

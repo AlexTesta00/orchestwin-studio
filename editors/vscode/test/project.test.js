@@ -63,7 +63,9 @@ describe("readProject", () => {
       assert.deepEqual(development.aligned, {
         commit: fixtures.ALIGNED_COMMIT,
         decidedAt: "2026-09-29T16:13:26+00:00",
+        design: 4,
       });
+      assert.equal(development.alignedDesign, 4);
       assert.equal(development.recorded, 3);
       assert.equal(development.pending, 2);
       assert.equal(development.staleKnown, true);
@@ -202,6 +204,7 @@ describe("readProject", () => {
       assert.equal(state.development.stale, 0);
       assert.deepEqual(state.development.staleCommits, []);
       assert.equal(state.development.latest.stale, false);
+      assert.equal(state.development.aligned.design, 4);
     });
 
     it("reads the tasks without origin as tasks of the verdict on their commit", () => {
@@ -304,6 +307,8 @@ describe("readProject", () => {
       assert.equal(state.folder.available, true);
       assert.equal(state.development.available, false);
       assert.equal(state.development.problem, "INVALID");
+      assert.equal(state.development.aligned, null);
+      assert.equal(state.development.alignedDesign, null);
       assert.equal(state.tasks.available, false);
       assert.equal(state.tests.latest.id, fixtures.LATEST_RUN);
       assert.equal(state.twins.items.length, 2);
@@ -416,6 +421,110 @@ describe("readProject", () => {
         exitStatus: 3,
         changedFiles: null,
       });
+    });
+  });
+
+  describe("the design version of the aligned point", () => {
+    const STATE_FILE = "orchestwin/state/state.json";
+
+    function alignedWith(name, value) {
+      const root = fixtures.writeCompleteProject(path.join(base, name), "new");
+      const document = fixtures.readJson(root, STATE_FILE);
+      if (value === undefined) {
+        delete document.aligned.design_version_number;
+      } else {
+        document.aligned.design_version_number = value;
+      }
+      fixtures.writeJson(root, STATE_FILE, document);
+      const state = readProject(root);
+      assert.deepEqual(state.notices, [], name);
+      return state.development.aligned;
+    }
+
+    it("reads the design version that the aligned point records", () => {
+      assert.deepEqual(alignedWith("aligned-design", 6), {
+        commit: fixtures.ALIGNED_COMMIT,
+        decidedAt: "2026-09-29T16:13:26+00:00",
+        design: 6,
+      });
+    });
+
+    it("leaves the design version empty when it is missing or not a number", () => {
+      for (const [name, value] of [
+        ["aligned-missing", undefined],
+        ["aligned-null", null],
+        ["aligned-text", "6"],
+        ["aligned-fraction", 2.5],
+        ["aligned-negative", -1],
+        ["aligned-flag", true],
+      ]) {
+        const aligned = alignedWith(name, value);
+        assert.equal(aligned.commit, fixtures.ALIGNED_COMMIT, name);
+        assert.equal(aligned.design, null, name);
+      }
+    });
+
+    function readWith(name, write) {
+      const root = fixtures.writeCompleteProject(path.join(base, name), "new");
+      write(root);
+      return readProject(root);
+    }
+
+    it("takes the higher design version between the aligned point and the latest run of the agent", () => {
+      const higher = readWith("point-higher", (root) => fixtures.writeDesignPoint(root, 7));
+      assert.equal(higher.development.aligned.design, 4);
+      assert.equal(higher.development.alignedDesign, 7);
+      assert.deepEqual(higher.notices, []);
+      const lower = readWith("point-lower", (root) => fixtures.writeDesignPoint(root, 3));
+      assert.equal(lower.development.alignedDesign, 4);
+      const missing = readWith("point-missing", () => {});
+      assert.equal(missing.development.alignedDesign, 4);
+      assert.deepEqual(missing.notices, []);
+    });
+
+    it("ignores a design point that is not valid and names one that cannot be read", () => {
+      for (const [name, version, values] of [
+        ["point-zero", 0, {}],
+        ["point-text", "7", {}],
+        ["point-flag", true, {}],
+        ["point-fraction", 6.5, {}],
+        ["point-without-version", undefined, {}],
+        ["point-schema", 7, { schema_version: 2 }],
+        ["point-schema-flag", 7, { schema_version: true }],
+      ]) {
+        const state = readWith(name, (root) => fixtures.writeDesignPoint(root, version, values));
+        assert.equal(state.development.alignedDesign, 4, name);
+        assert.deepEqual(state.notices, [], name);
+      }
+      for (const [name, write, problem] of [
+        ["point-broken", (root) => fixtures.writeText(root, fixtures.DESIGN_POINT, "{ "), "INVALID_JSON"],
+        ["point-list", (root) => fixtures.writeJson(root, fixtures.DESIGN_POINT, [7]), "UNEXPECTED"],
+      ]) {
+        const state = readWith(name, write);
+        assert.equal(state.development.alignedDesign, 4, name);
+        assert.deepEqual(state.notices, [{ file: ".orchestwin/code/design.json", problem }], name);
+      }
+    });
+
+    it("compares with the design point alone while no commit is aligned", () => {
+      const withoutAligned = (root) => {
+        const document = fixtures.readJson(root, STATE_FILE);
+        document.aligned = null;
+        fixtures.writeJson(root, STATE_FILE, document);
+      };
+      const alone = readWith("point-alone", (root) => {
+        withoutAligned(root);
+        fixtures.writeDesignPoint(root, 6);
+      });
+      assert.equal(alone.development.aligned, null);
+      assert.equal(alone.development.alignedDesign, 6);
+      assert.equal(alone.development.pending, 3);
+      assert.equal(readWith("point-none", withoutAligned).development.alignedDesign, null);
+      const zero = readWith("point-zero-alone", (root) => {
+        withoutAligned(root);
+        fixtures.writeDesignPoint(root, 0);
+      });
+      assert.equal(zero.development.alignedDesign, null);
     });
   });
 

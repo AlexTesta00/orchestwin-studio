@@ -23,6 +23,7 @@ const WATCHED_FILES = Object.freeze([
   ".orchestwin/project.json",
   ".orchestwin/tests/latest.json",
   ".orchestwin/code/latest.json",
+  ".orchestwin/code/design.json",
   ".orchestwin/align/latest.json",
   ".vscode/mcp.json",
 ]);
@@ -32,6 +33,7 @@ const TERMINAL_COMMANDS = Object.freeze({
   "orchestwin.verify": "verify",
   "orchestwin.recheck": "recheck",
   "orchestwin.align": "align",
+  "orchestwin.alignDesign": "alignDesign",
   "orchestwin.push": "push",
   "orchestwin.code": "code",
   "orchestwin.tasks": "tasks",

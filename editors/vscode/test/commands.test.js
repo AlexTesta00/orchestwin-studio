@@ -21,6 +21,7 @@ describe("commandLine", () => {
     assert.equal(commandLine("recheck", "ut"), "ut verify --recheck");
     assert.equal(commandLine("align", "ut"), "ut align");
     assert.equal(commandLine("alignPending", "ut"), "ut align --pending");
+    assert.equal(commandLine("alignDesign", "ut"), "ut align --from-design");
     assert.equal(commandLine("push", "ut"), "ut push");
     assert.equal(commandLine("code", "ut"), "ut code");
     assert.equal(commandLine("tasks", "ut"), "ut tasks");
@@ -37,6 +38,7 @@ describe("commandLine", () => {
     }
     assert.deepEqual(Object.keys(ARGUMENTS).sort(), [
       "align",
+      "alignDesign",
       "alignPending",
       "code",
       "design",
@@ -111,6 +113,7 @@ describe("costOf", () => {
       assert.equal(costOf(id), "SPENDS", id);
     }
     assert.equal(costOf("code"), "AGENT");
+    assert.equal(costOf("alignDesign"), "AGENT");
     for (const id of ["status", "tasks", "tasksFromTest", "publish", "push"]) {
       assert.equal(costOf(id), "FREE", id);
     }
