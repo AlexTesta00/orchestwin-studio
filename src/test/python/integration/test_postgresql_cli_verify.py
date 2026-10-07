@@ -415,12 +415,14 @@ def decide_without_a_review(scene: Scene, development: Development) -> None:
     development_line = say(
         "status.alignment", recorded=recorded, pending=0, commit=newest[:7], tasks=0
     )
+    design_line = say("status.code_design_current", aligned=aligned["design_version_number"])
     status = scene.ut("status")
     assert status.status == 0, status.transcript()
     for sentence in (
         say("status.next", action=say("status.next_folder_current")),
         say("status.folder_both", local=COMPLETE_FOLDER, studio=COMPLETE_FOLDER),
         development_line,
+        design_line,
     ):
         assert sentence in status.output, f"missing: {sentence}\n{status.transcript()}"
     as_json = scene.ut("status", "--json")
@@ -435,6 +437,8 @@ def decide_without_a_review(scene: Scene, development: Development) -> None:
             "aligned_commit": newest,
             "open_tasks": 0,
             "stale_reviews": 0,
+            "aligned_design_version": aligned["design_version_number"],
+            "current_design_version": reference["design"]["version_number"],
         },
     ), as_json.transcript()
     publish_the_state(scene, newest, aligned, reference)

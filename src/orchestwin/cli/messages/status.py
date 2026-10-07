@@ -89,6 +89,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Sviluppo: nessun commit registrato finora. Dopo il primo commit lancia `ut verify`.",
         "en": "Development: no commit recorded yet. After your first commit launch `ut verify`.",
     },
+    "status.code_design_behind": {
+        "it": "Codice: allineato al design versione {aligned}; il design è alla versione "
+        "{current}: `ut align --from-design` porta il codice al design attuale.",
+        "en": "Code: aligned with design version {aligned}; the design is at version {current}: "
+        "`ut align --from-design` brings the code up to the current design.",
+    },
+    "status.code_design_current": {
+        "it": "Codice: allineato al design versione {aligned}.",
+        "en": "Code: aligned with design version {aligned}.",
+    },
     "status.knowledge": {
         "it": "Conoscenza: allineata al codice fino al commit {commit} ({date}); proposte in "
         "attesa: {count}.",

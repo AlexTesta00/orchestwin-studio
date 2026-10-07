@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -177,9 +177,17 @@ def align_files(project: ProjectFolder, *, waiting: int = 1, run: bool = True) -
         (folder / f"{RUN_ID}.json").write_text(json.dumps(snapshot), encoding="utf-8")
 
 
+def local_date(moment: str) -> str:
+    return datetime.fromisoformat(moment).astimezone().strftime("%Y-%m-%d %H:%M")
+
+
 def knowledge_line(language: str, count: int) -> str:
     return messages.text(
-        "status.knowledge", language, commit="4f2a9c1", date="2026-09-29 10:15", count=count
+        "status.knowledge",
+        language,
+        commit="4f2a9c1",
+        date=local_date(str(LATEST_RUN["created_at"])),
+        count=count,
     )
 
 
@@ -415,6 +423,7 @@ def test_status_from_the_studio_in_italian_with_an_older_folder(tmp_path: Path) 
         "La cartella qui è più vecchia: aggiornala con `ut package pull`.",
         "Sviluppo: commit registrati: 3; dopo il punto allineato: 1; commit allineato: "
         "4f2a9c1; compiti aperti per il codice: 1.",
+        "Codice: allineato al design versione 2.",
         "Spesa del progetto: 0,42 USD. Credito rimasto nello Studio: 25,13 USD.",
     ]
 
@@ -478,6 +487,8 @@ def test_the_development_as_json_and_when_nothing_is_recorded(tmp_path: Path) ->
         "aligned_commit": ALIGNED,
         "open_tasks": 1,
         "stale_reviews": 0,
+        "aligned_design_version": 2,
+        "current_design_version": 2,
     }
     assert document["next_command"] == "ut verify"
     assert (
@@ -546,6 +557,8 @@ def test_offline_the_development_comes_from_the_folder(tmp_path: Path) -> None:
         "aligned_commit": ALIGNED,
         "open_tasks": 3,
         "stale_reviews": 0,
+        "aligned_design_version": None,
+        "current_design_version": 1,
     }
 
 
@@ -1142,7 +1155,8 @@ def test_the_latest_run_of_the_tests_follows_the_development_line(
 
     lines = run.output.splitlines()
     position = lines.index(line)
-    assert lines[position - 1].startswith(("Development:", "Sviluppo:"))
+    assert lines[position - 2].startswith(("Development:", "Sviluppo:"))
+    assert lines[position - 1].startswith(("Code:", "Codice:"))
     assert lines[position + 1].startswith(("Spent", "Spesa"))
     assert document["tests"] == {
         "runs": 2,
@@ -1354,8 +1368,14 @@ def test_stale_reviews_join_the_development_line_and_the_json(
         "aligned_commit": ALIGNED,
         "open_tasks": 1,
         "stale_reviews": 2,
+        "aligned_design_version": 2,
+        "current_design_version": 2,
     }
-    assert list(document["alignment"])[-1] == "stale_reviews"
+    assert list(document["alignment"])[-3:] == [
+        "stale_reviews",
+        "aligned_design_version",
+        "current_design_version",
+    ]
     assert document["learning"] is None
     text.assert_done()
     as_json.assert_done()
@@ -1437,7 +1457,8 @@ def test_the_knowledge_line_follows_the_development_and_the_json_ends_with_it(
 
     lines = run.output.splitlines()
     position = lines.index(knowledge_line(language, 2))
-    assert lines[position - 1].startswith(("Development:", "Sviluppo:"))
+    assert lines[position - 2].startswith(("Development:", "Sviluppo:"))
+    assert lines[position - 1].startswith(("Code:", "Codice:"))
     assert lines[position + 1].startswith(("Spent", "Spesa"))
     assert document["knowledge_alignment"] == {"latest_run": LATEST_RUN, "waiting": 2}
     assert list(document)[-1] == "knowledge_alignment"
@@ -1510,8 +1531,9 @@ def test_offline_without_the_run_file_the_latest_file_is_enough(tmp_path: Path) 
     )
 
     assert (
-        "Knowledge: aligned with the code up to commit 4f2a9c1 (2026-09-29 10:20); proposals "
-        "waiting: 0." in run.output.splitlines()
+        "Knowledge: aligned with the code up to commit 4f2a9c1 "
+        f"({local_date('2026-09-29T10:20:00+00:00')}); proposals waiting: 0."
+        in run.output.splitlines()
     )
     assert document["knowledge_alignment"] == {
         "latest_run": {

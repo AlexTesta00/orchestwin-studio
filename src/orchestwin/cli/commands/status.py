@@ -4,6 +4,7 @@ import argparse
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import folder as knowledge
@@ -17,7 +18,7 @@ from orchestwin.cli.client import LOCAL_ACCESS, ensure_access
 from orchestwin.cli.commands import sections as sections_command
 from orchestwin.cli.costs import usd_text
 from orchestwin.cli.errors import SIGN_IN_STATUS, ApiFailure, CliError
-from orchestwin.cli.flows import align_knowledge, design_state
+from orchestwin.cli.flows import align_knowledge, code_run, design_state
 from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows.test_report import moment_text
 from orchestwin.cli.messages import known
@@ -120,6 +121,8 @@ class Report:
     sections: Sections | None = None
     knowledge: KnowledgeAlignment | None = None
     local_access: bool = False
+    aligned_design_version: int | None = None
+    current_design_version: int | None = None
 
     @property
     def folder_current(self) -> bool:
@@ -179,6 +182,8 @@ class Report:
                     "aligned_commit": self.alignment.aligned_commit,
                     "open_tasks": self.alignment.open_tasks,
                     "stale_reviews": self.stale_reviews,
+                    "aligned_design_version": self.aligned_design_version,
+                    "current_design_version": self.current_design_version,
                 }
             ),
             "tests": None if self.tests is None else self.tests.document(),
@@ -205,6 +210,7 @@ class _Studio:
     sections: Sections | None = None
     knowledge: KnowledgeAlignment | None = None
     local_access: bool = False
+    aligned_design_version: int | None = None
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -272,6 +278,10 @@ def project_report(context: CommandContext, project: ProjectFolder, *, offline: 
         if found.knowledge is not None
         else folder_knowledge(project, found.steps),
         local_access=found.local_access,
+        aligned_design_version=_aligned_design_version(
+            project, found.alignment, found.aligned_design_version
+        ),
+        current_design_version=_design_version(found.steps),
     )
 
 
@@ -298,6 +308,7 @@ def show(context: CommandContext, report: Report) -> None:
     _folder_lines(context, report)
     if report.alignment is not None:
         show_alignment(context, report.alignment, stale_reviews=report.stale_reviews)
+        show_code_design(context, report.aligned_design_version, report.current_design_version)
     if report.knowledge is not None:
         show_knowledge(context, report.knowledge)
     if report.tests is not None:
@@ -376,6 +387,13 @@ def show_alignment(
     context.console.write(line)
 
 
+def show_code_design(context: CommandContext, aligned: int | None, current: int | None) -> None:
+    if aligned is None or current is None:
+        return
+    key = "status.code_design_behind" if current > aligned else "status.code_design_current"
+    context.console.say(key, aligned=aligned, current=current)
+
+
 def show_knowledge(context: CommandContext, knowledge: KnowledgeAlignment) -> None:
     latest = knowledge.latest_run
     if latest is None:
@@ -383,9 +401,17 @@ def show_knowledge(context: CommandContext, knowledge: KnowledgeAlignment) -> No
     context.console.say(
         "status.knowledge",
         commit=str(latest.get("to_commit") or "")[:SHORT_COMMIT],
-        date=git.commit_date(str(latest.get("created_at") or "")),
+        date=git.commit_date(local_moment(str(latest.get("created_at") or ""))),
         count=knowledge.waiting,
     )
+
+
+def local_moment(text: str) -> str:
+    try:
+        moment = datetime.fromisoformat(text.strip())
+        return (moment if moment.tzinfo is None else moment.astimezone()).isoformat()
+    except (ValueError, OverflowError, OSError):
+        return text
 
 
 def studio_knowledge(client: StudioClient, project_id: str) -> KnowledgeAlignment | None:
@@ -657,6 +683,7 @@ def _studio_facts(
         sections=sections,
         knowledge=knowledge,
         local_access=access == LOCAL_ACCESS,
+        aligned_design_version=None if development is None else development.aligned_design_version,
     )
 
 
@@ -685,6 +712,16 @@ def _design_approved(steps: tuple[project_api.StepState, ...]) -> bool:
 
 def _twins_approved(steps: tuple[project_api.StepState, ...]) -> bool:
     return any(step.stage == TWINS_STAGE and step.approved for step in steps)
+
+
+def _design_version(steps: tuple[project_api.StepState, ...]) -> int | None:
+    return next((step.version for step in steps if step.stage == DESIGN_STAGE), None)
+
+
+def _aligned_design_version(
+    project: ProjectFolder, alignment: StateSummary | None, verified: int | None
+) -> int | None:
+    return None if alignment is None else code_run.aligned_design_version(project, verified)
 
 
 def _offline_reason(error: CliError) -> str | None:
@@ -760,6 +797,8 @@ def _folder_report(
         stale_reviews=0 if alignment is None else local_stale_reviews(project),
         learning=local_learning(project),
         knowledge=folder_knowledge(project, steps),
+        aligned_design_version=_aligned_design_version(project, alignment, None),
+        current_design_version=_design_version(steps),
     )
 
 

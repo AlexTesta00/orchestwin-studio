@@ -234,7 +234,7 @@ def test_the_development_carries_the_stale_reviews(tmp_path: Path) -> None:
     missing = changes_api.development(client, PROJECT_ID)
 
     assert found == changes_api.Development(
-        StateSummary(changes=1, pending_changes=1, aligned_commit=ALIGNED, open_tasks=1), 2
+        StateSummary(changes=1, pending_changes=1, aligned_commit=ALIGNED, open_tasks=1), 2, 4
     )
     assert missing is None
     assert [
@@ -247,6 +247,19 @@ def test_the_development_carries_the_stale_reviews(tmp_path: Path) -> None:
         0,
     ]
     assert changes_api.stale_count(ALIGNMENT) == 0
+
+
+@pytest.mark.parametrize(
+    ("aligned", "expected"),
+    [
+        ({"commit": ALIGNED, "design_version_number": 4}, 4),
+        ({"commit": ALIGNED, "design_version_number": True}, None),
+        ({"commit": ALIGNED}, None),
+        (None, None),
+    ],
+)
+def test_the_design_version_of_the_aligned_point(aligned: object, expected: int | None) -> None:
+    assert changes_api.aligned_design_version({**ALIGNMENT, "aligned": aligned}) == expected
 
 
 def test_the_review_of_a_change_says_when_it_is_stale() -> None:
