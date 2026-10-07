@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createAppI18n } from "@/i18n";
 import { expectAccessible } from "@/test/axe";
 import UiDecisionBar from "./UiDecisionBar.vue";
+import styles from "../styles/tailwind.css?raw";
 
 type BarProps = InstanceType<typeof UiDecisionBar>["$props"];
 
@@ -47,6 +48,16 @@ describe("decision bar", () => {
     expect(classes).toEqual(expect.arrayContaining(["sticky", "bottom-4", "mt-10"]));
     expect(classes).not.toContain("fixed");
     expect(wrapper.get("section").attributes("data-surface")).toBe("night");
+    wrapper.unmount();
+  });
+
+  it("marks its root so the page scrolls a focused control above the bar", () => {
+    const wrapper = mountBar();
+    const root = wrapper.element as HTMLElement;
+    expect(root.getAttribute("data-ui-decision-bar")).toBe("");
+    expect(wrapper.classes()).toEqual(expect.arrayContaining(["sticky", "bottom-4"]));
+    const base = styles.slice(styles.indexOf("@layer base")).replace(/\s+/g, " ");
+    expect(base).toContain("html:has([data-ui-decision-bar]) { scroll-padding-bottom: 9rem; }");
     wrapper.unmount();
   });
 
