@@ -1003,8 +1003,9 @@ def create_design_router() -> APIRouter:
         payload: DesignChangeRequest,
         request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
-        service: Annotated[DesignChangeService, Depends(design_change_service_dependency)],
     ) -> DesignChangePayload:
+        service = design_change_service_dependency(request)
+
         async def change() -> DesignChangePayload:
             result = await service.request_change(
                 owner_user_id=user.id,

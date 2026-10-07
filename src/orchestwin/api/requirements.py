@@ -1600,11 +1600,9 @@ def create_requirements_router() -> APIRouter:
         payload: RequirementsChangeRequest,
         request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
-        service: Annotated[
-            RequirementsChangeService,
-            Depends(requirements_change_service_dependency),
-        ],
     ) -> RequirementsRevisionPayload:
+        service = requirements_change_service_dependency(request)
+
         async def change() -> RequirementsRevisionPayload:
             if payload.include_journeys:
                 result = await service.request_change(

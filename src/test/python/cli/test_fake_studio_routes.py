@@ -6276,6 +6276,7 @@ def test_invalid_knowledge_alignment_requests_answer_like_the_real_application(
         *(("POST", "/alignment/runs", *item) for item in RUN_REFUSALS),
         *(("POST", apply, *item) for item in APPLY_REFUSALS),
         *(("POST", skip, *item) for item in SKIP_REFUSALS),
+        *(("POST", "/design/change-requests", *item) for item in DESIGN_CHANGE_REFUSALS),
         ("GET", "/alignment/proposals?status=maybe", None, ["query", "status"], "literal_error"),
         ("GET", "/alignment/runs/not-a-uuid", None, ["path", "run_id"], "uuid_parsing"),
     ]
@@ -6288,13 +6289,6 @@ def test_invalid_knowledge_alignment_requests_answer_like_the_real_application(
             assert real.status_code == 422, (path, body, real.text)
             assert real.json() == invalid(location, kind), (path, body)
             assert client.call(method, base + path, body) == (422, real.json()), (path, body)
-        for body, location, kind in DESIGN_CHANGE_REFUSALS:
-            real = real_client.post(PREFIX + base + "/design/change-requests", json=body)
-            assert real.status_code == 503, (body, real.text)
-            assert client.call("POST", base + "/design/change-requests", body) == (
-                422,
-                invalid(location, kind),
-            ), body
         assert project.alignment_runs() == []
         assert studio.errors == []
 
