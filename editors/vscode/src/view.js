@@ -60,6 +60,7 @@ const NEXT_SENTENCES = Object.freeze({
   DESIGN: "next.design",
   RECHECK: "next.recheck",
   ALIGN: "next.align",
+  DESIGN_AHEAD: "next.designAhead",
   CODE: "next.code",
   TASKS_FROM_TEST: "next.tasksFromTest",
   VERIFY: "next.verify",
@@ -589,6 +590,11 @@ function nextStep(state) {
   if (Number.isInteger(waiting) && waiting > 0) {
     return { kind: "ALIGN", command: "alignPending", count: waiting };
   }
+  const aligned = development.alignedDesign;
+  const current = objectOf(project.reference).design;
+  if (Number.isInteger(aligned) && Number.isInteger(current) && current > aligned) {
+    return { kind: "DESIGN_AHEAD", command: "alignDesign", count: null, current, aligned };
+  }
   const open = listOf(objectOf(project.tasks).open).length;
   if (open > 0) {
     return { kind: "CODE", command: "code", count: open };
@@ -616,6 +622,9 @@ function nextSentence(step, context) {
   const key = NEXT_SENTENCES[step.kind] ?? NEXT_SENTENCES.TEST;
   if (step.kind === "INIT") {
     return context.t(key, { stage: context.t(`stage.${step.stage}`) });
+  }
+  if (step.kind === "DESIGN_AHEAD") {
+    return context.t(key, { current: step.current, aligned: step.aligned });
   }
   return step.count === null ? context.t(key) : context.n(key, step.count);
 }
@@ -855,7 +864,10 @@ function developmentSection(state, context) {
   }
   content.push(knowledgeBlock(state.alignment, context));
   content.push(
-    actions(["verify", development.stale > 0 ? "recheck" : null, "align", "push"], context),
+    actions(
+      ["verify", development.stale > 0 ? "recheck" : null, "align", "push", "alignDesign"],
+      context,
+    ),
   );
   return sectionOf("development", title, content);
 }

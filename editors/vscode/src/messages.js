@@ -240,6 +240,8 @@ const MESSAGES = Object.freeze({
       "One proposal from the code waits for a decision: decide it with `ut align --pending`.",
       "{count} proposals from the code wait for a decision: decide them with `ut align --pending`.",
     ],
+    "next.designAhead":
+      "The design is at version {current} and the code is aligned with version {aligned}: bring the code up to the current design with `ut align --from-design`.",
     "next.verify": [
       "One commit came after the aligned point: have it reviewed by the twins and decide what to do.",
       "{count} commits came after the aligned point: have them reviewed by the twins and decide what to do.",
@@ -257,6 +259,7 @@ const MESSAGES = Object.freeze({
     "action.recheck": "Review the commits again",
     "action.align": "Align the knowledge to the code",
     "action.alignPending": "Decide the proposals from the code",
+    "action.alignDesign": "Bring the code up to the current design",
     "action.push": "Send the folder changes to the Studio",
     "action.code": "Start the coding agent",
     "action.tasks": "List the tasks",
@@ -615,6 +618,8 @@ const MESSAGES = Object.freeze({
       "Una proposta dal codice aspetta una decisione: decidila con `ut align --pending`.",
       "{count} proposte dal codice aspettano una decisione: decidile con `ut align --pending`.",
     ],
+    "next.designAhead":
+      "Il design è alla versione {current} e il codice è allineato alla versione {aligned}: porta il codice al design attuale con `ut align --from-design`.",
     "next.verify": [
       "Un commit è arrivato dopo il punto allineato: fallo esaminare ai twin e decidi che cosa fare.",
       "{count} commit sono arrivati dopo il punto allineato: falli esaminare ai twin e decidi che cosa fare.",
@@ -632,6 +637,7 @@ const MESSAGES = Object.freeze({
     "action.recheck": "Riesamina i commit",
     "action.align": "Allinea la conoscenza al codice",
     "action.alignPending": "Decidi le proposte dal codice",
+    "action.alignDesign": "Porta il codice al design attuale",
     "action.push": "Invia le modifiche della cartella allo Studio",
     "action.code": "Avvia l'agente di programmazione",
     "action.tasks": "Elenca i compiti",

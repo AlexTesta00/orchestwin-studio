@@ -246,7 +246,7 @@ describe("renderPanel", () => {
   it("reads the shapes of sprint 27 without flags or learning", () => {
     for (const language of LANGUAGES) {
       const page = plain(render(states.old, language));
-      assert.ok(page.includes(counted(language, "next.code", 2)));
+      assert.ok(page.includes(sentence(language, "next.designAhead", { current: 5, aligned: 4 })));
       assert.ok(page.includes(sentence(language, "origin.verdictCommit", { commit: "2b2c2d2" })));
       assert.ok(page.includes(sentence(language, "origin.verdictCommit", { commit: "3c3d3e3" })));
       assert.ok(!page.includes(`${text(language, "development.stale")} `));
@@ -352,9 +352,9 @@ describe("renderPanel", () => {
       assert.ok(first.text.includes(text(language, "cost.SPENDS")));
       assert.deepEqual(
         buttons(html)
-          .slice(1, 5)
+          .slice(1, 6)
           .map((button) => button.command),
-        ["verify", "align", "push", "code"],
+        ["verify", "align", "push", "alignDesign", "code"],
       );
       const without = plain(render(states.complete, language));
       assert.ok(!without.includes(text(language, "knowledge.run")));
@@ -376,7 +376,7 @@ describe("renderPanel", () => {
     state.alignment = { ...ALIGNMENT, waiting: 0 };
     for (const language of LANGUAGES) {
       const html = render(state, language);
-      assert.ok(html.includes('data-step="CODE"'));
+      assert.ok(html.includes('data-step="DESIGN_AHEAD"'));
       assert.ok(plain(html).includes(`${text(language, "knowledge.waiting")} 0`));
     }
   });
@@ -447,6 +447,7 @@ describe("renderPanel", () => {
         "recheck",
         "align",
         "push",
+        "alignDesign",
         "code",
         "tasks",
         "test",
@@ -456,10 +457,11 @@ describe("renderPanel", () => {
         "status",
       ],
       old: [
-        "code",
+        "alignDesign",
         "verify",
         "align",
         "push",
+        "alignDesign",
         "code",
         "tasks",
         "test",
@@ -543,6 +545,54 @@ describe("renderPanel", () => {
       );
       assert.ok(development.includes('data-command="push"'));
       assert.ok(!plain(render(states.partial, language)).includes("ut push"));
+    }
+  });
+
+  it("asks to bring the code up to the current design when the design moved past the aligned point", () => {
+    assert.equal(text("en", "action.alignDesign"), "Bring the code up to the current design");
+    assert.equal(text("it", "action.alignDesign"), "Porta il codice al design attuale");
+    const expected = {
+      en: "The design is at version 6 and the code is aligned with version 3: bring the code up to the current design with ut align --from-design.",
+      it: "Il design è alla versione 6 e il codice è allineato alla versione 3: porta il codice al design attuale con ut align --from-design.",
+    };
+    const state = structuredClone(states.complete);
+    state.development.stale = 0;
+    state.reference.design = 6;
+    state.development.alignedDesign = 3;
+    for (const language of LANGUAGES) {
+      assert.equal(
+        sentence(language, "next.designAhead", { current: 6, aligned: 3 }),
+        expected[language],
+      );
+      const html = render(state, language);
+      const page = plain(html);
+      assert.ok(html.includes('data-step="DESIGN_AHEAD"'));
+      assert.ok(page.includes(expected[language]));
+      assert.ok(!page.includes(counted(language, "next.code", 3)));
+      const found = buttons(html);
+      const commands = found.map((button) => button.command);
+      const [first] = found;
+      assert.deepEqual([first.command, first.primary], ["alignDesign", true]);
+      assert.ok(first.text.includes(text(language, "action.alignDesign")));
+      assert.ok(first.text.includes("ut align --from-design"));
+      assert.ok(first.text.includes(text(language, "cost.AGENT")));
+      const offered = commands.lastIndexOf("alignDesign");
+      assert.equal(commands.indexOf("code"), offered + 1);
+      assert.equal(found[offered].primary, false);
+      const development = html.slice(
+        html.indexOf('id="development-title"'),
+        html.indexOf('id="tasks-title"'),
+      );
+      assert.ok(development.includes('data-command="alignDesign"'));
+      assert.ok(!plain(render(states.partial, language)).includes("ut align --from-design"));
+    }
+    state.development.alignedDesign = 6;
+    for (const language of LANGUAGES) {
+      const html = render(state, language);
+      assert.ok(html.includes('data-step="CODE"'));
+      assert.ok(plain(html).includes(counted(language, "next.code", 3)));
+      const [first] = buttons(html);
+      assert.deepEqual([first.command, first.primary], ["code", true]);
     }
   });
 
@@ -775,8 +825,12 @@ describe("nextStep", () => {
     const noStale = (state) => {
       state.development.stale = 0;
     };
-    const noTasks = (state) => {
+    const sameDesign = (state) => {
       noStale(state);
+      state.development.alignedDesign = state.reference.design;
+    };
+    const noTasks = (state) => {
+      sameDesign(state);
       state.tasks.open = [];
     };
     const noProblems = (state) => {
@@ -789,7 +843,8 @@ describe("nextStep", () => {
       state.development.pending = 0;
     };
     assert.deepEqual(step(complete), ["RECHECK", "recheck", 1]);
-    assert.deepEqual(step(changed(noStale)), ["CODE", "code", 3]);
+    assert.deepEqual(step(changed(noStale)), ["DESIGN_AHEAD", "alignDesign", null]);
+    assert.deepEqual(step(changed(sameDesign)), ["CODE", "code", 3]);
     assert.deepEqual(step(changed(noTasks)), ["TASKS_FROM_TEST", "tasksFromTest", 2]);
     assert.deepEqual(step(changed(noProblems)), ["VERIFY", "verify", 2]);
     assert.deepEqual(step(changed(noPending)), ["TEST", "test", null]);
@@ -807,6 +862,7 @@ describe("nextStep", () => {
   it("asks to decide the proposals from the code after the stale reviews and before the tasks", () => {
     const noStale = (state) => {
       state.development.stale = 0;
+      state.development.alignedDesign = state.reference.design;
     };
     const waiting = (count) => (state) => {
       noStale(state);
@@ -828,6 +884,83 @@ describe("nextStep", () => {
           }),
         ),
         ["CODE", "code", 3],
+      );
+    }
+  });
+
+  it("asks to bring the code up to the current design after the proposals and before the tasks", () => {
+    const ahead = (current, aligned) => (state) => {
+      state.development.stale = 0;
+      state.reference.design = current;
+      state.development.alignedDesign = aligned;
+    };
+    const aheadAnd = (change) => (state) => {
+      ahead(6, 3)(state);
+      change(state);
+    };
+    const state = changed(ahead(6, 3));
+    assert.equal(state.tasks.open.length, 3);
+    assert.deepEqual(nextStep(state), {
+      kind: "DESIGN_AHEAD",
+      command: "alignDesign",
+      count: null,
+      current: 6,
+      aligned: 3,
+    });
+    assert.deepEqual(step(changed(ahead(6, 6))), ["CODE", "code", 3]);
+    assert.deepEqual(step(changed(ahead(3, 6))), ["CODE", "code", 3]);
+    assert.deepEqual(
+      step(changed(aheadAnd((item) => (item.alignment = { ...ALIGNMENT })))),
+      ["ALIGN", "alignPending", 2],
+    );
+    assert.deepEqual(
+      step(changed(aheadAnd((item) => (item.development.stale = 1)))),
+      ["RECHECK", "recheck", 1],
+    );
+    assert.deepEqual(
+      step(changed(aheadAnd((item) => (item.development.aligned = null)))),
+      ["DESIGN_AHEAD", "alignDesign", null],
+    );
+    for (const odd of [null, undefined, "3", 2.5, true]) {
+      assert.deepEqual(
+        step(changed(aheadAnd((item) => (item.development.alignedDesign = odd)))),
+        ["CODE", "code", 3],
+      );
+      assert.deepEqual(
+        step(changed(aheadAnd((item) => (item.reference.design = odd)))),
+        ["CODE", "code", 3],
+      );
+    }
+  });
+
+  it("counts the design that the latest run of the agent brought into the code", () => {
+    const STATE_FILE = "orchestwin/state/state.json";
+    const read = (name, point) => {
+      const root = fixtures.writeCompleteProject(path.join(base, name), "new");
+      const document = fixtures.readJson(root, STATE_FILE);
+      document.reference.design.version_number = 7;
+      document.aligned.design_version_number = 3;
+      fixtures.writeJson(root, STATE_FILE, document);
+      if (point !== null) {
+        fixtures.writeDesignPoint(root, point);
+      }
+      const state = readProject(root);
+      state.development.stale = 0;
+      return state;
+    };
+    assert.deepEqual(step(read("verify-point", null)), ["DESIGN_AHEAD", "alignDesign", null]);
+    assert.deepEqual(step(read("run-point-current", 7)), ["CODE", "code", 3]);
+    const behind = read("run-point-behind", 5);
+    const found = nextStep(behind);
+    assert.deepEqual(
+      [found.kind, found.command, found.current, found.aligned],
+      ["DESIGN_AHEAD", "alignDesign", 7, 5],
+    );
+    for (const language of LANGUAGES) {
+      assert.ok(
+        plain(render(behind, language)).includes(
+          sentence(language, "next.designAhead", { current: 7, aligned: 5 }),
+        ),
       );
     }
   });
@@ -877,6 +1010,7 @@ describe("nextStep", () => {
     for (const language of LANGUAGES) {
       const state = changed((item) => {
         item.development.stale = 0;
+        item.development.alignedDesign = item.reference.design;
         item.tasks.open = [];
       });
       const html = render(state, language);

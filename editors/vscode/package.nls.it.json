@@ -8,6 +8,7 @@
   "command.verify": "Esamina i commit con i twin (ut verify, può spendere)",
   "command.recheck": "Riesamina i commit di un design precedente (ut verify --recheck, può spendere)",
   "command.align": "Allinea la conoscenza al codice (ut align, può spendere)",
+  "command.alignDesign": "Porta il codice al design attuale (ut align --from-design)",
   "command.push": "Invia le modifiche della cartella allo Studio (ut push)",
   "command.code": "Avvia l'agente di programmazione sui compiti aperti (ut code, sul tuo account)",
   "command.tasks": "Elenca i compiti per il codice (ut tasks)",
