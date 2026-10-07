@@ -67,7 +67,7 @@ TAG = re.compile(r"<[a-zA-Z][^>]*>")
 HANDLER = re.compile(r"\son[a-z]+\s*=", re.IGNORECASE)
 LINK = re.compile(r'href="([^"]*)"')
 SECTION = re.compile(r'<section class="ot-screen" id="(SCR-[0-9]{3})"([^>]*)>')
-WHY_FOLDER_CONTENT_HASH = "a47d9cc23427274bf9a1a2c43af8785b7b272f9f3cb803fb64773de9cf9d7536"
+WHY_FOLDER_CONTENT_HASH = "095e40a9e01aa8850de5fbe8fe4878887e885e6b56ae0af761c8a20f87cf936d"
 
 
 def digest(text: str) -> str:
