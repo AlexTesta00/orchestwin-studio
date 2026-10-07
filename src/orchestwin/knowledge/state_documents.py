@@ -208,6 +208,10 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
             "`ut push` sends the hand-made changes of this folder to the Studio: you approve the "
             "differences and a new version is born."
         ),
+        "align_design": (
+            "`ut align --from-design` brings the code up to the current design when the design "
+            "changed after the code was written."
+        ),
         "reference": "## Reference",
         "requirements": "- Requirements: version {number} (`{path}`).",
         "requirements_missing": "- Requirements: not approved yet.",
@@ -290,6 +294,10 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
         "push": (
             "`ut push` invia allo Studio le modifiche fatte a mano in questa cartella: le "
             "differenze si approvano e nasce una versione nuova."
+        ),
+        "align_design": (
+            "`ut align --from-design` porta il codice al design attuale quando il design è "
+            "cambiato dopo che il codice è stato scritto."
         ),
         "reference": "## Riferimento",
         "requirements": "- Requisiti: versione {number} (`{path}`).",
@@ -1162,7 +1170,7 @@ def state_markdown(sources: KnowledgeSources, *, language: str | None) -> str:
         "",
         texts["intro"].format(document=STATE_DOCUMENT, changes=FEEDBACK_CHANGES),
         "",
-        texts["push"],
+        f"{texts['push']} {texts['align_design']}",
         "",
         *_reference_lines(document, texts),
         *_aligned_lines(document, texts),

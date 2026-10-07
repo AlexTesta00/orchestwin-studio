@@ -300,7 +300,8 @@ ITALIAN_TEXT = (
     "viene mai copiato nella cartella.",
     "",
     "`ut push` invia allo Studio le modifiche fatte a mano in questa cartella: le differenze si "
-    "approvano e nasce una versione nuova.",
+    "approvano e nasce una versione nuova. `ut align --from-design` porta il codice al design "
+    "attuale quando il design è cambiato dopo che il codice è stato scritto.",
     "",
     "## Riferimento",
     "",
@@ -379,7 +380,8 @@ ENGLISH_TEXT = (
     "diff of a commit is never copied into the folder.",
     "",
     "`ut push` sends the hand-made changes of this folder to the Studio: you approve the "
-    "differences and a new version is born.",
+    "differences and a new version is born. `ut align --from-design` brings the code up to the "
+    "current design when the design changed after the code was written.",
     "",
     "## Reference",
     "",
@@ -608,6 +610,16 @@ PUSH_LINE = {
     "it": (
         "`ut push` invia allo Studio le modifiche fatte a mano in questa cartella: le "
         "differenze si approvano e nasce una versione nuova."
+    ),
+}
+ALIGN_DESIGN_LINE = {
+    "en": (
+        "`ut align --from-design` brings the code up to the current design when the design "
+        "changed after the code was written."
+    ),
+    "it": (
+        "`ut align --from-design` porta il codice al design attuale quando il design è "
+        "cambiato dopo che il codice è stato scritto."
     ),
 }
 NO_RUN = {
@@ -1077,16 +1089,31 @@ def test_the_state_text_is_written_in_english_otherwise(language: str | None) ->
 def test_the_state_text_says_after_its_intro_how_hand_made_changes_reach_the_studio(
     language: str, heading: str
 ) -> None:
+    paragraph = f"{PUSH_LINE[language]} {ALIGN_DESIGN_LINE[language]}"
     for text in (
         state_markdown(real_sources(state=development_sources()), language=language),
         state_markdown(partial_sources("brief"), language=language),
     ):
         lines = text.splitlines()
 
-        assert lines[3:7] == ["", PUSH_LINE[language], "", heading]
-        assert lines.count(PUSH_LINE[language]) == 1
+        assert lines[3:7] == ["", paragraph, "", heading]
+        assert text.count(PUSH_LINE[language]) == 1
     assert PUSH_LINE["en"] not in state_markdown(partial_sources("brief"), language="it")
     assert PUSH_LINE["it"] not in state_markdown(partial_sources("brief"), language="en")
+
+
+@pytest.mark.parametrize(("language", "other"), [("it", "en"), ("en", "it")])
+def test_the_state_file_says_after_ut_push_how_the_code_follows_a_changed_design(
+    language: str, other: str
+) -> None:
+    package = (real_sources if language == "it" else sources)()
+    folder = build_knowledge_folder(package, version_number=1, created_at=PUBLISHED_AT)
+    text = folder.files[STATE_TEXT]
+
+    assert folder.manifest["project"]["language"] == language
+    assert f"\n\n{PUSH_LINE[language]} {ALIGN_DESIGN_LINE[language]}\n\n" in text
+    assert text.count(ALIGN_DESIGN_LINE[language]) == 1
+    assert ALIGN_DESIGN_LINE[other] not in text
 
 
 @pytest.mark.parametrize(("language", "words"), [("it", "it"), ("it-IT", "it"), ("IT", "it")])
