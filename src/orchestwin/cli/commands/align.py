@@ -6,7 +6,13 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli.api import alignment as alignment_api
 from orchestwin.cli.commands import status as status_command
 from orchestwin.cli.errors import USAGE_STATUS, CliError
-from orchestwin.cli.flows import align_apply, align_knowledge, verify_decision, verify_review
+from orchestwin.cli.flows import (
+    align_apply,
+    align_design,
+    align_knowledge,
+    verify_decision,
+    verify_review,
+)
 from orchestwin.cli.flows import changes as git
 
 if TYPE_CHECKING:
@@ -15,19 +21,33 @@ if TYPE_CHECKING:
 
 NAME = "align"
 BUDGET_OPERATION: Final = alignment_api.OPERATION
+FROM_DESIGN: Final = "FROM_DESIGN"
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--since", metavar="COMMIT", help="align.option_since")
     parser.add_argument("--dry-run", action="store_true", help="align.option_dry_run")
     parser.add_argument("--pending", action="store_true", help="align.option_pending")
+    parser.add_argument("--from-design", action="store_true", help="align.option_from_design")
+    parser.add_argument("--max-agent-usd", metavar="USD", help="align.option_max_agent_usd")
 
 
 def run(context: CommandContext, arguments: argparse.Namespace) -> int:
+    if arguments.pending and arguments.from_design:
+        raise CliError("ALIGN_PENDING_ALONE", status=USAGE_STATUS, values={"reason": FROM_DESIGN})
     if arguments.pending and (arguments.since is not None or arguments.dry_run):
         raise CliError("ALIGN_PENDING_ALONE", status=USAGE_STATUS)
+    if arguments.max_agent_usd is not None and not arguments.from_design:
+        raise CliError("ALIGN_BUDGET_NEEDS_DESIGN", status=USAGE_STATUS)
     if arguments.pending:
         return pending(context)
+    if arguments.from_design:
+        return align_design.run(
+            context,
+            since=arguments.since,
+            dry_run=arguments.dry_run,
+            max_usd=arguments.max_agent_usd,
+        )
     workspace = verify_review.prepare(context)
     console = context.console
     console.heading(context.text("align.heading", name=workspace.project.link().project_name))
