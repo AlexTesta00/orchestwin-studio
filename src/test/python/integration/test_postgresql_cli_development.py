@@ -596,11 +596,16 @@ def stale_reviews(scene: Scene, flow: Flow) -> None:
     assert scene.folders()[0]["state"]["stale_reviews"] == 1
     state = read_json(scene.knowledge / "state" / "state.json")
     assert (state["changes"][0]["commit"], state["changes"][0]["review"]["stale"]) == (fourth, True)
+    point = alignment["aligned"]
     development_line = say("status.alignment", recorded=4, pending=1, commit=third[:7], tasks=3)
     line = f"{development_line} {say('status.stale_reviews', count=1)}"
+    behind = say(
+        "status.code_design_behind", aligned=point["design_version_number"], current=version
+    )
     status = scene.ut("status")
     assert status.status == 0, status.transcript()
     assert status.shows(line), f"missing: {line}\n{status.transcript()}"
+    assert status.shows(behind), f"missing: {behind}\n{status.transcript()}"
     as_json = scene.ut("status", "--json")
     assert as_json.status == 0, as_json.transcript()
     assert json.loads(as_json.output)["alignment"] == {
@@ -609,11 +614,12 @@ def stale_reviews(scene: Scene, flow: Flow) -> None:
         "aligned_commit": third,
         "open_tasks": 3,
         "stale_reviews": 1,
+        "aligned_design_version": point["design_version_number"],
+        "current_design_version": version,
     }, as_json.transcript()
     offline = scene.ut("status", "--offline")
     assert (offline.status, offline.exchanges) == (0, ()), offline.transcript()
     assert offline.shows(line), f"missing: {line}\n{offline.transcript()}"
-    point = alignment["aligned"]
     estimate = costs.estimate(review_operations(local_twins(scene), 1))
     listing = (
         say(
@@ -863,6 +869,9 @@ def code_with_an_agent(scene: Scene, flow: Flow) -> None:
     outcome = read_json(second / "outcome.json")
     changed = outcome["changed_files"]
     assert changed == [AGENT_NOTE], outcome
+    stages = read_json(scene.knowledge / "orchestwin.json")["stages"]
+    design_version = stages["design"]["version_number"]
+    assert isinstance(design_version, int), stages
     assert outcome == {
         "schema_version": 1,
         "started_at": outcome["started_at"],
@@ -877,6 +886,9 @@ def code_with_an_agent(scene: Scene, flow: Flow) -> None:
         "request": None,
         "exit_status": 0,
         "changed_files": changed,
+        "kind": "code",
+        "design_from": None,
+        "design_version_number": design_version,
     }, outcome
     assert latest == {
         "schema_version": 1,
@@ -886,6 +898,8 @@ def code_with_an_agent(scene: Scene, flow: Flow) -> None:
         "agent": CUSTOM_AGENT,
         "exit_status": 0,
         "changed_files": changed,
+        "kind": "code",
+        "design_version_number": design_version,
     }, latest
     started, finished = (
         datetime.fromisoformat(outcome[key]) for key in ("started_at", "finished_at")
