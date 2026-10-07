@@ -10,7 +10,6 @@ from uuid import UUID
 
 import pytest
 
-from orchestwin.cli.flows import changes as git
 from orchestwin.projects.knowledge_alignment import (
     KnowledgeAlignmentRun,
     ProposalOrigin,
@@ -458,10 +457,11 @@ def latest_run_of(run: dict[str, object]) -> dict[str, object]:
 
 
 def knowledge_line(run: dict[str, object], commit: str, *, waiting: int) -> str:
+    moment = datetime.fromisoformat(str(run["created_at"])).astimezone()
     return say(
         "status.knowledge",
         commit=commit[:7],
-        date=git.commit_date(str(run["created_at"])),
+        date=moment.strftime("%Y-%m-%d %H:%M"),
         count=waiting,
     )
 
