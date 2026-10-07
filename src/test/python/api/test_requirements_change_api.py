@@ -299,6 +299,25 @@ def test_a_studio_without_the_change_service_answers_unavailable():
     assert response.json() == {"detail": "requirements_change_service_unavailable"}
 
 
+def test_a_studio_without_the_change_service_still_refuses_an_invalid_request():
+    service = ScriptedChanges(refused(RequirementsChangeIssueCode.UNCHANGED)())
+    body = {"request": ""}
+
+    with TestClient(application(service)) as client:
+        configured = client.post(CHANGES, json=body)
+    with TestClient(application(None)) as client:
+        synchronous = client.post(CHANGES, json=body)
+        preferred = client.post(CHANGES, json=body, headers=ASYNC)
+        jobs = client.get(JOBS).json()
+
+    assert synchronous.status_code == 422
+    assert synchronous.json()["detail"] == "invalid_request"
+    assert answered(synchronous) == answered(configured)
+    assert answered(preferred) == answered(synchronous)
+    assert jobs == {"items": []}
+    assert service.calls == []
+
+
 def test_the_change_request_route_is_part_of_the_requirements_router():
     [route] = [
         route
