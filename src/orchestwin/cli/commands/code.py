@@ -43,6 +43,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     if project is None:
         raise CliError("PROJECT_NOT_LINKED")
     summary = code_order.approved_folder(project)
+    design = summary.stage(code_order.DESIGN_STAGE)
     settings = code_run.chosen_settings(
         code_run.read_settings(project),
         agent=arguments.agent,
@@ -76,6 +77,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         settings=settings,
         work=work,
         spend=arguments.spend,
+        design_version_number=None if design is None else design.version_number,
     )
     announce(context, facts, launch, max_usd=max_usd)
     if arguments.dry_run:
@@ -85,6 +87,14 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         raise CliError("SPENDING_REFUSED")
     context.console.say("code.starting", program=launch.program)
     finished = code_run.start(context, launch)
+    if finished.outcome.exit_status == 0 and launch.design_version_number is not None:
+        code_run.write_design_point(
+            project,
+            version=launch.design_version_number,
+            folder=launch.files.name,
+            reason=code_run.CODE_RUN_REASON,
+            moment=context.environment.now(),
+        )
     report(context, facts, launch, finished)
     return 0 if finished.outcome.exit_status == 0 else 1
 
