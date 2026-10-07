@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -23,11 +24,15 @@ if TYPE_CHECKING:
 PROFILE_PREFIX: Final = "orchestwin-browser-"
 PROFILE_FOLDER: Final = "profile"
 SNAP_FOLDER: Final = "/snap/"
+SNAP_SCRIPT_BYTES: Final = 4096
+SNAP_LAUNCHER: Final = "snap"
+SNAP_LINK_STEPS: Final = 8
+SCRIPT_START: Final = "#!"
 CHROMIUM_PORT_FILE: Final = "DevToolsActivePort"
 FIREFOX_PORT_FILE: Final = "WebDriverBiDiServer.json"
 FIREFOX_PREFERENCES_FILE: Final = "user.js"
 LOOPBACK: Final = "127.0.0.1"
-PORT_FILE_SECONDS: Final = 30.0
+PORT_FILE_SECONDS: Final = 60.0
 PORT_POLL_SECONDS: Final = 0.1
 GRACEFUL_SECONDS: Final = 5.0
 TERMINATE_SECONDS: Final = 10.0
@@ -252,9 +257,19 @@ def launch(
 
 
 def temporary_parent(environment: Environment, program: BrowserProgram) -> Path | None:
-    if program.path.as_posix().startswith(SNAP_FOLDER):
+    if snap_program(program):
         return environment.home
     return None
+
+
+def snap_program(program: BrowserProgram) -> bool:
+    path = program.path
+    return (
+        path.as_posix().startswith(SNAP_FOLDER)
+        or _resolved_to_snap(path)
+        or _linked_into_snap(path)
+        or _snap_script(path)
+    )
 
 
 def wait_for_endpoint(environment: Environment, launched: Launched) -> str:
@@ -384,3 +399,36 @@ def _port(text: str) -> int | None:
         return None
     port = int(text)
     return port if 0 < port < 65536 else None
+
+
+def _resolved_to_snap(path: Path) -> bool:
+    try:
+        resolved = path.resolve()
+    except (OSError, RuntimeError):
+        return False
+    return resolved.name == SNAP_LAUNCHER or resolved.as_posix().startswith(SNAP_FOLDER)
+
+
+def _linked_into_snap(path: Path) -> bool:
+    current = path
+    for _ in range(SNAP_LINK_STEPS):
+        try:
+            target = Path(os.readlink(current))
+        except OSError:
+            return False
+        current = Path(os.path.normpath(target if target.root else current.parent / target))
+        if current.as_posix().startswith(SNAP_FOLDER):
+            return True
+    return False
+
+
+def _snap_script(path: Path) -> bool:
+    try:
+        if not path.is_file():
+            return False
+        with path.open("rb") as file:
+            head = file.read(SNAP_SCRIPT_BYTES + 1)
+        text = head.decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return len(head) <= SNAP_SCRIPT_BYTES and text.startswith(SCRIPT_START) and SNAP_FOLDER in text

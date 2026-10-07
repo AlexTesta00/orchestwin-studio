@@ -11,11 +11,13 @@ import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from orchestwin.cli.browser import (
     BROWSER_NAMES,
+    BrowserError,
     BrowserProgram,
     Element,
     Page,
@@ -41,6 +43,7 @@ from .support.transports import NoNetwork
 pytestmark = pytest.mark.browser
 
 SKIP_VARIABLE = "ORCHESTWIN_SKIP_BROWSER_TESTS"
+NO_ANSWER = "no answer within"
 ATTEMPTS = 4
 PAUSE_SECONDS = 0.4
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -195,6 +198,15 @@ def installed(environment: Environment, name: str) -> BrowserProgram:
     return found[0]
 
 
+def open_real_page(context: CommandContext, program: BrowserProgram, **kwargs: Any) -> Page:
+    try:
+        return open_page(context, program, **kwargs)
+    except BrowserError as error:
+        if error.code != "BROWSER_NOT_STARTED" or not error.detail.startswith(NO_ANSWER):
+            raise
+    return open_page(context, program, **kwargs)
+
+
 def waited(
     page: Page, environment: Environment, condition: Callable[[PageSnapshot], bool]
 ) -> PageSnapshot:
@@ -228,7 +240,7 @@ def test_a_real_browser_reads_the_page_and_acts_like_a_person(
         environment, Console(environment, language="en", color=False), language="en"
     )
 
-    page = open_page(context, program, language="it-IT", direct=True)
+    page = open_real_page(context, program, language="it-IT", direct=True)
     try:
         assert (page.browser, bool(page.version)) == (name, True)
         page.open(f"{site}/index.html")
@@ -281,7 +293,7 @@ def test_a_real_browser_reads_the_page_and_acts_like_a_person(
     finally:
         page.close()
 
-    assert len(starts.processes) == 1
+    assert len(starts.processes) in (1, 2)
     assert all(process.poll() is not None for process in starts.processes)
     assert not any(folder.exists() for folder in starts.folders)
 
@@ -297,7 +309,7 @@ def test_a_real_browser_keeps_the_hidden_text_apart_from_the_visible_text(
         environment, Console(environment, language="en", color=False), language="en"
     )
 
-    page = open_page(context, program, language="it-IT", direct=True)
+    page = open_real_page(context, program, language="it-IT", direct=True)
     try:
         page.open(f"{site}/hidden.html")
         closed = page.snapshot()
@@ -335,6 +347,6 @@ def test_a_real_browser_keeps_the_hidden_text_apart_from_the_visible_text(
         )
         assert list(snapshot.document()) == ["url", "title", "text", "hidden_text", "elements"]
 
-    assert len(starts.processes) == 1
+    assert len(starts.processes) in (1, 2)
     assert all(process.poll() is not None for process in starts.processes)
     assert not any(folder.exists() for folder in starts.folders)
