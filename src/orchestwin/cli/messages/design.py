@@ -129,24 +129,61 @@ MESSAGES: dict[str, dict[str, str]] = {
     "design.option_action": {
         "it": "che cosa fare: show (mostra), open (apre le anteprime), choose (sceglie "
         "un'alternativa), change (chiede una modifica), review (revisione dei twin), approve "
-        "(approva), regenerate (rigenera le alternative); senza azione il comando ti guida "
-        "passo per passo",
+        "(approva), regenerate (rigenera le alternative), restore N (torna alla versione N "
+        "con una versione nuova uguale, da approvare); senza azione il comando ti guida "
+        "passo per passo; show --elements elenca gli elementi del mockup scelto, a cui una "
+        "modifica può mirare con --screen e --element",
         "en": "what to do: show, open (the previews), choose (an alternative), change (ask for "
-        "a change), review (by the twins), approve, regenerate (the alternatives); without "
+        "a change), review (by the twins), approve, regenerate (the alternatives), restore N "
+        "(go back to version N with a new identical version, to approve); without "
         "an action the command guides you "
-        "step by step",
+        "step by step; show --elements lists the elements of the chosen mockup, which a change "
+        "can aim at with --screen and --element",
     },
     "design.option_value": {
-        "it": "il codice o il numero di un'alternativa (per open e choose), oppure la modifica "
-        "scritta a parole tra virgolette (per change)",
-        "en": "the code or the number of an alternative (for open and choose), or the change "
-        "written in words between quotes (for change)",
+        "it": "il codice o il numero di un'alternativa (per open e choose), la modifica "
+        "scritta a parole tra virgolette (per change), oppure il numero di una versione "
+        "(per restore)",
+        "en": "the code or the number of an alternative (for open and choose), the change "
+        "written in words between quotes (for change), or the number of a version (for "
+        "restore)",
     },
     "design.option_rule": {
         "it": "una regola che deve restare valida anche dopo le prossime modifiche; si può "
         "ripetere, solo con change",
         "en": "a rule that must stay valid after the next changes too; it can be repeated, "
         "only with change",
+    },
+    "design.option_screen": {
+        "it": "la schermata del mockup a cui mira la modifica, per esempio SCR-002; solo con "
+        "change",
+        "en": "the screen of the mockup that the change aims at, for example SCR-002; only with "
+        "change",
+    },
+    "design.option_element": {
+        "it": "l'elemento della schermata a cui mira la modifica, per esempio ELM-012; vuole "
+        "anche --screen",
+        "en": "the element of the screen that the change aims at, for example ELM-012; it needs "
+        "--screen too",
+    },
+    "design.option_no_review": {
+        "it": "dopo la modifica non chiede subito il parere dei twin; solo con change",
+        "en": "after the change, do not ask the twins for their opinion right away; only with "
+        "change",
+    },
+    "design.option_elements": {
+        "it": "elenca gli elementi del mockup scelto, di ogni schermata o solo di quella indicata "
+        "(per esempio SCR-002); solo con show",
+        "en": "list the elements of the chosen mockup, of every screen or only of the one given "
+        "(for example SCR-002); only with show",
+    },
+    "design.usage_target": {
+        "it": "--screen, --element e --no-review si usano solo con `ut design change`.",
+        "en": "--screen, --element and --no-review can be used only with `ut design change`.",
+    },
+    "design.usage_elements": {
+        "it": "--elements si usa solo con `ut design show`.",
+        "en": "--elements can be used only with `ut design show`.",
     },
     "design.usage_rule": {
         "it": "--rule si usa solo con `ut design change`.",
@@ -160,12 +197,28 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Scrivi quale alternativa scegli, per esempio `ut design choose DES-001`.",
         "en": "Write which alternative you choose, for example `ut design choose DES-001`.",
     },
+    "design.usage_restore": {
+        "it": "Scrivi a quale versione tornare, per esempio `ut design restore 2`.",
+        "en": "Write which version to go back to, for example `ut design restore 2`.",
+    },
     "design.heading": {"it": "Design di {project}", "en": "Design of {project}"},
     "design.requirements_pending": {
         "it": "Il design viene dopo i requisiti, che non sono ancora approvati. Completa i "
         "passi precedenti con `ut init`, poi torna qui.",
         "en": "The design comes after the requirements, which are not approved yet. Complete "
         "the earlier steps with `ut init`, then come back here.",
+    },
+    "design.definition_behind": {
+        "it": "La Definizione è da riagganciare ai twin nuovi: `ut sections update`, poi torna "
+        "qui.",
+        "en": "The Definition has to be re-anchored to the new twins: `ut sections update`, then "
+        "come back here.",
+    },
+    "design.definition_blocked": {
+        "it": "La Definizione è da riagganciare ai twin nuovi, ma prima va sistemato questo. "
+        "{blocked} Poi torna qui.",
+        "en": "The Definition has to be re-anchored to the new twins, but this has to be settled "
+        "first. {blocked} Then come back here.",
     },
     "design.no_design_yet": {
         "it": "Il design non esiste ancora. Lancia `ut design`: ti dice quanto costa prepararlo "
@@ -790,6 +843,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "I am about to ask the model to change the chosen design: “{request}”. Right "
         "after, the twins review the new version.",
     },
+    "design.about_change_alone": {
+        "it": "Adesso chiedo al modello di cambiare il design scelto: «{request}». I twin non "
+        "la rivedono adesso, come hai chiesto con --no-review.",
+        "en": "I am about to ask the model to change the chosen design: “{request}”. The twins "
+        "do not review it now, as you asked with --no-review.",
+    },
+    "design.target_element": {
+        "it": "Modifica mirata a {element} di {screen}: «{text}»",
+        "en": "Targeted change to {element} of {screen}: “{text}”",
+    },
+    "design.target_screen": {
+        "it": "Modifica mirata a {screen}: «{text}»",
+        "en": "Targeted change to {screen}: “{text}”",
+    },
     "design.about_rules": {
         "it": "Queste regole resteranno in vigore anche dopo:",
         "en": "These rules will stay in force afterwards too:",
@@ -816,6 +883,74 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The change stays applied in version {version}, but the twins did not review it, "
         "for the reason given. Once the reason is solved, launch `ut design review` to have the "
         "review done.",
+    },
+    "design.change_review_later": {
+        "it": "I twin non hanno ancora rivisto la versione {version}: quando vuoi il loro parere, "
+        "lancia `ut design review`.",
+        "en": "The twins have not reviewed version {version} yet: when you want their opinion, "
+        "launch `ut design review`.",
+    },
+    "design.elements_heading": {
+        "it": "Elementi del mockup di {code} · {title}",
+        "en": "Elements of the mockup of {code} · {title}",
+    },
+    "design.elements_screen": {"it": "{code} · {title}", "en": "{code} · {title}"},
+    "design.column_code": {"it": "Codice", "en": "Code"},
+    "design.column_kind": {"it": "Tipo", "en": "Type"},
+    "design.column_text": {"it": "Testo", "en": "Text"},
+    "design.elements_none": {
+        "it": "Questo mockup non ha elementi indicabili.",
+        "en": "This mockup has no elements to point at.",
+    },
+    "design.elements_screen_none": {
+        "it": "In questa schermata non ci sono elementi indicabili.",
+        "en": "This screen has no elements to point at.",
+    },
+    "design.elements_next": {
+        "it": 'Per una modifica mirata a uno di questi elementi: `ut design change "..." '
+        "--screen {screen} --element {element}`.",
+        "en": 'For a change aimed at one of these elements: `ut design change "..." '
+        "--screen {screen} --element {element}`.",
+    },
+    "design.elements_needs_choice": {
+        "it": "Gli elementi si leggono dal mockup del design scelto: prima scegli un'alternativa, "
+        "per esempio con `ut design choose DES-001`.",
+        "en": "The elements are read from the mockup of the chosen design: choose an alternative "
+        "first, for example with `ut design choose DES-001`.",
+    },
+    "design.elements_no_mockup": {
+        "it": "Il design scelto non ha un mockup disegnato dal modello, quindi non ha elementi da "
+        "elencare.",
+        "en": "The chosen design has no mockup drawn by the model, so it has no elements to list.",
+    },
+    "design.screen_item": {"it": "{code} «{title}»", "en": "{code} “{title}”"},
+    "design.restore_about": {
+        "it": "Torno alla versione {version}: nasce la versione {next}, uguale alla {version} e "
+        "riagganciata alla Definizione attuale, che poi va approvata. Il modello non lavora: "
+        "non costa nulla.",
+        "en": "I go back to version {version}: version {next} is created, the same as {version} "
+        "and re-anchored to the current Definition, and then it has to be approved. The model "
+        "does not work on it: it costs nothing.",
+    },
+    "design.restore_confirm": {
+        "it": "Torno alla versione {version}?",
+        "en": "Go back to version {version}?",
+    },
+    "design.restore_cancelled": {
+        "it": "Non sono tornato alla versione {version}: il design non è cambiato.",
+        "en": "I did not go back to version {version}: the design did not change.",
+    },
+    "design.restored": {
+        "it": "Versione {version} creata dalla versione {restored}: approva con "
+        "`ut design approve`.",
+        "en": "Version {version} created from version {restored}: approve it with "
+        "`ut design approve`.",
+    },
+    "design.restored_choose": {
+        "it": "Versione {version} creata dalla versione {restored}: scegli un'alternativa con "
+        "`ut design choose CODE`, poi approva con `ut design approve`.",
+        "en": "Version {version} created from version {restored}: choose an alternative with "
+        "`ut design choose CODE`, then approve it with `ut design approve`.",
     },
     "design.choice_not_reviewed": {
         "it": "La scelta resta applicata nella versione {version}, ma i twin non l'hanno "
@@ -979,6 +1114,71 @@ MESSAGES: dict[str, dict[str, str]] = {
         "{codes}.",
         "en": "The alternative {code} does not exist. Write one of these codes, or its number: "
         "{codes}.",
+    },
+    "design.errors.DESIGN_ELEMENT_NEEDS_SCREEN": {
+        "it": "--element vuole anche --screen, la schermata dell'elemento, per esempio "
+        '`ut design change "..." --screen SCR-002 --element ELM-012`.',
+        "en": "--element needs --screen too, the screen of the element, for example "
+        '`ut design change "..." --screen SCR-002 --element ELM-012`.',
+    },
+    "design.errors.DESIGN_SCREEN_CODE_INVALID": {
+        "it": "«{code}» non è il codice di una schermata: scrivilo come SCR-002, cioè SCR- e tre "
+        "cifre.",
+        "en": "“{code}” is not the code of a screen: write it like SCR-002, that is SCR- and "
+        "three digits.",
+    },
+    "design.errors.DESIGN_ELEMENT_CODE_INVALID": {
+        "it": "«{code}» non è il codice di un elemento: scrivilo come ELM-012, cioè ELM- e tre "
+        "cifre.",
+        "en": "“{code}” is not the code of an element: write it like ELM-012, that is ELM- and "
+        "three digits.",
+    },
+    "design.errors.DESIGN_TARGET_NOT_FOUND": {
+        "it": "Il mockup del design scelto non ha la schermata {screen}. Schermate disponibili: "
+        "{screens}. `ut design show --elements` elenca gli elementi di ogni schermata.",
+        "en": "The mockup of the chosen design has no screen {screen}. Screens available: "
+        "{screens}. `ut design show --elements` lists the elements of every screen.",
+    },
+    "design.errors.DESIGN_TARGET_NOT_FOUND.ELEMENT": {
+        "it": "La schermata {screen} del mockup scelto non ha l'elemento {element}. Schermate "
+        "disponibili: {screens}. `ut design show --elements {screen}` elenca gli elementi di "
+        "questa schermata.",
+        "en": "The screen {screen} of the chosen mockup has no element {element}. Screens "
+        "available: {screens}. `ut design show --elements {screen}` lists the elements of this "
+        "screen.",
+    },
+    "design.errors.DESIGN_RESTORE_NUMBER_INVALID": {
+        "it": "«{value}» non è il numero di una versione: scrivilo come 2, cioè un numero intero "
+        "da 1 in su.",
+        "en": "“{value}” is not the number of a version: write it like 2, that is a whole number "
+        "from 1 up.",
+    },
+    "design.errors.DESIGN_RESTORE_CURRENT": {
+        "it": "Il design attuale è già uguale alla versione {version}: non c'è niente da "
+        "ripristinare.",
+        "en": "The current design is already the same as version {version}: there is nothing "
+        "to restore.",
+    },
+    "design.errors.DESIGN_VERSION_NOT_FOUND": {
+        "it": "Il design non ha la versione {version}. Versioni disponibili: {versions}.",
+        "en": "The design has no version {version}. Versions available: {versions}.",
+    },
+    "design.errors.DESIGN_RESTORE_BLOCKED": {
+        "it": "La versione {version} non può tornare con le sezioni di adesso: non è cambiato "
+        "nulla.",
+        "en": "Version {version} cannot come back with the current sections: nothing changed.",
+    },
+    "design.errors.DESIGN_RESTORE_BLOCKED.REQUIREMENT_NO_LONGER_AVAILABLE": {
+        "it": "La versione {version} cita requisiti che la Definizione non contiene più, quindi "
+        "non può tornare: non è cambiato nulla.",
+        "en": "Version {version} cites requirements that the Definition no longer contains, so "
+        "it cannot come back: nothing changed.",
+    },
+    "design.errors.DESIGN_RESTORE_BLOCKED.TWIN_SET_CHANGED": {
+        "it": "La versione {version} è stata preparata con twin diversi da quelli di adesso, "
+        "quindi non può tornare: non è cambiato nulla.",
+        "en": "Version {version} was prepared with twins different from the current ones, so it "
+        "cannot come back: nothing changed.",
     },
     "design.errors.STUDIO_UNREACHABLE": {
         "it": "Lo Studio all'indirizzo {address} non risponde. Controlla che sia avviato, poi "

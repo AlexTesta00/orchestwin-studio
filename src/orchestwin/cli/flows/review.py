@@ -38,7 +38,13 @@ ITALIAN_LOCALE: Final = "it-IT"
 ENGLISH_LOCALE: Final = "en-US"
 
 
-def run_review(context: CommandContext, client: StudioClient, project: ProjectFolder) -> int:
+def run_review(
+    context: CommandContext,
+    client: StudioClient,
+    project: ProjectFolder,
+    *,
+    scope: Mapping[str, str] | None = None,
+) -> int:
     from orchestwin.workflow_inputs import PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE
 
     console = context.console
@@ -53,7 +59,7 @@ def run_review(context: CommandContext, client: StudioClient, project: ProjectFo
         return 1
     locale = review_locale(project_language(project, context.language))
     try:
-        run = _reviewed(context, client, link.project_id, version, locale)
+        run = _reviewed(context, client, link.project_id, version, locale, scope)
     except CliError as error:
         key = error_key(error)
         if key is None:
@@ -72,9 +78,10 @@ def review_after(
     *,
     key: str,
     number: object,
+    scope: Mapping[str, str] | None = None,
 ) -> int:
     try:
-        status = run_review(context, client, project)
+        status = run_review(context, client, project, scope=scope)
     except CliError:
         context.console.say(key, version=number)
         raise
@@ -234,8 +241,13 @@ def finding_line(
     summary = " ".join(str(finding.get("summary") or "").split())
     place = place_text(context, finding, screens, elements)
     if place:
-        return context.text("design.finding_placed", weight=weight, summary=summary, place=place)
-    return context.text("design.finding", weight=weight, summary=summary)
+        line = context.text("design.finding_placed", weight=weight, summary=summary, place=place)
+    else:
+        line = context.text("design.finding", weight=weight, summary=summary)
+    element = finding.get("element_code")
+    if isinstance(element, str) and element:
+        return context.text("design.point", label=element, text=line)
+    return line
 
 
 def place_text(
@@ -315,6 +327,7 @@ def _reviewed(
     project_id: str,
     version: Mapping[str, object],
     locale: str,
+    scope: Mapping[str, str] | None = None,
 ) -> Mapping[str, object]:
     console = context.console
     label = context.text("design.label_review")
@@ -345,7 +358,7 @@ def _reviewed(
             client,
             project_id,
             design_api.evaluations_path(project_id),
-            design_api.evaluation_body(version, locale),
+            design_api.evaluation_body(version, locale, scope),
             label=label,
         )
     except CliError as error:
