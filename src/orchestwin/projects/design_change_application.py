@@ -22,10 +22,12 @@ from orchestwin.artifacts.design_revisions import DesignPackageDiff, DesignRevis
 from orchestwin.models.design_change import (
     PURPOSE,
     DesignChangeRejection,
+    DesignChangeTarget,
     DesignChangeUnchanged,
     bind_design_change,
     design_change_context,
     propose_design_change,
+    with_targeted_change,
 )
 from orchestwin.models.proposal_evidence import (
     current_proposal_evidence,
@@ -222,6 +224,7 @@ class DesignChangeApplication:
         project_id: UUID,
         owner_request: str,
         locale: str = DEFAULT_LOCALE,
+        target: DesignChangeTarget | None = None,
     ) -> DesignChangeResult:
         version = await self._projects.current_brief(
             project_id=project_id, owner_user_id=owner_user_id
@@ -251,6 +254,7 @@ class DesignChangeApplication:
                 requirements=requirements,
                 design=current,
                 owner_request=owner_request,
+                target=target,
             )
         except DesignEvaluationError:
             return _rejected(DesignChangeIssueCode.PROTOTYPE_REQUIRED)
@@ -274,11 +278,12 @@ class DesignChangeApplication:
         revision = await self._revisions.propose_revision(
             owner_user_id=owner_user_id, project_id=project_id, proposed_package=proposed
         )
+        changes = with_targeted_change(draft.changes, target, locale)
         if revision.status is DesignRevisionStatus.CREATED and revision.diff is not None:
             return DesignChangeResult(
-                status=DesignChangeStatus.CREATED, revision=revision, changes=draft.changes
+                status=DesignChangeStatus.CREATED, revision=revision, changes=changes
             )
-        return _rejected(_revision_issue(revision), revision=revision, changes=draft.changes)
+        return _rejected(_revision_issue(revision), revision=revision, changes=changes)
 
 
 __all__ = [

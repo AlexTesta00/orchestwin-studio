@@ -242,6 +242,7 @@ def test_the_list_of_the_iterations_follows_their_evidence_and_the_design_versio
         "generation_id",
         "requested_at",
         "request",
+        "target",
         "assertions",
         "changes",
         "status",
@@ -250,6 +251,7 @@ def test_the_list_of_the_iterations_follows_their_evidence_and_the_design_versio
         "cost_microusd",
     }
     assert newest["generation_id"] == retried["result"]["generation_id"]
+    assert [item["target"] for item in listed] == [None, None, None, None]
     assert newest["assertions"] == ["Il tono resta caldo e rassicurante."]
     assert newest["changes"] == iteration_payload()["changes"]
     assert newest["base_design_version_number"] == 2

@@ -151,7 +151,7 @@ def import_feedback(
                     values[key] = text(values[key])
                 mapped = create_synthetic_finding(**values)
                 if hasattr(finding, "anchor_key"):
-                    mapped = anchor_finding(mapped, finding.anchor_key)
+                    mapped = anchor_finding(mapped, finding.anchor_key, finding.element_code)
                 hashes[finding.content_hash] = mapped.content_hash
                 findings.append(mapped)
             values = dict(

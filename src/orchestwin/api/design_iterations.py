@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.design import DesignChangeTargetRequest
 from orchestwin.api.design_mockups import (
     DISCARDED_ANSWER_CODES,
     MOCKUP_ATTEMPT,
@@ -27,6 +28,7 @@ from orchestwin.api.generation_jobs import (
 from orchestwin.artifacts.design import contains_control_character
 from orchestwin.artifacts.design_packages import MAX_OWNER_ASSERTION_LENGTH, MAX_OWNER_ASSERTIONS
 from orchestwin.identity.domain import UserAccount
+from orchestwin.models.design_change import with_targeted_change
 from orchestwin.models.design_drafts import requirements_language, requirements_view
 from orchestwin.models.generated_mockup_drafts import GeneratedIterationDraft
 from orchestwin.models.generated_mockup_instructions import DESIGN_ITERATION, mockup_context
@@ -45,6 +47,7 @@ class IterationRequest(BaseModel):
     design_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     request: str
     assertions: list[str] = Field(default_factory=list)
+    target: DesignChangeTargetRequest | None = None
 
 
 class IterationStatus(StrEnum):
@@ -130,6 +133,7 @@ def iteration_items(records, versions) -> list[dict[str, object]]:
                 "generation_id": final["generation_id"],
                 "requested_at": group[0]["recorded_at"],
                 "request": first.get("owner_request"),
+                "target": first.get("target"),
                 "assertions": [item for item in first.get("assertions") or [] if item not in known],
                 "changes": list((accepted.get("result") or {}).get("changes") or []),
                 "status": status.value,
@@ -180,6 +184,7 @@ class DesignIterationApplication(ModelMockupApplication):
     async def generate_iteration(self, *, owner_user_id, project_id, body, progress=None):
         progress = GenerationJobProgress() if progress is None else progress
         request, assertions = normalized_iteration(body)
+        target = None if body.target is None else body.target.to_domain()
         current = await self.checked_version(
             owner_user_id, project_id, body.design_version_id, body.design_content_hash
         )
@@ -205,6 +210,7 @@ class DesignIterationApplication(ModelMockupApplication):
                 observations=observations,
                 current_mockup=bound.mockup,
                 owner_request=request,
+                target=None if target is None else target.to_snapshot(),
                 assertions=merged,
                 previous_answer=previous_answer,
                 rejection=rejection,
@@ -236,7 +242,9 @@ class DesignIterationApplication(ModelMockupApplication):
             draft=draft,
             binding=binding,
             cost=cost,
-            changes=draft.changes,
+            changes=with_targeted_change(
+                tuple(draft.changes), target, None if language is None else language["code"]
+            ),
         )
 
     async def iterations(self, *, owner_user_id, project_id):

@@ -7,6 +7,15 @@ from uuid import uuid4
 
 import pytest
 
+from orchestwin.artifacts.design_evaluation import (
+    anchor_finding,
+    create_design_evaluation_run,
+    design_evaluation_run_from_snapshot,
+)
+from orchestwin.evaluation.evaluator import (
+    UserTwinEvaluationResponse,
+    user_twin_evaluation_response_hash,
+)
 from orchestwin.knowledge.archive import verify_folder
 from orchestwin.knowledge.folder import build_knowledge_folder
 from orchestwin.knowledge.layout import STAGES
@@ -18,6 +27,43 @@ from orchestwin.knowledge.why import importable_why, normalized_why
 from orchestwin.why import build_why_document
 from src.test.python.knowledge.knowledge_fixtures import PUBLISHED_AT
 from src.test.python.knowledge.why_fixtures import current_feedback_sources
+
+ANCHOR = "SCR-001/ELM-007"
+
+
+def anchored_feedback_sources(element_code):
+    sources = current_feedback_sources(claim_reference=True)
+    [run] = sources.feedback.runs
+    [response] = run.responses
+    values = {
+        "evaluation_run_id": response.evaluation_run_id,
+        "artifact_bundle_id": response.artifact_bundle_id,
+        "artifact_bundle_hash": response.artifact_bundle_hash,
+        "twin_id": response.twin_id,
+        "twin_version": response.twin_version,
+        "evaluator": response.evaluator,
+        "findings": tuple(anchor_finding(item, ANCHOR, element_code) for item in response.findings),
+        "summary": response.summary,
+        "evidence_gaps": response.evidence_gaps,
+    }
+    anchored = UserTwinEvaluationResponse(
+        **values,
+        completed_at=response.completed_at,
+        content_hash=user_twin_evaluation_response_hash(**values),
+    )
+    anchored_run = create_design_evaluation_run(
+        run_id=run.id,
+        owner_user_id=run.owner_user_id,
+        version=sources.design,
+        bundle=run.bundle,
+        responses=(anchored,),
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+    )
+    return replace(
+        sources,
+        feedback=knowledge_feedback(runs=(anchored_run,), validations=sources.feedback.validations),
+    )
 
 
 def mixed_feedback_sources():
@@ -61,6 +107,44 @@ def test_history_is_exported_but_missing_context_is_explicitly_omitted_from_impo
     assert json.loads(verified.files["twins/feedback/reviews.json"]) == exported
     rebuilt = build_why_document(
         project_id=str(project),
+        stages=plan_documents(plan, owner_user_id=owner, created_at=moment),
+        evaluations=[
+            {
+                "runs": [item.to_snapshot() for item in plan.evaluations],
+                "decisions": [item.to_snapshot() for item in plan.finding_decisions],
+            }
+        ],
+    )
+    assert normalized_why(
+        importable_why(verified, plan.omitted_sections),
+        identities=plan.identities,
+        hashes=plan.hashes,
+    ) == normalized_why(rebuilt)
+
+
+@pytest.mark.parametrize("element_code", [None, "ELM-007"])
+def test_the_import_keeps_the_anchor_and_the_element_that_a_finding_names(element_code):
+    sources = anchored_feedback_sources(element_code)
+    folder = build_knowledge_folder(sources, version_number=1, created_at=PUBLISHED_AT)
+    verified = verify_folder(folder.files)
+    owner, moment = uuid4(), datetime.now(UTC)
+    plan = plan_project_import(
+        verified,
+        project_id=uuid4(),
+        brief_version_id=uuid4(),
+        owner_user_id=owner,
+        created_at=moment,
+    )
+    [exported] = json.loads(folder.files["twins/feedback/reviews.json"])["runs"]
+    [run] = plan.evaluations
+    [before] = exported["responses"][0]["findings"]
+    [after] = run.to_snapshot()["responses"][0]["findings"]
+    assert (before["anchor_key"], before.get("element_code")) == (ANCHOR, element_code)
+    assert (after["anchor_key"], after.get("element_code")) == (ANCHOR, element_code)
+    assert set(after) == set(before)
+    assert design_evaluation_run_from_snapshot(json.loads(json.dumps(run.to_snapshot()))) == run
+    rebuilt = build_why_document(
+        project_id=str(plan.project_id),
         stages=plan_documents(plan, owner_user_id=owner, created_at=moment),
         evaluations=[
             {

@@ -311,13 +311,14 @@ def test_the_fake_serves_every_area_that_the_commands_need(
         ("POST", project + "/brief-versions"),
         ("POST", project + "/requirements/revisions"),
         ("POST", project + "/design/revisions"),
+        ("POST", project + "/design/revisions/restore"),
         ("POST", project + "/user-modeling/twins/{twin_id}/revisions"),
         ("POST", project + "/user-modeling/revisions/{diff_id}/decision"),
     }
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 172
+    assert len(ROUTES) == 173
 
 
 def test_validation_routes_are_exactly_the_two_authorized_read_only_routes() -> None:
