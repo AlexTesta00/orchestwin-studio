@@ -1,7 +1,12 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
-import { designIterationsApi, type DesignIterationsApi } from "../api/designIterations";
+import {
+  designIterationsApi,
+  type DesignChangeTarget,
+  type DesignIterationsApi,
+  type IterationJobBody,
+} from "../api/designIterations";
 import { designMockupsApi, type DesignMockupsApi } from "../api/designMockups";
 import type { DesignPackageVersionPayload } from "../types/design";
 import type {
@@ -32,19 +37,26 @@ import {
 export const ITERATION_REQUEST_LIMIT = 1000;
 export const ITERATION_ASSERTION_LIMIT = 300;
 export const ITERATION_ASSERTIONS_PER_REQUEST = 5;
+export const TARGET_LABEL_LIMIT = 120;
+export const TARGET_HTML_LIMIT = 2048;
 export const DESIGN_CONTEXT_CHANGED = "DESIGN_CONTEXT_CHANGED";
 export const DESIGN_ITERATIONS_UNAVAILABLE = "DESIGN_ITERATIONS_UNAVAILABLE";
+
+const SCREEN_CODE = /^SCR-\d{3}$/;
+const ELEMENT_CODE = /^ELM-\d{3,6}$/;
 
 export type IterationState = "idle" | "drawing" | "ready" | "rejected" | "failed";
 
 export interface IterationRequest {
   request: string;
   assertions: string[];
+  target?: DesignChangeTarget;
 }
 
 export interface IterationRequestInput {
   request: string;
   assertions?: readonly string[];
+  target?: DesignChangeTarget | null;
 }
 
 export interface IterationFailure {
@@ -86,6 +98,7 @@ interface RememberedIteration {
   hash: string;
   request: string;
   assertions: string[];
+  target?: DesignChangeTarget;
 }
 
 interface IterationMemory {
@@ -110,13 +123,24 @@ function isStringList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function isTarget(value: unknown): value is DesignChangeTarget {
+  return (
+    isRecord(value) &&
+    typeof value.screen_code === "string" &&
+    (value.element_code === undefined || typeof value.element_code === "string") &&
+    typeof value.label === "string" &&
+    typeof value.html === "string"
+  );
+}
+
 function isRememberedIteration(value: unknown): value is RememberedIteration {
   return (
     isRecord(value) &&
     typeof value.jobId === "string" &&
     typeof value.hash === "string" &&
     typeof value.request === "string" &&
-    isStringList(value.assertions)
+    isStringList(value.assertions) &&
+    (value.target === undefined || isTarget(value.target))
   );
 }
 
@@ -145,6 +169,32 @@ function characterCount(value: string): number {
   return [...value].length;
 }
 
+function withinLimit(value: string, limit: number): boolean {
+  const count = characterCount(value);
+  return count > 0 && count <= limit;
+}
+
+function normalizedTarget(value: DesignChangeTarget): DesignChangeTarget | null {
+  const label = value.label.trim();
+  const element = value.element_code;
+
+  if (
+    !SCREEN_CODE.test(value.screen_code) ||
+    (element !== undefined && !ELEMENT_CODE.test(element)) ||
+    !withinLimit(label, TARGET_LABEL_LIMIT) ||
+    !withinLimit(value.html, TARGET_HTML_LIMIT)
+  ) {
+    return null;
+  }
+
+  return {
+    screen_code: value.screen_code,
+    ...(element === undefined ? {} : { element_code: element }),
+    label,
+    html: value.html,
+  };
+}
+
 export function normalizedIterationRequest(input: IterationRequestInput): IterationRequest | null {
   const request = input.request.trim();
   const assertions = [
@@ -162,7 +212,13 @@ export function normalizedIterationRequest(input: IterationRequestInput): Iterat
     return null;
   }
 
-  return { request, assertions };
+  if (input.target === undefined || input.target === null) {
+    return { request, assertions };
+  }
+
+  const target = normalizedTarget(input.target);
+
+  return target === null ? null : { request, assertions, target };
 }
 
 function iterationContext(version: DesignPackageVersionPayload): IterationDesignContext {
@@ -553,28 +609,26 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
     api: DesignIterationsApi,
   ): Promise<IterationOutcome> {
     const replaced = result.value;
+    const target = value.target === undefined ? {} : { target: value.target };
+    const body: IterationJobBody = {
+      design_version_id: context.versionId,
+      design_content_hash: context.contentHash,
+      request: value.request,
+      assertions: value.assertions,
+      ...target,
+    };
     starting.value = true;
     request.value = value;
 
     try {
-      const created = await authorize((token) =>
-        api.startJob(
-          project,
-          {
-            design_version_id: context.versionId,
-            design_content_hash: context.contentHash,
-            request: value.request,
-            assertions: value.assertions,
-          },
-          token,
-        ),
-      );
+      const created = await authorize((token) => api.startJob(project, body, token));
 
       rememberIteration(project, {
         jobId: created.job_id,
         hash: context.contentHash,
         request: value.request,
         assertions: value.assertions,
+        ...target,
       });
 
       if (replaced !== null) {
@@ -719,7 +773,11 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
     const remembered = memory.jobs[project] ?? null;
 
     if (remembered !== null) {
-      request.value = { request: remembered.request, assertions: [...remembered.assertions] };
+      request.value = {
+        request: remembered.request,
+        assertions: [...remembered.assertions],
+        ...(remembered.target === undefined ? {} : { target: { ...remembered.target } }),
+      };
 
       try {
         const value = await authorize((token) => api.job(project, remembered.jobId, token));

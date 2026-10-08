@@ -1,6 +1,11 @@
 import { defineStore } from "pinia";
 
-import { designLoopApi, DesignLoopApiError, type DesignLoopApi } from "../api/designLoop";
+import {
+  designLoopApi,
+  DesignLoopApiError,
+  type DesignEvaluationScope,
+  type DesignLoopApi,
+} from "../api/designLoop";
 import type { DesignGenerationPayload } from "../types/design";
 import type {
   DesignDiscussionPayload,
@@ -61,6 +66,12 @@ export function runMode(run: DesignEvaluationRunPayload): DesignEvaluationMode {
   return run.responses[0]?.evaluator.evaluator_id === TWIN_REVIEW_EVALUATOR_ID
     ? "TWIN_REVIEW"
     : "STATIC_CHECK";
+}
+
+export function findingElement(
+  finding: SyntheticFindingPayload & { element_code?: unknown },
+): string | null {
+  return typeof finding.element_code === "string" ? finding.element_code : null;
 }
 
 export function findingKey(runId: string, twinId: string, findingId: string): string {
@@ -189,6 +200,7 @@ export const useDesignLoopStore = defineStore("designLoop", {
       api: DesignLoopApi = designLoopApi,
       mode: DesignEvaluationMode = "TWIN_REVIEW",
       locale?: string,
+      scope?: DesignEvaluationScope,
     ): Promise<DesignEvaluationRunPayload> {
       this.busy = "evaluate";
       this.error = null;
@@ -201,6 +213,7 @@ export const useDesignLoopStore = defineStore("designLoop", {
               design_content_hash: designContentHash,
               mode,
               ...(locale === undefined ? {} : { locale }),
+              ...(scope === undefined ? {} : { scope }),
             },
             token,
           ),

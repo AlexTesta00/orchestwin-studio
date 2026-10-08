@@ -11,9 +11,14 @@ const props = withDefaults(
     width?: MockupWidth | undefined;
     interactive?: boolean | undefined;
     scale?: number | undefined;
+    inspect?: boolean | undefined;
   }>(),
-  { width: "desktop", interactive: true, scale: undefined },
+  { width: "desktop", interactive: true, scale: undefined, inspect: false },
 );
+
+const emit = defineEmits<{ load: [] }>();
+
+defineSlots<{ overlay?(props: { factor: number }): unknown }>();
 
 const PRESET_WIDTHS: Record<WidthPreset, number> = { desktop: 1280, tablet: 768, phone: 390 };
 const PRESET_HEIGHTS: Record<WidthPreset, number> = { desktop: 800, tablet: 1024, phone: 844 };
@@ -29,10 +34,13 @@ const RATIOS: Record<WidthPreset, string> = {
 const SCREEN_LINK = /(<a\b[^<>]*?\shref=")#(SCR-[0-9]{3}")/g;
 
 const box = ref<HTMLElement | null>(null);
+const iframe = ref<HTMLIFrameElement | null>(null);
 const size = ref({ width: 0, height: 0 });
 let observer: ResizeObserver | null = null;
 
 const documentHtml = computed(() => props.html.replace(SCREEN_LINK, "$1about:srcdoc#$2"));
+
+const inspecting = computed(() => props.inspect && props.interactive);
 
 const preset = computed<WidthPreset>(() =>
   typeof props.width === "number" ? "desktop" : props.width,
@@ -105,6 +113,18 @@ const frameStyle = computed(() => ({
   transform: factor.value === 1 ? undefined : `scale(${factor.value})`,
 }));
 
+const layerClasses = computed(() => [
+  "pointer-events-none absolute overflow-hidden",
+  device.value ? "rounded-[18px]" : "",
+]);
+
+const layerStyle = computed(() => ({
+  width: `${layoutWidth.value * factor.value}px`,
+  height: `${layoutHeight.value * factor.value}px`,
+  top: `${inset.value}px`,
+  left: `${offset.value}px`,
+}));
+
 function measure(): void {
   const element = box.value;
   if (element !== null) {
@@ -125,6 +145,8 @@ onBeforeUnmount(() => {
   observer?.disconnect();
   observer = null;
 });
+
+defineExpose({ iframe, factor });
 </script>
 
 <template>
@@ -138,15 +160,27 @@ onBeforeUnmount(() => {
     :data-interactive="interactive ? 'true' : 'false'"
   >
     <iframe
+      :key="inspecting ? 'inspect' : 'view'"
+      ref="iframe"
       :class="frameClasses"
       :style="frameStyle"
       :srcdoc="documentHtml"
-      sandbox=""
+      :sandbox="inspecting ? 'allow-same-origin' : ''"
       referrerpolicy="no-referrer"
       loading="lazy"
       :title="title"
       :tabindex="interactive ? undefined : -1"
       data-testid="generated-mockup-iframe"
+      @load="emit('load')"
     />
+    <div
+      v-if="$slots.overlay"
+      :class="layerClasses"
+      :style="layerStyle"
+      aria-hidden="true"
+      data-testid="generated-mockup-overlay"
+    >
+      <slot name="overlay" :factor="factor" />
+    </div>
   </div>
 </template>

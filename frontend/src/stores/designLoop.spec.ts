@@ -9,9 +9,10 @@ import type {
   DesignEvaluationRunPayload,
   FindingValidationPayload,
   InsightApplicationPayload,
+  SyntheticFindingPayload,
   TwinEvaluationResponsePayload,
 } from "../types/designLoop";
-import { findingKey, runFindings, runMode, useDesignLoopStore } from "./designLoop";
+import { findingElement, findingKey, runFindings, runMode, useDesignLoopStore } from "./designLoop";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("token");
 
@@ -285,6 +286,66 @@ describe("designLoop store", () => {
   it("names the kind of each run from its evaluator", () => {
     expect(runMode(run("run-1", [response("proposer-design-twin-review")]))).toBe("TWIN_REVIEW");
     expect(runMode(run("run-1", [response("s67-final-user-twin-evaluator")]))).toBe("STATIC_CHECK");
+  });
+
+  it("asks the twins about a changed element only when the scope is given", async () => {
+    const store = useDesignLoopStore();
+    const api = fakeApi();
+    await store.load("project-1", authorize, api);
+    const scope = { screen_code: "SCR-002", element_code: "ELM-012" };
+    const created = await store.evaluate(
+      "project-1",
+      "version-1",
+      "a".repeat(64),
+      authorize,
+      api,
+      "TWIN_REVIEW",
+      "it-IT",
+      scope,
+    );
+    expect(vi.mocked(api.evaluate).mock.calls[0]?.[1]).toEqual({
+      design_version_id: "version-1",
+      design_content_hash: "a".repeat(64),
+      mode: "TWIN_REVIEW",
+      locale: "it-IT",
+      scope,
+    });
+    expect(store.runs.map((item) => item.id)).toEqual([created.id, "run-1"]);
+    await store.evaluate("project-1", "version-1", "a".repeat(64), authorize, api);
+    expect(Object.keys(vi.mocked(api.evaluate).mock.calls[1]?.[1] ?? {})).toEqual([
+      "design_version_id",
+      "design_content_hash",
+      "mode",
+    ]);
+    expect(store.busy).toBeNull();
+  });
+
+  it("reads the element that a twin gives to a finding", () => {
+    const finding: SyntheticFindingPayload = {
+      finding_id: "UTF-001",
+      twin_id: "twin-1",
+      twin_version: 1,
+      artifact_id: "artifact-1",
+      artifact_version: 1,
+      location: "SCR-002 Riepilogo · ELM-012 Prenota",
+      summary: "Il pulsante ora si vede bene.",
+      rationale: "Al banco cerco subito l'azione.",
+      criterion: "actionability",
+      severity: "observation",
+      epistemic_status: "MODEL_INFERRED",
+      evidence_refs: [],
+      confidence: 0.6,
+      confidence_semantics: "MODEL_SELF_ASSESSMENT_UNLESS_CALIBRATED",
+      recommended_action: "Prova con un blu più scuro.",
+      requires_human_validation: true,
+      model_config_ref: "config",
+      prompt_version_ref: "prompt",
+      is_simulated_feedback: true,
+      content_hash: "f".repeat(64),
+    };
+    expect(findingElement({ ...finding, element_code: "ELM-012" })).toBe("ELM-012");
+    expect(findingElement(finding)).toBeNull();
+    expect(findingElement({ ...finding, element_code: 12 })).toBeNull();
   });
 
   it("records the owner's decision on a finding and reloads the comparison", async () => {
