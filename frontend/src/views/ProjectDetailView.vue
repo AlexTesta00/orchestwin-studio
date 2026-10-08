@@ -15,6 +15,7 @@ import { projectImportsApi } from "@/api/projectImports";
 import { whyApi } from "@/api/why";
 import { whyContextKey } from "@/components/whyContext";
 import ActivitySessionControl from "@/components/ActivitySessionControl.vue";
+import ActivityTimeline from "@/components/ActivityTimeline.vue";
 import ProjectImportVerification from "@/components/ProjectImportVerification.vue";
 import { projectImportResult } from "@/stores/projectImportResults";
 import GeneratedMockupFrame from "@/components/GeneratedMockupFrame.vue";
@@ -1387,6 +1388,12 @@ onUnmounted(() => {
         v-if="project !== null"
         :locale="locale === 'it' ? 'it' : 'en'"
         :row-target="activityRow"
+      />
+      <ActivityTimeline
+        v-if="project !== null"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+        :authorize="authorized"
       />
     </div>
 
