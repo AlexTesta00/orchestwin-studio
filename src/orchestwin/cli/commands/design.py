@@ -48,11 +48,18 @@ REVIEW: Final = "review"
 APPROVE: Final = "approve"
 REGENERATE: Final = design_recovery.REGENERATE
 UPDATE: Final = design_recovery.UPDATE
-ACTIONS: Final = (SHOW, OPEN, CHOOSE, CHANGE, REVIEW, APPROVE, REGENERATE)
-WITH_VALUE: Final = frozenset({OPEN, CHOOSE, CHANGE})
+RESTORE: Final = "restore"
+ACTIONS: Final = (SHOW, OPEN, CHOOSE, CHANGE, REVIEW, APPROVE, REGENERATE, RESTORE)
+WITH_VALUE: Final = frozenset({OPEN, CHOOSE, CHANGE, RESTORE})
+RESTORE_CURRENT: Final = "DESIGN_RESTORE_CURRENT"
+VERSION_NOT_FOUND: Final = "DESIGN_VERSION_NOT_FOUND"
+RESTORE_BLOCKED: Final = "DESIGN_RESTORE_BLOCKED"
+RESTORE_CODES: Final = frozenset({RESTORE_CURRENT, VERSION_NOT_FOUND})
+RESTORE_BLOCKS: Final = frozenset({"REQUIREMENT_NO_LONGER_AVAILABLE", "TWIN_SET_CHANGED"})
 MOCKUPS: Final = "mockups"
 APPLY: Final = "apply"
 LEAVE: Final = "leave"
+EVERY_SCREEN: Final = "*"
 HARD_CODES: Final = frozenset(
     {
         "INPUT_CLOSED",
@@ -75,12 +82,32 @@ class Followed:
     explained: bool
 
 
+@dataclass(frozen=True, slots=True)
+class Options:
+    rules: tuple[str, ...] = ()
+    aim: design_change.Aim | None = None
+    reviewing: bool = True
+    elements: bool = False
+    screen: str | None = None
+    version: int | None = None
+
+
 def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "action", nargs="?", choices=ACTIONS, metavar="ACTION", help="design.option_action"
     )
     parser.add_argument("value", nargs="?", metavar="VALUE", help="design.option_value")
     parser.add_argument("--rule", action="append", metavar="TEXT", help="design.option_rule")
+    parser.add_argument("--screen", metavar="SCREEN", help="design.option_screen")
+    parser.add_argument("--element", metavar="ELEMENT", help="design.option_element")
+    parser.add_argument("--no-review", action="store_true", help="design.option_no_review")
+    parser.add_argument(
+        "--elements",
+        nargs="?",
+        const=EVERY_SCREEN,
+        metavar="SCREEN",
+        help="design.option_elements",
+    )
 
 
 def run(context: CommandContext, arguments: argparse.Namespace) -> int:
@@ -88,8 +115,15 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     value = arguments.value
     rules = list(arguments.rule or [])
     console = context.console
+    aimed = arguments.screen is not None or arguments.element is not None
     if rules and action != CHANGE:
         console.error("design.usage_rule")
+        return USAGE_STATUS
+    if (aimed or arguments.no_review) and action != CHANGE:
+        console.error("design.usage_target")
+        return USAGE_STATUS
+    if arguments.elements is not None and action != SHOW:
+        console.error("design.usage_elements")
         return USAGE_STATUS
     if value is not None and action not in WITH_VALUE:
         console.error("design.usage_value", action=action or NAME)
@@ -97,6 +131,19 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     if action == CHOOSE and not value:
         console.error("design.usage_code")
         return USAGE_STATUS
+    if action == RESTORE and not value:
+        console.error("design.usage_restore")
+        return USAGE_STATUS
+    options = Options(
+        rules=tuple(rules),
+        aim=design_change.aim_of(arguments.screen, arguments.element),
+        reviewing=not arguments.no_review,
+        elements=arguments.elements is not None,
+        screen=None
+        if arguments.elements in (None, EVERY_SCREEN)
+        else design_change.screen_code(arguments.elements),
+        version=restore_number(value) if action == RESTORE else None,
+    )
     project = context.project()
     client = context.client()
     source = workflow_inputs.state(client, project.link().project_id)
@@ -105,7 +152,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     if action is None:
         return guided(context, client, project)
     try:
-        return perform(context, client, project, action, value, rules)
+        return perform(context, client, project, action, value, options)
     except CliError as error:
         if error.code != design_generate.CONTEXT_CHANGED:
             raise
@@ -120,10 +167,15 @@ def perform(
     project: ProjectFolder,
     action: str,
     value: str | None,
-    rules: Sequence[str],
+    options: Options,
 ) -> int:
     state = design_state.read_state(client, project)
     prices = design_generate.Prices(client)
+    if state.kind == design_state.REQUIREMENTS_PENDING:
+        if action in (SHOW, OPEN):
+            heading(context, state)
+        say_requirements(context, client, project)
+        return 1
     if action == REVIEW:
         recovery = design_recovery.read(client, project, state)
         if recovery.action is not None:
@@ -131,6 +183,8 @@ def perform(
             return 1
         return review.run_review(context, client, project)
     if action == SHOW:
+        if options.elements:
+            return show_elements(context, client, state, prices, options.screen)
         return show(context, client, project, state, prices)
     if action == OPEN:
         heading(context, state)
@@ -151,8 +205,18 @@ def perform(
         if prices.modelless(state):
             console.say("design.no_model_change")
             return 1
-        text = value if value is not None else console.ask_text("design.change_ask")
-        return design_change.change(context, client, project, state, text, rules)
+        return design_change.change(
+            context,
+            client,
+            project,
+            state,
+            value,
+            options.rules,
+            aim=options.aim,
+            reviewing=options.reviewing,
+        )
+    if action == RESTORE:
+        return restore(context, client, project, state, options.version)
     if state.chosen is None and prices.modelless(state):
         console.say("design.no_model_approve")
         return 1
@@ -169,9 +233,6 @@ def show(
     console = context.console
     heading(context, state)
     kind = state.kind
-    if kind == design_state.REQUIREMENTS_PENDING:
-        console.say("design.requirements_pending")
-        return 1
     if kind == design_state.NO_DESIGN:
         say_no_design(context, prices)
         return 0
@@ -206,6 +267,57 @@ def next_key(state: DesignState, prices: design_generate.Prices, modelless: bool
     return f"design.next_{kind.lower()}"
 
 
+def show_elements(
+    context: CommandContext,
+    client: StudioClient,
+    state: DesignState,
+    prices: design_generate.Prices,
+    wanted: str | None,
+) -> int:
+    console = context.console
+    heading(context, state)
+    if state.kind == design_state.JOB_RUNNING:
+        console.say("design.show_running", names=running_names(context, state))
+    chosen = state.chosen
+    if state.version is None:
+        say_no_design(context, prices)
+        return 1
+    if chosen is None:
+        console.say("design.elements_needs_choice")
+        return 1
+    document = design_state.chosen_mockup(client, state)
+    if document is None:
+        console.say("design.elements_no_mockup")
+        return 1
+    screens = design_state.document_screens(document)
+    shown = screens if wanted is None else (design_change.find_screen(context, screens, wanted),)
+    if not any(screen.elements for screen in screens):
+        console.say("design.elements_none")
+        return 0
+    console.write()
+    console.heading(context.text("design.elements_heading", code=chosen.code, title=chosen.title))
+    columns = [
+        context.text("design.column_code"),
+        context.text("design.column_kind"),
+        context.text("design.column_text"),
+    ]
+    for screen in shown:
+        console.write(
+            context.text("design.elements_screen", code=screen.code, title=screen.title or "-")
+        )
+        if screen.elements:
+            console.table(
+                columns, [[item.code, item.kind, item.text or "-"] for item in screen.elements]
+            )
+        else:
+            console.say("design.elements_screen_none")
+        console.write()
+    example = next((screen for screen in shown if screen.elements), None)
+    if example is not None:
+        console.say("design.elements_next", screen=example.code, element=example.elements[0].code)
+    return 0
+
+
 def open_previews(
     context: CommandContext,
     project: ProjectFolder,
@@ -214,10 +326,6 @@ def open_previews(
     prices: design_generate.Prices,
 ) -> int:
     console = context.console
-    kind = state.kind
-    if kind == design_state.REQUIREMENTS_PENDING:
-        console.say("design.requirements_pending")
-        return 1
     if state.version is None:
         say_no_design(context, prices)
         return 1
@@ -240,6 +348,65 @@ def open_previews(
     return 0
 
 
+def restore_number(value: str | None) -> int:
+    text = (value or "").strip()
+    if not (text.isascii() and text.isdigit()) or int(text) < 1:
+        raise CliError(
+            "DESIGN_RESTORE_NUMBER_INVALID", status=USAGE_STATUS, values={"value": value or ""}
+        )
+    return int(text)
+
+
+def restore(
+    context: CommandContext,
+    client: StudioClient,
+    project: ProjectFolder,
+    state: DesignState,
+    number: int | None,
+) -> int:
+    console = context.console
+    current = state.version_number
+    if number is None or current is None:
+        console.error("design.usage_restore")
+        return USAGE_STATUS
+    numbers = sorted(
+        found
+        for item in design_api.history(client, state.project_id)
+        if isinstance(found := item.get("version_number"), int) and not isinstance(found, bool)
+    )
+    values = {"version": number, "versions": ", ".join(map(str, numbers)) or "-"}
+    if number == current:
+        raise CliError(RESTORE_CURRENT, values=values)
+    if number not in numbers:
+        raise CliError(VERSION_NOT_FOUND, values=values)
+    console.say("design.restore_about", version=number, next=current + 1)
+    if not context.assume_yes and not console.confirm(
+        "design.restore_confirm", default=True, version=number
+    ):
+        console.say("design.restore_cancelled", version=number)
+        return 1
+    try:
+        version = design_api.restore(
+            client, state.project_id, number, review.review_locale(context.language)
+        )
+    except ApiFailure as failure:
+        if failure.code in RESTORE_CODES:
+            raise CliError(failure.code, values=values) from None
+        if failure.code in RESTORE_BLOCKS:
+            raise CliError(RESTORE_BLOCKED, values={**values, "reason": failure.code}) from None
+        design_generate.raise_failure(failure)
+    fresh = design_state.read_state(client, project)
+    if fresh.generated and fresh.documents:
+        index = previews.write_previews(context, project, fresh)
+        console.say("design.previews_written", path=str(index.parent))
+    console.say(
+        "design.restored" if version.get("ready_for_gate") is True else "design.restored_choose",
+        version=version.get("version_number"),
+        restored=number,
+    )
+    return 0
+
+
 def guided(context: CommandContext, client: StudioClient, project: ProjectFolder) -> int:
     console = context.console
     first = True
@@ -255,7 +422,7 @@ def guided(context: CommandContext, client: StudioClient, project: ProjectFolder
             first = False
         kind = state.kind
         if kind == design_state.REQUIREMENTS_PENDING:
-            console.say("design.requirements_pending")
+            say_requirements(context, client, project)
             return 1
         if kind == design_state.NO_DESIGN:
             if followed:
@@ -585,9 +752,7 @@ def find(state: DesignState, value: str) -> Alternative:
 def blocked(context: CommandContext, state: DesignState, prices: design_generate.Prices) -> bool:
     console = context.console
     kind = state.kind
-    if kind == design_state.REQUIREMENTS_PENDING:
-        console.say("design.requirements_pending")
-    elif kind == design_state.NO_DESIGN:
+    if kind == design_state.NO_DESIGN:
         say_no_design(context, prices)
     elif kind == design_state.JOB_RUNNING:
         console.say("design.wait_running", names=running_names(context, state))
@@ -601,6 +766,20 @@ def say_no_design(context: CommandContext, prices: design_generate.Prices) -> No
         context.console.say("design.no_design_yet")
     else:
         context.console.say("design.no_design_yet_plain")
+
+
+def say_requirements(context: CommandContext, client: StudioClient, project: ProjectFolder) -> None:
+    console = context.console
+    found = design_sections(client, project)
+    definition = None if found is None else found.section(sections_api.REQUIREMENTS)
+    if found is None or definition is None or not definition.behind:
+        console.say("design.requirements_pending")
+        return
+    lines = [] if found.alignment.available else sections_command.blocked_lines(context, found)
+    if lines:
+        console.say("design.definition_blocked", blocked=" ".join(lines))
+    else:
+        console.say("design.definition_behind")
 
 
 def running_names(context: CommandContext, state: DesignState) -> str:

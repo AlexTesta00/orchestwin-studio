@@ -204,13 +204,24 @@ def declarative_mockup(
 
 
 def iteration_body(
-    version: Mapping[str, object], request: str, rules: Sequence[str]
+    version: Mapping[str, object],
+    request: str,
+    rules: Sequence[str],
+    target: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
-    return version_body(version, request=request, assertions=list(rules))
+    body = version_body(version, request=request, assertions=list(rules))
+    if target is not None:
+        body["target"] = dict(target)
+    return body
 
 
-def evaluation_body(version: Mapping[str, object], locale: str) -> dict[str, object]:
-    return version_body(version, locale=locale)
+def evaluation_body(
+    version: Mapping[str, object], locale: str, scope: Mapping[str, str] | None = None
+) -> dict[str, object]:
+    body = version_body(version, locale=locale)
+    if scope is not None:
+        body["scope"] = dict(scope)
+    return body
 
 
 def propose_revision(
@@ -235,6 +246,23 @@ def decide_revision(
     if not isinstance(document, dict):
         raise ApiFailure("API_FAILURE", http_status=200)
     return document
+
+
+def restore_path(project_id: str) -> str:
+    return f"{design_path(project_id)}/revisions/restore"
+
+
+def restore(
+    client: StudioClient, project_id: str, version_number: int, locale: str
+) -> Mapping[str, object]:
+    document = client.post(
+        restore_path(project_id), {"version_number": version_number, "locale": locale}
+    )
+    revision = document.get("revision") if isinstance(document, dict) else None
+    version = revision.get("version") if isinstance(revision, dict) else None
+    if not isinstance(version, dict) or not isinstance(version.get("version_number"), int):
+        raise ApiFailure("API_FAILURE", http_status=201)
+    return version
 
 
 def revisions(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
