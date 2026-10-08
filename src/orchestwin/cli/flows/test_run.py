@@ -22,15 +22,16 @@ from orchestwin.cli.browser import (
     open_page,
     resolve_target,
 )
+from orchestwin.cli.client import ensure_access
 from orchestwin.cli.console import ProgressOutcome
 from orchestwin.cli.errors import USAGE_STATUS, ApiFailure, CliError
 from orchestwin.cli.flows import (
-    align_review,
     publish,
     task_selection,
     test_plan,
     test_report,
     test_settings,
+    verify_review,
 )
 from orchestwin.cli.flows.test_server import StaticServer
 from orchestwin.cli.http import is_loopback
@@ -238,7 +239,13 @@ def execute(context: CommandContext, request: TestRequest) -> TestOutcome:
     ready = prepare(context, request)
     overview = tests_api.overview(ready.client, ready.project_id)
     available = tests_api.plan_available(overview)
-    choice = test_plan.decide(ready.saved, ready.versions, ready.criteria, new=request.new_plan)
+    choice = test_plan.decide(
+        ready.saved,
+        ready.versions,
+        ready.criteria,
+        new=request.new_plan,
+        redo=test_plan.read_redo(ready.project),
+    )
     if not choice.reuse and not available:
         raise CliError(tests_api.NO_TEST_MODEL)
     console = context.console
@@ -304,9 +311,7 @@ def prepare(context: CommandContext, request: TestRequest) -> Prepared:
         raise CliError("PROJECT_NOT_LINKED")
     link = project.link()
     client = context.client()
-    session = context.sessions.read(client.studio)
-    if session is None or not session.signed_in:
-        raise CliError("NOT_SIGNED_IN", values={"studio": client.studio.origin})
+    ensure_access(context, client)
     summary = approved_folder(project)
     settings = test_settings.read_settings(project)
     application = chosen_application(context, project, request.application, settings)
@@ -328,7 +333,7 @@ def prepare(context: CommandContext, request: TestRequest) -> Prepared:
         criteria=criteria,
         programs=programs,
         saved=saved,
-        locale=align_review.locale(context, project),
+        locale=verify_review.locale(context, project),
     )
 
 
@@ -548,6 +553,7 @@ def plan_for(
         weak=tuple(weak),
     )
     test_plan.save_plan(ready.project, saved)
+    test_plan.clear_redo(ready.project)
     console.say("test.plan_written", paths=len(saved.paths()), not_covered=len(saved.not_covered()))
     lines = [
         context.text(
@@ -1069,7 +1075,7 @@ def review_run(
 def reviewed(
     context: CommandContext, ready: Prepared, run: Mapping[str, object]
 ) -> Mapping[str, object]:
-    twins = align_review.twins_count(ready.client, ready.project)
+    twins = verify_review.twins_count(ready.client, ready.project)
     context.console.say("test.reviewing", twins=twins)
     costs.confirm_spending(context, ready.client, [tests_api.REVIEW_OPERATION] * twins)
     run_id = str(run.get("id") or "")

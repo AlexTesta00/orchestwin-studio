@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { connectAgents } = require("./src/agents");
+const { readAlignment } = require("./src/alignment");
 const { ARGUMENTS, commandLine } = require("./src/commands");
 const { languageOf, text } = require("./src/messages");
 const { KNOWLEDGE_FOLDER, readProject } = require("./src/project");
@@ -22,13 +23,18 @@ const WATCHED_FILES = Object.freeze([
   ".orchestwin/project.json",
   ".orchestwin/tests/latest.json",
   ".orchestwin/code/latest.json",
+  ".orchestwin/code/design.json",
+  ".orchestwin/align/latest.json",
   ".vscode/mcp.json",
 ]);
 const TERMINAL_COMMANDS = Object.freeze({
   "orchestwin.status": "status",
   "orchestwin.test": "test",
-  "orchestwin.align": "align",
+  "orchestwin.verify": "verify",
   "orchestwin.recheck": "recheck",
+  "orchestwin.align": "align",
+  "orchestwin.alignDesign": "alignDesign",
+  "orchestwin.push": "push",
   "orchestwin.code": "code",
   "orchestwin.tasks": "tasks",
   "orchestwin.twinsUpdate": "twinsUpdate",
@@ -147,11 +153,16 @@ function createExtension(vscode, options = {}) {
     return JSON.stringify([current, language(), status, why, validation, walkthrough]);
   }
 
+  function currentState() {
+    const current = readProject(projectRoot());
+    return { ...current, alignment: readAlignment(current.root) };
+  }
+
   function render(force = false) {
     if (disposed) {
       return;
     }
-    const current = readProject(projectRoot());
+    const current = currentState();
     scopeTo(current.root);
     watch(current);
     if (view === null) {

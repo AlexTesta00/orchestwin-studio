@@ -26,6 +26,12 @@ PHONE_FINDING = "Criterion AC-001 should be tried on a phone too."
 PHONE_TASK = "Repeat the path of criterion AC-001 on a small screen."
 
 
+def accounts_only() -> ScriptedTransport:
+    return ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", body={"access_mode": "ACCOUNTS", "registration_open": True}
+    )
+
+
 def progress(language: str = "en") -> list[str]:
     lines: list[str] = []
     for key in ("common.folder_publishing", "common.folder_downloading"):
@@ -236,7 +242,7 @@ def test_offline_the_tasks_are_read_from_the_folder(tmp_path: Path) -> None:
     every = unreachable(tmp_path, work.project.id, "--all")
     as_json = unreachable(tmp_path, work.project.id, "--json")
     (tmp_path / "config" / "sessions.json").unlink()
-    signed_out = run_ut(["tasks"], tmp_path, transport=NoNetwork(), variables=WIDE)
+    signed_out = run_ut(["tasks"], tmp_path, transport=accounts_only(), variables=WIDE)
 
     sentence = work.said("tasks.offline_unreachable", path="orchestwin/", studio=address)
     assert opened.status == 0, opened.errors
@@ -256,7 +262,7 @@ def test_offline_without_the_tasks_of_the_folder_the_error_stays(tmp_path: Path)
         address = work.studio.address
     refused = unreachable(tmp_path, work.project.id)
     (tmp_path / "config" / "sessions.json").unlink()
-    signed_out = run_ut(["tasks"], tmp_path, transport=NoNetwork())
+    signed_out = run_ut(["tasks"], tmp_path, transport=accounts_only())
 
     assert refused.status == 4
     assert (

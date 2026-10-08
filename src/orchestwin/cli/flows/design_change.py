@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final
@@ -12,7 +13,7 @@ from orchestwin.cli.flows import design_choice, design_generate, design_state, p
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
-    from orchestwin.cli.flows.design_state import DesignState
+    from orchestwin.cli.flows.design_state import DesignState, MockupScreen
     from orchestwin.cli.jobs import JobResult
     from orchestwin.cli.project import ProjectFolder
 
@@ -23,12 +24,85 @@ MAX_RULES: Final = 20
 ITERATION: Final = "ITERATION"
 REJECTED: Final = "REJECTED"
 PREVIEW_LIMIT: Final = 40
+SCREEN_CODE: Final = re.compile(r"SCR-[0-9]{3}")
+ELEMENT_CODE: Final = re.compile(r"ELM-[0-9]{3}")
+ELEMENT_MISSING: Final = "ELEMENT"
 
 
 @dataclass(frozen=True, slots=True)
 class ChangeRequest:
     text: str
     rules: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Aim:
+    screen: str
+    element: str | None = None
+
+
+def aim_of(screen: str | None, element: str | None) -> Aim | None:
+    if screen is None:
+        if element is not None:
+            raise CliError("DESIGN_ELEMENT_NEEDS_SCREEN", status=USAGE_STATUS)
+        return None
+    return Aim(screen_code(screen), None if element is None else element_code(element))
+
+
+def screen_code(value: str) -> str:
+    code = value.strip().upper()
+    if SCREEN_CODE.fullmatch(code) is None:
+        raise CliError("DESIGN_SCREEN_CODE_INVALID", status=USAGE_STATUS, values={"code": value})
+    return code
+
+
+def element_code(value: str) -> str:
+    code = value.strip().upper()
+    if ELEMENT_CODE.fullmatch(code) is None:
+        raise CliError("DESIGN_ELEMENT_CODE_INVALID", status=USAGE_STATUS, values={"code": value})
+    return code
+
+
+def find_screen(
+    context: CommandContext, screens: Sequence[MockupScreen], code: str
+) -> MockupScreen:
+    screen = next((item for item in screens if item.code == code), None)
+    if screen is None:
+        raise _not_found(context, screens, code)
+    return screen
+
+
+def target_of(context: CommandContext, document: Mapping[str, object], aim: Aim) -> dict[str, str]:
+    screens = design_state.document_screens(document)
+    screen = find_screen(context, screens, aim.screen)
+    if aim.element is None:
+        return {"screen_code": screen.code, "label": screen.label, "html": screen.html}
+    element = screen.element(aim.element)
+    if element is None:
+        raise _not_found(context, screens, screen.code, aim.element)
+    return {
+        "screen_code": screen.code,
+        "element_code": element.code,
+        "label": element.label,
+        "html": element.html,
+    }
+
+
+def scope_of(target: Mapping[str, str] | None) -> dict[str, str] | None:
+    if target is None:
+        return None
+    return {name: target[name] for name in ("screen_code", "element_code") if name in target}
+
+
+def say_target(context: CommandContext, target: Mapping[str, str]) -> None:
+    element = target.get("element_code")
+    screen = target["screen_code"]
+    if element is None:
+        context.console.say("design.target_screen", screen=screen, text=target["label"])
+    else:
+        context.console.say(
+            "design.target_element", element=element, screen=screen, text=target["label"]
+        )
 
 
 def request_of(text: str, rules: Sequence[str], current: Sequence[str]) -> ChangeRequest:
@@ -81,8 +155,11 @@ def change(
     client: StudioClient,
     project: ProjectFolder,
     state: DesignState,
-    text: str,
+    text: str | None,
     rules: Sequence[str],
+    *,
+    aim: Aim | None = None,
+    reviewing: bool = True,
 ) -> int:
     console = context.console
     reason = unavailable(state)
@@ -90,25 +167,46 @@ def change(
     if reason is not None or chosen is None or state.version is None:
         console.say(reason or "design.change_needs_choice")
         return 1
-    request = request_of(text, rules, state.rules)
-    console.say("design.about_change", request=request.text)
+    request = None if text is None else request_of(text, rules, state.rules)
+    project_id = state.project_id
+    before = design_api.mockup_document(client, project_id, chosen.id, source=design_api.APPLIED)
+    target = None
+    if aim is not None:
+        if before is None:
+            console.say("design.change_unavailable")
+            return 1
+        target = target_of(context, before, aim)
+        say_target(context, target)
+    if request is None:
+        request = request_of(console.ask_text("design.change_ask"), rules, state.rules)
+    console.say(
+        "design.about_change" if reviewing else "design.about_change_alone", request=request.text
+    )
     if request.rules:
         console.say("design.about_rules")
         console.items(list(request.rules))
-    costs.confirm_spending(context, client, [ITERATION, review.REVIEW])
-    project_id = state.project_id
-    before = design_api.mockup_document(client, project_id, chosen.id, source=design_api.APPLIED)
+    costs.confirm_spending(
+        context, client, [ITERATION, review.REVIEW] if reviewing else [ITERATION]
+    )
     result = design_generate.generate(
         context,
         client,
         project_id,
         design_api.iteration_jobs_path(project_id),
-        design_api.iteration_body(state.version, request.text, request.rules),
+        design_api.iteration_body(state.version, request.text, request.rules, target),
         label=context.text("design.label_change"),
         job_path=lambda job_id: design_api.iteration_job_path(project_id, job_id),
     )
     return finish(
-        context, client, project, state, _result(result), request=request.text, before=before
+        context,
+        client,
+        project,
+        state,
+        _result(result),
+        request=request.text,
+        before=before,
+        reviewing=reviewing,
+        target=target,
     )
 
 
@@ -121,6 +219,8 @@ def finish(
     *,
     request: str,
     before: Mapping[str, object] | None,
+    reviewing: bool = True,
+    target: Mapping[str, str] | None = None,
 ) -> int:
     console = context.console
     chosen = state.chosen
@@ -165,14 +265,22 @@ def finish(
         )
         console.say("design.previews_written", path=str(index.parent))
         previews.open_page(context, index)
-    return reviewed(context, client, project, version.get("version_number") or "-")
+    reached = version.get("version_number") or "-"
+    if not reviewing:
+        console.say("design.change_review_later", version=reached)
+        return 0
+    return reviewed(context, client, project, reached, scope_of(target))
 
 
 def reviewed(
-    context: CommandContext, client: StudioClient, project: ProjectFolder, number: object
+    context: CommandContext,
+    client: StudioClient,
+    project: ProjectFolder,
+    number: object,
+    scope: Mapping[str, str] | None = None,
 ) -> int:
     return review.review_after(
-        context, client, project, key="design.change_not_reviewed", number=number
+        context, client, project, key="design.change_not_reviewed", number=number, scope=scope
     )
 
 
@@ -262,3 +370,21 @@ def _short(text: str) -> str:
 
 def _list(value: object) -> list[object]:
     return list(value) if isinstance(value, list | tuple) else []
+
+
+def _not_found(
+    context: CommandContext,
+    screens: Sequence[MockupScreen],
+    screen: str,
+    element: str | None = None,
+) -> CliError:
+    listed = ", ".join(
+        context.text("design.screen_item", code=item.code, title=item.title)
+        if item.title
+        else item.code
+        for item in screens
+    )
+    values: dict[str, object] = {"screen": screen, "screens": listed or "-"}
+    if element is not None:
+        values.update(element=element, reason=ELEMENT_MISSING)
+    return CliError("DESIGN_TARGET_NOT_FOUND", status=USAGE_STATUS, values=values)

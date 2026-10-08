@@ -92,7 +92,7 @@ from .test_tables import records
 from .test_tables import specification as table_specification
 
 MOCKUP_DESIGN_SCHEMA_DIGEST = "87af8d8d070865b040b244a187669e8c173ef955533068f13f754eedf176f23e"
-MOCKUP_FOLDER_CONTENT_HASH = "cca1274a485e592b9677b7f1d713cb850d301a8f5e7a203341e26c4974cb8c0b"
+MOCKUP_FOLDER_CONTENT_HASH = "bbd2d85851c6ddcc3f133c0b034e90d6eee1074aaf67579f630073a1f5a92c83"
 DESIGN_SCHEMA = schema_document("design")
 WHY_SCHEMA = "schema/why.schema.json"
 VISUAL_LANGUAGE_TABLE = "design/tables/visual-language.csv"

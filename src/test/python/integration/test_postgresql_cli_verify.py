@@ -116,11 +116,11 @@ class Development:
     commits: list[str] = field(default_factory=list)
 
 
-def test_ut_aligns_the_code_with_the_real_studio(
+def test_ut_verifies_the_code_with_the_real_studio(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     if not git_available():
-        pytest.skip("the alignment path needs the git program, which is not installed")
+        pytest.skip("the verify path needs the git program, which is not installed")
     database_url = os.environ.get(DATABASE_VARIABLE, "")
     assert database_url, "the integration fixture gives this test a database schema of its own"
     journey = Journey()
@@ -141,9 +141,9 @@ def test_ut_aligns_the_code_with_the_real_studio(
 def walk(scene: Scene, journey: Journey, development: Development) -> None:
     with journey.step("3 a git repository with two commits in the project folder"):
         create_the_repository(scene, development)
-    with journey.step("4 ut align --dry-run records the two commits and reviews nothing"):
+    with journey.step("4 ut verify --dry-run records the two commits and reviews nothing"):
         record_without_reviewing(scene, development)
-    with journey.step("5 ut align without a model records nothing new and reviews nothing"):
+    with journey.step("5 ut verify without a model records nothing new and reviews nothing"):
         refuse_the_review(scene, development)
     with journey.step("6 ut watch --once finds both commits known"):
         watch_once(scene, development)
@@ -220,26 +220,26 @@ def record_without_reviewing(scene: Scene, development: Development) -> None:
         commit_line(second, SECOND_MOMENT, SECOND_MESSAGE, 2),
     )
     estimate = costs.estimate(review_operations(local_twins(scene), 2))
-    run = scene.ut("align", "--dry-run")
+    run = scene.ut("verify", "--dry-run")
     assert run.status == 0, run.transcript()
     gaps = run.order_gaps(
-        say("align.heading", name=PROJECT_NAME),
+        say("verify.heading", name=PROJECT_NAME),
         reference_sentence(reference),
-        say("align.not_aligned"),
-        say("align.considered_all", count=2, limit=CONSIDERED_LIMIT),
+        say("verify.not_aligned"),
+        say("verify.considered_all", count=2, limit=CONSIDERED_LIMIT),
         *lines,
-        say("align.recorded", count=2),
-        say("align.dry_run", count=2),
+        say("verify.recorded", count=2),
+        say("verify.dry_run", count=2),
         *lines,
         say(
-            "align.dry_run_estimate",
+            "verify.dry_run_estimate",
             amount=costs.amount_text(estimate, "en"),
             minutes=costs.minutes_text(estimate.minutes),
         ),
         say("status.alignment_not_aligned", recorded=2, pending=2, tasks=0),
     )
     assert gaps == [], "\n".join([*gaps, run.transcript()])
-    assert not run.shows(say("align.uncommitted")), run.transcript()
+    assert not run.shows(say("verify.uncommitted")), run.transcript()
     assert run.errors == "", run.transcript()
     assert [exchange.line() for exchange in run.writes()] == [
         f"POST {scene.base}/code-changes -> 201"
@@ -280,21 +280,21 @@ def refuse_the_review(scene: Scene, development: Development) -> None:
         commit_line(first, FIRST_MOMENT, FIRST_MESSAGE, 2),
         commit_line(second, SECOND_MOMENT, SECOND_MESSAGE, 2),
     )
-    run = scene.ut("align")
+    run = scene.ut("verify")
     assert run.status == 1, run.transcript()
     gaps = run.order_gaps(
-        say("align.heading", name=PROJECT_NAME),
+        say("verify.heading", name=PROJECT_NAME),
         reference_sentence(reference),
-        say("align.not_aligned"),
-        say("align.considered_all", count=2, limit=CONSIDERED_LIMIT),
+        say("verify.not_aligned"),
+        say("verify.considered_all", count=2, limit=CONSIDERED_LIMIT),
         *lines,
-        say("align.recorded", count=0),
+        say("verify.recorded", count=0),
     )
     assert gaps == [], "\n".join([*gaps, run.transcript()])
-    refusal = say(f"align.errors.{NO_REVIEW_MODEL}")
+    refusal = say(f"verify.errors.{NO_REVIEW_MODEL}")
     assert refusal in run.errors, run.transcript()
     assert NO_REVIEW_MODEL in refusal
-    reviewing = say("align.reviewing", count=2, twins=local_twins(scene))
+    reviewing = say("verify.reviewing", count=2, twins=local_twins(scene))
     assert not run.shows(reviewing), run.transcript()
     assert run.writes() == [], run.transcript()
     assert [item["commit"] for item in scene.document("/code-changes")["items"]] == [second, first]
@@ -415,12 +415,14 @@ def decide_without_a_review(scene: Scene, development: Development) -> None:
     development_line = say(
         "status.alignment", recorded=recorded, pending=0, commit=newest[:7], tasks=0
     )
+    design_line = say("status.code_design_current", aligned=aligned["design_version_number"])
     status = scene.ut("status")
     assert status.status == 0, status.transcript()
     for sentence in (
         say("status.next", action=say("status.next_folder_current")),
         say("status.folder_both", local=COMPLETE_FOLDER, studio=COMPLETE_FOLDER),
         development_line,
+        design_line,
     ):
         assert sentence in status.output, f"missing: {sentence}\n{status.transcript()}"
     as_json = scene.ut("status", "--json")
@@ -428,13 +430,15 @@ def decide_without_a_review(scene: Scene, development: Development) -> None:
     document = json.loads(as_json.output)
     assert (document["next_action"], document["next_command"], document["alignment"]) == (
         "DOWNLOAD_FOLDER",
-        "ut align",
+        "ut verify",
         {
             "recorded": recorded,
             "pending": 0,
             "aligned_commit": newest,
             "open_tasks": 0,
             "stale_reviews": 0,
+            "aligned_design_version": aligned["design_version_number"],
+            "current_design_version": reference["design"]["version_number"],
         },
     ), as_json.transcript()
     publish_the_state(scene, newest, aligned, reference)
@@ -688,7 +692,7 @@ def app_source(line: str) -> str:
 
 def commit_line(commit: str, moment: datetime, message: str, files: int) -> str:
     return say(
-        "align.commit_line",
+        "verify.commit_line",
         commit=commit[:7],
         date=moment.strftime("%Y-%m-%d %H:%M"),
         line=message,
@@ -698,7 +702,7 @@ def commit_line(commit: str, moment: datetime, message: str, files: int) -> str:
 
 def reference_sentence(reference: Mapping[str, Mapping[str, object]]) -> str:
     return say(
-        "align.reference",
+        "verify.reference",
         requirements=reference["requirements"]["version_number"],
         design=reference["design"]["version_number"],
         alternative=reference["design"]["alternative_code"],

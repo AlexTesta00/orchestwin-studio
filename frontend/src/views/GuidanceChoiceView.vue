@@ -257,6 +257,7 @@ async function logout(): Promise<void> {
             {{ confirmLabel }}
           </UiButton>
           <UiButton
+            v-if="!auth.isLocal"
             variant="quiet"
             :disabled="saving"
             data-testid="guidance-choice-logout"

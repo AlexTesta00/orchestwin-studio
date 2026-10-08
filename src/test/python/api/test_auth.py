@@ -174,6 +174,9 @@ class FakeIdentityService:
             user=replace(build_user(), guidance_mode=GuidanceMode.EXPERT),
         )
         self.guidance_calls: list[tuple[UUID, str]] = []
+        self.local_owner_result = build_user()
+        self.local_owner_emails: list[str] = []
+        self.local_session_emails: list[str] = []
 
     async def register(
         self,
@@ -223,6 +226,25 @@ class FakeIdentityService:
     ) -> GuidanceChoiceResult:
         self.guidance_calls.append((user_id, mode))
         return self.guidance_result
+
+    async def local_owner(
+        self,
+        *,
+        email: str,
+    ) -> UserAccount:
+        self.local_owner_emails.append(email)
+        return self.local_owner_result
+
+    async def issue_local_owner_session(
+        self,
+        *,
+        email: str,
+    ) -> AuthenticatedSession:
+        self.local_session_emails.append(email)
+        return replace(
+            build_authenticated(refresh_token="local-refresh-token"),
+            user=self.local_owner_result,
+        )
 
 
 def build_client(

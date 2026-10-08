@@ -31,11 +31,20 @@ from orchestwin.api.design_discussion import (
 )
 from orchestwin.api.design_loop import DesignLoopApplication
 from orchestwin.api.generation_requests import PREFERENCE_APPLIED, RESPOND_ASYNC, SERVER_ERROR
+from orchestwin.api.knowledge_alignment import (
+    KnowledgeAlignmentApplication,
+    KnowledgeAlignmentResult,
+    KnowledgeAlignmentStatus,
+)
 from orchestwin.api.services import ApplicationRuntime
 from orchestwin.api.twin_learning import (
     TwinLearningApplication,
     TwinUpdateResult,
     TwinUpdateStatus,
+)
+from orchestwin.artifacts.design_revision_application import (
+    DesignRevisionResult,
+    DesignRevisionStatus,
 )
 from orchestwin.config import ApplicationSettings
 from orchestwin.evaluation.proposer_evaluator import TWIN_REVIEW_TASK
@@ -50,6 +59,11 @@ from orchestwin.projects.design_application import (
     DesignGenerationResult,
     DesignGenerationStatus,
 )
+from orchestwin.projects.design_change_application import (
+    DesignChangeIssueCode,
+    DesignChangeResult,
+    DesignChangeStatus,
+)
 from orchestwin.projects.requirements_application import (
     RequirementsGenerationIssueCode,
     RequirementsGenerationResult,
@@ -63,6 +77,7 @@ from orchestwin.twins.application import (
 )
 from src.test.python.api import test_design_discussion_api as discussion_harness
 from src.test.python.api import test_design_loop_api as loop_harness
+from src.test.python.api.test_design_api import design_version, proposed_diff
 from src.test.python.api.test_requirements_api import specification_version
 from src.test.python.artifacts import design_fixtures
 from src.test.python.artifacts.test_design_discussion import BRUNO, discussion, discussion_round
@@ -77,6 +92,7 @@ from src.test.python.projects.test_acceptance_tests import (
     sample_review,
 )
 from src.test.python.projects.test_code_changes import review_run
+from src.test.python.projects.test_knowledge_alignment_domain import alignment_run
 from src.test.python.projects.test_twin_learning import TWIN, twin_update
 from src.test.python.twins.test_user_modeling_persistence import (
     persona_version,
@@ -114,6 +130,8 @@ TEST_PLAN = {
 }
 TEST_REVIEW = {"locale": "it-IT", "again": False}
 TWIN_UPDATE = {"locale": "it-IT"}
+ALIGNMENT_RUN = {"locale": "it-IT", "from_commit": None, "to_commit": COMMIT, "commits": [COMMIT]}
+DESIGN_CHANGE = {"request": "Aggiungi un passo di conferma prima del salvataggio."}
 ROUTES = {
     "PERSONA_PROPOSAL": ("/user-modeling/personas/proposals", None),
     "USER_TWIN_GENERATION": ("/user-modeling/snapshots/generate", None),
@@ -121,9 +139,11 @@ ROUTES = {
     "DESIGN_PROPOSAL": ("/design/proposals", None),
     "DESIGN_REGENERATION": ("/design/regenerations", None),
     "DESIGN_EVALUATION": ("/design/evaluations", EVALUATION),
+    "DESIGN_CHANGE": ("/design/change-requests", DESIGN_CHANGE),
     "DISCUSSION_START": ("/design/discussions", OPENING),
     "DISCUSSION_ROUND": (f"/design/discussions/{DISCUSSION_ID}/rounds", ROUND),
     "CODE_CHANGE_REVIEW": (f"/code-changes/{COMMIT}/reviews", CHANGE_REVIEW),
+    "KNOWLEDGE_ALIGNMENT": ("/alignment/runs", ALIGNMENT_RUN),
     "TEST_PLAN": ("/test-plans", TEST_PLAN),
     "TEST_REVIEW": (f"/test-runs/{RUN_ID}/reviews", TEST_REVIEW),
     "TWIN_UPDATE": (f"/user-twins/{TWIN}/updates", TWIN_UPDATE),
@@ -170,6 +190,7 @@ def studio(scripted: Scripted, monkeypatch):
     monkeypatch.setattr(DesignDiscussionApplication, "start", scripted)
     monkeypatch.setattr(DesignDiscussionApplication, "next_round", scripted)
     monkeypatch.setattr(CodeChangeApplication, "review", scripted)
+    monkeypatch.setattr(KnowledgeAlignmentApplication, "run", scripted)
     monkeypatch.setattr(AcceptanceTestApplication, "plan", scripted)
     monkeypatch.setattr(AcceptanceTestApplication, "review", scripted)
     monkeypatch.setattr(TwinLearningApplication, "propose", scripted)
@@ -189,6 +210,7 @@ def studio(scripted: Scripted, monkeypatch):
             ),
             requirements_generation_service=SimpleNamespace(generate=scripted),
             design_generation_service=SimpleNamespace(generate=scripted, regenerate=scripted),
+            design_change_service=SimpleNamespace(request_change=scripted),
         )
     )
 
@@ -290,6 +312,29 @@ CASES = [
     ),
     ("DESIGN_EVALUATION", lambda _: ProposalGenerationError("CONTEXT_BUDGET_EXCEEDED")),
     (
+        "DESIGN_CHANGE",
+        lambda _: DesignChangeResult(
+            status=DesignChangeStatus.CREATED,
+            revision=DesignRevisionResult(
+                status=DesignRevisionStatus.CREATED, diff=proposed_diff(design_version())
+            ),
+            changes=("Il flusso chiede una conferma prima del salvataggio.",),
+        ),
+    ),
+    (
+        "DESIGN_CHANGE",
+        lambda _: DesignChangeResult(
+            status=DesignChangeStatus.REJECTED, issue=DesignChangeIssueCode.UNCHANGED
+        ),
+    ),
+    (
+        "DESIGN_CHANGE",
+        lambda _: DesignChangeResult(
+            status=DesignChangeStatus.REJECTED, issue=DesignChangeIssueCode.MODEL_NOT_CONFIGURED
+        ),
+    ),
+    ("DESIGN_CHANGE", lambda _: ProposalGenerationError("GENERATION_BUDGET_EXCEEDED")),
+    (
         "DISCUSSION_START",
         lambda _: DesignDiscussionResult(
             status=DesignDiscussionCommandStatus.STARTED, discussion=discussion()
@@ -331,6 +376,21 @@ CASES = [
     ),
     ("CODE_CHANGE_REVIEW", lambda _: ProposalGenerationError("INVALID_PROVIDER_OUTPUT")),
     ("CODE_CHANGE_REVIEW", lambda _: ProposalGenerationError("GENERATION_BUDGET_EXCEEDED")),
+    (
+        "KNOWLEDGE_ALIGNMENT",
+        lambda _: KnowledgeAlignmentResult(
+            status=KnowledgeAlignmentStatus.RECORDED, run=alignment_run()
+        ),
+    ),
+    (
+        "KNOWLEDGE_ALIGNMENT",
+        lambda _: HTTPException(409, detail={"code": "REQUIREMENTS_APPROVAL_REQUIRED"}),
+    ),
+    (
+        "KNOWLEDGE_ALIGNMENT",
+        lambda _: HTTPException(503, detail={"code": "KNOWLEDGE_ALIGNMENT_MODEL_NOT_CONFIGURED"}),
+    ),
+    ("KNOWLEDGE_ALIGNMENT", lambda _: ProposalGenerationError("INVALID_PROVIDER_OUTPUT")),
     (
         "TEST_PLAN",
         lambda _: TestPlanResult(status=TestPlanStatus.PLANNED, plan=sample_plan()),
@@ -471,8 +531,12 @@ def test_a_refused_proposal_gives_its_reason_with_and_without_the_preference(
         ("DESIGN_EVALUATION", {**EVALUATION, "design_content_hash": "short"}),
         ("DISCUSSION_START", {**OPENING, "locale": "?"}),
         ("DISCUSSION_ROUND", {**ROUND, "expected_round_count": 0}),
+        ("DESIGN_CHANGE", {"request": ""}),
+        ("DESIGN_CHANGE", {**DESIGN_CHANGE, "locale": "it-IT"}),
         ("CODE_CHANGE_REVIEW", {**CHANGE_REVIEW, "locale": "?"}),
         ("CODE_CHANGE_REVIEW", {**CHANGE_REVIEW, "again": "maybe"}),
+        ("KNOWLEDGE_ALIGNMENT", {**ALIGNMENT_RUN, "commits": []}),
+        ("KNOWLEDGE_ALIGNMENT", {**ALIGNMENT_RUN, "to_commit": "xyz"}),
         ("TEST_PLAN", {**TEST_PLAN, "locale": "?"}),
         ("TEST_PLAN", {**TEST_PLAN, "snapshot": None}),
         ("TEST_PLAN", {**TEST_PLAN, "criteria": []}),

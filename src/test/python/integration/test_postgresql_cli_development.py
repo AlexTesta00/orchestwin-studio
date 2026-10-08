@@ -42,7 +42,7 @@ from src.test.python.integration.cli_journey_support import (
     table_rows,
     utc_now,
 )
-from src.test.python.integration.test_postgresql_cli_alignment import (
+from src.test.python.integration.test_postgresql_cli_verify import (
     APP,
     APPROVAL_ANSWERS,
     BOLD_TEXT,
@@ -201,7 +201,7 @@ def walk(scene: Scene, journey: Journey, flow: Flow) -> None:
     steps: tuple[tuple[str, Callable[[Scene, Flow], None]], ...] = (
         ("1 ut tasks add, list, --json, done, drop and reopen, folder published", owner_tasks),
         ("2 findings of the twins on a commit and on a test run become tasks", findings_to_tasks),
-        ("3 ut align --decide aligned closes what the rule closes, the rest stays", close_tasks),
+        ("3 ut verify --decide aligned closes what the rule closes, the rest stays", close_tasks),
         ("4 a new design version makes a review stale: status and --recheck", stale_reviews),
         ("5 ut twins learn, forget, list, show and update without a model", twins_that_learn),
         ("6 ut code --dry-run, then the agent of the test in a real run", code_with_an_agent),
@@ -399,22 +399,22 @@ def findings_to_tasks(scene: Scene, flow: Flow) -> None:
         say("tasks.created_none"),
     )
     assert writes_of(retested) == [], retested.transcript()
-    decided = scene.ut("align", "--decide", second, answers=["tasks", DECISION_TASK, "", "1"])
+    decided = scene.ut("verify", "--decide", second, answers=["tasks", DECISION_TASK, "", "1"])
     assert decided.status == 0, decided.transcript()
     flow.folder += 1
     assert_gaps(
         decided,
-        say("align.heading", name=PROJECT_NAME),
-        say("align.review_heading", commit=second[:7], line=SECOND_MESSAGE),
-        say("align.decision_heading", commit=second[:7], line=SECOND_MESSAGE),
-        say("align.tasks_intro", limit=10),
-        say("align.findings_intro"),
+        say("verify.heading", name=PROJECT_NAME),
+        say("verify.review_heading", commit=second[:7], line=SECOND_MESSAGE),
+        say("verify.decision_heading", commit=second[:7], line=SECOND_MESSAGE),
+        say("verify.tasks_intro", limit=10),
+        say("verify.findings_intro"),
         *candidate_lines(review["critiques"], {(twin[0], 0): "TSK-004"}),
-        say("align.findings_question"),
-        say("align.decided_tasks", count=2),
+        say("verify.findings_question"),
+        say("verify.decided_tasks", count=2),
         f"- TSK-007: {DECISION_TASK}",
         f"- TSK-008: {finding_task(change_findings[1])}",
-        say("align.folder_updated", version=flow.folder),
+        say("verify.folder_updated", version=flow.folder),
         say("status.alignment_not_aligned", recorded=2, pending=2, tasks=6),
     )
     assert writes_of(decided) == [
@@ -468,7 +468,7 @@ def close_tasks(scene: Scene, flow: Flow) -> None:
         THIRD_MESSAGE, {APP: app_source(ROUND_LINE)}, THIRD_MOMENT
     )
     development.commits.append(third)
-    recorded = scene.ut("align", "--dry-run")
+    recorded = scene.ut("verify", "--dry-run")
     assert recorded.status == 0, recorded.transcript()
     assert writes_of(recorded) == [f"POST {base}/code-changes -> 201"], recorded.transcript()
     moment = datetime.fromisoformat(scene.document(f"/code-changes/{third}")["recorded_at"])
@@ -490,14 +490,14 @@ def close_tasks(scene: Scene, flow: Flow) -> None:
     flow.folder += 1
     assert_gaps(late_owner, say("tasks.added", task="TSK-010", text=LATE_TASK), folder_line(flow))
     before = by_code(tasks_of(scene))
-    aligned = scene.ut("align", "--decide", third, answers=["aligned"])
+    aligned = scene.ut("verify", "--decide", third, answers=["aligned"])
     assert aligned.status == 0, aligned.transcript()
     flow.folder += 1
     assert_gaps(
         aligned,
-        say("align.decision_heading", commit=third[:7], line=THIRD_MESSAGE),
-        say("align.decided_aligned", commit=third[:7]),
-        say("align.folder_updated", version=flow.folder),
+        say("verify.decision_heading", commit=third[:7], line=THIRD_MESSAGE),
+        say("verify.decided_aligned", commit=third[:7]),
+        say("verify.folder_updated", version=flow.folder),
         say("status.alignment", recorded=3, pending=0, commit=third[:7], tasks=2),
     )
     assert writes_of(aligned) == [
@@ -541,7 +541,7 @@ def stale_reviews(scene: Scene, flow: Flow) -> None:
         FOURTH_MESSAGE, {STYLE: STYLE_TEXT + BOLD_TEXT}, FOURTH_MOMENT
     )
     development.commits.append(fourth)
-    recorded = scene.ut("align", "--dry-run")
+    recorded = scene.ut("verify", "--dry-run")
     assert recorded.status == 0, recorded.transcript()
     assert writes_of(recorded) == [f"POST {base}/code-changes -> 201"], recorded.transcript()
     review = insert_change_review(
@@ -596,11 +596,16 @@ def stale_reviews(scene: Scene, flow: Flow) -> None:
     assert scene.folders()[0]["state"]["stale_reviews"] == 1
     state = read_json(scene.knowledge / "state" / "state.json")
     assert (state["changes"][0]["commit"], state["changes"][0]["review"]["stale"]) == (fourth, True)
+    point = alignment["aligned"]
     development_line = say("status.alignment", recorded=4, pending=1, commit=third[:7], tasks=3)
     line = f"{development_line} {say('status.stale_reviews', count=1)}"
+    behind = say(
+        "status.code_design_behind", aligned=point["design_version_number"], current=version
+    )
     status = scene.ut("status")
     assert status.status == 0, status.transcript()
     assert status.shows(line), f"missing: {line}\n{status.transcript()}"
+    assert status.shows(behind), f"missing: {behind}\n{status.transcript()}"
     as_json = scene.ut("status", "--json")
     assert as_json.status == 0, as_json.transcript()
     assert json.loads(as_json.output)["alignment"] == {
@@ -609,15 +614,16 @@ def stale_reviews(scene: Scene, flow: Flow) -> None:
         "aligned_commit": third,
         "open_tasks": 3,
         "stale_reviews": 1,
+        "aligned_design_version": point["design_version_number"],
+        "current_design_version": version,
     }, as_json.transcript()
     offline = scene.ut("status", "--offline")
     assert (offline.status, offline.exchanges) == (0, ()), offline.transcript()
     assert offline.shows(line), f"missing: {line}\n{offline.transcript()}"
-    point = alignment["aligned"]
     estimate = costs.estimate(review_operations(local_twins(scene), 1))
     listing = (
         say(
-            "align.recheck_list",
+            "verify.recheck_list",
             count=1,
             requirements=current["requirements_version_number"],
             design=current["design_version_number"],
@@ -625,7 +631,7 @@ def stale_reviews(scene: Scene, flow: Flow) -> None:
         ),
         "- "
         + say(
-            "align.recheck_line",
+            "verify.recheck_line",
             commit=fourth[:7],
             date=minute_text(latest["committed_at"]),
             line=FOURTH_MESSAGE,
@@ -634,36 +640,36 @@ def stale_reviews(scene: Scene, flow: Flow) -> None:
             alternative=earlier["alternative_code"],
         ),
     )
-    dry = scene.ut("align", "--recheck", "--dry-run")
+    dry = scene.ut("verify", "--recheck", "--dry-run")
     assert dry.status == 0, dry.transcript()
     assert_gaps(
         dry,
-        say("align.heading", name=PROJECT_NAME),
+        say("verify.heading", name=PROJECT_NAME),
         reference_sentence(alignment["reference"]),
         say(
-            "align.aligned",
+            "verify.aligned",
             commit=third[:7],
             date=minute_text(point["decided_at"]),
             requirements=point["requirements_version_number"],
             design=point["design_version_number"],
         ),
-        say("align.open_tasks", count=3),
+        say("verify.open_tasks", count=3),
         *listing,
-        say("align.recheck_dry_run"),
+        say("verify.recheck_dry_run"),
         say(
-            "align.dry_run_estimate",
+            "verify.dry_run_estimate",
             amount=costs.amount_text(estimate, "en"),
             minutes=costs.minutes_text(estimate.minutes),
         ),
         development_line,
-        say("align.recheck_hint", count=1),
+        say("verify.recheck_hint", count=1),
     )
     assert (writes_of(dry), dry.errors) == ([], ""), dry.transcript()
-    recheck = scene.ut("align", "--recheck")
+    recheck = scene.ut("verify", "--recheck")
     assert recheck.status == 1, recheck.transcript()
     assert_gaps(recheck, *listing)
-    assert say(f"align.errors.{NO_REVIEW_MODEL}") in recheck.errors, recheck.transcript()
-    reviewing = say("align.recheck_reviewing", count=1, twins=local_twins(scene))
+    assert say(f"verify.errors.{NO_REVIEW_MODEL}") in recheck.errors, recheck.transcript()
+    reviewing = say("verify.recheck_reviewing", count=1, twins=local_twins(scene))
     assert not recheck.shows(reviewing), recheck.transcript()
     assert writes_of(recheck) == [], recheck.transcript()
     assert recheck.requests("GET", BUDGET_PATH) == [], recheck.transcript()
@@ -863,6 +869,9 @@ def code_with_an_agent(scene: Scene, flow: Flow) -> None:
     outcome = read_json(second / "outcome.json")
     changed = outcome["changed_files"]
     assert changed == [AGENT_NOTE], outcome
+    stages = read_json(scene.knowledge / "orchestwin.json")["stages"]
+    design_version = stages["design"]["version_number"]
+    assert isinstance(design_version, int), stages
     assert outcome == {
         "schema_version": 1,
         "started_at": outcome["started_at"],
@@ -877,6 +886,9 @@ def code_with_an_agent(scene: Scene, flow: Flow) -> None:
         "request": None,
         "exit_status": 0,
         "changed_files": changed,
+        "kind": "code",
+        "design_from": None,
+        "design_version_number": design_version,
     }, outcome
     assert latest == {
         "schema_version": 1,
@@ -886,6 +898,8 @@ def code_with_an_agent(scene: Scene, flow: Flow) -> None:
         "agent": CUSTOM_AGENT,
         "exit_status": 0,
         "changed_files": changed,
+        "kind": "code",
+        "design_version_number": design_version,
     }, latest
     started, finished = (
         datetime.fromisoformat(outcome[key]) for key in ("started_at", "finished_at")

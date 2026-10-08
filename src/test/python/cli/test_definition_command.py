@@ -39,6 +39,12 @@ class Offline:
         raise unreachable(url, sent=False)
 
 
+def accounts_only() -> ScriptedTransport:
+    return ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", body={"access_mode": "ACCOUNTS", "registration_open": True}
+    )
+
+
 @pytest.mark.parametrize("language", ["it", "en"])
 def test_definition_defaults_to_titles_in_chain_order_without_details(
     tmp_path: Path, language: str
@@ -127,7 +133,7 @@ def test_definition_offline_uses_the_local_document_without_writing(
     before = target.read_bytes()
 
     run = run_ut(
-        ["definition", "--json"], tmp_path, transport=Offline() if signed_in else NoNetwork()
+        ["definition", "--json"], tmp_path, transport=Offline() if signed_in else accounts_only()
     )
 
     assert run.status == 0, run.errors
@@ -157,7 +163,7 @@ def test_legacy_definition_declares_absent_needs_without_fabricating_fields(tmp_
     version = definition_version(1)
     project.save_step("requirements", version=version, gate={}, saved_at=START)
 
-    run = run_ut(["definition", "--all"], tmp_path, transport=NoNetwork())
+    run = run_ut(["definition", "--all"], tmp_path, transport=accounts_only())
 
     assert run.status == 0, run.errors
     assert "contains no needs" in run.output

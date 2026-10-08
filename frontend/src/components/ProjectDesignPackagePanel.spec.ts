@@ -13,6 +13,7 @@ import { suppliedPrototype } from "@/test/workflowInputsFixtures";
 import type { ProvidedPrototype } from "@/types/workflowInputs";
 
 import { KnowledgePackagesApiError, type KnowledgePackagesApi } from "../api/knowledgePackages";
+import { useAuthStore } from "../stores/auth";
 import { useDesignStore } from "../stores/design";
 import { useUserModelingStore } from "../stores/userModeling";
 import type { DeclarativePrototypePayload, DesignAlternativePayload } from "../types/design";
@@ -153,6 +154,7 @@ interface MountOptions {
   sectionsMode?: boolean;
   providedPrototype?: ProvidedPrototype;
   providedDesignApproved?: boolean;
+  active?: boolean;
 }
 
 function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
@@ -177,6 +179,7 @@ function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
       ...(options.providedDesignApproved === undefined
         ? {}
         : { providedDesignApproved: options.providedDesignApproved }),
+      ...(options.active === undefined ? {} : { active: options.active }),
     },
     slots: options.preview === undefined ? {} : { preview: options.preview },
     attachTo: document.body,
@@ -582,11 +585,11 @@ describe("ProjectDesignPackagePanel", () => {
   it.each([
     [
       "en",
-      "Development goes on from the terminal: ut align checks the commits against the design and ut watch follows them.",
+      "Development goes on from the terminal: ut verify checks the commits against the design and ut watch follows them.",
     ],
     [
       "it",
-      "Lo sviluppo continua dal terminale: ut align confronta i commit con il design e ut watch li segue.",
+      "Lo sviluppo continua dal terminale: ut verify confronta i commit con il design e ut watch li segue.",
     ],
   ] as const)(
     "names the commands of the terminal in %s after the versions once the design is approved",
@@ -596,11 +599,44 @@ describe("ProjectDesignPackagePanel", () => {
 
       const sentence = wrapper.get('[data-testid="package-terminal"]');
       expect(spoken(sentence)).toBe(expected);
-      expect(sentence.findAll("code").map((item) => item.text())).toEqual(["ut align", "ut watch"]);
+      expect(sentence.findAll("code").map((item) => item.text())).toEqual([
+        "ut verify",
+        "ut watch",
+      ]);
       expect(
         wrapper.get('[data-testid="package-history"]').element.contains(sentence.element),
       ).toBe(true);
       wrapper.unmount();
+    },
+  );
+
+  it.each([
+    [
+      "en",
+      "A new version is created only when something has changed. Every version can be downloaded again exactly as it was. The project's orchestwin/ folder is the source of truth: hand-made changes come back to the Studio with ut push as versions supplied by you.",
+    ],
+    [
+      "it",
+      "Una nuova versione nasce solo quando cambia qualcosa. Ognuna si riscarica esattamente com'era. La cartella orchestwin/ del progetto è la fonte di verità: le modifiche fatte a mano tornano nello Studio con ut push come versioni fornite da te.",
+    ],
+  ] as const)(
+    "says in %s above the versions that the folder is the source of truth and names ut push",
+    async (locale, expected) => {
+      for (const stages of [STAGES, approvedUpTo(1)]) {
+        const { wrapper } = mountPanel(knowledgeApi(), { locale, stages });
+        await flushPromises();
+
+        const intro = wrapper.get('[data-testid="package-history-intro"]');
+        expect(spoken(intro)).toBe(expected);
+        expect(intro.findAll("code").map((item) => item.text())).toEqual([
+          "orchestwin/",
+          "ut push",
+        ]);
+        expect(wrapper.get('[data-testid="package-history"]').element.contains(intro.element)).toBe(
+          true,
+        );
+        wrapper.unmount();
+      }
     },
   );
 
@@ -612,6 +648,7 @@ describe("ProjectDesignPackagePanel", () => {
     expect(panel.exists()).toBe(true);
     expect(panel.props("projectId")).toBe(PROJECT_ID);
     expect(panel.props("locale")).toBe("it");
+    expect(panel.props("active")).toBe(true);
     const authorize = panel.props("authorize") as <T>(
       operation: (accessToken: string) => Promise<T>,
     ) => Promise<T>;
@@ -627,6 +664,29 @@ describe("ProjectDesignPackagePanel", () => {
     expect(waiting.wrapper.findComponent({ name: "ProjectDevelopmentPanel" }).exists()).toBe(false);
     expect(waiting.wrapper.find('[data-testid="package-terminal"]').exists()).toBe(false);
     waiting.wrapper.unmount();
+  });
+
+  it("keeps its single column as wide as the page, whatever the panels below it hold", async () => {
+    const { wrapper } = mountPanel(knowledgeApi());
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="design-package"]').classes()).toEqual(
+      expect.arrayContaining(["grid", "grid-cols-1"]),
+    );
+    wrapper.unmount();
+  });
+
+  it("tells the development outside the Studio when its step is not the one shown", async () => {
+    const { wrapper } = mountPanel(knowledgeApi(), { active: false });
+    await flushPromises();
+
+    const panel = wrapper.findComponent({ name: "ProjectDevelopmentPanel" });
+    expect(panel.props("active")).toBe(false);
+
+    await wrapper.setProps({ active: true });
+
+    expect(panel.props("active")).toBe(true);
+    wrapper.unmount();
   });
 
   it("shows the acceptance tests right after the development outside the Studio once the design is approved", async () => {
@@ -1109,6 +1169,52 @@ describe("ProjectDesignPackagePanel", () => {
   });
 
   it.each([
+    [
+      "it",
+      [
+        "Crea una cartella vuota per il progetto ed entraci.",
+        "Collega la cartella a questo progetto: ut scarica qui la cartella di conoscenza.",
+        "Apri la cartella in Visual Studio Code: il pannello OrchesTwin mostra lo stato del progetto e lancia gli stessi comandi.",
+      ],
+    ],
+    [
+      "en",
+      [
+        "Create an empty folder for the project and go into it.",
+        "Link the folder to this project: ut downloads the knowledge folder here.",
+        "Open the folder in Visual Studio Code: the OrchesTwin panel shows the state of the project and runs the same commands.",
+      ],
+    ],
+  ] as const)(
+    "leaves out in %s the sign-in from the terminal when the Studio is local",
+    async (locale, sentences) => {
+      const auth = useAuthStore();
+      auth.accessMode = "LOCAL_OWNER";
+      expect(auth.isLocal).toBe(true);
+      const { wrapper } = mountPanel(knowledgeApi(), {
+        locale,
+        studioAddress: "http://127.0.0.1:8000",
+      });
+      await flushPromises();
+
+      const steps = wrapper.findAll('[data-testid="package-cli-step"]');
+      expect(steps.map((step) => spoken(step.get('[data-testid="package-cli-text"]')))).toEqual(
+        sentences,
+      );
+      expect(steps.map((step) => step.get('[aria-hidden="true"]').text())).toEqual(["1", "2", "3"]);
+      expect(commands(wrapper, "package-cli-step")).toEqual([
+        "mkdir lista-ospiti-workshop; cd lista-ospiti-workshop",
+        `ut init --project ${PROJECT_ID} --mode design-code`,
+        "code .",
+      ]);
+      expect(commands(wrapper, "package-development-step")).toContain("ut push");
+      expect(wrapper.findAll('[data-testid="command-line"]')).toHaveLength(12);
+      expect(wrapper.text()).not.toContain("ut login");
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
     ["it", "  Caffè & Città — Prenotazioni 2026!  ", "caffe-citta-prenotazioni-2026"],
     ["en", "L'Agenda dell'Università: ÈLITE", "l-agenda-dell-universita-elite"],
     [
@@ -1148,10 +1254,13 @@ describe("ProjectDesignPackagePanel", () => {
       "it",
       "Poi, durante lo sviluppo",
       [
-        "Metti la cartella sotto git: ut align lavora sui commit.",
+        "Metti la cartella sotto git: ut verify lavora sui commit.",
         "Fai scrivere l'applicazione al tuo agente di programmazione, con requisiti e design come contesto.",
         "Verifica i criteri di accettazione nei browser di questo computer (con --url se l'applicazione ha un suo indirizzo).",
-        "Fai esaminare i commit ai twin e riallinea codice, design e requisiti.",
+        "I twin esaminano i commit e il modello dice se codice, Definizione e Design sono allineati; decidi tu.",
+        "Legge le modifiche del codice e propone aggiornamenti alla Definizione, al Design e al piano dei test: li approvi uno per uno.",
+        "Quando il design cambia nello Studio dopo che il codice esiste, porta il codice al design attuale: il tuo agente riceve un ordine di lavoro limitato a ciò che è cambiato.",
+        "Invia allo Studio le modifiche fatte a mano nella cartella di conoscenza: vedi le differenze, le approvi e nasce una versione nuova.",
         "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
         "Guarda a che punto è il progetto.",
       ],
@@ -1160,10 +1269,13 @@ describe("ProjectDesignPackagePanel", () => {
       "en",
       "Then, during development",
       [
-        "Put the folder under git: ut align works on the commits.",
+        "Put the folder under git: ut verify works on the commits.",
         "Have your coding agent write the application, with the requirements and the design as context.",
         "Check the acceptance criteria in the browsers of this computer (with --url if the application has an address of its own).",
-        "Have the twins review the commits and bring code, design and requirements back in line.",
+        "The twins review the commits and the model says whether code, Definition and Design are aligned; you decide.",
+        "Reads the code changes and proposes updates to the Definition, the Design and the test plan: you approve them one by one.",
+        "When the design changes in the Studio after the code exists, bring the code up to the current design: your agent receives a work order limited to what changed.",
+        "Sends the hand-made changes of the knowledge folder to the Studio: you see the differences, approve them, and a new version is born.",
         "Have the twins propose what they learned from the development.",
         "See where the project stands.",
       ],
@@ -1185,14 +1297,54 @@ describe("ProjectDesignPackagePanel", () => {
         "git init",
         "ut code",
         "ut test --static .",
+        "ut verify",
         "ut align",
+        "ut align --from-design",
+        "ut push",
         "ut twins update",
         "ut status",
       ]);
       expect(items[0]!.get('[data-testid="package-development-text"] code').text()).toBe(
-        "ut align",
+        "ut verify",
       );
       expect(items[2]!.get('[data-testid="package-development-text"] code').text()).toBe("--url");
+      expect(items[3]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
+      expect(items[4]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
+      expect(items[5]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
+      expect(items[6]!.findAll('[data-testid="package-development-text"] code')).toHaveLength(0);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    [
+      "en",
+      "Copy",
+      "When the design changes in the Studio after the code exists, bring the code up to the current design: your agent receives a work order limited to what changed.",
+    ],
+    [
+      "it",
+      "Copia",
+      "Quando il design cambia nello Studio dopo che il codice esiste, porta il codice al design attuale: il tuo agente riceve un ordine di lavoro limitato a ciò che è cambiato.",
+    ],
+  ] as const)(
+    "lists in %s the command that brings the code up to a changed design right after ut align",
+    async (locale, copyLabel, sentence) => {
+      const { wrapper } = mountPanel(knowledgeApi(), { locale });
+      await flushPromises();
+
+      const list = commands(wrapper, "package-development-step");
+      const position = list.indexOf("ut align --from-design");
+      expect(list.slice(position - 1, position + 2)).toEqual([
+        "ut align",
+        "ut align --from-design",
+        "ut push",
+      ]);
+      const step = wrapper.findAll('[data-testid="package-development-step"]')[position]!;
+      expect(spoken(step.get('[data-testid="package-development-text"]'))).toBe(sentence);
+      expect(step.get('[data-testid="command-copy"]').attributes("aria-label")).toBe(
+        `${copyLabel}: ut align --from-design`,
+      );
       wrapper.unmount();
     },
   );
@@ -1290,7 +1442,7 @@ describe("ProjectDesignPackagePanel", () => {
   });
 
   it.each([
-    { name: "the chosen design", options: {}, count: 10 },
+    { name: "the chosen design", options: {}, count: 13 },
     {
       name: "a supplied design",
       options: {

@@ -22,4 +22,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The Studio {studio} does not answer: the sign-in was removed from this "
         "computer all the same.",
     },
+    "logout.local_mode": {
+        "it": "Lo Studio {studio} è locale: non c'è un accesso da chiudere.",
+        "en": "The Studio {studio} is local: there is no sign-in to close.",
+    },
 }

@@ -13,6 +13,7 @@ const DRIFT_COMMIT = "3c3d3e3f3a3b3c3d3e3f3a3b3c3d3e3f3a3b3c3d";
 const LATEST_RUN = "96c07236-9dcf-4fca-8e64-09eb460e42f0";
 const EARLIER_RUN = "5f84633f-5646-4b32-b2a3-619f8c0bcb2b";
 const RUN_FOLDER = "20260930-090400";
+const DESIGN_POINT = ".orchestwin/code/design.json";
 const STATEMENTS = Object.freeze({
   "AC-001":
     "With a bill of 50 and a tip of 10 percent, the result shows a tip of 5.00 and a total of 55.00.",
@@ -561,6 +562,17 @@ function writeCompleteProject(root, shape = "new") {
   return root;
 }
 
+function writeDesignPoint(root, version, values = {}) {
+  return writeJson(root, DESIGN_POINT, {
+    schema_version: 1,
+    design_version_number: version,
+    recorded_at: "2026-10-06T21:30:00+00:00",
+    folder: "20261006-212000",
+    reason: "DESIGN_RUN",
+    ...values,
+  });
+}
+
 function writePartialProject(root) {
   writeJson(root, ".orchestwin/project.json", link("Tip calculator"));
   writeJson(root, "orchestwin/orchestwin.json", manifest(["brief"], "new"));
@@ -596,6 +608,7 @@ function writeUnlinkedFolder(root) {
 module.exports = {
   ALIGNED_COMMIT,
   CLEAN_COMMIT,
+  DESIGN_POINT,
   DRIFT_COMMIT,
   EARLIER_RUN,
   HEAD_WAITER,
@@ -610,6 +623,7 @@ module.exports = {
   removeFolder,
   writeBrokenProject,
   writeCompleteProject,
+  writeDesignPoint,
   writeJson,
   writePartialProject,
   writeText,

@@ -79,6 +79,8 @@ const messages = {
     close: "Chiudi",
     closeLabel: "Chiudi la navigazione principale",
     label: "Navigazione principale",
+    localStudio: "Studio locale",
+    localStudioTitle: "Account di chi usa questo computer, senza registrazione",
     login: "Accedi",
     logout: "Esci",
     menu: "Menu",
@@ -125,6 +127,7 @@ const messages = {
       invalid_authentication: "L'email o la password non sono valide.",
       email_already_registered: "Esiste già un account con questo indirizzo email.",
       invalid_registration: "I dati di registrazione non sono validi.",
+      local_mode: "Lo Studio è locale e non chiede l'accesso: apri i progetti.",
       invalid_refresh_token: "La sessione non è più valida. Accedi nuovamente.",
       expired_refresh_token: "La sessione è scaduta. Accedi nuovamente.",
       refresh_token_reuse_detected:
@@ -138,6 +141,7 @@ const messages = {
     title: "Un'idea diventa un'applicazione. Tu decidi a ogni passo.",
     lead: "OrchesTwin Studio orchestra l'AI lungo sei passi governati: guarda il progetto dalle prospettive che gli servono, costruisce utenti sintetici a partire dal tuo brief, scrive i requisiti, esplora il design e ti consegna un dossier per realizzare l'applicazione con i tuoi strumenti. Ogni passo si chiude con la tua approvazione.",
     enter: "Entra nello Studio",
+    openProjects: "Apri i progetti",
     twinsLink: "Come funzionano i twin",
     rules: {
       one: {

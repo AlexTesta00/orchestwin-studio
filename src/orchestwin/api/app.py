@@ -37,6 +37,7 @@ from orchestwin.api.generation_requests import (
 from orchestwin.api.health import create_health_router
 from orchestwin.api.human_validation import create_human_validation_router
 from orchestwin.api.insight_applications import create_insight_application_router
+from orchestwin.api.knowledge_alignment import create_knowledge_alignment_router
 from orchestwin.api.knowledge_packages import create_knowledge_package_router
 from orchestwin.api.model_runtime import create_model_runtime_router
 from orchestwin.api.model_usage import create_model_usage_router
@@ -60,7 +61,7 @@ from orchestwin.api.user_modeling_realignment import create_user_modeling_realig
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
 from orchestwin.api.validation import request_validation_error
 from orchestwin.api.workflow_inputs import create_workflow_inputs_router, protect_provided_consumers
-from orchestwin.config import ApplicationSettings, load_settings
+from orchestwin.config import AccessMode, ApplicationSettings, load_settings
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.real_runtime import RealModelRuntimeError
@@ -78,6 +79,7 @@ def create_app(
     resolved_settings = settings if settings is not None else load_settings()
     resolved_runtime = runtime if runtime is not None else create_default_runtime(resolved_settings)
     resolved_auth_settings = auth_settings if auth_settings is not None else AuthApiSettings()
+    local_owner_email = resolved_settings.resolved_local_owner_email()
     jobs = GenerationJobRegistry()
 
     @asynccontextmanager
@@ -92,6 +94,11 @@ def create_app(
                 await resolved_runtime.real_model_runtime.check_readiness(
                     resolved_runtime.database_runtime.session_factory
                 )
+            if (
+                resolved_settings.access_mode is AccessMode.LOCAL_OWNER
+                and resolved_runtime.identity_service is not None
+            ):
+                await resolved_runtime.identity_service.local_owner(email=local_owner_email)
             yield
         finally:
             try:
@@ -153,6 +160,9 @@ def create_app(
     application.state.proposal_evidence_store = resolved_runtime.proposal_evidence_store
     application.state.final_evaluator_runtime = resolved_runtime.final_evaluator_runtime
     application.state.identity_service = resolved_runtime.identity_service
+    application.state.access_mode = resolved_settings.access_mode
+    application.state.local_owner_email = local_owner_email
+    application.state.cors_allowed_origins = resolved_settings.cors_allowed_origins
     application.state.project_service = resolved_runtime.project_service
     application.state.clarification_service = resolved_runtime.clarification_service
     application.state.brief_gate_service = resolved_runtime.brief_gate_service
@@ -169,6 +179,7 @@ def create_app(
     application.state.requirements_change_service = resolved_runtime.requirements_change_service
     application.state.design_generation_service = resolved_runtime.design_generation_service
     application.state.design_revision_service = resolved_runtime.design_revision_service
+    application.state.design_change_service = resolved_runtime.design_change_service
     application.state.design_query_service = resolved_runtime.design_query_service
     application.state.design_gate_service = resolved_runtime.design_gate_service
     application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
@@ -247,6 +258,7 @@ def create_app(
         create_diagram_router(),
         create_knowledge_package_router(),
         create_code_change_router(),
+        create_knowledge_alignment_router(),
         create_acceptance_test_router(),
         create_twin_learning_router(),
         create_research_evidence_router(),

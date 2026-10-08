@@ -364,15 +364,15 @@ def test_the_project_state_joins_the_link_the_folder_and_the_development_state(
         "stale_reviews": 0,
         "open_tasks": [task for task in state["tasks"] if task["status"] == "OPEN"],
         "next": "Compiti aperti per il codice: 1 (TSK-001). Realizzali, fai il commit, poi "
-        "lancia `ut align`.",
+        "lancia `ut verify`.",
     }
     assert [task["code"] for task in document["open_tasks"]] == [sources.tasks[0]["code"]]
 
 
 OPEN_TASKS_NEXT = {
-    "en": "Open tasks for the code: 1 (TSK-001). Carry them out, commit, then launch `ut align`.",
+    "en": "Open tasks for the code: 1 (TSK-001). Carry them out, commit, then launch `ut verify`.",
     "it": "Compiti aperti per il codice: 1 (TSK-001). Realizzali, fai il commit, poi lancia "
-    "`ut align`.",
+    "`ut verify`.",
 }
 
 
@@ -452,7 +452,8 @@ def test_a_complete_folder_without_commits_says_to_develop_and_align(tmp_path: P
     )
     assert document["next"] == (
         "Il design è approvato e nessun commit è ancora registrato: sviluppa il codice, poi "
-        "lancia `ut align` per far rivedere i commit ai twin."
+        "lancia `ut verify`: i twin esaminano i commit e il modello dice se codice, Definizione e "
+        "Design sono allineati; decidi tu."
     )
 
 
@@ -473,7 +474,7 @@ def test_a_schema_two_folder_has_no_development_state(tmp_path: Path) -> None:
     assert (document["pending_changes"], document["open_tasks"]) == ([], [])
     assert document["next"] == (
         "Il design è approvato, ma questa cartella non ha lo stato dello sviluppo: scarica la "
-        "versione nuova con `ut package publish`, poi dopo i commit lancia `ut align`."
+        "versione nuova con `ut package publish`, poi dopo i commit lancia `ut verify`."
     )
     assert run(tools, "get_feedback") == {"runs": [], "design_reviews": 0}
 
@@ -531,28 +532,28 @@ def change(commit: str, decision: str | None) -> dict[str, object]:
             [change(PENDING_COMMIT, None), change(ALIGNED_COMMIT, "ALIGNED")],
             {"commit": ALIGNED_COMMIT},
             [{"code": "TSK-001"}],
-            "Commit dopo il punto allineato ancora da rivedere o decidere: 1. Lancia `ut align`.",
+            "Commit dopo il punto allineato ancora da rivedere o decidere: 1. Lancia `ut verify`.",
         ),
         (
             [change(ALIGNED_COMMIT, "ALIGNED")],
             {"commit": ALIGNED_COMMIT},
             [],
             "Il codice è allineato al design approvato al commit 9d8e7f6: continua a sviluppare "
-            "e lancia `ut align` dopo i prossimi commit.",
+            "e lancia `ut verify` dopo i prossimi commit.",
         ),
         (
             [change(PENDING_COMMIT, "DISMISSED"), change(ALIGNED_COMMIT, "DESIGN_CHANGE")],
             None,
             [],
             "Ci sono commit registrati, ma nessuno è ancora segnato come allineato: lancia "
-            "`ut align` per decidere.",
+            "`ut verify` per decidere.",
         ),
         (
             [change(PENDING_COMMIT, "CODE_TASKS"), change(ALIGNED_COMMIT, "ALIGNED")],
             {"commit": ALIGNED_COMMIT},
             [{"code": "TSK-001"}, {"code": "TSK-002"}],
             "Compiti aperti per il codice: 2 (TSK-001, TSK-002). Realizzali, fai il commit, poi "
-            "lancia `ut align`.",
+            "lancia `ut verify`.",
         ),
     ],
 )
@@ -1014,7 +1015,7 @@ def test_without_the_estimates_of_a_review_the_description_has_no_figures(
     assert listed["review_changes"]["description"] == (
         "Record a commit in the Studio (HEAD when not given) and have the twins criticize it, "
         "with the verdict of alignment with the approved design and requirements. Paid. The "
-        "decision stays with the owner of the project, through `ut align`."
+        "decision stays with the owner of the project, through `ut verify`."
     )
     assert tools_module.review_estimate(2) is None
 
@@ -1129,8 +1130,12 @@ def test_a_failed_answer_is_a_tool_error_with_the_code_of_the_studio(
 
 def test_asking_needs_approved_twins_and_the_sign_in(tmp_path: Path) -> None:
     state_folder(tmp_path)
-    tools, _ = build(tmp_path, spend=True)
+    accounts = ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", status=404, body={"detail": "Not Found"}
+    )
+    tools, _ = build(tmp_path, spend=True, transport=accounts)
     signed_out = refused(tools, "ask_twin", twin="1", question="Ciao?")
+    assert [request.path for request in accounts.sent] == [f"{API}/auth/mode"]
     store_session(tmp_path)
     transport = ScriptedTransport().expect(
         "GET", READINESS, body={"snapshot_exists": True, "approved_current_snapshot": False}
@@ -1166,7 +1171,7 @@ def test_a_review_records_the_head_commit_and_asks_the_twins(
     assert document == {
         **change_run(),
         "reused": False,
-        "decide_with": "ut align",
+        "decide_with": "ut verify",
         "estimated_usd": [0.45, 0.8],
     }
     assert calls == [
@@ -1248,7 +1253,7 @@ def test_a_review_that_exists_gives_the_latest_run(
     assert document == {
         **newer,
         "reused": True,
-        "decide_with": "ut align",
+        "decide_with": "ut verify",
         "estimated_usd": [0.45, 0.8],
     }
     transport.assert_done()

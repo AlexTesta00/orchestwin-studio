@@ -9,7 +9,7 @@ from orchestwin.cli.api import design as design_api
 from orchestwin.cli.messages import text
 
 from .support.terminal import link_folder, run_ut
-from .support.transports import NoNetwork
+from .support.transports import API, NoNetwork, ScriptedTransport
 from .test_api_design import Session, choose, choose_in_the_web, design_session, draw, propose
 
 FIGURES = re.compile(r"USD|\d+ min\b")
@@ -593,7 +593,11 @@ def test_a_folder_that_is_not_linked(tmp_path: Path) -> None:
 
 def test_without_sign_in(tmp_path: Path) -> None:
     link_folder(tmp_path / "project")
-    run = run_ut(["--lang", "en", "design", "show"], tmp_path, transport=NoNetwork())
+    transport = ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", status=404, body={"detail": "Not Found"}
+    )
+    run = run_ut(["--lang", "en", "design", "show"], tmp_path, transport=transport)
 
     assert run.status == 3
     assert run.errors.startswith("You are not signed in to the Studio")
+    assert [request.path for request in transport.sent] == [f"{API}/auth/mode"]

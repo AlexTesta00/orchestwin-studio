@@ -12,6 +12,16 @@ const { escapeHtml, nextStep, renderPanel } = require("../src/view");
 const NONCE = "0123456789abcdef0123456789abcdef";
 const CSP_SOURCE = "https://file+.vscode-resource.vscode-cdn.net";
 const LANGUAGES = ["en", "it"];
+const ALIGNMENT = Object.freeze({
+  runId: "0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+  finishedAt: "2026-10-06T10:20:00+00:00",
+  fromCommit: fixtures.ALIGNED_COMMIT,
+  toCommit: fixtures.DRIFT_COMMIT,
+  proposals: 5,
+  waiting: 2,
+  applied: 2,
+  skipped: 1,
+});
 const ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
 
 function render(state, language, extra = {}) {
@@ -236,7 +246,7 @@ describe("renderPanel", () => {
   it("reads the shapes of sprint 27 without flags or learning", () => {
     for (const language of LANGUAGES) {
       const page = plain(render(states.old, language));
-      assert.ok(page.includes(counted(language, "next.code", 2)));
+      assert.ok(page.includes(sentence(language, "next.designAhead", { current: 5, aligned: 4 })));
       assert.ok(page.includes(sentence(language, "origin.verdictCommit", { commit: "2b2c2d2" })));
       assert.ok(page.includes(sentence(language, "origin.verdictCommit", { commit: "3c3d3e3" })));
       assert.ok(!page.includes(`${text(language, "development.stale")} `));
@@ -317,6 +327,60 @@ describe("renderPanel", () => {
     assert.ok(!plain(render(state, "en")).includes(text("en", "code.title")));
   });
 
+  it("shows the knowledge aligned by ut align and asks to decide the proposals that wait", () => {
+    const state = structuredClone(states.complete);
+    state.development.stale = 0;
+    state.alignment = { ...ALIGNMENT };
+    const dates = { en: "6 Oct 2026, 10:20", it: "6 ott 2026, 10:20" };
+    for (const language of LANGUAGES) {
+      const html = render(state, language);
+      const page = plain(html);
+      const block = [
+        text(language, "knowledge.title"),
+        text(language, "knowledge.run"),
+        `${sentence(language, "knowledge.commits", { from: "1a1b1c1", to: "3c3d3e3" })} · ${dates[language]}`,
+        `${text(language, "knowledge.proposals")} 5`,
+        `${text(language, "knowledge.waiting")} 2`,
+      ].join(" ");
+      assert.ok(page.includes(block), `${language}: ${block}`);
+      assert.ok(html.includes('data-step="ALIGN"'));
+      assert.ok(page.includes(counted(language, "next.align", 2)));
+      const [first] = buttons(html);
+      assert.deepEqual([first.command, first.primary], ["alignPending", true]);
+      assert.ok(first.text.includes("ut align --pending"));
+      assert.ok(first.text.includes(text(language, "action.alignPending")));
+      assert.ok(first.text.includes(text(language, "cost.SPENDS")));
+      assert.deepEqual(
+        buttons(html)
+          .slice(1, 6)
+          .map((button) => button.command),
+        ["verify", "align", "push", "alignDesign", "code"],
+      );
+      const without = plain(render(states.complete, language));
+      assert.ok(!without.includes(text(language, "knowledge.run")));
+      assert.ok(!without.includes(counted(language, "next.align", 2)));
+    }
+    const italian = plain(render(state, "it"));
+    assert.ok(!italian.includes(sentence("en", "knowledge.run")));
+    assert.ok(!italian.includes(counted("en", "next.align", 2)));
+    state.alignment = { ...ALIGNMENT, fromCommit: null, waiting: 1 };
+    for (const language of LANGUAGES) {
+      const page = plain(render(state, language));
+      assert.ok(page.includes(sentence(language, "knowledge.upTo", { to: "3c3d3e3" })));
+      assert.ok(
+        !page.includes(sentence(language, "knowledge.commits", { from: "1a1b1c1", to: "3c3d3e3" })),
+      );
+      assert.ok(page.includes(counted(language, "next.align", 1)));
+      assert.ok(!page.includes(counted(language, "next.align", 2)));
+    }
+    state.alignment = { ...ALIGNMENT, waiting: 0 };
+    for (const language of LANGUAGES) {
+      const html = render(state, language);
+      assert.ok(html.includes('data-step="DESIGN_AHEAD"'));
+      assert.ok(plain(html).includes(`${text(language, "knowledge.waiting")} 0`));
+    }
+  });
+
   it("says that the development starts after the design in a partial folder", () => {
     for (const language of LANGUAGES) {
       const page = plain(render(states.partial, language));
@@ -379,8 +443,11 @@ describe("renderPanel", () => {
     const expected = {
       complete: [
         "recheck",
-        "align",
+        "verify",
         "recheck",
+        "align",
+        "push",
+        "alignDesign",
         "code",
         "tasks",
         "test",
@@ -390,8 +457,11 @@ describe("renderPanel", () => {
         "status",
       ],
       old: [
-        "code",
+        "alignDesign",
+        "verify",
         "align",
+        "push",
+        "alignDesign",
         "code",
         "tasks",
         "test",
@@ -438,12 +508,91 @@ describe("renderPanel", () => {
             assert.ok(button.text.includes(text(language, `cost.${cost}`)), button.command);
           }
           if (
-            ["test", "align", "recheck", "twinsUpdate", "init", "design"].includes(button.command)
+            [
+              "test",
+              "verify",
+              "recheck",
+              "align",
+              "alignPending",
+              "twinsUpdate",
+              "init",
+              "design",
+            ].includes(button.command)
           ) {
             assert.equal(cost, "SPENDS");
           }
         }
       }
+    }
+  });
+
+  it("offers to send the folder changes to the Studio right after ut align, for free", () => {
+    assert.equal(text("en", "action.push"), "Send the folder changes to the Studio");
+    assert.equal(text("it", "action.push"), "Invia le modifiche della cartella allo Studio");
+    for (const language of LANGUAGES) {
+      const html = render(states.complete, language);
+      const found = buttons(html);
+      const commands = found.map((button) => button.command);
+      const push = found[commands.indexOf("push")];
+      assert.equal(commands.indexOf("push"), commands.indexOf("align") + 1);
+      assert.equal(push.primary, false);
+      assert.ok(push.text.includes(text(language, "action.push")));
+      assert.ok(push.text.includes("ut push"));
+      assert.ok(push.text.includes(text(language, "cost.FREE")));
+      const development = html.slice(
+        html.indexOf('id="development-title"'),
+        html.indexOf('id="tasks-title"'),
+      );
+      assert.ok(development.includes('data-command="push"'));
+      assert.ok(!plain(render(states.partial, language)).includes("ut push"));
+    }
+  });
+
+  it("asks to bring the code up to the current design when the design moved past the aligned point", () => {
+    assert.equal(text("en", "action.alignDesign"), "Bring the code up to the current design");
+    assert.equal(text("it", "action.alignDesign"), "Porta il codice al design attuale");
+    const expected = {
+      en: "The design is at version 6 and the code is aligned with version 3: bring the code up to the current design with ut align --from-design.",
+      it: "Il design è alla versione 6 e il codice è allineato alla versione 3: porta il codice al design attuale con ut align --from-design.",
+    };
+    const state = structuredClone(states.complete);
+    state.development.stale = 0;
+    state.reference.design = 6;
+    state.development.alignedDesign = 3;
+    for (const language of LANGUAGES) {
+      assert.equal(
+        sentence(language, "next.designAhead", { current: 6, aligned: 3 }),
+        expected[language],
+      );
+      const html = render(state, language);
+      const page = plain(html);
+      assert.ok(html.includes('data-step="DESIGN_AHEAD"'));
+      assert.ok(page.includes(expected[language]));
+      assert.ok(!page.includes(counted(language, "next.code", 3)));
+      const found = buttons(html);
+      const commands = found.map((button) => button.command);
+      const [first] = found;
+      assert.deepEqual([first.command, first.primary], ["alignDesign", true]);
+      assert.ok(first.text.includes(text(language, "action.alignDesign")));
+      assert.ok(first.text.includes("ut align --from-design"));
+      assert.ok(first.text.includes(text(language, "cost.AGENT")));
+      const offered = commands.lastIndexOf("alignDesign");
+      assert.equal(commands.indexOf("code"), offered + 1);
+      assert.equal(found[offered].primary, false);
+      const development = html.slice(
+        html.indexOf('id="development-title"'),
+        html.indexOf('id="tasks-title"'),
+      );
+      assert.ok(development.includes('data-command="alignDesign"'));
+      assert.ok(!plain(render(states.partial, language)).includes("ut align --from-design"));
+    }
+    state.development.alignedDesign = 6;
+    for (const language of LANGUAGES) {
+      const html = render(state, language);
+      assert.ok(html.includes('data-step="CODE"'));
+      assert.ok(plain(html).includes(counted(language, "next.code", 3)));
+      const [first] = buttons(html);
+      assert.deepEqual([first.command, first.primary], ["code", true]);
     }
   });
 
@@ -676,8 +825,12 @@ describe("nextStep", () => {
     const noStale = (state) => {
       state.development.stale = 0;
     };
-    const noTasks = (state) => {
+    const sameDesign = (state) => {
       noStale(state);
+      state.development.alignedDesign = state.reference.design;
+    };
+    const noTasks = (state) => {
+      sameDesign(state);
       state.tasks.open = [];
     };
     const noProblems = (state) => {
@@ -690,9 +843,10 @@ describe("nextStep", () => {
       state.development.pending = 0;
     };
     assert.deepEqual(step(complete), ["RECHECK", "recheck", 1]);
-    assert.deepEqual(step(changed(noStale)), ["CODE", "code", 3]);
+    assert.deepEqual(step(changed(noStale)), ["DESIGN_AHEAD", "alignDesign", null]);
+    assert.deepEqual(step(changed(sameDesign)), ["CODE", "code", 3]);
     assert.deepEqual(step(changed(noTasks)), ["TASKS_FROM_TEST", "tasksFromTest", 2]);
-    assert.deepEqual(step(changed(noProblems)), ["ALIGN", "align", 2]);
+    assert.deepEqual(step(changed(noProblems)), ["VERIFY", "verify", 2]);
     assert.deepEqual(step(changed(noPending)), ["TEST", "test", null]);
     assert.deepEqual(
       step(
@@ -703,6 +857,112 @@ describe("nextStep", () => {
       ),
       ["FIRST_TEST", "test", null],
     );
+  });
+
+  it("asks to decide the proposals from the code after the stale reviews and before the tasks", () => {
+    const noStale = (state) => {
+      state.development.stale = 0;
+      state.development.alignedDesign = state.reference.design;
+    };
+    const waiting = (count) => (state) => {
+      noStale(state);
+      state.alignment = { ...ALIGNMENT, waiting: count };
+    };
+    assert.deepEqual(
+      step(changed((state) => (state.alignment = { ...ALIGNMENT }))),
+      ["RECHECK", "recheck", 1],
+    );
+    assert.deepEqual(step(changed(waiting(2))), ["ALIGN", "alignPending", 2]);
+    assert.deepEqual(step(changed(waiting(1))), ["ALIGN", "alignPending", 1]);
+    assert.deepEqual(step(changed(waiting(0))), ["CODE", "code", 3]);
+    for (const odd of [null, undefined, { waiting: "2" }, { waiting: 2.5 }, { waiting: -1 }, []]) {
+      assert.deepEqual(
+        step(
+          changed((state) => {
+            noStale(state);
+            state.alignment = odd;
+          }),
+        ),
+        ["CODE", "code", 3],
+      );
+    }
+  });
+
+  it("asks to bring the code up to the current design after the proposals and before the tasks", () => {
+    const ahead = (current, aligned) => (state) => {
+      state.development.stale = 0;
+      state.reference.design = current;
+      state.development.alignedDesign = aligned;
+    };
+    const aheadAnd = (change) => (state) => {
+      ahead(6, 3)(state);
+      change(state);
+    };
+    const state = changed(ahead(6, 3));
+    assert.equal(state.tasks.open.length, 3);
+    assert.deepEqual(nextStep(state), {
+      kind: "DESIGN_AHEAD",
+      command: "alignDesign",
+      count: null,
+      current: 6,
+      aligned: 3,
+    });
+    assert.deepEqual(step(changed(ahead(6, 6))), ["CODE", "code", 3]);
+    assert.deepEqual(step(changed(ahead(3, 6))), ["CODE", "code", 3]);
+    assert.deepEqual(
+      step(changed(aheadAnd((item) => (item.alignment = { ...ALIGNMENT })))),
+      ["ALIGN", "alignPending", 2],
+    );
+    assert.deepEqual(
+      step(changed(aheadAnd((item) => (item.development.stale = 1)))),
+      ["RECHECK", "recheck", 1],
+    );
+    assert.deepEqual(
+      step(changed(aheadAnd((item) => (item.development.aligned = null)))),
+      ["DESIGN_AHEAD", "alignDesign", null],
+    );
+    for (const odd of [null, undefined, "3", 2.5, true]) {
+      assert.deepEqual(
+        step(changed(aheadAnd((item) => (item.development.alignedDesign = odd)))),
+        ["CODE", "code", 3],
+      );
+      assert.deepEqual(
+        step(changed(aheadAnd((item) => (item.reference.design = odd)))),
+        ["CODE", "code", 3],
+      );
+    }
+  });
+
+  it("counts the design that the latest run of the agent brought into the code", () => {
+    const STATE_FILE = "orchestwin/state/state.json";
+    const read = (name, point) => {
+      const root = fixtures.writeCompleteProject(path.join(base, name), "new");
+      const document = fixtures.readJson(root, STATE_FILE);
+      document.reference.design.version_number = 7;
+      document.aligned.design_version_number = 3;
+      fixtures.writeJson(root, STATE_FILE, document);
+      if (point !== null) {
+        fixtures.writeDesignPoint(root, point);
+      }
+      const state = readProject(root);
+      state.development.stale = 0;
+      return state;
+    };
+    assert.deepEqual(step(read("verify-point", null)), ["DESIGN_AHEAD", "alignDesign", null]);
+    assert.deepEqual(step(read("run-point-current", 7)), ["CODE", "code", 3]);
+    const behind = read("run-point-behind", 5);
+    const found = nextStep(behind);
+    assert.deepEqual(
+      [found.kind, found.command, found.current, found.aligned],
+      ["DESIGN_AHEAD", "alignDesign", 7, 5],
+    );
+    for (const language of LANGUAGES) {
+      assert.ok(
+        plain(render(behind, language)).includes(
+          sentence(language, "next.designAhead", { current: 7, aligned: 5 }),
+        ),
+      );
+    }
   });
 
   it("asks first for what the development needs before it starts", () => {
@@ -750,6 +1010,7 @@ describe("nextStep", () => {
     for (const language of LANGUAGES) {
       const state = changed((item) => {
         item.development.stale = 0;
+        item.development.alignedDesign = item.reference.design;
         item.tasks.open = [];
       });
       const html = render(state, language);

@@ -284,14 +284,19 @@ describe("progressive project workspace", () => {
       { label: "Definition", version: 1, approved: true },
       { label: "Design & Evaluation", version: 1, approved: true },
     ]);
+    const dossier = wrapper.findComponent({ name: "ProjectDesignPackagePanel" });
+    expect(dossier.props("active")).toBe(true);
     await wrapper.get('[data-stage="0"]').trigger("click");
     await flushPromises();
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
+    expect(dossier.props("active")).toBe(false);
     await wrapper.get('[data-stage="4"]').trigger("click");
     expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(false);
+    expect(dossier.props("active")).toBe(false);
     await wrapper.get('[data-stage="5"]').trigger("click");
     expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(dossier.props("active")).toBe(true);
     expect(wrapper.get('[data-testid="technical-details"]').attributes("open")).toBeUndefined();
     wrapper.unmount();
     const reloaded = mountWorkspace(pinia);
@@ -2635,6 +2640,8 @@ function fakeStudio(served: Served) {
       [`${base}/insight-applications`]: () => ok([]),
       [`${base}/knowledge-packages`]: () => ok({ project_id: OPEN, versions: [] }),
       [`${base}/alignment`]: () => ok(DEVELOPMENT_STATE),
+      [`${base}/alignment/proposals`]: () => ok({ items: [], latest_run: null }),
+      [`${base}/alignment/runs`]: () => ok({ items: [] }),
       [`${base}/code-changes`]: () => ok({ items: [] }),
       [`${base}/code-tasks`]: () => ok({ items: [] }),
       [`${base}/twin-learning`]: () => ok(TWIN_LEARNING),
@@ -2956,6 +2963,8 @@ const OPENING_READINGS: Record<string, number> = {
   "…/insight-applications": 1,
   "…/knowledge-packages": 1,
   "…/alignment": 1,
+  "…/alignment/proposals?status=waiting": 1,
+  "…/alignment/runs": 1,
   "…/code-changes": 1,
   "…/code-tasks?status=all": 1,
   "…/twin-learning": 1,
@@ -3345,6 +3354,7 @@ describe("readings of the project page", () => {
       "…/generation-jobs?status=RUNNING": 1,
       "…/knowledge-packages": 1,
       "…/alignment": 1,
+      "…/alignment/runs": 1,
       "…/code-changes": 1,
       "…/code-tasks?status=all": 1,
     });

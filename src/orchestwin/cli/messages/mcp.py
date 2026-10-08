@@ -138,7 +138,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "modello e ora rispondono con un errore, perché il server è stato avviato senza "
         "--spend. Lo stesso vale per run_tests, che verifica i criteri di accettazione "
         "sull'applicazione nei browser di questo computer. Le decisioni sui commit e sui compiti "
-        "restano al proprietario del progetto, con `ut align` e `ut tasks`.",
+        "restano al proprietario del progetto, con `ut verify` e `ut tasks`.",
         "en": "This server gives the agents of the editor the approved knowledge of the project "
         '"{project}" of OrchesTwin Studio: brief, requirements, chosen design, development '
         "state, the tasks for the code, the critiques of the twins on the code and the outcome "
@@ -152,7 +152,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "model and now answer with an error, because the server was started without --spend. "
         "The same holds for run_tests, which checks the acceptance criteria on the application "
         "in the browsers of this computer. Decisions on the commits and on the tasks stay with "
-        "the owner of the project, through `ut align` and `ut tasks`.",
+        "the owner of the project, through `ut verify` and `ut tasks`.",
     },
     "mcp.instructions_spend": {
         "it": "Questo server dà agli agenti dell'editor la conoscenza approvata del progetto "
@@ -169,7 +169,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "È permesso anche run_tests: verifica i criteri di accettazione sull'applicazione nei "
         "browser di questo computer, registra l'esito nello Studio e spende sul modello per il "
         "piano dei test e per le critiche dei twin. Le decisioni sui commit e sui compiti "
-        "restano al proprietario del progetto, con `ut align` e `ut tasks`.",
+        "restano al proprietario del progetto, con `ut verify` e `ut tasks`.",
         "en": "This server gives the agents of the editor the approved knowledge of the project "
         '"{project}" of OrchesTwin Studio: brief, requirements, chosen design, development '
         "state, the tasks for the code, the critiques of the twins on the code and the outcome "
@@ -184,7 +184,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "run_tests is allowed too: it checks the acceptance criteria on the application in the "
         "browsers of this computer, records the outcome in the Studio and spends on the model "
         "for the test plan and for the critiques of the twins. Decisions on the commits and on "
-        "the tasks stay with the owner of the project, through `ut align` and `ut tasks`.",
+        "the tasks stay with the owner of the project, through `ut verify` and `ut tasks`.",
     },
     "mcp.rpc_parse_error": {
         "it": "Il messaggio non è JSON valido.",
@@ -365,19 +365,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Registra un commit nello Studio (HEAD se non indicato) e lo fa criticare dai "
         "twin, con il verdetto di allineamento al design e ai requisiti approvati. A "
         "pagamento, circa {review} USD per twin più {alignment} USD per il verdetto. La "
-        "decisione resta al proprietario del progetto, con `ut align`.",
+        "decisione resta al proprietario del progetto, con `ut verify`.",
         "en": "Record a commit in the Studio (HEAD when not given) and have the twins criticize "
         "it, with the verdict of alignment with the approved design and requirements. Paid, "
         "about {review} USD per twin plus {alignment} USD for the verdict. The decision stays "
-        "with the owner of the project, through `ut align`.",
+        "with the owner of the project, through `ut verify`.",
     },
     "mcp.describe_review_changes_plain": {
         "it": "Registra un commit nello Studio (HEAD se non indicato) e lo fa criticare dai "
         "twin, con il verdetto di allineamento al design e ai requisiti approvati. A "
-        "pagamento. La decisione resta al proprietario del progetto, con `ut align`.",
+        "pagamento. La decisione resta al proprietario del progetto, con `ut verify`.",
         "en": "Record a commit in the Studio (HEAD when not given) and have the twins criticize "
         "it, with the verdict of alignment with the approved design and requirements. Paid. "
-        "The decision stays with the owner of the project, through `ut align`.",
+        "The decision stays with the owner of the project, through `ut verify`.",
     },
     "mcp.title_get_test_results": {
         "it": "Esiti dei test di accettazione",
@@ -499,38 +499,40 @@ MESSAGES: dict[str, dict[str, str]] = {
     "mcp.next_no_state": {
         "it": "Il design è approvato, ma questa cartella non ha lo stato dello sviluppo: "
         "scarica la versione nuova con `ut package publish`, poi dopo i commit lancia "
-        "`ut align`.",
+        "`ut verify`.",
         "en": "The design is approved, but this folder has no development state: download the "
-        "new version with `ut package publish`, then after the commits launch `ut align`.",
+        "new version with `ut package publish`, then after the commits launch `ut verify`.",
     },
     "mcp.next_start": {
         "it": "Il design è approvato e nessun commit è ancora registrato: sviluppa il codice, "
-        "poi lancia `ut align` per far rivedere i commit ai twin.",
+        "poi lancia `ut verify`: i twin esaminano i commit e il modello dice se codice, "
+        "Definizione e Design sono allineati; decidi tu.",
         "en": "The design is approved and no commit is recorded yet: develop the code, then "
-        "launch `ut align` to have the twins review the commits.",
+        "launch `ut verify`: the twins review the commits and the model says whether code, "
+        "Definition and Design are aligned; you decide.",
     },
     "mcp.next_pending": {
         "it": "Commit dopo il punto allineato ancora da rivedere o decidere: {count}. Lancia "
-        "`ut align`.",
+        "`ut verify`.",
         "en": "Commits after the aligned point still to review or decide: {count}. Launch "
-        "`ut align`.",
+        "`ut verify`.",
     },
     "mcp.next_tasks": {
         "it": "Compiti aperti per il codice: {count} ({codes}). Realizzali, fai il commit, poi "
-        "lancia `ut align`.",
+        "lancia `ut verify`.",
         "en": "Open tasks for the code: {count} ({codes}). Carry them out, commit, then launch "
-        "`ut align`.",
+        "`ut verify`.",
     },
     "mcp.next_aligned": {
         "it": "Il codice è allineato al design approvato al commit {commit}: continua a "
-        "sviluppare e lancia `ut align` dopo i prossimi commit.",
+        "sviluppare e lancia `ut verify` dopo i prossimi commit.",
         "en": "The code is aligned with the approved design at the commit {commit}: go on "
-        "developing and launch `ut align` after the next commits.",
+        "developing and launch `ut verify` after the next commits.",
     },
     "mcp.next_undecided": {
         "it": "Ci sono commit registrati, ma nessuno è ancora segnato come allineato: lancia "
-        "`ut align` per decidere.",
-        "en": "Commits are recorded, but none is marked as aligned yet: launch `ut align` to "
+        "`ut verify` per decidere.",
+        "en": "Commits are recorded, but none is marked as aligned yet: launch `ut verify` to "
         "decide.",
     },
     "mcp.errors.PROJECT_NOT_LINKED": {

@@ -30,6 +30,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "print a single JSON document, for other programs",
     },
     "status.studio": {"it": "Studio: {studio}", "en": "Studio: {studio}"},
+    "status.studio_local": {
+        "it": "Studio: {studio} (locale, senza accesso)",
+        "en": "Studio: {studio} (local, no sign-in)",
+    },
     "status.mode": {"it": "Modalità: {mode}", "en": "Mode: {mode}"},
     "status.mode_design_only": {"it": "solo design", "en": "design only"},
     "status.mode_design_and_code": {"it": "design e codice", "en": "design and code"},
@@ -82,14 +86,30 @@ MESSAGES: dict[str, dict[str, str]] = {
         "open tasks for the code: {tasks}.",
     },
     "status.alignment_none": {
-        "it": "Sviluppo: nessun commit registrato finora. Dopo il primo commit lancia `ut align`.",
-        "en": "Development: no commit recorded yet. After your first commit launch `ut align`.",
+        "it": "Sviluppo: nessun commit registrato finora. Dopo il primo commit lancia `ut verify`.",
+        "en": "Development: no commit recorded yet. After your first commit launch `ut verify`.",
+    },
+    "status.code_design_behind": {
+        "it": "Codice: allineato al design versione {aligned}; il design è alla versione "
+        "{current}: `ut align --from-design` porta il codice al design attuale.",
+        "en": "Code: aligned with design version {aligned}; the design is at version {current}: "
+        "`ut align --from-design` brings the code up to the current design.",
+    },
+    "status.code_design_current": {
+        "it": "Codice: allineato al design versione {aligned}.",
+        "en": "Code: aligned with design version {aligned}.",
+    },
+    "status.knowledge": {
+        "it": "Conoscenza: allineata al codice fino al commit {commit} ({date}); proposte in "
+        "attesa: {count}.",
+        "en": "Knowledge: aligned with the code up to commit {commit} ({date}); proposals "
+        "waiting: {count}.",
     },
     "status.stale_reviews": {
         "it": "Esami da rifare perché i requisiti o il design sono cambiati: {count} "
-        "(`ut align --recheck`).",
+        "(`ut verify --recheck`).",
         "en": "Reviews to do again because the requirements or the design changed: {count} "
-        "(`ut align --recheck`).",
+        "(`ut verify --recheck`).",
     },
     "status.learning": {
         "it": "Cosa hanno imparato i twin durante lo sviluppo: {twins}.",

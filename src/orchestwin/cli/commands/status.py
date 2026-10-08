@@ -4,18 +4,22 @@ import argparse
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import folder as knowledge
+from orchestwin.cli.api import alignment as alignment_api
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import projects as project_api
 from orchestwin.cli.api import sections as sections_api
 from orchestwin.cli.api import tests as tests_api
 from orchestwin.cli.api import usage
+from orchestwin.cli.client import LOCAL_ACCESS, ensure_access
 from orchestwin.cli.commands import sections as sections_command
 from orchestwin.cli.costs import usd_text
 from orchestwin.cli.errors import SIGN_IN_STATUS, ApiFailure, CliError
-from orchestwin.cli.flows import design_state
+from orchestwin.cli.flows import align_knowledge, code_run, design_state
+from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows.test_report import moment_text
 from orchestwin.cli.messages import known
 from orchestwin.cli.project import STEP_STAGES, read_json
@@ -78,6 +82,18 @@ class TwinLearning:
 
 
 @dataclass(frozen=True, slots=True)
+class KnowledgeAlignment:
+    latest_run: Mapping[str, object] | None
+    waiting: int
+
+    def document(self) -> dict[str, object]:
+        return {
+            "latest_run": None if self.latest_run is None else dict(self.latest_run),
+            "waiting": self.waiting,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class Report:
     source: str
     reason: str | None
@@ -103,6 +119,10 @@ class Report:
     learning: tuple[TwinLearning, ...] | None = None
     billing: str = usage.API_BILLING
     sections: Sections | None = None
+    knowledge: KnowledgeAlignment | None = None
+    local_access: bool = False
+    aligned_design_version: int | None = None
+    current_design_version: int | None = None
 
     @property
     def folder_current(self) -> bool:
@@ -162,6 +182,8 @@ class Report:
                     "aligned_commit": self.alignment.aligned_commit,
                     "open_tasks": self.alignment.open_tasks,
                     "stale_reviews": self.stale_reviews,
+                    "aligned_design_version": self.aligned_design_version,
+                    "current_design_version": self.current_design_version,
                 }
             ),
             "tests": None if self.tests is None else self.tests.document(),
@@ -169,6 +191,7 @@ class Report:
                 {"twins": [twin.document() for twin in self.learning]} if self.learning else None
             ),
             "sections": None if self.sections is None else dict(self.sections.document),
+            "knowledge_alignment": None if self.knowledge is None else self.knowledge.document(),
         }
 
 
@@ -185,6 +208,9 @@ class _Studio:
     learning: tuple[TwinLearning, ...] | None = None
     billing: str = usage.API_BILLING
     sections: Sections | None = None
+    knowledge: KnowledgeAlignment | None = None
+    local_access: bool = False
+    aligned_design_version: int | None = None
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -248,13 +274,23 @@ def project_report(context: CommandContext, project: ProjectFolder, *, offline: 
         learning=found.learning if found.learning is not None else local_learning(project),
         billing=found.billing,
         sections=found.sections,
+        knowledge=found.knowledge
+        if found.knowledge is not None
+        else folder_knowledge(project, found.steps),
+        local_access=found.local_access,
+        aligned_design_version=_aligned_design_version(
+            project, found.alignment, found.aligned_design_version
+        ),
+        current_design_version=_design_version(found.steps),
     )
 
 
 def show(context: CommandContext, report: Report) -> None:
     console = context.console
     console.heading(report.name)
-    console.say("status.studio", studio=report.studio)
+    console.say(
+        "status.studio_local" if report.local_access else "status.studio", studio=report.studio
+    )
     mode_key = MODE_KEYS.get(report.mode)
     console.say("status.mode", mode=context.text(mode_key) if mode_key else report.mode)
     if report.reason is not None:
@@ -272,6 +308,9 @@ def show(context: CommandContext, report: Report) -> None:
     _folder_lines(context, report)
     if report.alignment is not None:
         show_alignment(context, report.alignment, stale_reviews=report.stale_reviews)
+        show_code_design(context, report.aligned_design_version, report.current_design_version)
+    if report.knowledge is not None:
+        show_knowledge(context, report.knowledge)
     if report.tests is not None:
         show_tests(context, report.tests)
     show_learning(context, report.learning)
@@ -346,6 +385,72 @@ def show_alignment(
         stale = context.text("status.stale_reviews", count=stale_reviews)
         line = f"{line} {stale}"
     context.console.write(line)
+
+
+def show_code_design(context: CommandContext, aligned: int | None, current: int | None) -> None:
+    if aligned is None or current is None:
+        return
+    key = "status.code_design_behind" if current > aligned else "status.code_design_current"
+    context.console.say(key, aligned=aligned, current=current)
+
+
+def show_knowledge(context: CommandContext, knowledge: KnowledgeAlignment) -> None:
+    latest = knowledge.latest_run
+    if latest is None:
+        return
+    context.console.say(
+        "status.knowledge",
+        commit=str(latest.get("to_commit") or "")[:SHORT_COMMIT],
+        date=git.commit_date(local_moment(str(latest.get("created_at") or ""))),
+        count=knowledge.waiting,
+    )
+
+
+def local_moment(text: str) -> str:
+    try:
+        moment = datetime.fromisoformat(text.strip())
+        return (moment if moment.tzinfo is None else moment.astimezone()).isoformat()
+    except (ValueError, OverflowError, OSError):
+        return text
+
+
+def studio_knowledge(client: StudioClient, project_id: str) -> KnowledgeAlignment | None:
+    try:
+        document = alignment_api.proposals(client, project_id)
+    except ApiFailure as failure:
+        if failure.http_status in changes_api.MISSING_ROUTE or failure.http_status >= SERVER_ERROR:
+            return None
+        raise
+    return KnowledgeAlignment(
+        alignment_api.latest_run(document), len(alignment_api.waiting(document))
+    )
+
+
+def local_knowledge(project: ProjectFolder) -> KnowledgeAlignment | None:
+    latest = align_knowledge.read_latest(project)
+    if latest is None:
+        return None
+    run_id = str(latest["run_id"])
+    run = align_knowledge.read_run(project, run_id)
+    if run is not None:
+        found = {key: run.get(key) for key in alignment_api.LATEST_RUN_KEYS}
+    else:
+        found = {
+            **dict.fromkeys(alignment_api.LATEST_RUN_KEYS),
+            "id": run_id,
+            "from_commit": latest.get("from_commit"),
+            "to_commit": latest.get("to_commit"),
+            "created_at": latest.get("finished_at"),
+        }
+    waiting = latest.get("waiting")
+    valid = isinstance(waiting, int) and not isinstance(waiting, bool) and waiting >= 0
+    return KnowledgeAlignment(found, waiting if valid else 0)
+
+
+def folder_knowledge(
+    project: ProjectFolder, steps: tuple[project_api.StepState, ...]
+) -> KnowledgeAlignment | None:
+    return local_knowledge(project) if _design_approved(steps) else None
 
 
 def show_learning(context: CommandContext, learning: tuple[TwinLearning, ...] | None) -> None:
@@ -546,10 +651,8 @@ def _project_row(
 def _studio_facts(
     context: CommandContext, client: StudioClient, link: ProjectLink
 ) -> _Studio | str:
-    session = context.sessions.read(client.studio)
-    if session is None or not session.signed_in:
-        return NOT_SIGNED_IN
     try:
+        access = ensure_access(context, client)
         if client.health().status != HEALTHY:
             return UNREACHABLE
         found = project_api.get_project(client, link.project_id)
@@ -558,6 +661,7 @@ def _studio_facts(
         approved = _design_approved(steps)
         development = changes_api.development(client, link.project_id) if approved else None
         tests = tests_api.summary(client, link.project_id) if approved else None
+        knowledge = studio_knowledge(client, link.project_id) if approved else None
         learning = studio_learning(client, link.project_id) if _twins_approved(steps) else None
         has_budget, spent, remaining, billing = _spending(client, link.project_id)
     except CliError as error:
@@ -577,6 +681,9 @@ def _studio_facts(
         learning=learning,
         billing=billing,
         sections=sections,
+        knowledge=knowledge,
+        local_access=access == LOCAL_ACCESS,
+        aligned_design_version=None if development is None else development.aligned_design_version,
     )
 
 
@@ -605,6 +712,16 @@ def _design_approved(steps: tuple[project_api.StepState, ...]) -> bool:
 
 def _twins_approved(steps: tuple[project_api.StepState, ...]) -> bool:
     return any(step.stage == TWINS_STAGE and step.approved for step in steps)
+
+
+def _design_version(steps: tuple[project_api.StepState, ...]) -> int | None:
+    return next((step.version for step in steps if step.stage == DESIGN_STAGE), None)
+
+
+def _aligned_design_version(
+    project: ProjectFolder, alignment: StateSummary | None, verified: int | None
+) -> int | None:
+    return None if alignment is None else code_run.aligned_design_version(project, verified)
 
 
 def _offline_reason(error: CliError) -> str | None:
@@ -679,6 +796,9 @@ def _folder_report(
         tests=local_tests(project),
         stale_reviews=0 if alignment is None else local_stale_reviews(project),
         learning=local_learning(project),
+        knowledge=folder_knowledge(project, steps),
+        aligned_design_version=_aligned_design_version(project, alignment, None),
+        current_design_version=_design_version(steps),
     )
 
 

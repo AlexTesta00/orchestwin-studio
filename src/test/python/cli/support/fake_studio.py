@@ -12,6 +12,7 @@ import itertools
 import json
 import math
 import re
+import secrets
 import socketserver
 import threading
 import traceback
@@ -46,6 +47,7 @@ from orchestwin.agents.selection_rules import (
     determine_team_constraints,
 )
 from orchestwin.agents.team_gate import OWNER_CHOICE_STATEMENT
+from orchestwin.api.knowledge_alignment import LATEST_RUN_KEYS
 from orchestwin.api.requirements import (
     RequirementsSpecificationDiffPayload,
     RequirementsSpecificationPayload,
@@ -55,7 +57,9 @@ from orchestwin.artifacts.bound_mockups import create_bound_mockup, markup_requi
 from orchestwin.artifacts.design_distance import design_distance_report
 from orchestwin.artifacts.design_evaluation import (
     ANCHOR_LABEL_LENGTH,
+    DESIGN_EVALUATION_SCOPE_INVALID,
     MATCH_SIMILARITY,
+    anchor_element,
     anchor_finding,
     finding_similarity,
     synthetic_finding_from_snapshot,
@@ -90,6 +94,10 @@ from orchestwin.evaluation.findings import (
     SyntheticFindingSeverity,
     create_synthetic_finding,
 )
+from orchestwin.evaluation.proposer_evaluator import (
+    SCOPED_TWIN_REVIEW_PROMPT_VERSION,
+    scoped_prompt_version,
+)
 from orchestwin.identity.domain import InvalidEmailAddress, NormalizedEmail
 from orchestwin.identity.passwords import (
     PasswordPolicy,
@@ -117,6 +125,7 @@ from orchestwin.knowledge.state import (
     MAX_BROWSER_VERSION_LENGTH,
     MAX_BROWSERS,
     MAX_CRITERIA_PER_PATH,
+    MAX_DESIGN_REQUEST_LENGTH,
     MAX_DIFF_LENGTH,
     MAX_EARLIER_PATHS,
     MAX_EXPECTED_TEXT_LENGTH,
@@ -157,6 +166,13 @@ from orchestwin.knowledge.state import (
     ProjectStateSources,
     review_is_stale,
 )
+from orchestwin.models.design_change import (
+    ELEMENT_CODE_PATTERN,
+    SCREEN_CODE_PATTERN,
+    target_html,
+    target_label,
+)
+from orchestwin.models.design_change import TARGET_FIELDS as CHANGE_TARGET_FIELDS
 from orchestwin.models.evidence_update import (
     EvidenceUpdateOutput,
     bind_evidence_update,
@@ -170,6 +186,7 @@ from orchestwin.models.fake_design import (
 from orchestwin.models.fake_team_proposals import FakeDeterministicTeamProposalAdapter
 from orchestwin.models.output_language import dominant_language
 from orchestwin.models.proposal_tasks import TASKS as PROPOSAL_TASKS
+from orchestwin.projects import knowledge_alignment
 from orchestwin.projects.brief_dialogue import (
     ACTIVE_STATUSES,
     ESSENTIAL_FIELDS,
@@ -257,6 +274,7 @@ from orchestwin.twins.persistence.snapshots import (
 from orchestwin.twins.personas import PersonaProfileVersion
 from orchestwin.twins.representation import ArchetypeInput, archetype_payload, twin_view
 from orchestwin.twins.user_twins import (
+    UserTwinField,
     UserTwinProfileVersion,
     VersionedArtifactReference,
     create_user_modeling_snapshot,
@@ -308,6 +326,11 @@ STAGES = ("brief", "team", "twins", "requirements", "design")
 PROJECT_MODES = ("GREENFIELD_GENERATION", "BROWNFIELD_ASSESSMENT")
 JOB_STATUSES = ("RUNNING", "SUCCEEDED", "REJECTED", "FAILED")
 BILLINGS = ("SUBSCRIPTION", "API", "MIXED")
+ACCOUNTS = "ACCOUNTS"
+LOCAL_OWNER = "LOCAL_OWNER"
+ACCESS_MODES = (ACCOUNTS, LOCAL_OWNER)
+LOCAL_OWNER_EMAIL = "local-owner@example.com"
+LOCAL_MODE = "local_mode"
 REQUEST_OPERATIONS = (
     "PERSONA_PROPOSAL",
     "USER_TWIN_GENERATION",
@@ -320,6 +343,8 @@ REQUEST_OPERATIONS = (
     "TEST_PLAN",
     "TEST_REVIEW",
     "TWIN_UPDATE",
+    "KNOWLEDGE_ALIGNMENT",
+    "DESIGN_CHANGE",
 )
 OPERATIONS = ("MOCKUP", "ITERATION", *REQUEST_OPERATIONS)
 GATE_ACTIONS = ("SUBMIT", "APPROVE", "REJECT", "REQUEST_REVISION", "PAUSE", "RESUME", "CANCEL")
@@ -344,6 +369,8 @@ COSTS = {
     "TEST_PLAN": 200_000,
     "TEST_REVIEW": 150_000,
     "TWIN_UPDATE": 150_000,
+    "KNOWLEDGE_ALIGNMENT": 300_000,
+    "DESIGN_CHANGE": 350_000,
 }
 TASKS = {
     "BRIEF_QUESTION": "brief",
@@ -365,6 +392,8 @@ TASKS = {
     "TEST_PLAN": "requirements",
     "TEST_REVIEW": "user-twin-evaluation",
     "TWIN_UPDATE": "user-twin-evaluation",
+    "KNOWLEDGE_ALIGNMENT": "requirements",
+    "DESIGN_CHANGE": "design",
 }
 PURPOSES = {
     "BRIEF_QUESTION": "BRIEF_QUESTION",
@@ -386,6 +415,8 @@ PURPOSES = {
     "TEST_PLAN": "TEST_PLAN",
     "TEST_REVIEW": "TEST_REVIEW",
     "TWIN_UPDATE": "TWIN_UPDATE",
+    "KNOWLEDGE_ALIGNMENT": "KNOWLEDGE_ALIGNMENT",
+    "DESIGN_CHANGE": "DESIGN_CHANGE",
 }
 GATE_TYPES = {
     "brief": HumanGateType.PROJECT_BRIEF,
@@ -517,6 +548,8 @@ ACTIVITY_PURPOSES = {
     "CODE_CHANGE_REVIEW": "PACKAGE",
     "CODE_ALIGNMENT": "PACKAGE",
     "TWIN_UPDATE": "USER_TWINS",
+    "KNOWLEDGE_ALIGNMENT": "PACKAGE",
+    "DESIGN_CHANGE": "DESIGN",
 }
 ACTIVITY_TASKS = {
     "brief": "BRIEF",
@@ -607,6 +640,66 @@ SEED_AUTHOR = "Test Author"
 SEED_ADDRESS = "dist"
 SEED_BROWSER = {"name": "chrome", "version": "151.0.7922.76"}
 SEED_PAGE = "http://127.0.0.1:41234/"
+ALIGNMENT_RUN_FIELDS = ("locale", "from_commit", "to_commit", "commits")
+PROPOSAL_APPLY_FIELDS = ("text", "locale")
+PROPOSAL_SKIP_FIELDS = ("reason",)
+DESIGN_CHANGE_FIELDS = ("request", "target")
+ITERATION_FIELDS = ("design_version_id", "design_content_hash", "request", "assertions", "target")
+EVALUATION_FIELDS = ("design_version_id", "design_content_hash", "locale", "mode", "scope")
+SCOPE_FIELDS = ("screen_code", "element_code")
+SCREEN_CODE = re.compile(SCREEN_CODE_PATTERN)
+ELEMENT_CODE = re.compile(ELEMENT_CODE_PATTERN)
+PROPOSAL_STATUS_FILTERS = ("waiting", "all")
+APPLY_OPERATIONS = {"REQUIREMENTS": "REQUIREMENTS_CHANGE", "DESIGN": "DESIGN_CHANGE"}
+EXCERPT_LINES = 8
+ALIGNMENT_TEXTS = {
+    "it": {
+        "summary": "Il codice di {count} commit cambia ciò che la conoscenza dice su «{line}».",
+        "summary_empty": "I commit esaminati non cambiano ciò che la conoscenza del progetto dice.",
+        "rationale": "Il diff registrato motiva la proposta.",
+        "requirements_title": "Aggiorna la Definizione dopo «{line}»",
+        "requirements_request": (
+            "Aggiorna il requisito {code} in base a {file}: il codice ora realizza «{line}»."
+        ),
+        "requirements_rationale": "Il diff di {file} cambia il comportamento descritto nella "
+        "Definizione.",
+        "design_title": "Aggiorna il Design dopo «{line}»",
+        "design_request": (
+            "Aggiorna la descrizione e i flussi dell'alternativa scelta per la schermata "
+            "{screen}: il codice ora realizza «{line}»."
+        ),
+        "design_rationale": "Il diff tocca {count} file che il Design descrive.",
+        "tests_title": "Aggiorna il piano dei test dopo «{line}»",
+        "tests_request": "Copri con un percorso di prova il criterio {code} dopo «{line}».",
+        "tests_rationale": "Il piano dei test non copre ancora la modifica del codice.",
+        "design_change": "L'alternativa «{title}» cambia come chiesto: {request}",
+        "targeted_element": "Modifica mirata a {element} di {screen}",
+        "targeted_screen": "Modifica mirata a {screen}",
+    },
+    "en": {
+        "summary": "The code of {count} commits changes what the knowledge says about “{line}”.",
+        "summary_empty": "The reviewed commits do not change what the project knowledge says.",
+        "rationale": "The recorded diff motivates the proposal.",
+        "requirements_title": "Update the Definition after “{line}”",
+        "requirements_request": (
+            "Update the requirement {code} according to {file}: the code now realizes “{line}”."
+        ),
+        "requirements_rationale": "The diff of {file} changes the behaviour the Definition "
+        "describes.",
+        "design_title": "Update the Design after “{line}”",
+        "design_request": (
+            "Update the description and the flows of the chosen alternative for the screen "
+            "{screen}: the code now realizes “{line}”."
+        ),
+        "design_rationale": "The diff touches {count} files that the Design describes.",
+        "tests_title": "Update the test plan after “{line}”",
+        "tests_request": "Cover the criterion {code} with a test path after “{line}”.",
+        "tests_rationale": "The test plan does not cover the code change yet.",
+        "design_change": "The alternative “{title}” changes as asked: {request}",
+        "targeted_element": "Targeted change to {element} of {screen}",
+        "targeted_screen": "Targeted change to {screen}",
+    },
+}
 PROPOSED_OBSERVATIONS = 2
 MAX_OBSERVATION_NUMBER = 999_999
 UNKNOWN_INDEX = "the proposal has no observation at this index"
@@ -1401,6 +1494,20 @@ FINDINGS = {
         ),
     },
 }
+SCOPED_FINDINGS = {
+    "it": (
+        "La modifica mi aiuta: ora trovo subito questo elemento al tavolo.",
+        "observation",
+        "actionability",
+        "Prova con un blu più scuro per farlo risaltare ancora di più.",
+    ),
+    "en": (
+        "The change helps me: now I find this element at once at the table.",
+        "observation",
+        "actionability",
+        "Try a darker blue to make it stand out even more.",
+    ),
+}
 CHAT = {
     "it": (
         "Sono {name}: mi serve vedere subito quanto lasciare di mancia, senza fare conti.",
@@ -1541,6 +1648,7 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/auth/register", "register", authenticated=False),
     Route("POST", "/auth/refresh", "refresh", authenticated=False),
     Route("POST", "/auth/logout", "logout", authenticated=False),
+    Route("GET", "/auth/mode", "access_mode", authenticated=False),
     Route("GET", "/auth/me", "me"),
     Route("GET", "/model-runtime/budget", "budget"),
     Route("GET", "/model-runtime/readiness", "readiness"),
@@ -1627,6 +1735,14 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}/user-modeling/gate/events", "twins_gate_events"),
     Route("GET", "/projects/{project_id}/user-modeling/context-alignment", "twins_alignment"),
     Route("POST", "/projects/{project_id}/user-modeling/context-alignment", "realign_twins"),
+    Route(
+        "POST", "/projects/{project_id}/user-modeling/twins/{twin_id}/revisions", "twin_revision"
+    ),
+    Route(
+        "POST",
+        "/projects/{project_id}/user-modeling/revisions/{diff_id}/decision",
+        "twin_revision_decision",
+    ),
     Route("GET", "/projects/{project_id}/user-twins/{twin_id}/conversation", "conversation"),
     Route(
         "POST",
@@ -1638,6 +1754,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}/requirements", "requirements_history"),
     Route("GET", "/projects/{project_id}/requirements/readiness", "requirements_readiness"),
     Route("POST", "/projects/{project_id}/requirements/change-requests", "requirements_change"),
+    Route("POST", "/projects/{project_id}/requirements/revisions", "requirements_revise"),
     Route("GET", "/projects/{project_id}/requirements/revisions", "requirements_revisions"),
     Route(
         "GET", "/projects/{project_id}/requirements/revisions/{diff_id}", "requirements_revision"
@@ -1669,6 +1786,8 @@ ROUTES: tuple[Route, ...] = (
         "/projects/{project_id}/design/revisions/{diff_id}/decision",
         "design_revision_decision",
     ),
+    Route("POST", "/projects/{project_id}/design/revisions/restore", "design_restore"),
+    Route("POST", "/projects/{project_id}/design/change-requests", "design_change"),
     Route("POST", "/projects/{project_id}/design/gate/submit", "design_gate_submit"),
     Route("POST", "/projects/{project_id}/design/gate/decision", "design_gate_decision"),
     Route("GET", "/projects/{project_id}/design/gate", "design_gate_current"),
@@ -1707,6 +1826,12 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/projects/{project_id}/code-changes/{commit}/reviews", "review_change"),
     Route("GET", "/projects/{project_id}/code-changes/{commit}/reviews", "change_reviews"),
     Route("POST", "/projects/{project_id}/code-changes/{commit}/decision", "decide_change"),
+    Route("POST", "/projects/{project_id}/alignment/runs", "alignment_run"),
+    Route("GET", "/projects/{project_id}/alignment/runs", "alignment_runs"),
+    Route("GET", "/projects/{project_id}/alignment/runs/{run_id}", "alignment_run_view"),
+    Route("GET", "/projects/{project_id}/alignment/proposals", "alignment_proposals"),
+    Route("POST", "/projects/{project_id}/alignment/proposals/{code}/apply", "apply_proposal"),
+    Route("POST", "/projects/{project_id}/alignment/proposals/{code}/skip", "skip_proposal"),
     Route("GET", "/projects/{project_id}/acceptance-tests", "acceptance_tests"),
     Route("POST", "/projects/{project_id}/test-plans", "plan_tests"),
     Route("GET", "/projects/{project_id}/test-plans", "test_plans"),
@@ -2356,6 +2481,7 @@ class FakeProject:
         self.personas: dict[str, list[dict[str, object]]] = {}
         self.snapshots: list[dict[str, object]] = []
         self.twins: dict[str, list[dict[str, object]]] = {}
+        self.twin_diffs: list[dict[str, object]] = []
         self.conversations: dict[str, TwinConversation] = {}
         self.requirements: list[dict[str, object]] = []
         self.requirement_diffs: list[dict[str, object]] = []
@@ -2382,6 +2508,7 @@ class FakeProject:
         self.acceptance_runs: list[dict[str, object]] = []
         self.acceptance_reviews: list[dict[str, object]] = []
         self.critique_contexts: list[dict[str, object]] = []
+        self.knowledge_runs: list[dict[str, object]] = []
         self.learned: list[dict[str, object]] = []
         self.development: dict[str, int] = {}
         self.updates: list[dict[str, object]] = []
@@ -2606,6 +2733,18 @@ class FakeProject:
         with self._studio._lock:
             return self._studio._seed_design_revision(self)
 
+    def seed_alignment_run(self, proposals: Sequence[object] | None = None) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_alignment_run(self, proposals)
+
+    def alignment_runs(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return _copy(self.knowledge_runs)
+
+    def alignment_proposals(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return _copy(self._studio._alignment_proposals(self))
+
 
 class FakeStudio:
     def __init__(
@@ -2620,9 +2759,13 @@ class FakeStudio:
         job_polls: int = 2,
         now: Callable[[], datetime] | None = None,
         directions: bool = False,
+        access_mode: str = ACCOUNTS,
+        local_owner_email: str = LOCAL_OWNER_EMAIL,
     ) -> None:
         if language not in LANGUAGES:
             raise ValueError("language must be it or en")
+        if access_mode not in ACCESS_MODES:
+            raise ValueError("access_mode must be ACCOUNTS or LOCAL_OWNER")
         if directions and not hosted:
             raise ValueError("directions need a hosted model")
         if isinstance(twins, bool) or not isinstance(twins, int) or not 1 <= twins <= MAX_TWINS:
@@ -2663,6 +2806,10 @@ class FakeStudio:
         self._server: _Server | None = None
         self._thread: threading.Thread | None = None
         self._routes = tuple((route, _compile(route.template)) for route in ROUTES)
+        self.access_mode = access_mode
+        self.local_owner_email = _registered_email(local_owner_email)
+        if access_mode == LOCAL_OWNER:
+            self.add_account(self.local_owner_email, secrets.token_urlsafe(48))
 
     @property
     def address(self) -> str:
@@ -2842,6 +2989,17 @@ class FakeStudio:
     def seed_design_revision(self, project_id: str) -> dict[str, object]:
         return self.project(project_id).seed_design_revision()
 
+    def seed_alignment_run(
+        self, project_id: str, proposals: Sequence[object] | None = None
+    ) -> dict[str, object]:
+        return self.project(project_id).seed_alignment_run(proposals)
+
+    def alignment_runs(self, project_id: str) -> list[dict[str, object]]:
+        return self.project(project_id).alignment_runs()
+
+    def alignment_proposals(self, project_id: str) -> list[dict[str, object]]:
+        return self.project(project_id).alignment_proposals()
+
     def _now(self) -> datetime:
         if self._clock is None:
             moment = self._moment
@@ -2909,7 +3067,10 @@ class FakeStudio:
         route, parameters = matched
         user = None
         if route.authenticated:
-            user = self._bearer(headers.get("authorization"))
+            header = headers.get("authorization")
+            user = self._bearer(header)
+            if user is None and self.access_mode == LOCAL_OWNER and not _bearer_token(header):
+                user = self._local_owner()
             if user is None:
                 return _Answer(
                     401,
@@ -2956,15 +3117,16 @@ class FakeStudio:
         return None
 
     def _bearer(self, header: str | None) -> _Account | None:
-        if not header:
-            return None
-        scheme, _, token = header.partition(" ")
-        if scheme.casefold() != "bearer" or not token:
+        token = _bearer_token(header)
+        if token is None:
             return None
         access = self._access.get(token)
         if access is None or access.expires_at <= self._now():
             return None
         return self._accounts_by_id.get(access.account)
+
+    def _local_owner(self) -> _Account:
+        return self._accounts[self.local_owner_email]
 
     def _owned(self, call: _Call) -> FakeProject | None:
         project = self._projects.get(call.project_id)
@@ -3408,7 +3570,15 @@ class FakeStudio:
     def _route_health(self, call: _Call) -> _Answer:
         return _Answer(200, {"status": "ok"})
 
+    def _route_access_mode(self, call: _Call) -> _Answer:
+        return _Answer(
+            200,
+            {"access_mode": self.access_mode, "registration_open": self.access_mode == ACCOUNTS},
+        )
+
     def _route_login(self, call: _Call) -> _Answer:
+        if self.access_mode == LOCAL_OWNER:
+            raise _Refusal(404, LOCAL_MODE)
         fields = _Fields(call.json(), ("email", "password"))
         email = fields.text("email", minimum=1, maximum=320)
         password = fields.text("password", minimum=1, maximum=1024)
@@ -3419,6 +3589,8 @@ class FakeStudio:
         return self._signed_in(account, self._refresh_session(account, self._new_id()))
 
     def _route_register(self, call: _Call) -> _Answer:
+        if self.access_mode == LOCAL_OWNER:
+            raise _Refusal(404, LOCAL_MODE)
         try:
             fields = _Fields(call.json(), ("email", "password"))
             email = fields.text("email", minimum=3, maximum=320)
@@ -3447,20 +3619,30 @@ class FakeStudio:
     def _route_refresh(self, call: _Call) -> _Answer:
         token = call.cookie(COOKIE_NAME)
         session = self._sessions.get(token) if token else None
-        if session is None:
-            return self._refused_refresh("invalid_refresh_token")
-        if session.rotated or session.revoked:
-            for other in self._sessions.values():
-                if other.family == session.family:
-                    other.revoked = True
-            return self._refused_refresh("refresh_token_reuse_detected")
-        if session.expires_at <= self._now():
-            session.revoked = True
-            return self._refused_refresh("expired_refresh_token")
+        refusal = self._refresh_refusal(session)
+        if refusal is not None:
+            if self.access_mode == LOCAL_OWNER:
+                owner = self._local_owner()
+                return self._signed_in(owner, self._refresh_session(owner, self._new_id()))
+            return self._refused_refresh(refusal)
+        assert session is not None
         account = self._accounts_by_id[session.account]
         replacement = self._refresh_session(account, session.family)
         session.rotated = True
         return self._signed_in(account, replacement)
+
+    def _refresh_refusal(self, session: _RefreshSession | None) -> str | None:
+        if session is None:
+            return "invalid_refresh_token"
+        if session.rotated or session.revoked:
+            for other in self._sessions.values():
+                if other.family == session.family:
+                    other.revoked = True
+            return "refresh_token_reuse_detected"
+        if session.expires_at <= self._now():
+            session.revoked = True
+            return "expired_refresh_token"
+        return None
 
     def _route_logout(self, call: _Call) -> _Answer:
         token = call.cookie(COOKIE_NAME)
@@ -5275,6 +5457,175 @@ class FakeStudio:
             else [self._readable_snapshot(item) for item in project.snapshots],
         )
 
+    def _route_twin_revision(self, call: _Call) -> _Answer:
+        from orchestwin.api.user_modeling import (
+            ProfileObservationPayload,
+            ProfileRevisionProposalRequest,
+        )
+
+        fields = _Fields(call.json(), ("replacements",))
+        raw = fields.value("replacements")
+        fields.check()
+        try:
+            request = ProfileRevisionProposalRequest.model_validate({"replacements": raw})
+        except ValueError as error:
+            raise _Invalid([_error(("body", "replacements"), "value_error")]) from error
+        try:
+            replacements = request.to_domain()
+        except ValueError as error:
+            raise _Refusal(
+                422, {"code": "INVALID_PROFILE_REPLACEMENT", "message": str(error)}
+            ) from error
+        project = self._owned(call)
+        snapshot = None if project is None else project.snapshot
+        if project is None or snapshot is None:
+            raise _Refusal(404, {"code": "SNAPSHOT_NOT_FOUND"})
+        twin_id = call.params["twin_id"]
+        twin = next(
+            (
+                item
+                for item in snapshot["snapshot"]["twin_versions"]
+                if str(item["twin_id"]) == twin_id
+            ),
+            None,
+        )
+        if twin is None:
+            raise _Refusal(404, {"code": "TWIN_NOT_FOUND"})
+        if any(
+            diff["status"] == "PROPOSED"
+            and diff["base_snapshot_version_id"] == snapshot["id"]
+            and diff["twin_id"] == twin_id
+            for diff in project.twin_diffs
+        ):
+            raise _Refusal(409, {"code": "DIFF_ALREADY_PENDING"})
+        before = {
+            item["observation_key"]: ProfileObservationPayload.model_validate(item).model_dump(
+                mode="json"
+            )
+            for item in twin["profile"]["observations"]
+        }
+        order = list(UserTwinField)
+        operations = []
+        for name in sorted(replacements, key=order.index):
+            after = ProfileObservationPayload.from_domain(replacements[name]).model_dump(
+                mode="json"
+            )
+            previous = before.get(name.observation_key)
+            if previous != after:
+                operations.append({"field": name.value, "before": previous, "after": after})
+        if not operations:
+            raise _Refusal(409, {"code": "INVALID_REPLACEMENT"})
+        try:
+            _fake_twin_profile(_revised_profile(twin["profile"], operations))
+        except ValueError as error:
+            raise _Refusal(409, {"code": "INVALID_REPLACEMENT"}) from error
+        diff = {
+            "id": self._new_id(),
+            "project_id": project.id,
+            "base_snapshot_version_id": snapshot["id"],
+            "base_snapshot_version_number": snapshot["version_number"],
+            "base_snapshot_content_hash": snapshot["content_hash"],
+            "twin_id": twin_id,
+            "base_twin_version_id": twin["id"],
+            "base_twin_version_number": twin["version_number"],
+            "base_twin_content_hash": twin["content_hash"],
+            "proposal_hash": _digest(operations),
+            "status": "PROPOSED",
+            "operations": operations,
+            "created_by_user_id": call.account.id,
+            "created_at": _stamp(self._now()),
+            "decided_by_user_id": None,
+            "decided_at": None,
+            "decision_reason": None,
+            "applied_snapshot_version_id": None,
+        }
+        project.twin_diffs.append(diff)
+        return _Answer(200, _twin_revision_payload("CREATED", diff, None, None))
+
+    def _route_twin_revision_decision(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), ("decision", "reason"))
+        decision = fields.choice("decision", ("APPROVE", "REJECT"))
+        reason = fields.text("reason", required=False, nullable=True)
+        fields.check()
+        project = self._owned(call)
+        diff = _by_id([] if project is None else project.twin_diffs, call.params["diff_id"])
+        if project is None or diff is None:
+            raise _Refusal(404, {"code": "DIFF_NOT_FOUND"})
+        wanted = "APPROVED" if decision == "APPROVE" else "REJECTED"
+        if diff["status"] != "PROPOSED":
+            if diff["status"] == wanted:
+                return _Answer(200, _twin_revision_payload("NO_CHANGE", diff, None, None))
+            raise _Refusal(409, {"code": "DECISION_REJECTED"})
+        normalized = _blank_to_none(reason)
+        if decision == "REJECT" and normalized is None:
+            raise _Refusal(409, {"code": "DECISION_REJECTED"})
+        snapshot = project.snapshot
+        if snapshot is None:
+            raise _Refusal(404, {"code": "SNAPSHOT_NOT_FOUND"})
+        if (snapshot["id"], snapshot["version_number"], snapshot["content_hash"]) != (
+            diff["base_snapshot_version_id"],
+            diff["base_snapshot_version_number"],
+            diff["base_snapshot_content_hash"],
+        ):
+            raise _Refusal(409, {"code": "CONTEXT_CHANGED"})
+        version = None if decision == "REJECT" else self._revised_twins(project, diff, call.account)
+        diff["status"] = wanted
+        diff["decided_by_user_id"] = call.account.id
+        diff["decided_at"] = _stamp(self._now())
+        diff["decision_reason"] = normalized
+        if version is None:
+            return _Answer(200, _twin_revision_payload("APPLIED", diff, None, None))
+        diff["applied_snapshot_version_id"] = version["id"]
+        readable = self._readable_snapshot(version)
+        twin = next(
+            item
+            for item in readable["snapshot"]["twin_versions"]
+            if item["twin_id"] == diff["twin_id"]
+        )
+        return _Answer(200, _twin_revision_payload("APPLIED", diff, twin, readable))
+
+    def _revised_twins(
+        self, project: FakeProject, diff: Mapping[str, object], account: _Account
+    ) -> dict[str, object]:
+        previous = project.snapshot
+        if previous is None:
+            raise RuntimeError("a twin revision needs a snapshot")
+        body = copy.deepcopy(previous["snapshot"])
+        revised: list[dict[str, object]] = []
+        twins = []
+        for base in body["twin_versions"]:
+            if str(base["twin_id"]) != diff["twin_id"]:
+                twins.append(base)
+                continue
+            profile = _revised_profile(base["profile"], diff["operations"])
+            twin = {
+                **base,
+                "id": self._new_id(),
+                "version_number": int(base["version_number"]) + 1,
+                "based_on_version_number": base["version_number"],
+                "content_hash": _fake_twin_profile(profile).content_hash,
+                "created_by_user_id": account.id,
+                "created_at": _stamp(self._now()),
+                "profile": profile,
+            }
+            revised.append(twin)
+            twins.append(twin)
+        body["twin_versions"] = twins
+        version = {
+            "id": self._new_id(),
+            "project_id": project.id,
+            "version_number": int(previous["version_number"]) + 1,
+            "based_on_version_number": previous["version_number"],
+            "content_hash": _fake_modeling(body).content_hash,
+            "created_by_user_id": account.id,
+            "created_at": _stamp(self._now()),
+            "snapshot": body,
+        }
+        for twin in revised:
+            project.twins.setdefault(str(twin["twin_id"]), []).append(twin)
+        project.snapshots.append(version)
+        return version
+
     def _route_modeling_readiness(self, call: _Call) -> _Answer:
         project = self._owned(call)
         snapshot = None if project is None else project.snapshot
@@ -5861,6 +6212,43 @@ class FakeStudio:
             ),
             None,
         )
+
+    def _route_requirements_revise(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), ("specification",))
+        specification = fields.value("specification")
+        fields.check()
+        try:
+            payload = RequirementsSpecificationPayload.model_validate(specification)
+        except ValueError as error:
+            raise _Invalid([_error(("body", "specification"), "model_type")]) from error
+        if str(payload.project_id) != call.project_id:
+            raise _Refusal(422, {"code": "REQUIREMENTS_PROJECT_MISMATCH"})
+        try:
+            proposed = payload.to_domain()
+        except (TypeError, ValueError) as error:
+            raise _Refusal(422, {"code": "INVALID_REQUIREMENTS_SPECIFICATION"}) from error
+        project = self._owned(call)
+        current = None if project is None else project.specification
+        if project is None or current is None:
+            raise _Refusal(404, {"code": "SPECIFICATION_NOT_FOUND"})
+        if self._pending_requirements_diff(project) is not None:
+            raise _Refusal(409, {"code": "DIFF_ALREADY_PENDING"})
+        base = {
+            **current,
+            "specification": _fake_requirements(current["specification"]).to_snapshot(),
+        }
+        result = propose_requirements_diff(
+            base_version=stage_versions({"requirements": base})["requirements"],
+            proposed_specification=proposed,
+            diff_id=UUID(self._new_id()),
+            created_by_user_id=UUID(call.account.id),
+            created_at=self._now(),
+        )
+        if result.diff is None:
+            raise _Refusal(409, {"code": "INVALID_PROPOSAL"})
+        diff = RequirementsSpecificationDiffPayload.from_domain(result.diff).model_dump(mode="json")
+        project.requirement_diffs.append(diff)
+        return _Answer(201, _revision_payload("CREATED", diff, None))
 
     def _route_requirements_revisions(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -6545,6 +6933,62 @@ class FakeStudio:
             None,
         )
 
+    def _route_design_change(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), DESIGN_CHANGE_FIELDS)
+        request = fields.text("request")
+        target = _change_target(fields)
+        fields.check()
+        text = (request or "").strip()
+        if not 1 <= len(text) <= MAX_DESIGN_REQUEST_LENGTH:
+            raise _Invalid([_error(("body", "request"), "value_error")])
+        return self._later(
+            call,
+            "DESIGN_CHANGE",
+            {"request": text, "target": target},
+            lambda: self._changed_design(call, text, target),
+        )
+
+    def _changed_design(
+        self, call: _Call, text: str, target: Mapping[str, object] | None = None
+    ) -> _Answer:
+        project = self._owned(call)
+        if project is None:
+            raise _Refusal(404, {"code": "PROJECT_NOT_FOUND"})
+        design = project.design
+        if design is None:
+            raise _Refusal(404, {"code": "DESIGN_PACKAGE_NOT_FOUND"})
+        package = design["package"]
+        selected = package["owner_selected_alternative_id"]
+        chosen = None if selected is None else _by_id(package["alternatives"], str(selected))
+        if chosen is None:
+            raise _Refusal(409, {"code": "DESIGN_ALTERNATIVE_NOT_CHOSEN"})
+        if self._pending_design_diff(project) is not None:
+            raise _Refusal(409, {"code": "DESIGN_REVISION_PENDING"})
+        if project.specification is None:
+            raise _Refusal(404, {"code": "REQUIREMENTS_SPECIFICATION_NOT_FOUND"})
+        if not self.hosted:
+            raise _Refusal(503, {"code": "DESIGN_CHANGE_MODEL_NOT_CONFIGURED"})
+        self._record(project, "DESIGN_CHANGE")
+        sentence = " ".join(text.split())
+        proposed = copy.deepcopy(package)
+        changed = _by_id(proposed["alternatives"], str(selected))
+        if changed is None or sentence in str(changed["summary"]):
+            raise _Refusal(409, {"code": "DESIGN_UNCHANGED"})
+        changed["summary"] = f"{changed['summary']} {sentence}"
+        diff = self._design_diff(project, design, proposed, call.account)
+        changes = _with_targeted(
+            [
+                ALIGNMENT_TEXTS[self.language]["design_change"].format(
+                    title=changed["title"], request=sentence
+                )
+            ],
+            self.language,
+            target,
+        )
+        return _Answer(
+            201, {"revision": _design_revision_payload("CREATED", diff, None), "changes": changes}
+        )
+
     def _design_diff(
         self,
         project: FakeProject,
@@ -6631,6 +7075,65 @@ class FakeStudio:
             {key: value for key, value in diff.items() if key != "content_hash"}
         )
         return _Answer(200, _design_revision_payload("APPLIED", diff, version))
+
+    def _route_design_restore(self, call: _Call) -> _Answer:
+        from orchestwin.api.design import DESIGN_RESTORED, RESTORE_NOTES
+
+        fields = _Fields(call.json(), ("version_number", "locale"))
+        number = fields.integer("version_number", minimum=1)
+        locale = fields.text("locale", required=False, minimum=2, maximum=20, default="it-IT")
+        fields.check()
+        assert number is not None and locale is not None
+        project = self._owned(call)
+        current = None if project is None else project.design
+        if project is None or current is None:
+            raise _Refusal(404, {"code": "PACKAGE_NOT_FOUND"})
+        if number == current["version_number"]:
+            raise _Refusal(409, {"code": "DESIGN_RESTORE_CURRENT"})
+        restored = next(
+            (item for item in project.designs if item["version_number"] == number), None
+        )
+        if restored is None:
+            raise _Refusal(404, {"code": "DESIGN_VERSION_NOT_FOUND"})
+        if self._pending_design_diff(project) is not None:
+            raise _Refusal(409, {"code": "DIFF_ALREADY_PENDING"})
+        package = copy.deepcopy(restored["package"])
+        package["grounding"] = copy.deepcopy(current["package"]["grounding"])
+        if _fake_design(package).content_hash == current["content_hash"]:
+            raise _Refusal(409, {"code": "DESIGN_RESTORE_CURRENT"})
+        language = "en" if locale.strip().lower().startswith("en") else "it"
+        note = RESTORE_NOTES[language].format(number=number)
+        changes = _design_changes(current["package"], package)
+        version = self._append_design(project, package, call.account)
+        moment = _stamp(self._now())
+        diff = {
+            "id": self._new_id(),
+            "project_id": project.id,
+            "owner_user_id": call.account.id,
+            "base_version_id": current["id"],
+            "base_version_number": current["version_number"],
+            "base_content_hash": current["content_hash"],
+            "proposed_package": copy.deepcopy(package),
+            "proposal_hash": _digest(package),
+            "changes": changes,
+            "status": "APPROVED",
+            "created_at": moment,
+            "decided_by_user_id": call.account.id,
+            "decided_at": moment,
+            "decision_reason": note,
+            "applied_version_id": version["id"],
+        }
+        diff["content_hash"] = _digest(diff)
+        project.design_diffs.append(diff)
+        return _Answer(
+            201,
+            {
+                "reason": DESIGN_RESTORED,
+                "restored_version_number": number,
+                "note": note,
+                "revision": _design_revision_payload("APPLIED", diff, version),
+            },
+        )
 
     def _route_design_gate_submit(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -6849,13 +7352,12 @@ class FakeStudio:
         )
 
     def _route_iteration_job(self, call: _Call) -> _Answer:
-        fields = _Fields(
-            call.json(), ("design_version_id", "design_content_hash", "request", "assertions")
-        )
+        fields = _Fields(call.json(), ITERATION_FIELDS)
         version_id = fields.identifier("design_version_id")
         content_hash = fields.digest("design_content_hash")
         request = fields.text("request")
         assertions = fields.texts("assertions", nullable=False, default=[]) or []
+        target = _change_target(fields)
         fields.check()
         text, added = _normalized_iteration(request or "", assertions)
         project = self._owned(call)
@@ -6878,7 +7380,7 @@ class FakeStudio:
             key=str(content_hash),
             alternative_id=alternative_id,
             work=lambda job: self._iteration_work(
-                job, project, str(version_id), str(content_hash), added
+                job, project, str(version_id), str(content_hash), added, target
             ),
         )
         if not any(record["job_id"] == job.id for record in project.iterations):
@@ -6889,6 +7391,7 @@ class FakeStudio:
                     "generation_id": None,
                     "requested_at": _iso(job.started_at),
                     "request": text,
+                    "target": _target_snapshot(target),
                     "assertions": [
                         item for item in added if item not in package["owner_assertions"]
                     ],
@@ -6908,6 +7411,7 @@ class FakeStudio:
         version_id: str,
         content_hash: str,
         added: Sequence[str],
+        target: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
         current = project.design
         if current is None or (current["id"], current["content_hash"]) != (
@@ -6930,7 +7434,7 @@ class FakeStudio:
         project.variant += 1
         alternative_id = str(bound["mockup"]["design_alternative_id"])
         proposed = self._mockup_package(project, package, alternative_id, merged)
-        changes = list(ITERATION_CHANGES[self.language])
+        changes = _with_targeted(list(ITERATION_CHANGES[self.language]), self.language, target)
         for record in project.iterations:
             if record["job_id"] == job.id:
                 record["generation_id"] = generation
@@ -6977,6 +7481,7 @@ class FakeStudio:
                     "generation_id": record["generation_id"],
                     "requested_at": record["requested_at"],
                     "request": record["request"],
+                    "target": _copy(record.get("target")),
                     "assertions": list(record["assertions"]),
                     "changes": list(record["changes"]),
                     "status": status,
@@ -6988,29 +7493,38 @@ class FakeStudio:
         return _Answer(200, {"items": items})
 
     def _route_evaluation(self, call: _Call) -> _Answer:
-        fields = _Fields(
-            call.json(), ("design_version_id", "design_content_hash", "locale", "mode")
-        )
+        fields = _Fields(call.json(), EVALUATION_FIELDS)
         version_id = fields.identifier("design_version_id")
         content_hash = fields.digest("design_content_hash")
         locale = fields.text("locale", required=False, minimum=2, maximum=20, default="it-IT")
         mode = fields.choice("mode", ("TWIN_REVIEW", "STATIC_CHECK"), required=False, nullable=True)
+        scope = _review_scope(fields)
+        _model_rule(fields, lambda: _scope_of_a_twin_review(scope, mode))
         fields.check()
         body = {
             "design_version_id": version_id,
             "design_content_hash": content_hash,
             "locale": locale,
             "mode": mode,
+            **({} if scope is None else {"scope": scope}),
         }
         return self._later(
             call,
             "DESIGN_EVALUATION",
             body,
-            lambda: self._evaluated(call, str(version_id), str(content_hash), str(locale), mode),
+            lambda: self._evaluated(
+                call, str(version_id), str(content_hash), str(locale), mode, scope
+            ),
         )
 
     def _evaluated(
-        self, call: _Call, version_id: str, content_hash: str, locale: str, mode: str | None
+        self,
+        call: _Call,
+        version_id: str,
+        content_hash: str,
+        locale: str,
+        mode: str | None,
+        scope: Mapping[str, object] | None = None,
     ) -> _Answer:
         project = self._owned(call)
         current = None if project is None else project.design
@@ -7018,13 +7532,14 @@ class FakeStudio:
             raise _Refusal(404, {"code": "DESIGN_PACKAGE_NOT_FOUND"})
         if (current["id"], current["content_hash"]) != (version_id, content_hash):
             raise _Refusal(409, {"code": "DESIGN_CONTEXT_CHANGED"})
-        if mode == "STATIC_CHECK" or (mode is None and not self.hosted):
+        if mode == "STATIC_CHECK" or (mode is None and scope is None and not self.hosted):
             raise _Refusal(503, {"code": "DESIGN_EVALUATOR_NOT_CONFIGURED"})
         if not self.hosted:
             raise _Refusal(503, {"code": "DESIGN_REVIEWER_NOT_CONFIGURED"})
         package = current["package"]
         if package["owner_selected_alternative_id"] is None or package["prototype"] is None:
             raise _Refusal(409, {"code": "DESIGN_PROTOTYPE_REQUIRED"})
+        scoped = None if scope is None else _scope_anchor(package["prototype"], scope)
         twins = [dict(item) for item in package["grounding"]["user_twin_references"]]
         for twin in twins:
             known = project.twins.get(str(twin["twin_id"]))
@@ -7037,7 +7552,7 @@ class FakeStudio:
         started = self._now()
         for _ in twins:
             self._record(project, "DESIGN_EVALUATION")
-        run = self._run(project, current, twins, locale, started)
+        run = self._run(project, current, twins, locale, started, scoped)
         project.runs.insert(0, run)
         return _Answer(201, run)
 
@@ -7048,8 +7563,12 @@ class FakeStudio:
         twins: Sequence[Mapping[str, object]],
         locale: str,
         started: datetime,
+        scoped: tuple[str, str] | None = None,
     ) -> dict[str, object]:
         texts = FINDINGS[self.language]
+        evaluator = dict(EVALUATOR)
+        if scoped is not None:
+            evaluator["prompt_version_ref"] = scoped_prompt_version(EVALUATOR["prompt_version_ref"])
         run_id = self._new_id()
         package = version["package"]
         alternative = _by_id(package["alternatives"], str(package["owner_selected_alternative_id"]))
@@ -7096,9 +7615,24 @@ class FakeStudio:
                 templates = texts["first" if earlier == 0 else "later"][position]
             else:
                 templates = (texts["other"],)
+            placed = [
+                (anchors[template[0]], template[1:], texts["action"]) for template in templates
+            ]
+            if scoped is not None:
+                summary, severity, criterion, action = SCOPED_FINDINGS[self.language]
+                placed.insert(0, (scoped, (summary, severity, criterion), action))
             findings = [
-                self._finding(number, twin, version, anchors[template[0]], template[1:])
-                for number, template in enumerate(templates, start=1)
+                self._finding(
+                    number,
+                    twin,
+                    version,
+                    anchor,
+                    template,
+                    action=action,
+                    evaluator=evaluator,
+                    scoped=scoped is not None,
+                )
+                for number, (anchor, template, action) in enumerate(placed, start=1)
             ]
             response = {
                 "evaluation_run_id": run_id,
@@ -7106,7 +7640,7 @@ class FakeStudio:
                 "artifact_bundle_hash": bundle["content_hash"],
                 "twin_id": twin["twin_id"],
                 "twin_version": twin["version_number"],
-                "evaluator": dict(EVALUATOR),
+                "evaluator": dict(evaluator),
                 "findings": findings,
                 "summary": texts["summary"].format(name=twin["name"]),
                 "evidence_gaps": [],
@@ -7142,6 +7676,10 @@ class FakeStudio:
         version: Mapping[str, object],
         anchor: tuple[str, str],
         template: Sequence[str],
+        *,
+        action: str | None = None,
+        evaluator: Mapping[str, str] = EVALUATOR,
+        scoped: bool = False,
     ) -> dict[str, object]:
         texts = FINDINGS[self.language]
         key, location = anchor
@@ -7160,12 +7698,13 @@ class FakeStudio:
             epistemic_status=SyntheticFindingEpistemicStatus.MODEL_INFERRED,
             evidence_refs=(f"artifact:{version['id']}:v{version['version_number']}",),
             confidence=0.6,
-            recommended_action=texts["action"],
+            recommended_action=texts["action"] if action is None else action,
             requires_human_validation=True,
-            model_config_ref=EVALUATOR["model_config_ref"],
-            prompt_version_ref=EVALUATOR["prompt_version_ref"],
+            model_config_ref=evaluator["model_config_ref"],
+            prompt_version_ref=evaluator["prompt_version_ref"],
         )
-        return anchor_finding(finding, key).to_snapshot()
+        element = anchor_element(key) if scoped else None
+        return anchor_finding(finding, key, element).to_snapshot()
 
     def _route_evaluations(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -7173,7 +7712,7 @@ class FakeStudio:
 
     def _route_comparison(self, call: _Call) -> _Answer:
         project = self._owned(call)
-        runs = [] if project is None else project.runs
+        runs = [] if project is None else [run for run in project.runs if not _scoped_run(run)]
         if not runs:
             raise _Refusal(404, {"code": "DESIGN_EVALUATION_COMPARISON_UNAVAILABLE"})
         head = runs[0]
@@ -8748,6 +9287,392 @@ class FakeStudio:
                 task["status"] = "DONE"
                 task["closed_at"] = moment
                 task["note"] = None
+
+    def _route_alignment_run(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), ALIGNMENT_RUN_FIELDS)
+        locale = fields.pattern(
+            "locale",
+            LOCALE_PATTERN,
+            required=False,
+            minimum=2,
+            maximum=MAX_LOCALE_LENGTH,
+            default=DEFAULT_LOCALE,
+        )
+        from_commit = fields.pattern("from_commit", COMMIT_PATTERN, required=False, nullable=True)
+        to_commit = fields.pattern("to_commit", COMMIT_PATTERN)
+        commits = fields.texts(
+            "commits",
+            required=True,
+            nullable=False,
+            minimum_items=1,
+            maximum_items=knowledge_alignment.MAX_COMMITS,
+            item_pattern=COMMIT_PATTERN,
+        )
+        fields.check()
+        listed = [item.lower() for item in commits or []]
+        start = None if from_commit is None else from_commit.lower()
+        end = str(to_commit).lower()
+        if (
+            len(set(listed)) != len(listed)
+            or not _same_commit(end, listed[-1])
+            or (start is not None and any(_same_commit(start, item) for item in listed))
+        ):
+            raise _Invalid([_error(("body",), "value_error")])
+        body = {"locale": locale, "from_commit": start, "to_commit": end, "commits": listed}
+        return self._later(
+            call, "KNOWLEDGE_ALIGNMENT", body, lambda: self._aligned_knowledge(call, body)
+        )
+
+    def _aligned_knowledge(self, call: _Call, body: Mapping[str, object]) -> _Answer:
+        project = self._code_project(call)
+        records = [self._find_change(project, str(commit)) for commit in body["commits"]]
+        reference = self._alignment_reference(project)
+        if reference["requirements"] is None:
+            raise _Refusal(409, {"code": "REQUIREMENTS_APPROVAL_REQUIRED"})
+        if reference["design"] is None:
+            raise _Refusal(409, {"code": "DESIGN_APPROVAL_REQUIRED"})
+        if not self.hosted:
+            raise _Refusal(503, {"code": "KNOWLEDGE_ALIGNMENT_MODEL_NOT_CONFIGURED"})
+        identifier = self._record(project, "KNOWLEDGE_ALIGNMENT")
+        from_commit = body["from_commit"]
+        try:
+            run = self._stored_alignment_run(
+                project,
+                records,
+                str(body["locale"]),
+                None if from_commit is None else str(from_commit),
+                reference,
+                COSTS["KNOWLEDGE_ALIGNMENT"],
+                [identifier],
+                self._proposed_updates(project, records),
+            )
+        except ValueError as error:
+            raise _Refusal(422, "invalid_request") from error
+        return _Answer(201, {"run": copy.deepcopy(run)})
+
+    def _next_proposal_number(self, project: FakeProject) -> int:
+        numbers = [
+            knowledge_alignment.proposal_number(str(item["code"])) or 0
+            for run in project.knowledge_runs
+            for item in run["proposals"]
+        ]
+        return max(numbers, default=0) + 1
+
+    def _stored_alignment_run(
+        self,
+        project: FakeProject,
+        records: Sequence[Mapping[str, object]],
+        locale: str,
+        from_commit: str | None,
+        reference: Mapping[str, object],
+        cost: int,
+        generation_ids: Sequence[str],
+        updates: Sequence[knowledge_alignment.ProposedUpdate],
+    ) -> dict[str, object]:
+        run_id = UUID(self._new_id())
+        moment = self._now()
+        project_id, owner_id = UUID(project.id), UUID(project.account.id)
+        first_number = self._next_proposal_number(project)
+        proposals = tuple(
+            knowledge_alignment.AlignmentProposal(
+                id=UUID(self._new_id()),
+                run_id=run_id,
+                project_id=project_id,
+                owner_user_id=owner_id,
+                number=first_number + index,
+                section=item.section,
+                title=item.title,
+                request=item.request,
+                rationale=item.rationale,
+                subjects=item.subjects,
+                origin=item.origin,
+                status=knowledge_alignment.ProposalStatus.PROPOSED,
+                created_at=moment,
+            )
+            for index, item in enumerate(updates)
+        )
+        commits = tuple(str(record["commit"]) for record in records)
+        texts = ALIGNMENT_TEXTS[self.language]
+        line = _first_line(str(records[-1]["message"]))
+        summary = (
+            texts["summary"].format(count=len(records), line=line)
+            if proposals
+            else texts["summary_empty"]
+        )
+        requirements, design = reference["requirements"], reference["design"]
+        run = knowledge_alignment.KnowledgeAlignmentRun(
+            id=run_id,
+            project_id=project_id,
+            owner_user_id=owner_id,
+            from_commit=from_commit,
+            to_commit=commits[-1],
+            commits=commits,
+            locale=locale,
+            requirements_version_number=int(requirements["version_number"]),
+            design_version_number=int(design["version_number"]),
+            alternative_code=str(design["alternative_code"]),
+            summary=knowledge_alignment.normalize_summary(summary),
+            created_at=moment,
+            cost_microusd=cost,
+            generation_ids=tuple(UUID(item) for item in generation_ids),
+            proposals=proposals,
+        )
+        snapshot = run.to_snapshot()
+        project.knowledge_runs.insert(0, snapshot)
+        return snapshot
+
+    def _proposed_updates(
+        self, project: FakeProject, records: Sequence[Mapping[str, object]]
+    ) -> tuple[knowledge_alignment.ProposedUpdate, ...]:
+        specification, design = project.specification, project.design
+        if specification is None or design is None:
+            raise RuntimeError("an alignment run needs the approved requirements and design")
+        changed = [record for record in records if str(record["diff"]).strip()]
+        files = list(
+            dict.fromkeys(str(item["path"]) for record in changed for item in record["files"])
+        )
+        if not changed or not files:
+            return ()
+        texts = ALIGNMENT_TEXTS[self.language]
+        first = changed[0]
+        line = _first_line(str(first["message"]))
+        commits = tuple(str(record["commit"]) for record in changed)
+        excerpt = _diff_excerpt(str(first["diff"]))
+        items = specification["specification"]
+        known = [str(item["code"]) for item in items["requirements"]]
+        cited = [code for code in REQUIREMENT_CODE.findall(str(first["diff"])) if code in known]
+        requirement = cited[0] if cited else known[0]
+        screen = _first_screen(design["package"])
+        criteria = tuple(str(item["code"]) for item in items["acceptance_criteria"][:1])
+        cited_files = tuple(files[: knowledge_alignment.MAX_ORIGIN_FILES])
+        return (
+            knowledge_alignment.create_proposed_update(
+                section="REQUIREMENTS",
+                title=texts["requirements_title"].format(line=line),
+                request=texts["requirements_request"].format(
+                    code=requirement, file=files[0], line=line
+                ),
+                rationale=texts["requirements_rationale"].format(file=files[0]),
+                origin=knowledge_alignment.ProposalOrigin(
+                    commits=commits, files=(files[0],), excerpt=excerpt
+                ),
+                subjects=knowledge_alignment.ProposalSubjects(requirements=(requirement,)),
+            ),
+            knowledge_alignment.create_proposed_update(
+                section="DESIGN",
+                title=texts["design_title"].format(line=line),
+                request=texts["design_request"].format(screen=screen, line=line),
+                rationale=texts["design_rationale"].format(count=len(cited_files)),
+                origin=knowledge_alignment.ProposalOrigin(
+                    commits=commits, files=cited_files, excerpt=excerpt
+                ),
+                subjects=knowledge_alignment.ProposalSubjects(screens=(screen,)),
+            ),
+            knowledge_alignment.create_proposed_update(
+                section="TESTS",
+                title=texts["tests_title"].format(line=line),
+                request=texts["tests_request"].format(
+                    code=criteria[0] if criteria else requirement, line=line
+                ),
+                rationale=texts["tests_rationale"],
+                origin=knowledge_alignment.ProposalOrigin(
+                    commits=commits, files=(files[0],), excerpt=excerpt
+                ),
+                subjects=knowledge_alignment.ProposalSubjects(criteria=criteria),
+            ),
+        )
+
+    def _alignment_proposals(
+        self, project: FakeProject, *, waiting_only: bool = False
+    ) -> list[dict[str, object]]:
+        return [
+            proposal
+            for run in project.knowledge_runs
+            for proposal in reversed(run["proposals"])
+            if not waiting_only or proposal["status"] == "PROPOSED"
+        ]
+
+    def _find_proposal(self, project: FakeProject, code: str) -> dict[str, object]:
+        number = knowledge_alignment.proposal_number(code)
+        wanted = None if number is None else knowledge_alignment.proposal_code(number)
+        found = next(
+            (item for item in self._alignment_proposals(project) if item["code"] == wanted), None
+        )
+        if found is None:
+            raise _Refusal(404, {"code": "ALIGNMENT_PROPOSAL_NOT_FOUND"})
+        return found
+
+    def _decided_proposal(
+        self,
+        project: FakeProject,
+        proposal: dict[str, object],
+        *,
+        status: knowledge_alignment.ProposalStatus,
+        note: str | None = None,
+        applied_text: str | None = None,
+        applied_diff_id: str | None = None,
+    ) -> dict[str, object]:
+        domain = knowledge_alignment.proposal_from_snapshot(
+            proposal, project_id=UUID(project.id), owner_user_id=UUID(project.account.id)
+        )
+        try:
+            decided = domain.with_decision(
+                status=status,
+                decided_at=self._now(),
+                note=note,
+                applied_text=applied_text,
+                applied_diff_id=None if applied_diff_id is None else UUID(applied_diff_id),
+            )
+        except knowledge_alignment.ProposalAlreadyDecided as error:
+            raise _Refusal(409, {"code": "ALIGNMENT_PROPOSAL_DECIDED"}) from error
+        proposal.update(decided.to_snapshot())
+        return proposal
+
+    def _route_alignment_runs(self, call: _Call) -> _Answer:
+        project = self._code_project(call)
+        return _Answer(200, {"items": [_alignment_run_item(run) for run in project.knowledge_runs]})
+
+    def _route_alignment_run_view(self, call: _Call) -> _Answer:
+        project = self._code_project(call)
+        run = _by_id(project.knowledge_runs, call.params["run_id"])
+        if run is None:
+            raise _Refusal(404, {"code": "KNOWLEDGE_ALIGNMENT_RUN_NOT_FOUND"})
+        return _Answer(200, {"run": copy.deepcopy(run)})
+
+    def _route_alignment_proposals(self, call: _Call) -> _Answer:
+        status = call.value("status")
+        if status is not None and status not in PROPOSAL_STATUS_FILTERS:
+            raise _Invalid([_error(("query", "status"), "literal_error")])
+        project = self._code_project(call)
+        items = self._alignment_proposals(project, waiting_only=status in (None, "waiting"))
+        latest = project.knowledge_runs[0] if project.knowledge_runs else None
+        return _Answer(
+            200,
+            {
+                "items": copy.deepcopy(items),
+                "latest_run": None
+                if latest is None
+                else {key: latest[key] for key in LATEST_RUN_KEYS},
+            },
+        )
+
+    def _route_apply_proposal(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), PROPOSAL_APPLY_FIELDS)
+        text = fields.text(
+            "text",
+            required=False,
+            nullable=True,
+            maximum=knowledge_alignment.MAX_ANY_REQUEST_LENGTH,
+        )
+        locale = fields.pattern(
+            "locale",
+            LOCALE_PATTERN,
+            required=False,
+            minimum=2,
+            maximum=MAX_LOCALE_LENGTH,
+            default=DEFAULT_LOCALE,
+        )
+        fields.check()
+        project = self._code_project(call)
+        proposal = self._find_proposal(project, call.params["code"])
+        body = {"text": _stripped(text), "locale": locale}
+        operation = APPLY_OPERATIONS.get(str(proposal["section"]))
+        if operation is None:
+            return self._applied_proposal(call, body)
+        return self._later(call, operation, body, lambda: self._applied_proposal(call, body))
+
+    def _applied_proposal(self, call: _Call, body: Mapping[str, object]) -> _Answer:
+        project = self._code_project(call)
+        proposal = self._find_proposal(project, call.params["code"])
+        if proposal["status"] != "PROPOSED":
+            raise _Refusal(409, {"code": "ALIGNMENT_PROPOSAL_DECIDED"})
+        section = knowledge_alignment.ProposalSection(str(proposal["section"]))
+        text = body["text"]
+        chosen = str(proposal["request"]) if text is None else str(text)
+        if not 1 <= len(chosen) <= knowledge_alignment.MAX_REQUEST_LENGTH[section]:
+            raise _Refusal(422, "invalid_request")
+        revision: dict[str, object] | None = None
+        diff_id = None
+        if section is knowledge_alignment.ProposalSection.REQUIREMENTS:
+            answer = self._changed_requirements(call, chosen).body
+            assert isinstance(answer, dict)
+            revision = answer
+            diff_id = str(answer["diff"]["id"])
+        elif section is knowledge_alignment.ProposalSection.DESIGN:
+            answer = self._changed_design(call, chosen).body
+            assert isinstance(answer, dict)
+            revision = answer
+            diff_id = str(answer["revision"]["diff"]["id"])
+        decided = self._decided_proposal(
+            project,
+            proposal,
+            status=knowledge_alignment.ProposalStatus.APPLIED,
+            applied_text=chosen,
+            applied_diff_id=diff_id,
+        )
+        return _Answer(200, {"proposal": copy.deepcopy(decided), "revision": revision})
+
+    def _route_skip_proposal(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), PROPOSAL_SKIP_FIELDS)
+        reason = fields.text(
+            "reason", required=False, nullable=True, maximum=knowledge_alignment.MAX_NOTE_LENGTH
+        )
+        fields.check()
+        project = self._code_project(call)
+        proposal = self._find_proposal(project, call.params["code"])
+        decided = self._decided_proposal(
+            project,
+            proposal,
+            status=knowledge_alignment.ProposalStatus.SKIPPED,
+            note=_stripped(reason),
+        )
+        return _Answer(200, {"proposal": copy.deepcopy(decided)})
+
+    def _seed_alignment_run(
+        self, project: FakeProject, proposals: Sequence[object] | None
+    ) -> dict[str, object]:
+        reference = self._seed_ground(project)
+        records = list(reversed(self._pending(project)))
+        if not records:
+            self._seed_change(project, None, None, False)
+            records = list(reversed(self._pending(project)))
+        aligned = self._aligned(project)
+        from_commit = None if aligned is None else str(aligned["commit"])
+        if proposals is None:
+            updates = self._proposed_updates(project, records)
+        else:
+            updates = tuple(self._seeded_proposal(item, records) for item in proposals)
+        return _copy(
+            self._stored_alignment_run(
+                project, records, self._seed_locale(), from_commit, reference, 0, [], updates
+            )
+        )
+
+    def _seeded_proposal(
+        self, item: object, records: Sequence[Mapping[str, object]]
+    ) -> knowledge_alignment.ProposedUpdate:
+        if isinstance(item, knowledge_alignment.ProposedUpdate):
+            return item
+        if not isinstance(item, Mapping):
+            raise ValueError("a seeded proposal is a mapping or a ProposedUpdate")
+        origin = item.get("origin")
+        subjects = item.get("subjects")
+        return knowledge_alignment.create_proposed_update(
+            section=str(item["section"]),
+            title=str(item["title"]),
+            request=str(item["request"]),
+            rationale=str(item.get("rationale") or ALIGNMENT_TEXTS[self.language]["rationale"]),
+            origin=knowledge_alignment.ProposalOrigin(
+                commits=tuple(str(record["commit"]) for record in records),
+                files=(str(SEED_FILE["path"]),),
+                excerpt=_diff_excerpt(SEED_DIFF),
+            )
+            if origin is None
+            else knowledge_alignment.proposal_origin_from_snapshot(origin),
+            subjects=None
+            if subjects is None
+            else knowledge_alignment.proposal_subjects_from_snapshot(subjects),
+        )
 
     def _task_list(self, project: FakeProject, *, every: bool) -> list[dict[str, object]]:
         return [
@@ -11394,6 +12319,15 @@ def _email_key(email: str) -> str | None:
         return None
 
 
+def _bearer_token(header: str | None) -> str | None:
+    if not header:
+        return None
+    scheme, _, token = header.partition(" ")
+    if scheme.casefold() != "bearer" or not token:
+        return None
+    return token
+
+
 def _registered_email(email: str) -> str:
     if not isinstance(email, str) or not 3 <= len(email) <= 320:
         raise ValueError("the real Studio registers only e-mail addresses of 3 to 320 characters")
@@ -11513,6 +12447,42 @@ def _first_screen(package: Mapping[str, object]) -> str:
 def _first_line(message: str) -> str:
     line = next((" ".join(item.split()) for item in message.splitlines() if item.strip()), "")
     return _bounded(line, FIRST_LINE_LENGTH)
+
+
+def _same_commit(first: str, second: str) -> bool:
+    return first.startswith(second) or second.startswith(first)
+
+
+def _stripped(value: str | None) -> str | None:
+    return None if value is None or not value.strip() else value.strip()
+
+
+def _diff_excerpt(diff: str) -> str:
+    lines: list[str] = []
+    for raw in diff.splitlines():
+        line = raw.rstrip()
+        if not lines and not line:
+            continue
+        candidate = [*lines, line]
+        if (
+            len(candidate) > EXCERPT_LINES
+            or len("\n".join(candidate)) > knowledge_alignment.MAX_EXCERPT_LENGTH
+        ):
+            break
+        lines = candidate
+    if not lines:
+        lines = [diff.strip().splitlines()[0][: knowledge_alignment.MAX_EXCERPT_LENGTH]]
+    return knowledge_alignment.normalize_excerpt("\n".join(lines))
+
+
+def _alignment_run_item(run: Mapping[str, object]) -> dict[str, object]:
+    proposals = run["proposals"]
+    assert isinstance(proposals, list)
+    return {
+        **{key: copy.deepcopy(value) for key, value in run.items() if key != "proposals"},
+        "waiting": sum(1 for item in proposals if item["status"] == "PROPOSED"),
+        "proposals_count": len(proposals),
+    }
 
 
 def _first_goal(twin: Mapping[str, object]) -> str:
@@ -13120,6 +14090,38 @@ def _revision_payload(
     }
 
 
+def _twin_revision_payload(
+    status: str,
+    diff: Mapping[str, object],
+    twin: Mapping[str, object] | None,
+    snapshot: Mapping[str, object] | None,
+) -> dict[str, object]:
+    return {
+        "status": status,
+        "issue": None,
+        "proposal_issue": None,
+        "diff": diff,
+        "twin_version": twin,
+        "snapshot_version": snapshot,
+    }
+
+
+def _revised_profile(
+    profile: Mapping[str, object], operations: Sequence[Mapping[str, object]]
+) -> dict[str, object]:
+    revised = copy.deepcopy(dict(profile))
+    replaced = {
+        UserTwinField(str(item["field"])).observation_key: copy.deepcopy(item["after"])
+        for item in operations
+    }
+    observations = [
+        replaced.pop(str(item["observation_key"]), item) for item in revised["observations"]
+    ]
+    observations.extend(replaced.values())
+    revised["observations"] = observations
+    return revised
+
+
 def _design_revision_payload(
     status: str, diff: Mapping[str, object], version: Mapping[str, object] | None
 ) -> dict[str, object]:
@@ -13372,6 +14374,81 @@ def _merged_assertions(current: Sequence[str], added: Sequence[str]) -> list[str
     if len(merged) > MAX_OWNER_ASSERTIONS:
         raise _Refusal(422, {"code": "ITERATION_REQUEST_INVALID"})
     return merged
+
+
+def _change_target(fields: _Fields) -> dict[str, object] | None:
+    child = fields.child("target", CHANGE_TARGET_FIELDS, required=False, nullable=True)
+    if child is None:
+        return None
+    screen = child.pattern("screen_code", SCREEN_CODE)
+    element = child.pattern("element_code", ELEMENT_CODE, required=False, nullable=True)
+    texts: dict[str, object] = {}
+    for name, normalizer in (("label", target_label), ("html", target_html)):
+        text = child.text(name, required=False, nullable=True)
+        texts[name] = None if text is None else child.normalized(name, text, normalizer)
+    valid = not child.errors
+    fields.adopt(child)
+    return {"screen_code": screen, "element_code": element, **texts} if valid else None
+
+
+def _target_snapshot(target: Mapping[str, object] | None) -> dict[str, object] | None:
+    if target is None:
+        return None
+    return {name: value for name, value in target.items() if value is not None}
+
+
+def _review_scope(fields: _Fields) -> dict[str, object] | None:
+    child = fields.child("scope", SCOPE_FIELDS, required=False, nullable=True)
+    if child is None:
+        return None
+    screen = child.pattern("screen_code", SCREEN_CODE)
+    element = child.pattern("element_code", ELEMENT_CODE, required=False, nullable=True)
+    valid = not child.errors
+    fields.adopt(child)
+    return {"screen_code": screen, "element_code": element} if valid else None
+
+
+def _scope_of_a_twin_review(scope: Mapping[str, object] | None, mode: str | None) -> None:
+    if scope is not None and mode == "STATIC_CHECK":
+        raise ValueError("a scope belongs only to the review of the twins")
+
+
+def _scope_anchor(prototype: Mapping[str, object], scope: Mapping[str, object]) -> tuple[str, str]:
+    refusal = _Refusal(422, {"code": DESIGN_EVALUATION_SCOPE_INVALID})
+    screen = next(
+        (item for item in prototype["screens"] if item["code"] == scope["screen_code"]), None
+    )
+    if screen is None:
+        raise refusal
+    place = f"{screen['code']} {_anchor_label(str(screen['title']))}"
+    code = scope["element_code"]
+    if code is None:
+        return str(screen["code"]), place
+    element = next((item for item in screen["elements"] if item["code"] == code), None)
+    if element is None:
+        raise refusal
+    label = _anchor_label(str(element["accessible_name"] or element["content"]))
+    return f"{screen['code']}/{code}", f"{place} · {code} {label}"
+
+
+def _scoped_run(run: Mapping[str, object]) -> bool:
+    evaluator = run["responses"][0]["evaluator"]
+    return str(evaluator["prompt_version_ref"]).endswith(f"+{SCOPED_TWIN_REVIEW_PROMPT_VERSION}")
+
+
+def _with_targeted(
+    changes: list[str], language: str, target: Mapping[str, object] | None
+) -> list[str]:
+    if target is None:
+        return changes
+    texts = ALIGNMENT_TEXTS[language]
+    if target["element_code"] is None:
+        line = texts["targeted_screen"].format(screen=target["screen_code"])
+    else:
+        line = texts["targeted_element"].format(
+            element=target["element_code"], screen=target["screen_code"]
+        )
+    return list(dict.fromkeys((line, *changes)))
 
 
 PACKAGE_KEYS = (

@@ -38,6 +38,12 @@ const HASH_TWO = "2".repeat(64);
 const HASH_THREE = "3".repeat(64);
 const REQUEST = "Sposta il pulsante principale in alto";
 const RULE = "Il pulsante principale resta in alto";
+const TARGET = {
+  screen_code: "SCR-002",
+  element_code: "ELM-012",
+  label: "Prenota",
+  html: '<button data-elm="ELM-012" type="button">Prenota</button>',
+};
 
 const authorize: AuthorizedMockupRequest = (operation) => operation("token");
 
@@ -271,6 +277,82 @@ describe("design iterations store", () => {
     ).toEqual({ request: "ok", assertions: ["a", "b", "c", "d", "e"] });
   });
 
+  it("sends the target of a change aimed at an element and keeps it for a retry", async () => {
+    const api = fakeApi();
+    api.job.mockResolvedValue(job("FAILED", { failure: { code: "TIMEOUT", reasons: [] } }));
+    const store = activeStore();
+
+    expect(await store.start({ request: REQUEST, target: TARGET }, authorize, { api })).toBe(
+      "started",
+    );
+
+    expect(api.startJob).toHaveBeenCalledWith(
+      PROJECT,
+      {
+        design_version_id: versionId(HASH_TWO),
+        design_content_hash: HASH_TWO,
+        request: REQUEST,
+        assertions: [],
+        target: TARGET,
+      },
+      "token",
+    );
+    expect(store.request).toEqual({ request: REQUEST, assertions: [], target: TARGET });
+    await tick();
+    expect(store.state).toBe("failed");
+    expect(await store.retry(authorize, { api })).toBe("started");
+    expect(api.startJob.mock.calls[1]?.[1]).toEqual(api.startJob.mock.calls[0]?.[1]);
+  });
+
+  it("leaves the body as it was when the change has no target", async () => {
+    const api = fakeApi();
+    const store = activeStore();
+
+    await store.start({ request: REQUEST, target: null }, authorize, { api });
+
+    expect(Object.keys(api.startJob.mock.calls[0]?.[1] ?? {})).toEqual([
+      "design_version_id",
+      "design_content_hash",
+      "request",
+      "assertions",
+    ]);
+  });
+
+  it.each([
+    ["a screen without its code", { ...TARGET, screen_code: "Prenotazione" }],
+    ["a screen with a short code", { ...TARGET, screen_code: "SCR-02" }],
+    ["an element without its code", { ...TARGET, element_code: "ELM-12" }],
+    ["an empty label", { ...TARGET, label: "   " }],
+    ["a label that is too long", { ...TARGET, label: "x".repeat(121) }],
+    ["an empty markup", { ...TARGET, html: "" }],
+    ["a markup that is too long", { ...TARGET, html: "x".repeat(2049) }],
+  ])("refuses a target with %s without calling the server", async (_label, target) => {
+    const api = fakeApi();
+    const store = activeStore();
+
+    expect(await store.start({ request: REQUEST, target }, authorize, { api })).toBe("invalid");
+    expect(api.startJob).not.toHaveBeenCalled();
+  });
+
+  it("counts the characters of a target as the server does and trims its label", () => {
+    const screen = { screen_code: "SCR-001", label: " 😀 ", html: "😀".repeat(2048) };
+
+    expect(normalizedIterationRequest({ request: "ok", target: screen })).toEqual({
+      request: "ok",
+      assertions: [],
+      target: { screen_code: "SCR-001", label: "😀", html: "😀".repeat(2048) },
+    });
+    expect(
+      normalizedIterationRequest({ request: "ok", target: { ...TARGET, label: "😀".repeat(120) } }),
+    ).not.toBeNull();
+    expect(
+      normalizedIterationRequest({
+        request: "ok",
+        target: { ...TARGET, element_code: "ELM-0012" },
+      }),
+    ).not.toBeNull();
+  });
+
   it("asks nothing when the design has no applied generated mockup or no project", async () => {
     const api = fakeApi();
     const store = activeStore(appliedVersion(HASH_TWO, false));
@@ -447,6 +529,20 @@ describe("design iterations store", () => {
     await tick();
     expect(store.state).toBe("ready");
     expect(api.startJob).not.toHaveBeenCalled();
+  });
+
+  it("keeps the target of a running change across a reload", async () => {
+    await activeStore().start({ request: REQUEST, target: TARGET }, authorize, {
+      api: fakeApi(),
+    });
+
+    setActivePinia(createPinia());
+    const store = activeStore();
+
+    expect(await store.recover(authorize, { api: fakeApi(), mockupsApi: fakeMockupsApi() })).toBe(
+      "running",
+    );
+    expect(store.request).toEqual({ request: REQUEST, assertions: [], target: TARGET });
   });
 
   it("recovers the proposal after a reload when the job is gone", async () => {

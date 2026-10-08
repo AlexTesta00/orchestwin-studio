@@ -187,7 +187,7 @@ def complete_order(language: str, paid_tools: str, work: Sequence[str]) -> str:
         f"reads in the application is written in {language}.",
         "- Follow the approved design (screens, flows, labels) and the requirements. Where you "
         "have to depart from them, do it and say so at the end with the reason: the owner "
-        "realigns the design with `ut align`.",
+        "realigns the design with `ut verify`.",
         "- Never edit `orchestwin/` and `.orchestwin/`: OrchesTwin Studio writes them.",
         "- Do not commit and do not push: the owner reviews your changes and commits them.",
         "- The MCP server `orchestwin-twins` answers from the knowledge folder: the twins, the "

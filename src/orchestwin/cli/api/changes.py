@@ -54,6 +54,7 @@ REFERENCE_KEYS: Final = (
 class Development:
     summary: StateSummary
     stale_reviews: int
+    aligned_design_version: int | None = None
 
 
 def changes_path(project_id: str) -> str:
@@ -143,12 +144,20 @@ def development(client: StudioClient, project_id: str) -> Development | None:
         if failure.http_status in MISSING_ROUTE or failure.http_status >= 500:
             return None
         raise
-    return Development(summary_of(document, len(items)), stale_count(document))
+    return Development(
+        summary_of(document, len(items)), stale_count(document), aligned_design_version(document)
+    )
 
 
 def stale_count(document: Mapping[str, object]) -> int:
     value = document.get("stale_reviews")
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def aligned_design_version(document: Mapping[str, object]) -> int | None:
+    point = aligned(document)
+    value = None if point is None else point.get("design_version_number")
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def review_of(change_document: Mapping[str, object]) -> Mapping[str, object] | None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -98,6 +99,10 @@ class GuidanceChoiceResult:
             raise ValueError("only a chosen guidance mode may contain the account")
 
 
+class LocalOwnerUnavailable(RuntimeError):
+    pass
+
+
 class IdentityUnitOfWork(Protocol):
     """Transactional repository boundary for identity use cases."""
 
@@ -173,11 +178,24 @@ class IdentityApplicationService(Protocol):
         mode: str,
     ) -> GuidanceChoiceResult: ...
 
+    async def local_owner(
+        self,
+        *,
+        email: str,
+    ) -> UserAccount: ...
+
+    async def issue_local_owner_session(
+        self,
+        *,
+        email: str,
+    ) -> AuthenticatedSession: ...
+
 
 class LocalIdentityApplicationService:
     """Local account use cases composed from explicit ports."""
 
     DUMMY_PASSWORD = "not a real OrchesTwin account password!"
+    LOCAL_OWNER_PASSWORD_PREFIX = "Local-"
 
     def __init__(
         self,
@@ -384,6 +402,59 @@ class LocalIdentityApplicationService:
             status=GuidanceChoiceStatus.CHOSEN,
             user=replace(user, guidance_mode=choice),
         )
+
+    async def local_owner(
+        self,
+        *,
+        email: str,
+    ) -> UserAccount:
+        normalized_email = NormalizedEmail.parse(email)
+
+        try:
+            async with self._unit_of_work_factory() as unit:
+                return await self._local_owner_account(unit=unit, email=normalized_email)
+        except IntegrityError:
+            async with self._unit_of_work_factory() as unit:
+                return await self._local_owner_account(unit=unit, email=normalized_email)
+
+    async def issue_local_owner_session(
+        self,
+        *,
+        email: str,
+    ) -> AuthenticatedSession:
+        normalized_email = NormalizedEmail.parse(email)
+
+        try:
+            async with self._unit_of_work_factory() as unit:
+                user = await self._local_owner_account(unit=unit, email=normalized_email)
+                return await self._issue_session(unit=unit, user=user)
+        except IntegrityError:
+            async with self._unit_of_work_factory() as unit:
+                user = await self._local_owner_account(unit=unit, email=normalized_email)
+                return await self._issue_session(unit=unit, user=user)
+
+    async def _local_owner_account(
+        self,
+        *,
+        unit: IdentityUnitOfWork,
+        email: NormalizedEmail,
+    ) -> UserAccount:
+        user = await unit.users.get_by_email(email)
+
+        if user is None:
+            user = await unit.users.add(
+                create_user_account(
+                    email=email,
+                    password_hash=self._password_service.hash(
+                        self.LOCAL_OWNER_PASSWORD_PREFIX + secrets.token_urlsafe(48)
+                    ),
+                )
+            )
+
+        if not user.is_active:
+            raise LocalOwnerUnavailable("the local owner account is not active")
+
+        return user
 
     async def _issue_session(
         self,

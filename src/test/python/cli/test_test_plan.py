@@ -258,6 +258,73 @@ def test_a_saved_plan_is_reused_while_it_fits_the_folder_and_the_criteria() -> N
     assert uncovered.values == {"codes": "AC-007, AC-009"}
 
 
+def test_a_saved_plan_is_not_reused_while_the_redo_file_exists(tmp_path: Path) -> None:
+    project = link_folder(tmp_path / "project")
+    plan = saved(REPLAN)
+
+    assert plan_flow.read_redo(project) is None
+    first = plan_flow.mark_redo(
+        project,
+        [{"code": "ALN-003", "request": "Cover the split among friends."}],
+        written_at="2026-09-29T10:00:00+00:00",
+    )
+    second = plan_flow.mark_redo(
+        project,
+        [
+            {"code": "ALN-003", "request": "Cover the split among friends again."},
+            {"code": "ALN-005", "request": "Cover the rounding."},
+        ],
+        written_at="2026-09-29T10:05:00+00:00",
+    )
+    document = json.loads(second.read_bytes().decode("utf-8"))
+    redo = plan_flow.read_redo(project)
+    choice = plan_flow.decide(plan, (2, 4), ["AC-002"], new=False, redo=redo)
+    forced = plan_flow.decide(plan, (2, 4), [], new=True, redo=redo)
+    plan_flow.clear_redo(project)
+    gone = plan_flow.read_redo(project)
+    plan_flow.clear_redo(project)
+
+    assert first == second == project.root / ".orchestwin" / "tests" / "redo.json"
+    assert list(document) == ["schema_version", "written_at", "proposals"]
+    assert (document["schema_version"], document["written_at"]) == (
+        1,
+        "2026-09-29T10:05:00+00:00",
+    )
+    assert redo == (
+        {"code": "ALN-003", "request": "Cover the split among friends again."},
+        {"code": "ALN-005", "request": "Cover the rounding."},
+    )
+    assert choice == plan_flow.PlanChoice(
+        reuse=False, key="test.plan_redo", values={"codes": "ALN-003, ALN-005"}
+    )
+    assert forced == plan_flow.PlanChoice(reuse=False)
+    assert gone is None
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        None,
+        "text",
+        {"schema_version": 2, "proposals": [{"code": "ALN-001", "request": "x"}]},
+        {"schema_version": 1, "proposals": [{"code": 1, "request": "x"}, "noise"]},
+    ],
+)
+def test_a_redo_file_that_cannot_be_read_still_asks_for_a_new_plan(
+    tmp_path: Path, document: object
+) -> None:
+    project = link_folder(tmp_path / "project")
+    target = plan_flow.redo_file(project)
+    target.parent.mkdir(parents=True)
+    target.write_text("" if document is None else json.dumps(document), encoding="utf-8")
+
+    redo = plan_flow.read_redo(project)
+    choice = plan_flow.decide(saved(REPLAN), (2, 4), [], new=False, redo=redo)
+
+    assert redo == ()
+    assert choice == plan_flow.PlanChoice(reuse=False, key="test.plan_redo", values={"codes": "-"})
+
+
 def test_a_plan_without_a_reference_never_fits() -> None:
     plan = plan_flow.SavedPlan("", {}, {**PLAN, "reference": None})
 

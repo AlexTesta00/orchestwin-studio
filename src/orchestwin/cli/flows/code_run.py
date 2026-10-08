@@ -30,12 +30,18 @@ PROMPT_NAME: Final = "prompt.md"
 MCP_NAME: Final = "mcp.json"
 OUTCOME_NAME: Final = "outcome.json"
 LATEST_NAME: Final = "latest.json"
+DESIGN_POINT_NAME: Final = "design.json"
 IGNORE_NAME: Final = ".gitignore"
 IGNORE_CONTENT: Final = b"*\n"
 FOLDER_FORMAT: Final = "%Y%m%d-%H%M%S"
 PYTHON_MODULE: Final = ("-m", "orchestwin.cli")
 STATUS_ARGUMENTS: Final = ("status", "--porcelain", "-z", "--untracked-files=normal")
 NO_REPOSITORY: Final = "NO_REPOSITORY"
+CODE_KIND: Final = "code"
+DESIGN_KIND: Final = "design"
+CODE_RUN_REASON: Final = "CODE_RUN"
+DESIGN_RUN_REASON: Final = "DESIGN_RUN"
+NO_CODE_CHANGES_REASON: Final = "NO_CODE_CHANGES"
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +84,9 @@ class Launch:
     settings: CodeSettings
     work: Work
     spend: bool
+    kind: str = CODE_KIND
+    design_from: int | None = None
+    design_version_number: int | None = None
 
     @property
     def program(self) -> str:
@@ -98,6 +107,9 @@ class Outcome:
     request: str | None
     exit_status: int
     changed_files: tuple[str, ...] | None
+    kind: str = CODE_KIND
+    design_from: int | None = None
+    design_version_number: int | None = None
 
     def document(self) -> dict[str, object]:
         return {
@@ -114,6 +126,9 @@ class Outcome:
             "request": self.request,
             "exit_status": self.exit_status,
             "changed_files": None if self.changed_files is None else list(self.changed_files),
+            "kind": self.kind,
+            "design_from": self.design_from,
+            "design_version_number": self.design_version_number,
         }
 
     def latest(self, folder: str) -> dict[str, object]:
@@ -125,6 +140,8 @@ class Outcome:
             "agent": self.agent,
             "exit_status": self.exit_status,
             "changed_files": None if self.changed_files is None else list(self.changed_files),
+            "kind": self.kind,
+            "design_version_number": self.design_version_number,
         }
 
 
@@ -218,11 +235,17 @@ def code_folder(project: ProjectFolder) -> Path:
     return project.local / CODE_FOLDER
 
 
-def run_folder(code: Path, moment: datetime) -> Path:
+def ensure_code_folder(project: ProjectFolder) -> Path:
+    code = code_folder(project)
     code.mkdir(parents=True, exist_ok=True)
     ignore = code / IGNORE_NAME
     if not ignore.exists():
         write_atomically(ignore, IGNORE_CONTENT)
+    return code
+
+
+def run_folder(project: ProjectFolder, moment: datetime) -> Path:
+    code = ensure_code_folder(project)
     stem = moment.astimezone(UTC).strftime(FOLDER_FORMAT)
     candidate = code / stem
     number = 1
@@ -251,7 +274,7 @@ def mcp_document(root: Path, *, spend: bool, python: str) -> dict[str, object]:
 def write_run_files(
     project: ProjectFolder, moment: datetime, order: str, *, spend: bool, python: str
 ) -> RunFiles:
-    folder = run_folder(code_folder(project), moment)
+    folder = run_folder(project, moment)
     files = RunFiles(folder=folder, prompt=folder / PROMPT_NAME, mcp=folder / MCP_NAME)
     write_atomically(files.prompt, order.encode("utf-8"))
     write_atomically(files.mcp, json_bytes(mcp_document(project.root, spend=spend, python=python)))
@@ -349,12 +372,55 @@ def outcome_of(
         request=launch.work.request,
         exit_status=exit_status,
         changed_files=None if changed_files is None else tuple(changed_files),
+        kind=launch.kind,
+        design_from=launch.design_from,
+        design_version_number=launch.design_version_number,
     )
 
 
 def write_outcome(files: RunFiles, outcome: Outcome) -> None:
     write_atomically(files.folder / OUTCOME_NAME, json_bytes(outcome.document()))
     write_atomically(files.folder.parent / LATEST_NAME, json_bytes(outcome.latest(files.name)))
+
+
+def write_design_point(
+    project: ProjectFolder, *, version: int, folder: str | None, reason: str, moment: datetime
+) -> Path:
+    path = ensure_code_folder(project) / DESIGN_POINT_NAME
+    document = {
+        "schema_version": SCHEMA_VERSION,
+        "design_version_number": version,
+        "recorded_at": moment_text(moment),
+        "folder": folder,
+        "reason": reason,
+    }
+    write_atomically(path, json_bytes(document))
+    return path
+
+
+def read_design_point(project: ProjectFolder) -> Mapping[str, object] | None:
+    document = read_json(code_folder(project) / DESIGN_POINT_NAME)
+    if (
+        not isinstance(document, Mapping)
+        or _version(document.get("schema_version")) != SCHEMA_VERSION
+        or _version(document.get("design_version_number")) is None
+    ):
+        return None
+    return document
+
+
+def design_point_version(project: ProjectFolder) -> int | None:
+    found = read_design_point(project)
+    return None if found is None else _version(found.get("design_version_number"))
+
+
+def aligned_design_version(project: ProjectFolder, verified: int | None) -> int | None:
+    found = [
+        version
+        for version in (design_point_version(project), _version(verified))
+        if version is not None
+    ]
+    return max(found) if found else None
 
 
 def changed_files(context: CommandContext, project: ProjectFolder) -> Changes:
@@ -410,6 +476,12 @@ def moment_text(moment: datetime) -> str:
 
 def _seconds(value: float) -> float:
     return float(round(max(value, 0.0), 2))
+
+
+def _version(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return None
+    return value
 
 
 def _words(value: object) -> bool:

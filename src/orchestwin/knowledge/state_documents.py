@@ -204,6 +204,14 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
             "and the tasks for the code. The exact records are in `{document}` and `{changes}`; "
             "the diff of a commit is never copied into the folder."
         ),
+        "push": (
+            "`ut push` sends the hand-made changes of this folder to the Studio: you approve the "
+            "differences and a new version is born."
+        ),
+        "align_design": (
+            "`ut align --from-design` brings the code up to the current design when the design "
+            "changed after the code was written."
+        ),
         "reference": "## Reference",
         "requirements": "- Requirements: version {number} (`{path}`).",
         "requirements_missing": "- Requirements: not approved yet.",
@@ -228,9 +236,9 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
         ),
         "stale_count": (
             "1 review was made against earlier versions of the requirements or of the design: "
-            "`ut align --recheck` has the twins review that commit again.",
+            "`ut verify --recheck` has the twins review that commit again.",
             "{count} reviews were made against earlier versions of the requirements or of the "
-            "design: `ut align --recheck` has the twins review those commits again.",
+            "design: `ut verify --recheck` has the twins review those commits again.",
         ),
         "tasks": "## Open tasks",
         "task": "- {code}: {text} ({details}).",
@@ -283,6 +291,14 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
             "codice. I dati esatti sono in `{document}` e in `{changes}`; il diff di un commit "
             "non viene mai copiato nella cartella."
         ),
+        "push": (
+            "`ut push` invia allo Studio le modifiche fatte a mano in questa cartella: le "
+            "differenze si approvano e nasce una versione nuova."
+        ),
+        "align_design": (
+            "`ut align --from-design` porta il codice al design attuale quando il design è "
+            "cambiato dopo che il codice è stato scritto."
+        ),
         "reference": "## Riferimento",
         "requirements": "- Requisiti: versione {number} (`{path}`).",
         "requirements_missing": "- Requisiti: non ancora approvati.",
@@ -311,9 +327,9 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
         ),
         "stale_count": (
             "1 revisione è stata fatta con versioni precedenti dei requisiti o del design: "
-            "`ut align --recheck` fa riesaminare quel commit ai twin.",
+            "`ut verify --recheck` fa riesaminare quel commit ai twin.",
             "{count} revisioni sono state fatte con versioni precedenti dei requisiti o del "
-            "design: `ut align --recheck` fa riesaminare quei commit ai twin.",
+            "design: `ut verify --recheck` fa riesaminare quei commit ai twin.",
         ),
         "tasks": "## Compiti aperti",
         "task": "- {code}: {text} ({details}).",
@@ -1153,6 +1169,8 @@ def state_markdown(sources: KnowledgeSources, *, language: str | None) -> str:
         texts["title"].format(project=_inline(sources.project_name)),
         "",
         texts["intro"].format(document=STATE_DOCUMENT, changes=FEEDBACK_CHANGES),
+        "",
+        f"{texts['push']} {texts['align_design']}",
         "",
         *_reference_lines(document, texts),
         *_aligned_lines(document, texts),

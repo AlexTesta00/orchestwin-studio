@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, provide, watch } from "vue";
+import { computed, provide, ref, watch } from "vue";
 
+import AlignmentProposalsNotice from "./AlignmentProposalsNotice.vue";
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import { placeLabel } from "./screenNames";
 import UiButton from "./UiButton.vue";
@@ -153,6 +154,7 @@ const messages = {
     noFindings: "No remarks.",
     terminal:
       "The tests run from the terminal: `ut test` repeats them with the saved paths, `ut test --plan new` first has the model write new paths.",
+    planRedo: "The test plan must be made again: `ut test --plan new`",
   },
   it: {
     eyebrow: "Sull'applicazione realizzata",
@@ -233,6 +235,7 @@ const messages = {
     noFindings: "Nessuna osservazione.",
     terminal:
       "I test partono dal terminale: `ut test` li ripete con i percorsi salvati, `ut test --plan new` fa prima scrivere al modello percorsi nuovi.",
+    planRedo: "Il piano dei test va rifatto: `ut test --plan new`",
   },
 } as const;
 
@@ -273,6 +276,7 @@ const store = useAcceptanceTestsStore();
 
 const copy = computed(() => messages[props.locale]);
 const intlLocale = computed(() => (props.locale === "it" ? "it-IT" : "en-GB"));
+const planRedo = ref(false);
 
 const { job: runningJob, recheck } = useGenerationResume({
   projectId: () => props.projectId,
@@ -484,7 +488,12 @@ function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): P
   return props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
 }
 
+function onProposalApplied(): void {
+  planRedo.value = true;
+}
+
 async function load(): Promise<void> {
+  planRedo.value = false;
   try {
     await store.load(props.projectId, authorizedRequest, props.api);
   } catch {
@@ -540,11 +549,34 @@ watch(() => props.projectId, load, { immediate: true });
     </div>
 
     <div
-      class="mt-5 grid gap-5"
+      class="mt-5 grid grid-cols-1 gap-5"
       aria-live="polite"
       :aria-busy="loading ? 'true' : undefined"
       data-testid="acceptance-state"
     >
+      <AlignmentProposalsNotice
+        :project-id="projectId"
+        section="TESTS"
+        :locale="locale"
+        :authorize="authorizedRequest"
+        @applied="onProposalApplied"
+      />
+
+      <p
+        v-if="planRedo"
+        class="m-0 rounded-field border border-warn-on-night/40 bg-warn-on-night/8 px-4 py-3 text-sm leading-normal text-warn-on-night"
+        data-testid="acceptance-plan-redo"
+      >
+        <template v-for="part in commandParts(copy.planRedo)" :key="part.key">
+          <code
+            v-if="part.command"
+            class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+            >{{ part.text }}</code
+          >
+          <template v-else>{{ part.text }}</template>
+        </template>
+      </p>
+
       <div
         v-if="failureText !== null"
         class="rounded-field border border-fail-on-night/40 bg-fail-on-night/10 px-4 py-3 text-sm text-fail-on-night"

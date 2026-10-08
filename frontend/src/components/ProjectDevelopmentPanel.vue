@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import ProjectTwinLearningBlock from "./ProjectTwinLearningBlock.vue";
@@ -13,11 +13,13 @@ import UiTechnicalDetails from "./UiTechnicalDetails.vue";
 import { apiClient } from "../api/client";
 import type { CodeChangesApi } from "../api/codeChanges";
 import type { GenerationJobsApi } from "../api/generationJobs";
+import type { KnowledgeAlignmentApi } from "../api/knowledgeAlignment";
 import type { TwinLearningApi } from "../api/twinLearning";
 import { useAuthStore } from "../stores/auth";
 import { useCodeChangesStore, type AuthorizedRequest } from "../stores/codeChanges";
 import { useDesignStore } from "../stores/design";
 import { useGenerationResume } from "../stores/generationJobs";
+import { useKnowledgeAlignmentStore } from "../stores/knowledgeAlignment";
 import { useRequirementsStore } from "../stores/requirements";
 import { useTwinLearningStore } from "../stores/twinLearning";
 import type {
@@ -32,6 +34,7 @@ import type {
   FindingSeverity,
 } from "../types/codeChanges";
 import type { GenerationOperation } from "../types/designMockups";
+import type { KnowledgeAlignmentRunSummaryPayload } from "../types/knowledgeAlignment";
 
 type Locale = "en" | "it";
 type ChipStatus = "approved" | "pending" | "blocked" | "failed";
@@ -51,15 +54,19 @@ const props = withDefaults(
   defineProps<{
     projectId: string;
     locale?: Locale;
+    active?: boolean;
     authorize?: AuthorizedRequest;
     api?: CodeChangesApi;
     learningApi?: TwinLearningApi | undefined;
     jobsApi?: GenerationJobsApi | undefined;
+    alignmentApi?: KnowledgeAlignmentApi | undefined;
   }>(),
   {
     locale: "en",
+    active: true,
     learningApi: undefined,
     jobsApi: undefined,
+    alignmentApi: undefined,
   },
 );
 
@@ -75,13 +82,13 @@ const messages = {
     intro:
       "The code is written with your own tools. Here you read how the commits stand against the approved requirements and design.",
     terminal:
-      "Reviews and decisions are made from the terminal with `ut align`: this page only shows their result.",
+      "Reviews and decisions are made from the terminal with `ut verify`: this page only shows their result.",
     refresh: "Read again",
     loading: "Loading the development state…",
     loadFailed: "The development state could not be loaded.",
     details: "Details",
     noModel: "On this Studio the twins cannot review the code: connect a model.",
-    empty: "No commit recorded yet. Record the first one with `ut align` or `ut watch`.",
+    empty: "No commit recorded yet. Record the first one with `ut verify` or `ut watch`.",
     reference: "The approved reference",
     requirements: "Requirements",
     design: "Design",
@@ -91,12 +98,14 @@ const messages = {
     designMissing: "not approved yet",
     alignedValue: "commit {commit} · {date}",
     noAligned: "No commit aligned yet",
+    designAhead:
+      "The design is at version {current}, the code is aligned with version {aligned}: from the terminal `ut align --from-design` brings the code up to the current design.",
     pendingTitle: "Pending commits ({count})",
     pendingIntro: "The commits recorded after the aligned point.",
     noPending: "No commit after the aligned point.",
     staleReviews: [
-      "1 review was made against earlier versions of the requirements or of the design: `ut align --recheck` has the twins review that commit again.",
-      "{count} reviews were made against earlier versions of the requirements or of the design: `ut align --recheck` has the twins review those commits again.",
+      "1 review was made against earlier versions of the requirements or of the design: `ut verify --recheck` has the twins review that commit again.",
+      "{count} reviews were made against earlier versions of the requirements or of the design: `ut verify --recheck` has the twins review those commits again.",
     ],
     staleChip: "To re-review",
     reviewedAgainst:
@@ -166,7 +175,19 @@ const messages = {
     designRequest: "Design change to request",
     requirementsRequest: "Requirements change to request",
     codeTasks: "Tasks proposed for the code",
-    codeTasksNote: "They become open tasks only when you decide so with `ut align`.",
+    codeTasksNote: "They become open tasks only when you decide so with `ut verify`.",
+    knowledgeTitle: "Knowledge alignment",
+    knowledgeCommits: "Commits",
+    knowledgeRange: "from {from} to {to}",
+    knowledgeUpTo: "up to {to}",
+    knowledgeDate: "Date",
+    knowledgeProposals: "Proposals",
+    knowledgeWaiting: "Waiting for a decision",
+    knowledgeNone: "The knowledge has not been compared with the code yet.",
+    knowledgeTerminal:
+      "Proposals are made from the terminal with `ut align`; you decide them here and in the sections. In the other direction, `ut align --from-design` brings the code up to a design that changed after the code was written.",
+    knowledgePush:
+      "The hand-made changes of the knowledge folder go back to the Studio from the terminal with `ut push`: you approve the differences and a new version is born.",
     technical: "Development state",
     technicalChanges: "Recorded commits",
     technicalPending: "Pending commits",
@@ -179,13 +200,13 @@ const messages = {
     intro:
       "Il codice si scrive con i tuoi strumenti. Qui leggi come stanno i commit rispetto ai requisiti e al design approvati.",
     terminal:
-      "Revisioni e decisioni si fanno dal terminale con `ut align`: questa pagina ne mostra solo il risultato.",
+      "Revisioni e decisioni si fanno dal terminale con `ut verify`: questa pagina ne mostra solo il risultato.",
     refresh: "Rileggi",
     loading: "Carico lo stato dello sviluppo…",
     loadFailed: "Non è stato possibile caricare lo stato dello sviluppo.",
     details: "Dettagli",
     noModel: "In questo Studio i twin non possono rivedere il codice: collega un modello.",
-    empty: "Nessun commit registrato. Registra il primo con `ut align` o `ut watch`.",
+    empty: "Nessun commit registrato. Registra il primo con `ut verify` o `ut watch`.",
     reference: "Il riferimento approvato",
     requirements: "Requisiti",
     design: "Design",
@@ -195,12 +216,14 @@ const messages = {
     designMissing: "non ancora approvato",
     alignedValue: "commit {commit} · {date}",
     noAligned: "Nessun commit ancora allineato",
+    designAhead:
+      "Il design è alla versione {current}, il codice è allineato alla versione {aligned}: dal terminale `ut align --from-design` porta il codice al design attuale.",
     pendingTitle: "Commit in attesa ({count})",
     pendingIntro: "I commit registrati dopo il punto allineato.",
     noPending: "Nessun commit dopo il punto allineato.",
     staleReviews: [
-      "1 revisione è stata fatta su versioni precedenti dei requisiti o del design: `ut align --recheck` fa riesaminare quel commit ai twin.",
-      "{count} revisioni sono state fatte su versioni precedenti dei requisiti o del design: `ut align --recheck` fa riesaminare quei commit ai twin.",
+      "1 revisione è stata fatta su versioni precedenti dei requisiti o del design: `ut verify --recheck` fa riesaminare quel commit ai twin.",
+      "{count} revisioni sono state fatte su versioni precedenti dei requisiti o del design: `ut verify --recheck` fa riesaminare quei commit ai twin.",
     ],
     staleChip: "Da riesaminare",
     reviewedAgainst:
@@ -270,7 +293,19 @@ const messages = {
     designRequest: "Modifica del design da chiedere",
     requirementsRequest: "Modifica dei requisiti da chiedere",
     codeTasks: "Compiti proposti per il codice",
-    codeTasksNote: "Diventano compiti aperti solo quando lo decidi con `ut align`.",
+    codeTasksNote: "Diventano compiti aperti solo quando lo decidi con `ut verify`.",
+    knowledgeTitle: "Allineamento della conoscenza",
+    knowledgeCommits: "Commit",
+    knowledgeRange: "da {from} a {to}",
+    knowledgeUpTo: "fino a {to}",
+    knowledgeDate: "Data",
+    knowledgeProposals: "Proposte",
+    knowledgeWaiting: "In attesa di decisione",
+    knowledgeNone: "La conoscenza non è ancora stata confrontata con il codice.",
+    knowledgeTerminal:
+      "Le proposte si fanno dal terminale con `ut align`; qui e nelle sezioni le decidi. Nella direzione contraria, `ut align --from-design` porta il codice a un design cambiato dopo che il codice è stato scritto.",
+    knowledgePush:
+      "Le modifiche fatte a mano nella cartella di conoscenza tornano nello Studio dal terminale con `ut push`: approvi le differenze e nasce una versione nuova.",
     technical: "Stato dello sviluppo",
     technicalChanges: "Commit registrati",
     technicalPending: "Commit in attesa",
@@ -308,9 +343,12 @@ const SEVERITY_STYLES: Readonly<Record<FindingSeverity, string>> = {
 
 const SHORT_COMMIT = 7;
 
+const REFRESH_MILLISECONDS = 20000;
+
 const DEVELOPMENT_OPERATIONS: readonly GenerationOperation[] = [
   "CODE_CHANGE_REVIEW",
   "TWIN_UPDATE",
+  "KNOWLEDGE_ALIGNMENT",
 ];
 
 const auth = useAuthStore();
@@ -318,11 +356,14 @@ const design = useDesignStore();
 const requirements = useRequirementsStore();
 const store = useCodeChangesStore();
 const learning = useTwinLearningStore();
+const knowledge = useKnowledgeAlignmentStore();
 
 const copy = computed(() => messages[props.locale]);
 const intlLocale = computed(() => (props.locale === "it" ? "it-IT" : "en-GB"));
 const failure = ref<{ operation: "load" | "run"; code: string | null } | null>(null);
 let refreshes = 0;
+let lastReadAt = 0;
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 const { job: runningJob, recheck } = useGenerationResume({
   projectId: () => props.projectId,
@@ -349,9 +390,20 @@ const loading = computed(() => current.value && store.pending.load);
 const learningLoading = computed(
   () => learning.projectId === props.projectId && learning.pending.load,
 );
-const busy = computed(() => loading.value || learningLoading.value);
+const knowledgeLoading = computed(
+  () => knowledge.projectId === props.projectId && knowledge.pending.runs,
+);
+const busy = computed(() => loading.value || learningLoading.value || knowledgeLoading.value);
 const loaded = computed(() => alignment.value !== null);
 const staleCount = computed(() => (current.value ? store.staleReviews : 0));
+const knowledgeRun = computed<KnowledgeAlignmentRunSummaryPayload | null>(() => {
+  const runs = knowledge.projectId === props.projectId ? (knowledge.runs ?? []) : [];
+  return runs.reduce<KnowledgeAlignmentRunSummaryPayload | null>(
+    (latest, run) =>
+      latest === null || Date.parse(run.created_at) > Date.parse(latest.created_at) ? run : latest,
+    null,
+  );
+});
 
 const dateFormat = computed(
   () =>
@@ -425,6 +477,14 @@ const alignedText = computed(() => {
         commit: shortCommit(value.commit),
         date: formatDate(value.decided_at),
       });
+});
+
+const designAhead = computed(() => {
+  const current = alignment.value?.reference.design?.version_number;
+  const aligned = alignment.value?.aligned?.design_version_number;
+  return typeof current === "number" && typeof aligned === "number" && current > aligned
+    ? { current, aligned }
+    : null;
 });
 
 const pendingRows = computed(() =>
@@ -526,6 +586,24 @@ const runView = computed(() => {
       requirementsRequest: verdict.requirements_request,
       codeTasks: verdict.code_tasks,
     },
+  };
+});
+
+const knowledgeView = computed(() => {
+  const run = knowledgeRun.value;
+  if (run === null) {
+    return null;
+  }
+  const to = shortCommit(run.to_commit);
+  return {
+    commits:
+      run.from_commit === null
+        ? fill(copy.value.knowledgeUpTo, { to })
+        : fill(copy.value.knowledgeRange, { from: shortCommit(run.from_commit), to }),
+    date: formatDate(run.created_at),
+    proposals: String(run.proposals_count),
+    waiting: String(run.waiting),
+    summary: run.summary,
   };
 });
 
@@ -661,9 +739,14 @@ function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): P
 }
 
 async function refresh(): Promise<void> {
+  failure.value = null;
+  await readState();
+}
+
+async function readState(): Promise<void> {
   const projectId = props.projectId;
   const attempt = ++refreshes;
-  failure.value = null;
+  lastReadAt = Date.now();
 
   let latest: CodeChangePayload | undefined;
   try {
@@ -671,21 +754,36 @@ async function refresh(): Promise<void> {
     latest = snapshot.changes.find((change) => change.review !== null);
   } catch {
     if (attempt === refreshes) {
-      failure.value = { operation: "load", code: store.error?.code ?? null };
+      fail("load");
     }
     return;
   }
 
-  if (attempt !== refreshes || latest === undefined) {
+  if (attempt !== refreshes) {
     return;
   }
 
-  try {
-    await store.loadRun(projectId, latest.commit, authorizedRequest, props.api);
-  } catch {
-    if (attempt === refreshes) {
-      failure.value = { operation: "run", code: store.error?.code ?? null };
+  if (latest !== undefined) {
+    try {
+      await store.loadRun(projectId, latest.commit, authorizedRequest, props.api);
+    } catch {
+      if (attempt === refreshes) {
+        fail("run");
+      }
+      return;
     }
+  }
+
+  if (attempt === refreshes) {
+    failure.value = null;
+  }
+}
+
+function fail(operation: "load" | "run"): void {
+  const code = store.error?.code ?? null;
+  const shown = failure.value;
+  if (shown === null || shown.operation !== operation || shown.code !== code) {
+    failure.value = { operation, code };
   }
 }
 
@@ -697,15 +795,55 @@ async function readLearning(): Promise<void> {
   }
 }
 
+async function readKnowledge(): Promise<void> {
+  try {
+    await knowledge.loadRuns(props.projectId, authorizedRequest, props.alignmentApi);
+  } catch {
+    return;
+  }
+}
+
 async function readAgain(): Promise<void> {
-  await Promise.all([refresh(), readLearning()]);
+  await Promise.all([refresh(), readLearning(), readKnowledge()]);
 }
 
 async function readAgainAndCheck(): Promise<void> {
   await Promise.all([readAgain(), recheck()]);
 }
 
+async function readAgainQuietly(): Promise<void> {
+  await Promise.all([readState(), readLearning(), readKnowledge(), recheck()]);
+}
+
+function readWhenVisible(): void {
+  if (props.active && document.visibilityState === "visible" && !busy.value) {
+    void readAgainQuietly();
+  }
+}
+
 watch(() => props.projectId, refresh, { immediate: true });
+watch(() => props.projectId, readKnowledge, { immediate: true });
+watch(
+  () => props.active,
+  (active) => {
+    if (active && Date.now() - lastReadAt >= REFRESH_MILLISECONDS) {
+      readWhenVisible();
+    }
+  },
+);
+
+onMounted(() => {
+  refreshTimer = setInterval(readWhenVisible, REFRESH_MILLISECONDS);
+  document.addEventListener("visibilitychange", readWhenVisible);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer !== null) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  document.removeEventListener("visibilitychange", readWhenVisible);
+});
 </script>
 
 <template>
@@ -754,7 +892,7 @@ watch(() => props.projectId, refresh, { immediate: true });
     </div>
 
     <div
-      class="mt-5 grid gap-5"
+      class="mt-5 grid grid-cols-1 gap-5"
       aria-live="polite"
       :aria-busy="busy ? 'true' : undefined"
       data-testid="development-state"
@@ -818,6 +956,24 @@ watch(() => props.projectId, refresh, { immediate: true });
             <dd class="m-0" data-testid="development-aligned">{{ alignedText }}</dd>
           </dl>
         </div>
+
+        <p
+          v-if="designAhead !== null"
+          class="m-0 rounded-field border border-warn-on-night/40 bg-warn-on-night/8 px-4 py-3 text-sm leading-normal text-warn-on-night"
+          data-testid="development-design-ahead"
+        >
+          <template
+            v-for="part in commandParts(fill(copy.designAhead, designAhead))"
+            :key="part.key"
+          >
+            <code
+              v-if="part.command"
+              class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+              >{{ part.text }}</code
+            >
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </p>
 
         <p
           v-if="changes.length === 0"
@@ -1182,6 +1338,72 @@ watch(() => props.projectId, refresh, { immediate: true });
           </div>
           <p v-else class="m-0 mt-2 text-sm text-on-night-3" data-testid="development-run-loading">
             {{ runFetched ? copy.runMissing : copy.runLoading }}
+          </p>
+        </div>
+
+        <div class="border-t border-on-night/10 pt-4" data-testid="development-knowledge">
+          <h3 class="m-0 text-base leading-tight font-semibold">{{ copy.knowledgeTitle }}</h3>
+          <template v-if="knowledgeView !== null">
+            <p
+              class="m-0 mt-1 text-sm leading-normal text-on-night-2"
+              data-testid="development-knowledge-summary"
+            >
+              {{ knowledgeView.summary }}
+            </p>
+            <dl
+              class="m-0 mt-3 grid grid-cols-1 gap-x-5 gap-y-1 text-sm sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-y-2"
+              data-testid="development-knowledge-run"
+            >
+              <dt class="text-on-night-3">{{ copy.knowledgeCommits }}</dt>
+              <dd class="m-0 mb-2 sm:mb-0" data-testid="development-knowledge-commits">
+                {{ knowledgeView.commits }}
+              </dd>
+              <dt class="text-on-night-3">{{ copy.knowledgeDate }}</dt>
+              <dd class="m-0 mb-2 sm:mb-0" data-testid="development-knowledge-date">
+                {{ knowledgeView.date }}
+              </dd>
+              <dt class="text-on-night-3">{{ copy.knowledgeProposals }}</dt>
+              <dd class="m-0 mb-2 sm:mb-0" data-testid="development-knowledge-proposals">
+                {{ knowledgeView.proposals }}
+              </dd>
+              <dt class="text-on-night-3">{{ copy.knowledgeWaiting }}</dt>
+              <dd class="m-0" data-testid="development-knowledge-waiting">
+                {{ knowledgeView.waiting }}
+              </dd>
+            </dl>
+          </template>
+          <p
+            v-else
+            class="m-0 mt-1 text-sm leading-normal text-on-night-3"
+            data-testid="development-knowledge-none"
+          >
+            {{ copy.knowledgeNone }}
+          </p>
+          <p
+            class="m-0 mt-3 text-sm leading-normal text-on-night-2"
+            data-testid="development-knowledge-terminal"
+          >
+            <template v-for="part in commandParts(copy.knowledgeTerminal)" :key="part.key">
+              <code
+                v-if="part.command"
+                class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                >{{ part.text }}</code
+              >
+              <template v-else>{{ part.text }}</template>
+            </template>
+          </p>
+          <p
+            class="m-0 mt-2 text-sm leading-normal text-on-night-2"
+            data-testid="development-knowledge-push"
+          >
+            <template v-for="part in commandParts(copy.knowledgePush)" :key="part.key">
+              <code
+                v-if="part.command"
+                class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                >{{ part.text }}</code
+              >
+              <template v-else>{{ part.text }}</template>
+            </template>
           </p>
         </div>
 

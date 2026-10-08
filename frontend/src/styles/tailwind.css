@@ -145,6 +145,10 @@
     border-radius: 6px;
   }
 
+  html:has([data-ui-decision-bar]) {
+    scroll-padding-bottom: 9rem;
+  }
+
   [data-diagram-sandbox] {
     position: fixed;
     top: 0;

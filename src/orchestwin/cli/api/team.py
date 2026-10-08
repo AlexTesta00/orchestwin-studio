@@ -95,6 +95,13 @@ def edit(client: StudioClient, project_id: str, selected: Sequence[str]) -> tupl
     return _send(client, "PATCH", f"{project_path(project_id)}/team-proposals/current", body)
 
 
+def owner_proposal(
+    client: StudioClient, project_id: str, selected: Sequence[str]
+) -> tuple[int, object]:
+    body = {"selected_agent_ids": ordered(selected)}
+    return _send(client, "POST", f"{project_path(project_id)}/team/owner-proposals", body)
+
+
 def submit_gate(client: StudioClient, project_id: str) -> tuple[int, object]:
     return _send(client, "POST", f"{project_path(project_id)}/gates/agent-team/submit")
 

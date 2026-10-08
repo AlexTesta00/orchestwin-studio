@@ -11,8 +11,11 @@ const COMMANDS = [
   "orchestwin.refresh",
   "orchestwin.status",
   "orchestwin.test",
-  "orchestwin.align",
+  "orchestwin.verify",
   "orchestwin.recheck",
+  "orchestwin.align",
+  "orchestwin.alignDesign",
+  "orchestwin.push",
   "orchestwin.code",
   "orchestwin.tasks",
   "orchestwin.twinsUpdate",
@@ -122,6 +125,19 @@ describe("the manifest of the extension", () => {
       }
     }
     assert.notEqual(english["command.test"], italian["command.test"]);
+    assert.equal(english["command.push"], "Send the folder changes to the Studio (ut push)");
+    assert.equal(
+      italian["command.push"],
+      "Invia le modifiche della cartella allo Studio (ut push)",
+    );
+    assert.equal(
+      english["command.alignDesign"],
+      "Bring the code up to the current design (ut align --from-design)",
+    );
+    assert.equal(
+      italian["command.alignDesign"],
+      "Porta il codice al design attuale (ut align --from-design)",
+    );
   });
 
   it("names only files that exist", () => {

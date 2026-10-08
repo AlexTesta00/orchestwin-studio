@@ -673,7 +673,7 @@ def test_a_browser_that_ends_before_the_port_file_did_not_start(
     assert list(temporary.iterdir()) == []
 
 
-def test_a_browser_that_never_answers_is_stopped_after_thirty_seconds(
+def test_a_browser_that_never_answers_is_stopped_after_sixty_seconds(
     tmp_path: Path, temporary: Path
 ) -> None:
     with (
@@ -682,7 +682,7 @@ def test_a_browser_that_never_answers_is_stopped_after_thirty_seconds(
     ):
         start(tmp_path, browser)
 
-    assert browser_error(caught, "BROWSER_NOT_STARTED") == "no answer within 30 seconds"
+    assert browser_error(caught, "BROWSER_NOT_STARTED") == "no answer within 60 seconds"
     assert browser.processes[0].terminated == 1
     assert list(temporary.iterdir()) == []
 

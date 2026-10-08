@@ -1,5 +1,12 @@
 export type GuidanceMode = "GUIDED" | "EXPERT";
 
+export type AccessMode = "ACCOUNTS" | "LOCAL_OWNER";
+
+export interface AccessModeResponse {
+  readonly access_mode: AccessMode;
+  readonly registration_open: boolean;
+}
+
 export interface UserResponse {
   readonly id: string;
   readonly email: string;
@@ -27,6 +34,7 @@ export interface AuthenticationApi {
   logout(): Promise<void>;
   me(accessToken: string): Promise<UserResponse>;
   chooseGuidanceMode(accessToken: string, mode: GuidanceMode): Promise<UserResponse>;
+  accessMode?(): Promise<AccessModeResponse>;
 }
 
 export type ProjectMode = "GREENFIELD_GENERATION" | "BROWNFIELD_ASSESSMENT";

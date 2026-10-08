@@ -188,6 +188,7 @@ def test_login_is_never_recorded(tmp_path: Path) -> None:
     linked(tmp_path)
     transport = ScriptedTransport()
     transport.expect("GET", f"{API}/health", body={"status": "ok"})
+    transport.expect("GET", f"{API}/auth/mode", status=404, body={"detail": "Not Found"})
     transport.expect(
         "POST",
         f"{API}/auth/login",
@@ -207,6 +208,7 @@ def test_login_is_never_recorded(tmp_path: Path) -> None:
     assert run.status == 0, run.errors
     assert [request.path for request in transport.sent] == [
         f"{API}/health",
+        f"{API}/auth/mode",
         f"{API}/auth/login",
     ]
 

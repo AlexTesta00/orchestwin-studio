@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -14,6 +14,9 @@ from .support.transports import API, ScriptedTransport
 
 LOCAL = "http://127.0.0.1:8000"
 BASE = f"{API}/projects/{PROJECT_ID}"
+MODE_PATH = f"{API}/auth/mode"
+ACCOUNTS_MODE = {"access_mode": "ACCOUNTS", "registration_open": True}
+LOCAL_MODE = {"access_mode": "LOCAL_OWNER", "registration_open": False}
 ALIGNED = "4f2a9c1e7b3d5a8f0c6e2b9d1a7f3c5e8b0d2a46"
 TEST_RUN = "00000000-0000-4000-8000-00000000e001"
 TWIN_OWNER = "00000000-0000-4000-8000-0000000000b1"
@@ -33,7 +36,8 @@ AFTER_DESIGN = {
         "- `ut code` writes the application with your coding agent.",
         "- `ut test` checks the acceptance criteria in the browsers.",
         "- `ut tasks` shows the things left to do.",
-        "- `ut align` compares the commits with the requirements and the design.",
+        "- `ut verify`: the twins review the commits and the model says whether code,",
+        "  Definition and Design are aligned; you decide.",
         "- `ut twins update` shows what the twins learned.",
         "- `ut watch` watches the commits and records them in the Studio.",
     ],
@@ -41,7 +45,8 @@ AFTER_DESIGN = {
         "- `ut code` scrive l'applicazione con il tuo agente di programmazione.",
         "- `ut test` verifica i criteri di accettazione nei browser.",
         "- `ut tasks` mostra le cose che restano da fare.",
-        "- `ut align` confronta i commit con i requisiti e il design.",
+        "- `ut verify`: i twin esaminano i commit e il modello dice se codice,",
+        "  Definizione e Design sono allineati; decidi tu.",
         "- `ut twins update` mostra che cosa hanno imparato i twin.",
         "- `ut watch` osserva i commit e li registra nello Studio.",
     ],
@@ -127,6 +132,63 @@ LEARNED = [
     learning_entry(TWIN_WAITER, "Evening shift waiter", "1.0", 0),
 ]
 EMPTY_LEARNING = {"project_id": PROJECT_ID, "update_available": False, "twins": []}
+RUN_ID = "00000000-0000-4000-8000-00000000a001"
+LATEST_RUN = {
+    "id": RUN_ID,
+    "from_commit": None,
+    "to_commit": ALIGNED,
+    "created_at": "2026-09-29T10:15:00+00:00",
+    "requirements_version_number": 1,
+    "design_version_number": 2,
+    "alternative_code": "DES-002",
+    "summary": "The code adds a split of the bill among friends.",
+}
+NO_KNOWLEDGE = {"items": [], "latest_run": None}
+PROPOSALS_PATH = f"{BASE}/alignment/proposals?status=waiting"
+
+
+def knowledge_document(*, waiting: int = 2) -> dict[str, object]:
+    return {
+        "items": [
+            {"code": f"ALN-{index + 1:03d}", "section": "REQUIREMENTS", "status": "PROPOSED"}
+            for index in range(waiting)
+        ],
+        "latest_run": dict(LATEST_RUN),
+    }
+
+
+def align_files(project: ProjectFolder, *, waiting: int = 1, run: bool = True) -> None:
+    folder = project.local / "align"
+    folder.mkdir(parents=True)
+    latest = {
+        "schema_version": 1,
+        "run_id": RUN_ID,
+        "finished_at": "2026-09-29T10:20:00+00:00",
+        "from_commit": None,
+        "to_commit": ALIGNED,
+        "proposals": 3,
+        "waiting": waiting,
+        "applied": 1,
+        "skipped": 1,
+    }
+    (folder / "latest.json").write_text(json.dumps(latest), encoding="utf-8")
+    if run:
+        snapshot = {**LATEST_RUN, "project_id": PROJECT_ID, "commits": [ALIGNED], "proposals": []}
+        (folder / f"{RUN_ID}.json").write_text(json.dumps(snapshot), encoding="utf-8")
+
+
+def local_date(moment: str) -> str:
+    return datetime.fromisoformat(moment).astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+def knowledge_line(language: str, count: int) -> str:
+    return messages.text(
+        "status.knowledge",
+        language,
+        commit="4f2a9c1",
+        date=local_date(str(LATEST_RUN["created_at"])),
+        count=count,
+    )
 
 
 def expect_alignment(
@@ -156,6 +218,7 @@ def expect_studio(
     learning: dict[str, object] | None = None,
     billing: str | None = None,
     sections: dict[str, object] | None = None,
+    knowledge: dict[str, object] | None = None,
 ) -> ScriptedTransport:
     requirements = version("requirements-1", 1, "hr")
     design = version("design-2", 2, "hd")
@@ -237,11 +300,15 @@ def expect_studio(
             f"{BASE}/acceptance-tests",
             body=acceptance_document() if tests is None else tests,
         )
+        transport.expect(
+            "GET", PROPOSALS_PATH, body=NO_KNOWLEDGE if knowledge is None else knowledge
+        )
     elif later_approved:
         transport.expect("GET", f"{BASE}/alignment", status=404, body={"detail": "Not Found"})
         transport.expect(
             "GET", f"{BASE}/acceptance-tests", status=404, body={"detail": "Not Found"}
         )
+        transport.expect("GET", PROPOSALS_PATH, status=404, body={"detail": "Not Found"})
     if twins_approved and routes:
         transport.expect(
             "GET", f"{BASE}/twin-learning", body=EMPTY_LEARNING if learning is None else learning
@@ -356,11 +423,12 @@ def test_status_from_the_studio_in_italian_with_an_older_folder(tmp_path: Path) 
         "La cartella qui è più vecchia: aggiornala con `ut package pull`.",
         "Sviluppo: commit registrati: 3; dopo il punto allineato: 1; commit allineato: "
         "4f2a9c1; compiti aperti per il codice: 1.",
+        "Codice: allineato al design versione 2.",
         "Spesa del progetto: 0,42 USD. Credito rimasto nello Studio: 25,13 USD.",
     ]
 
 
-def test_a_folder_at_the_version_of_the_studio_sends_the_development_to_ut_align(
+def test_a_folder_at_the_version_of_the_studio_sends_the_development_to_ut_verify(
     tmp_path: Path,
 ) -> None:
     project = signed_in_folder(tmp_path)
@@ -419,10 +487,12 @@ def test_the_development_as_json_and_when_nothing_is_recorded(tmp_path: Path) ->
         "aligned_commit": ALIGNED,
         "open_tasks": 1,
         "stale_reviews": 0,
+        "aligned_design_version": 2,
+        "current_design_version": 2,
     }
-    assert document["next_command"] == "ut align"
+    assert document["next_command"] == "ut verify"
     assert (
-        "Development: no commit recorded yet. After your first commit launch `ut align`."
+        "Development: no commit recorded yet. After your first commit launch `ut verify`."
         in nothing.output.splitlines()
     )
 
@@ -487,6 +557,8 @@ def test_offline_the_development_comes_from_the_folder(tmp_path: Path) -> None:
         "aligned_commit": ALIGNED,
         "open_tasks": 3,
         "stale_reviews": 0,
+        "aligned_design_version": None,
+        "current_design_version": 1,
     }
 
 
@@ -583,7 +655,14 @@ def test_status_as_json_from_the_studio(tmp_path: Path) -> None:
     assert document["tests"] is None
     assert document["learning"] is None
     assert document["sections"] is None
-    assert list(document)[-4:] == ["alignment", "tests", "learning", "sections"]
+    assert document["knowledge_alignment"] is None
+    assert list(document)[-5:] == [
+        "alignment",
+        "tests",
+        "learning",
+        "sections",
+        "knowledge_alignment",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -688,7 +767,7 @@ def test_offline_status_uses_the_manifest_of_the_knowledge_folder(tmp_path: Path
     assert document["steps"][-1]["version"] == 4
     assert document["knowledge_folder"]["local_version"] == 4
     assert document["next_action"] == "DOWNLOAD_FOLDER"
-    assert document["next_command"] == "ut align"
+    assert document["next_command"] == "ut verify"
     assert document["spending"] is None
 
 
@@ -720,7 +799,7 @@ def test_offline_a_complete_folder_names_the_commands_that_follow_the_design(
     lines = run.output.splitlines()
     position = lines.index(line)
     assert run.status == 0
-    assert lines[position + 1 : position + 7] == AFTER_DESIGN[language]
+    assert lines[position + 1 : position + 8] == AFTER_DESIGN[language]
 
 
 def test_offline_a_partial_folder_still_asks_to_download_the_complete_one(tmp_path: Path) -> None:
@@ -757,9 +836,11 @@ def test_offline_a_partial_folder_still_asks_to_download_the_complete_one(tmp_pa
     assert document["next_command"] == "ut package publish"
 
 
-def test_without_sign_in_the_folder_is_read_and_nothing_is_sent(tmp_path: Path) -> None:
+def test_without_sign_in_the_folder_is_read_after_asking_only_the_access_mode(
+    tmp_path: Path,
+) -> None:
     saved_steps(link_folder(tmp_path / "project"))
-    transport = ScriptedTransport()
+    transport = ScriptedTransport().expect("GET", MODE_PATH, body=ACCOUNTS_MODE)
 
     run = run_ut(["status"], tmp_path, transport=transport)
 
@@ -768,7 +849,48 @@ def test_without_sign_in_the_folder_is_read_and_nothing_is_sent(tmp_path: Path) 
         "State read from this folder: you are not signed in to the Studio "
         f"{LOCAL} (`ut login`)." in run.output
     )
-    assert transport.sent == []
+    assert f"Studio: {LOCAL}" in run.output.splitlines()
+    assert [request.path for request in transport.sent] == [MODE_PATH]
+
+
+@pytest.mark.parametrize(
+    ("language", "line"),
+    [
+        ("en", f"Studio: {LOCAL} (local, no sign-in)"),
+        ("it", f"Studio: {LOCAL} (locale, senza accesso)"),
+    ],
+)
+def test_a_local_studio_gives_the_status_without_a_sign_in(
+    tmp_path: Path, language: str, line: str
+) -> None:
+    link_folder(tmp_path / "project")
+    transport = expect_studio(ScriptedTransport().expect("GET", MODE_PATH, body=LOCAL_MODE))
+
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=transport)
+
+    assert run.status == 0, run.errors
+    assert run.output.splitlines()[2] == line
+    assert [request.header("authorization") for request in transport.sent] == [None] * len(
+        transport.sent
+    )
+    assert transport.sent[0].path == MODE_PATH
+    transport.assert_done()
+
+
+def test_the_json_of_a_local_studio_is_the_json_of_a_sign_in(tmp_path: Path) -> None:
+    link_folder(tmp_path / "project")
+    local = expect_studio(ScriptedTransport().expect("GET", MODE_PATH, body=LOCAL_MODE))
+    signed = expect_studio(ScriptedTransport())
+
+    without = json.loads(run_ut(["status", "--json"], tmp_path, transport=local).output)
+    store_session(tmp_path)
+    with_session = json.loads(run_ut(["status", "--json"], tmp_path, transport=signed).output)
+
+    assert without == with_session
+    assert (without["source"], without["reason"], without["studio"]) == ("studio", None, LOCAL)
+    assert signed.requests("GET", MODE_PATH) == []
+    local.assert_done()
+    signed.assert_done()
 
 
 def test_a_studio_that_does_not_answer_gives_the_folder(tmp_path: Path) -> None:
@@ -924,12 +1046,15 @@ def test_an_account_without_projects(tmp_path: Path) -> None:
 
 
 def test_the_list_needs_a_sign_in(tmp_path: Path) -> None:
-    run = run_ut(["status"], tmp_path, transport=ScriptedTransport())
+    transport = ScriptedTransport().expect("GET", MODE_PATH, body=ACCOUNTS_MODE)
+
+    run = run_ut(["status"], tmp_path, transport=transport)
 
     assert run.status == 3
     assert run.errors == (
         f"You are not signed in to the Studio {LOCAL}. Sign in with `ut login`.\n"
     )
+    assert [request.path for request in transport.sent] == [MODE_PATH]
 
 
 def test_offline_outside_a_linked_folder_is_not_linked(tmp_path: Path) -> None:
@@ -1030,7 +1155,8 @@ def test_the_latest_run_of_the_tests_follows_the_development_line(
 
     lines = run.output.splitlines()
     position = lines.index(line)
-    assert lines[position - 1].startswith(("Development:", "Sviluppo:"))
+    assert lines[position - 2].startswith(("Development:", "Sviluppo:"))
+    assert lines[position - 1].startswith(("Code:", "Codice:"))
     assert lines[position + 1].startswith(("Spent", "Spesa"))
     assert document["tests"] == {
         "runs": 2,
@@ -1040,7 +1166,7 @@ def test_the_latest_run_of_the_tests_follows_the_development_line(
             "summary": TEST_SUMMARY,
         },
     }
-    assert list(document)[-3:] == ["tests", "learning", "sections"]
+    assert list(document)[-4:] == ["tests", "learning", "sections", "knowledge_alignment"]
     text.assert_done()
 
 
@@ -1235,15 +1361,21 @@ def test_stale_reviews_join_the_development_line_and_the_json(
     )
     stale = messages.text("status.stale_reviews", language, count=2)
     assert f"{development} {stale}" in run.output.splitlines()
-    assert "`ut align --recheck`" in stale
+    assert "`ut verify --recheck`" in stale
     assert document["alignment"] == {
         "recorded": 3,
         "pending": 1,
         "aligned_commit": ALIGNED,
         "open_tasks": 1,
         "stale_reviews": 2,
+        "aligned_design_version": 2,
+        "current_design_version": 2,
     }
-    assert list(document["alignment"])[-1] == "stale_reviews"
+    assert list(document["alignment"])[-3:] == [
+        "stale_reviews",
+        "aligned_design_version",
+        "current_design_version",
+    ]
     assert document["learning"] is None
     text.assert_done()
     as_json.assert_done()
@@ -1312,6 +1444,136 @@ def test_offline_a_missing_or_wrong_count_of_stale_reviews_is_zero(
 
 
 @pytest.mark.parametrize("language", ["en", "it"])
+def test_the_knowledge_line_follows_the_development_and_the_json_ends_with_it(
+    tmp_path: Path, language: str
+) -> None:
+    signed_in_folder(tmp_path)
+    studio = {**PACKAGE_STEP, "knowledge": knowledge_document(waiting=2)}
+    text = expect_studio(ScriptedTransport(), **studio)
+    as_json = expect_studio(ScriptedTransport(), **studio)
+
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=text)
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=as_json).output)
+
+    lines = run.output.splitlines()
+    position = lines.index(knowledge_line(language, 2))
+    assert lines[position - 2].startswith(("Development:", "Sviluppo:"))
+    assert lines[position - 1].startswith(("Code:", "Codice:"))
+    assert lines[position + 1].startswith(("Spent", "Spesa"))
+    assert document["knowledge_alignment"] == {"latest_run": LATEST_RUN, "waiting": 2}
+    assert list(document)[-1] == "knowledge_alignment"
+    text.assert_done()
+    as_json.assert_done()
+
+
+def test_without_a_run_the_knowledge_line_is_absent_and_the_json_counts_zero(
+    tmp_path: Path,
+) -> None:
+    signed_in_folder(tmp_path)
+    text = expect_studio(ScriptedTransport(), **PACKAGE_STEP)
+    as_json = expect_studio(ScriptedTransport(), **PACKAGE_STEP)
+
+    run = run_ut(["status"], tmp_path, transport=text)
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=as_json).output)
+
+    assert not any(line.startswith("Knowledge:") for line in run.output.splitlines())
+    assert document["knowledge_alignment"] == {"latest_run": None, "waiting": 0}
+    text.assert_done()
+
+
+def test_a_studio_without_the_route_of_the_knowledge_leaves_it_to_the_folder(
+    tmp_path: Path,
+) -> None:
+    project = signed_in_folder(tmp_path)
+    align_files(project, waiting=1)
+    transport = expect_studio(ScriptedTransport(), **PACKAGE_STEP)
+    transport.expected = [item for item in transport.expected if item.path != PROPOSALS_PATH]
+    transport.expect("GET", PROPOSALS_PATH, status=404, body={"detail": "Not Found"})
+
+    run = run_ut(["status", "--json"], tmp_path, transport=transport)
+
+    assert run.status == 0
+    assert json.loads(run.output)["knowledge_alignment"] == {
+        "latest_run": LATEST_RUN,
+        "waiting": 1,
+    }
+    transport.assert_done()
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_offline_the_knowledge_comes_from_the_align_files(tmp_path: Path, language: str) -> None:
+    project = link_folder(tmp_path / "project")
+    folder_with_state(project, listed=False)
+    align_files(project, waiting=1)
+
+    run = run_ut(
+        ["--lang", language, "status", "--offline"], tmp_path, transport=ScriptedTransport()
+    )
+    document = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    lines = run.output.splitlines()
+    position = lines.index(knowledge_line(language, 1))
+    assert lines[position - 1].startswith(("Development:", "Sviluppo:"))
+    assert document["knowledge_alignment"] == {"latest_run": LATEST_RUN, "waiting": 1}
+    assert list(document)[-1] == "knowledge_alignment"
+
+
+def test_offline_without_the_run_file_the_latest_file_is_enough(tmp_path: Path) -> None:
+    project = link_folder(tmp_path / "project")
+    folder_with_state(project, listed=False)
+    align_files(project, waiting=0, run=False)
+
+    run = run_ut(["status", "--offline"], tmp_path, transport=ScriptedTransport())
+    document = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    assert (
+        "Knowledge: aligned with the code up to commit 4f2a9c1 "
+        f"({local_date('2026-09-29T10:20:00+00:00')}); proposals waiting: 0."
+        in run.output.splitlines()
+    )
+    assert document["knowledge_alignment"] == {
+        "latest_run": {
+            "id": RUN_ID,
+            "from_commit": None,
+            "to_commit": ALIGNED,
+            "created_at": "2026-09-29T10:20:00+00:00",
+            "requirements_version_number": None,
+            "design_version_number": None,
+            "alternative_code": None,
+            "summary": None,
+        },
+        "waiting": 0,
+    }
+
+
+@pytest.mark.parametrize(
+    "document",
+    [None, {"schema_version": 2, "run_id": RUN_ID}, {"schema_version": 1, "run_id": ""}, "text"],
+)
+def test_offline_a_missing_or_broken_latest_file_gives_no_knowledge(
+    tmp_path: Path, document: object
+) -> None:
+    project = link_folder(tmp_path / "project")
+    folder_with_state(project, listed=False)
+    if document is not None:
+        folder = project.local / "align"
+        folder.mkdir(parents=True)
+        (folder / "latest.json").write_text(json.dumps(document), encoding="utf-8")
+
+    run = run_ut(["status", "--offline"], tmp_path, transport=ScriptedTransport())
+    found = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    assert not any(line.startswith("Knowledge:") for line in run.output.splitlines())
+    assert found["knowledge_alignment"] is None
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
 def test_what_the_twins_learned_follows_the_tests_line(tmp_path: Path, language: str) -> None:
     signed_in_folder(tmp_path)
     studio = {
@@ -1333,7 +1595,7 @@ def test_what_the_twins_learned_follows_the_tests_line(tmp_path: Path, language:
     assert lines[position - 1].startswith(("Acceptance tests:", "Verifica dei criteri:"))
     assert lines[position + 1].startswith(("Spent", "Spesa"))
     assert document["learning"] == LEARNED_TWINS
-    assert list(document)[-2:] == ["learning", "sections"]
+    assert list(document)[-3:] == ["learning", "sections", "knowledge_alignment"]
     text.assert_done()
 
 
@@ -1582,7 +1844,7 @@ def test_every_section_up_to_date_names_the_commands_after_the_design(tmp_path: 
     run = run_ut(["status"], tmp_path, transport=transport)
 
     lines = run.output.splitlines()
-    assert lines[13:21] == [
+    assert lines[13:22] == [
         "",
         "Next step: The knowledge folder is up to date: the development goes on with these "
         "commands:",
@@ -1677,7 +1939,7 @@ def test_the_json_ends_with_the_object_of_the_sections_as_it_is(tmp_path: Path) 
 
     document = json.loads(run_ut(["status", "--json"], tmp_path, transport=transport).output)
 
-    assert list(document)[-1] == "sections"
+    assert list(document)[-2:] == ["sections", "knowledge_alignment"]
     assert document["sections"] == extra
     assert document["next_action"] == "UPDATE_SECTIONS"
     assert document["next_command"] == "ut sections update"

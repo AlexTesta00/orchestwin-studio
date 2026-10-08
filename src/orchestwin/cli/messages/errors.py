@@ -230,6 +230,43 @@ MESSAGES: dict[str, Mapping[str, str]] = {
         "en": "The design is not approved yet (ALIGN_DESIGN_REQUIRED): choose and approve it "
         "with `ut design`, then the code can be aligned with it.",
     },
+    "errors.ALIGN_DESIGN_NOT_APPROVED": {
+        "it": "Il design versione {version} non è ancora approvato (ALIGN_DESIGN_NOT_APPROVED): "
+        "approvalo con `ut design approve`, poi il codice potrà seguirlo.",
+        "en": "Design version {version} is not approved yet (ALIGN_DESIGN_NOT_APPROVED): "
+        "approve it with `ut design approve`, then the code can follow it.",
+    },
+    "errors.ALIGN_DESIGN_NO_POINT": {
+        "it": "Non so a quale versione del design sia allineato il codice "
+        "(ALIGN_DESIGN_NO_POINT): indicala con `--since N`, oppure segna prima un commit come "
+        "allineato con `ut verify`.",
+        "en": "It is not known which design version the code is aligned with "
+        "(ALIGN_DESIGN_NO_POINT): give it with `--since N`, or first mark a commit as aligned "
+        "with `ut verify`.",
+    },
+    "errors.ALIGN_DESIGN_UNCOMMITTED": {
+        "it": "Ci sono modifiche non registrate nel repository (ALIGN_DESIGN_UNCOMMITTED): "
+        "registrale in un commit o mettile da parte, così le modifiche dell'agente restano "
+        "distinte.",
+        "en": "The repository has changes that are not committed (ALIGN_DESIGN_UNCOMMITTED): "
+        "commit them or set them aside, so that the changes of the agent stay apart.",
+    },
+    "errors.ALIGN_DESIGN_VERSION_UNKNOWN": {
+        "it": "Lo Studio non ha la versione {version} del design (ALIGN_DESIGN_VERSION_UNKNOWN): "
+        "indica con `--since N` una versione esistente.",
+        "en": "The Studio does not have version {version} of the design "
+        "(ALIGN_DESIGN_VERSION_UNKNOWN): give an existing version with `--since N`.",
+    },
+    "errors.ALIGN_DESIGN_SINCE_INVALID": {
+        "it": "«{value}» non è un numero di versione del design (ALIGN_DESIGN_SINCE_INVALID): con "
+        "`--from-design`, `--since` vuole un intero da 1 in su.",
+        "en": '"{value}" is not a version number of the design (ALIGN_DESIGN_SINCE_INVALID): '
+        "with `--from-design`, `--since` needs a whole number from 1 up.",
+    },
+    "errors.ALIGN_BUDGET_NEEDS_DESIGN": {
+        "it": "`--max-agent-usd` vale soltanto con `--from-design` (ALIGN_BUDGET_NEEDS_DESIGN).",
+        "en": "`--max-agent-usd` works only with `--from-design` (ALIGN_BUDGET_NEEDS_DESIGN).",
+    },
     "errors.BROWSER_NOT_FOUND": {
         "it": "Il browser {program} non si trova più su questo computer (BROWSER_NOT_FOUND: "
         "{detail}). Installalo di nuovo, oppure indica dove si trova con la variabile "

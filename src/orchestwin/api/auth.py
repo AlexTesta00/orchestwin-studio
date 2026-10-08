@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -36,16 +37,19 @@ from pydantic_settings import (
 
 from orchestwin.api.rate_limit import AttemptLimiter
 from orchestwin.api.validation import password_violation_code
+from orchestwin.config import AccessMode
 from orchestwin.identity.application import (
     AuthenticatedSession,
     AuthenticationResult,
     AuthenticationStatus,
     GuidanceChoiceStatus,
     IdentityApplicationService,
+    LocalOwnerUnavailable,
 )
 from orchestwin.identity.domain import UserAccount
 
 bearer_scheme = HTTPBearer(auto_error=False)
+LOOPBACK_HOST = re.compile(r"(?:127\.0\.0\.1|localhost|\[::1\])(?::[0-9]{1,5})?")
 
 
 class AuthApiSettings(BaseSettings):
@@ -186,6 +190,50 @@ class AuthenticationResponse(BaseModel):
     user: UserResponse
 
 
+class AccessModeResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    access_mode: Literal["ACCOUNTS", "LOCAL_OWNER"]
+    registration_open: bool
+
+
+def request_access_mode(request: Request) -> AccessMode:
+    return getattr(request.app.state, "access_mode", AccessMode.ACCOUNTS)
+
+
+def local_owner_admitted(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    allowed_origins = getattr(request.app.state, "cors_allowed_origins", ())
+
+    return (
+        request_access_mode(request) is AccessMode.LOCAL_OWNER
+        and LOOPBACK_HOST.fullmatch(request.headers.get("host", "").lower()) is not None
+        and (origin is None or origin in allowed_origins)
+        and request.headers.get("sec-fetch-site", "").lower() != "cross-site"
+    )
+
+
+def reject_local_mode(request: Request) -> None:
+    if request_access_mode(request) is AccessMode.LOCAL_OWNER:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="local_mode",
+        )
+
+
+async def local_owner_session(
+    request: Request,
+    service: IdentityApplicationService,
+) -> AuthenticatedSession | None:
+    if not local_owner_admitted(request):
+        return None
+
+    try:
+        return await service.issue_local_owner_session(email=request.app.state.local_owner_email)
+    except LocalOwnerUnavailable:
+        return None
+
+
 def identity_service_dependency(
     request: Request,
 ) -> IdentityApplicationService:
@@ -202,6 +250,7 @@ def identity_service_dependency(
 
 
 async def current_user_dependency(
+    request: Request,
     credentials: Annotated[
         HTTPAuthorizationCredentials | None,
         Depends(bearer_scheme),
@@ -212,6 +261,12 @@ async def current_user_dependency(
     ],
 ) -> UserAccount:
     """Resolve the authenticated user from a bearer token."""
+    if credentials is None and local_owner_admitted(request):
+        try:
+            return await service.local_owner(email=request.app.state.local_owner_email)
+        except LocalOwnerUnavailable:
+            raise unauthorized_exception() from None
+
     if credentials is None or credentials.scheme.casefold() != "bearer":
         raise unauthorized_exception()
 
@@ -352,12 +407,27 @@ def create_auth_router(
         tags=["authentication"],
     )
 
+    @router.get(
+        "/mode",
+        response_model=AccessModeResponse,
+        summary="Return how the Studio admits its users",
+        operation_id="getAccessMode",
+    )
+    async def get_access_mode(request: Request) -> AccessModeResponse:
+        mode = request_access_mode(request)
+
+        return AccessModeResponse(
+            access_mode=mode.value,
+            registration_open=mode is AccessMode.ACCOUNTS,
+        )
+
     @router.post(
         "/register",
         response_model=AuthenticationResponse,
         status_code=status.HTTP_201_CREATED,
         summary="Register a local account",
         operation_id="registerLocalAccount",
+        dependencies=[Depends(reject_local_mode)],
     )
     async def register(
         payload: RegisterRequest,
@@ -408,6 +478,7 @@ def create_auth_router(
         response_model=AuthenticationResponse,
         summary="Log in with local credentials",
         operation_id="loginLocalAccount",
+        dependencies=[Depends(reject_local_mode)],
     )
     async def login(
         payload: LoginRequest,
@@ -465,14 +536,17 @@ def create_auth_router(
             "",
         )
         result = await service.refresh(raw_token)
+        authenticated = (
+            require_authenticated(result)
+            if result.status is AuthenticationStatus.AUTHENTICATED
+            else await local_owner_session(request, service)
+        )
 
-        if result.status is not AuthenticationStatus.AUTHENTICATED:
+        if authenticated is None:
             return invalid_refresh_response(
                 detail=result.status.value,
                 settings=settings,
             )
-
-        authenticated = require_authenticated(result)
 
         set_refresh_cookie(
             response,

@@ -41,7 +41,10 @@ const DEVELOPMENT_STEPS = [
   { key: "git", command: "git init" },
   { key: "code", command: "ut code" },
   { key: "test", command: "ut test --static ." },
+  { key: "verify", command: "ut verify" },
   { key: "align", command: "ut align" },
+  { key: "alignDesign", command: "ut align --from-design" },
+  { key: "push", command: "ut push" },
   { key: "learn", command: "ut twins update" },
   { key: "status", command: "ut status" },
 ] as const;
@@ -58,6 +61,7 @@ const props = withDefaults(
     sectionsMode?: boolean;
     providedPrototype?: ProvidedPrototype | null;
     providedDesignApproved?: boolean;
+    active?: boolean;
   }>(),
   {
     locale: "en",
@@ -65,6 +69,7 @@ const props = withDefaults(
     sectionsMode: false,
     providedPrototype: null,
     providedDesignApproved: false,
+    active: true,
   },
 );
 
@@ -157,11 +162,16 @@ const messages = {
     },
     developmentWay: "Then, during development",
     developmentSteps: {
-      git: "Put the folder under git: `ut align` works on the commits.",
+      git: "Put the folder under git: `ut verify` works on the commits.",
       code: "Have your coding agent write the application, with the requirements and the design as context.",
       test: "Check the acceptance criteria in the browsers of this computer (with `--url` if the application has an address of its own).",
+      verify:
+        "The twins review the commits and the model says whether code, Definition and Design are aligned; you decide.",
       align:
-        "Have the twins review the commits and bring code, design and requirements back in line.",
+        "Reads the code changes and proposes updates to the Definition, the Design and the test plan: you approve them one by one.",
+      alignDesign:
+        "When the design changes in the Studio after the code exists, bring the code up to the current design: your agent receives a work order limited to what changed.",
+      push: "Sends the hand-made changes of the knowledge folder to the Studio: you see the differences, approve them, and a new version is born.",
       learn: "Have the twins propose what they learned from the development.",
       status: "See where the project stands.",
     },
@@ -178,7 +188,7 @@ const messages = {
     ],
     history: "Versions of the folder",
     historyIntro:
-      "A new version is created only when something has changed. Every version can be downloaded again exactly as it was.",
+      "A new version is created only when something has changed. Every version can be downloaded again exactly as it was. The project's `orchestwin/` folder is the source of truth: hand-made changes come back to the Studio with `ut push` as versions supplied by you.",
     loadingHistory: "Loading the versions…",
     noHistory: "No version has been prepared yet.",
     version: "Version {number}",
@@ -188,7 +198,7 @@ const messages = {
     downloadVersion: "Download version {number}",
     earlier: "Earlier versions ({count})",
     terminal:
-      "Development goes on from the terminal: `ut align` checks the commits against the design and `ut watch` follows them.",
+      "Development goes on from the terminal: `ut verify` checks the commits against the design and `ut watch` follows them.",
   },
   it: {
     agentRole: "Sviluppatore dell'interfaccia",
@@ -264,10 +274,16 @@ const messages = {
     },
     developmentWay: "Poi, durante lo sviluppo",
     developmentSteps: {
-      git: "Metti la cartella sotto git: `ut align` lavora sui commit.",
+      git: "Metti la cartella sotto git: `ut verify` lavora sui commit.",
       code: "Fai scrivere l'applicazione al tuo agente di programmazione, con requisiti e design come contesto.",
       test: "Verifica i criteri di accettazione nei browser di questo computer (con `--url` se l'applicazione ha un suo indirizzo).",
-      align: "Fai esaminare i commit ai twin e riallinea codice, design e requisiti.",
+      verify:
+        "I twin esaminano i commit e il modello dice se codice, Definizione e Design sono allineati; decidi tu.",
+      align:
+        "Legge le modifiche del codice e propone aggiornamenti alla Definizione, al Design e al piano dei test: li approvi uno per uno.",
+      alignDesign:
+        "Quando il design cambia nello Studio dopo che il codice esiste, porta il codice al design attuale: il tuo agente riceve un ordine di lavoro limitato a ciò che è cambiato.",
+      push: "Invia allo Studio le modifiche fatte a mano nella cartella di conoscenza: vedi le differenze, le approvi e nasce una versione nuova.",
       learn: "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
       status: "Guarda a che punto è il progetto.",
     },
@@ -284,7 +300,7 @@ const messages = {
     ],
     history: "Versioni della cartella",
     historyIntro:
-      "Una nuova versione nasce solo quando cambia qualcosa. Ognuna si riscarica esattamente com'era.",
+      "Una nuova versione nasce solo quando cambia qualcosa. Ognuna si riscarica esattamente com'era. La cartella `orchestwin/` del progetto è la fonte di verità: le modifiche fatte a mano tornano nello Studio con `ut push` come versioni fornite da te.",
     loadingHistory: "Carico le versioni…",
     noHistory: "Non hai ancora preparato nessuna versione.",
     version: "Versione {number}",
@@ -294,7 +310,7 @@ const messages = {
     downloadVersion: "Scarica la versione {number}",
     earlier: "Versioni precedenti ({count})",
     terminal:
-      "Lo sviluppo continua dal terminale: `ut align` confronta i commit con il design e `ut watch` li segue.",
+      "Lo sviluppo continua dal terminale: `ut verify` confronta i commit con il design e `ut watch` li segue.",
   },
 } as const;
 
@@ -401,7 +417,8 @@ const terminalSteps = computed(() => {
     folder: folderName.value,
     project: props.projectId,
   };
-  return TERMINAL_STEPS.map((step) => ({
+  const steps = TERMINAL_STEPS.filter((step) => step.key !== "login" || !auth.isLocal);
+  return steps.map((step) => ({
     key: step.key,
     text: copy.value.terminalSteps[step.key],
     command: fill(
@@ -602,7 +619,11 @@ watch(() => props.projectId, loadHistory, { immediate: true });
 </script>
 
 <template>
-  <div class="grid gap-4 text-on-night" data-surface="night" data-testid="design-package">
+  <div
+    class="grid grid-cols-1 gap-4 text-on-night"
+    data-surface="night"
+    data-testid="design-package"
+  >
     <UiAgentMessage
       v-if="!guidance.expert"
       :role-label="copy.agentRole"
@@ -1033,8 +1054,18 @@ watch(() => props.projectId, loadHistory, { immediate: true });
           <h2 id="package-history-title" class="m-0 text-base leading-tight font-semibold">
             {{ copy.history }}
           </h2>
-          <p class="m-0 mt-0.5 text-sm leading-normal text-on-night-3">
-            {{ copy.historyIntro }}
+          <p
+            class="m-0 mt-0.5 text-sm leading-normal text-on-night-3"
+            data-testid="package-history-intro"
+          >
+            <template v-for="part in commandParts(copy.historyIntro)" :key="part.key">
+              <code
+                v-if="part.command"
+                class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                >{{ part.text }}</code
+              >
+              <template v-else>{{ part.text }}</template>
+            </template>
           </p>
         </div>
         <div
@@ -1124,6 +1155,7 @@ watch(() => props.projectId, loadHistory, { immediate: true });
       v-if="designApproved && !providedDesignApproved"
       :project-id="projectId"
       :locale="locale"
+      :active="active"
       :authorize="authorizedRequest"
     />
 

@@ -149,6 +149,9 @@ class Bench:
     def document(self, *parts: str) -> dict[str, object]:
         return json.loads(self.root.joinpath(*parts).read_bytes().decode("utf-8"))
 
+    def design_version(self) -> object:
+        return self.document("orchestwin", "orchestwin.json")["stages"]["design"]["version_number"]
+
     def ut(
         self,
         *arguments: str,
@@ -316,6 +319,9 @@ def test_the_files_of_a_run_hold_the_work_order_the_twins_and_the_outcome(tmp_pa
         "request",
         "exit_status",
         "changed_files",
+        "kind",
+        "design_from",
+        "design_version_number",
     ]
     assert outcome == {
         "schema_version": 1,
@@ -331,6 +337,9 @@ def test_the_files_of_a_run_hold_the_work_order_the_twins_and_the_outcome(tmp_pa
         "request": None,
         "exit_status": 0,
         "changed_files": ["src/"],
+        "kind": "code",
+        "design_from": None,
+        "design_version_number": work.design_version(),
     }
     latest = work.document(".orchestwin", "code", "latest.json")
     assert list(latest) == [
@@ -341,6 +350,8 @@ def test_the_files_of_a_run_hold_the_work_order_the_twins_and_the_outcome(tmp_pa
         "agent",
         "exit_status",
         "changed_files",
+        "kind",
+        "design_version_number",
     ]
     assert latest == {
         "schema_version": 1,
@@ -350,6 +361,8 @@ def test_the_files_of_a_run_hold_the_work_order_the_twins_and_the_outcome(tmp_pa
         "agent": "claude",
         "exit_status": 0,
         "changed_files": ["src/"],
+        "kind": "code",
+        "design_version_number": work.design_version(),
     }
     assert (work.code / ".gitignore").read_bytes() == b"*\n"
     assert work.document(".orchestwin", "code.json") == {
@@ -359,6 +372,52 @@ def test_the_files_of_a_run_hold_the_work_order_the_twins_and_the_outcome(tmp_pa
         "model": None,
         "headless": False,
     }
+
+
+def test_a_run_that_ends_well_records_the_design_version_the_code_follows(tmp_path: Path) -> None:
+    work = bench(tmp_path)
+
+    first = work.ut(agent=ScriptedAgent(), yes=True)
+    point = work.document(".orchestwin", "code", "design.json")
+    content = (work.code / "design.json").read_bytes()
+    failed = work.ut(agent=ScriptedAgent(status=3), yes=True)
+    kept = work.document(".orchestwin", "code", "design.json")
+    second = work.ut(agent=ScriptedAgent(), yes=True)
+    moved = work.document(".orchestwin", "code", "design.json")
+
+    assert [first.status, failed.status, second.status] == [0, 1, 0]
+    assert isinstance(work.design_version(), int)
+    assert list(point) == [
+        "schema_version",
+        "design_version_number",
+        "recorded_at",
+        "folder",
+        "reason",
+    ]
+    assert point == {
+        "schema_version": 1,
+        "design_version_number": work.design_version(),
+        "recorded_at": "2026-09-29T09:00:00+00:00",
+        "folder": FOLDER,
+        "reason": "CODE_RUN",
+    }
+    assert b"\r" not in content and content.endswith(b"}\n")
+    assert kept == point
+    assert moved == {**point, "folder": f"{FOLDER}-3"}
+    assert work.runs() == [FOLDER, f"{FOLDER}-2", f"{FOLDER}-3"]
+    assert code_run.design_point_version(work.project) == work.design_version()
+
+
+@pytest.mark.parametrize("status", [1, 3])
+def test_a_run_that_fails_records_no_design_version(tmp_path: Path, status: int) -> None:
+    work = bench(tmp_path)
+
+    run = work.ut(agent=ScriptedAgent(status=status), yes=True)
+
+    assert run.status == 1
+    assert work.document(".orchestwin", "code", "latest.json")["exit_status"] == status
+    assert not (work.code / "design.json").exists()
+    assert code_run.design_point_version(work.project) is None
 
 
 @pytest.mark.parametrize(
@@ -446,6 +505,7 @@ def test_a_dry_run_writes_the_files_prints_the_words_and_starts_nothing(
     assert agent.calls == []
     assert sorted(path.name for path in folder.iterdir()) == ["mcp.json", "prompt.md"]
     assert not (work.code / "latest.json").exists()
+    assert not (work.code / "design.json").exists()
     assert (work.root / ".orchestwin" / "code.json").is_file()
 
 
@@ -777,6 +837,7 @@ def test_the_agent_starts_only_after_a_yes(
     assert agent.calls == []
     assert (work.folder() / "prompt.md").is_file()
     assert not (work.folder() / "outcome.json").exists()
+    assert not (work.code / "design.json").exists()
 
 
 def test_yes_starts_the_agent_without_the_question(tmp_path: Path) -> None:
@@ -921,6 +982,7 @@ def test_an_agent_that_fails_ends_the_command_with_one(tmp_path: Path, language:
     assert lines[-1] == say("code.next_steps_failed", folder=str(work.folder()))
     assert say("code.next_steps") not in lines
     assert work.document(".orchestwin", "code", "latest.json")["exit_status"] == 3
+    assert not (work.code / "design.json").exists()
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
@@ -962,6 +1024,7 @@ def test_ctrl_c_during_the_agent_ends_with_130_after_the_outcome(tmp_path: Path)
     assert run.errors == "Interrotto.\n"
     assert (outcome["exit_status"], outcome["changed_files"]) == (130, None)
     assert work.document(".orchestwin", "code", "latest.json")["exit_status"] == 130
+    assert not (work.code / "design.json").exists()
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
@@ -981,6 +1044,7 @@ def test_an_agent_that_cannot_start_is_named(tmp_path: Path, language: str) -> N
         + "\n"
     )
     assert not (work.folder() / "outcome.json").exists()
+    assert not (work.code / "design.json").exists()
 
 
 def test_the_command_never_asks_the_studio_and_works_signed_out(tmp_path: Path) -> None:

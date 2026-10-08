@@ -43,6 +43,8 @@ export const GENERATION_OPERATIONS: readonly GenerationOperation[] = [
   "TEST_PLAN",
   "TEST_REVIEW",
   "TWIN_UPDATE",
+  "KNOWLEDGE_ALIGNMENT",
+  "DESIGN_CHANGE",
 ];
 
 const JOB_KINDS: readonly GenerationJobKind[] = ["MOCKUP", "ITERATION", "REQUEST"];

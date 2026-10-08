@@ -299,6 +299,10 @@ ITALIAN_TEXT = (
     "sono in `state/state.json` e in `twins/feedback/changes.json`; il diff di un commit non "
     "viene mai copiato nella cartella.",
     "",
+    "`ut push` invia allo Studio le modifiche fatte a mano in questa cartella: le differenze si "
+    "approvano e nasce una versione nuova. `ut align --from-design` porta il codice al design "
+    "attuale quando il design è cambiato dopo che il codice è stato scritto.",
+    "",
     "## Riferimento",
     "",
     "- Requisiti: versione 2 (`requirements/requirements.md`).",
@@ -374,6 +378,10 @@ ENGLISH_TEXT = (
     "Studio, the critiques of the user twins, the decisions of the owner and the tasks for the "
     "code. The exact records are in `state/state.json` and `twins/feedback/changes.json`; the "
     "diff of a commit is never copied into the folder.",
+    "",
+    "`ut push` sends the hand-made changes of this folder to the Studio: you approve the "
+    "differences and a new version is born. `ut align --from-design` brings the code up to the "
+    "current design when the design changed after the code was written.",
     "",
     "## Reference",
     "",
@@ -455,7 +463,7 @@ DEVELOPMENT_ITALIAN = (
     "versione 2 e il design alla versione 3, alternativa DES-002.",
     "",
     "1 revisione è stata fatta con versioni precedenti dei requisiti o del design: "
-    "`ut align --recheck` fa riesaminare quel commit ai twin.",
+    "`ut verify --recheck` fa riesaminare quel commit ai twin.",
     "",
     "## Compiti aperti",
     "",
@@ -498,7 +506,7 @@ DEVELOPMENT_ENGLISH = (
     "3, alternative DES-002.",
     "",
     "1 review was made against earlier versions of the requirements or of the design: "
-    "`ut align --recheck` has the twins review that commit again.",
+    "`ut verify --recheck` has the twins review that commit again.",
     "",
     "## Open tasks",
     "",
@@ -547,7 +555,8 @@ INDEX_DEVELOPMENT = (
     "The Studio has recorded 3 changes (commits) of the code. The aligned point is commit "
     "`9d8e7f6`, decided on 2026-09-28 10:00+00:00. 2 changes are waiting after the aligned "
     "point. 1 review was made against earlier versions of the requirements or of the design: "
-    "`ut align --recheck` has the twins review that commit again. 4 tasks are open for the code. "
+    "`ut verify --recheck` has the twins review that commit again. 4 tasks are open for the "
+    "code. "
     "`state/state.md` explains the state in the language of the project; `state/state.json` and "
     "`twins/feedback/changes.json` hold the exact records.",
     "",
@@ -593,6 +602,26 @@ INDEX_SECTION = (
     "evidence and the critiques of the twins. `ut test` runs the tests again.",
     "",
 )
+PUSH_LINE = {
+    "en": (
+        "`ut push` sends the hand-made changes of this folder to the Studio: you approve the "
+        "differences and a new version is born."
+    ),
+    "it": (
+        "`ut push` invia allo Studio le modifiche fatte a mano in questa cartella: le "
+        "differenze si approvano e nasce una versione nuova."
+    ),
+}
+ALIGN_DESIGN_LINE = {
+    "en": (
+        "`ut align --from-design` brings the code up to the current design when the design "
+        "changed after the code was written."
+    ),
+    "it": (
+        "`ut align --from-design` porta il codice al design attuale quando il design è "
+        "cambiato dopo che il codice è stato scritto."
+    ),
+}
 NO_RUN = {
     "en": (
         "No run of the acceptance tests is recorded yet: `ut test` runs them on the application "
@@ -1054,6 +1083,39 @@ def test_the_state_text_is_written_in_english_otherwise(language: str | None) ->
     assert text == "\n".join(ENGLISH_TEXT)
 
 
+@pytest.mark.parametrize(
+    ("language", "heading"), [("it", "## Riferimento"), ("en", "## Reference")]
+)
+def test_the_state_text_says_after_its_intro_how_hand_made_changes_reach_the_studio(
+    language: str, heading: str
+) -> None:
+    paragraph = f"{PUSH_LINE[language]} {ALIGN_DESIGN_LINE[language]}"
+    for text in (
+        state_markdown(real_sources(state=development_sources()), language=language),
+        state_markdown(partial_sources("brief"), language=language),
+    ):
+        lines = text.splitlines()
+
+        assert lines[3:7] == ["", paragraph, "", heading]
+        assert text.count(PUSH_LINE[language]) == 1
+    assert PUSH_LINE["en"] not in state_markdown(partial_sources("brief"), language="it")
+    assert PUSH_LINE["it"] not in state_markdown(partial_sources("brief"), language="en")
+
+
+@pytest.mark.parametrize(("language", "other"), [("it", "en"), ("en", "it")])
+def test_the_state_file_says_after_ut_push_how_the_code_follows_a_changed_design(
+    language: str, other: str
+) -> None:
+    package = (real_sources if language == "it" else sources)()
+    folder = build_knowledge_folder(package, version_number=1, created_at=PUBLISHED_AT)
+    text = folder.files[STATE_TEXT]
+
+    assert folder.manifest["project"]["language"] == language
+    assert f"\n\n{PUSH_LINE[language]} {ALIGN_DESIGN_LINE[language]}\n\n" in text
+    assert text.count(ALIGN_DESIGN_LINE[language]) == 1
+    assert ALIGN_DESIGN_LINE[other] not in text
+
+
 @pytest.mark.parametrize(("language", "words"), [("it", "it"), ("it-IT", "it"), ("IT", "it")])
 def test_every_italian_language_code_gives_italian(language: str, words: str) -> None:
     assert state_language(language) == words
@@ -1410,12 +1472,12 @@ def test_several_stale_reviews_are_counted_in_both_texts() -> None:
     assert folder.manifest["state"]["stale_reviews"] == 2
     assert (
         "2 revisioni sono state fatte con versioni precedenti dei requisiti o del design: "
-        "`ut align --recheck` fa riesaminare quei commit ai twin."
+        "`ut verify --recheck` fa riesaminare quei commit ai twin."
     ) in folder.files[STATE_TEXT]
     assert folder.files[STATE_TEXT].count("Da riesaminare: rivisto con i requisiti") == 2
     sentence = (
         "2 reviews were made against earlier versions of the requirements or of the design: "
-        "`ut align --recheck` has the twins review those commits again."
+        "`ut verify --recheck` has the twins review those commits again."
     )
     assert sentence in english
     assert (

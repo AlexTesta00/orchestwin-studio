@@ -2,404 +2,217 @@ from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
     "align.help": {
-        "it": "Registra i commit nello Studio, li fa esaminare ai twin e allinea codice, design "
-        "e requisiti",
-        "en": "Record the commits in the Studio, have the twins review them and align code, "
-        "design and requirements",
+        "it": "Legge le modifiche del codice e propone aggiornamenti alla Definizione, al Design "
+        "e al piano dei test, che approvi uno per uno; con --from-design porta il codice al "
+        "design attuale",
+        "en": "Read the code changes and propose updates to the Definition, the Design and the "
+        "test plan, which you approve one by one; with --from-design bring the code up to the "
+        "current design",
     },
     "align.option_since": {
-        "it": "considera i commit dopo questo (hash o nome di un commit), invece che dopo il "
-        "punto allineato",
+        "it": "considera i commit dopo questo (hash o nome di un commit), invece che dopo "
+        "l'ultimo esame; con --from-design, il numero della versione del design da cui partire",
         "en": "consider the commits after this one (hash or name of a commit), instead of after "
-        "the aligned point",
-    },
-    "align.option_latest": {
-        "it": "fa esaminare soltanto il commit più recente",
-        "en": "have only the newest commit reviewed",
+        "the latest review; with --from-design, the number of the design version to start from",
     },
     "align.option_dry_run": {
         "it": "registra i commit e mostra che cosa verrebbe esaminato, senza spendere",
         "en": "record the commits and show what would be reviewed, without spending",
     },
-    "align.option_decide": {
-        "it": "riapre la decisione su un commit già esaminato (hash o nome di un commit), senza "
-        "nuovi esami e senza registrare altro",
-        "en": "open again the decision on a commit already reviewed (hash or name of a commit), "
-        "without new reviews and without recording anything else",
+    "align.option_pending": {
+        "it": "decide soltanto le proposte che aspettano ancora una decisione, senza esaminare "
+        "nuovi commit",
+        "en": "decide only the proposals still waiting for a decision, without reviewing new "
+        "commits",
     },
-    "align.option_recheck": {
-        "it": "fa esaminare di nuovo ai twin i commit in attesa il cui esame è stato fatto con "
-        "versioni precedenti dei requisiti o del design",
-        "en": "have the twins review again the waiting commits whose review was made against "
-        "earlier versions of the requirements or of the design",
+    "align.option_from_design": {
+        "it": "porta il codice al design attuale: legge le differenze fra la versione del design "
+        "a cui il codice è allineato e quella approvata, scrive un ordine di lavoro limitato a "
+        "quelle e avvia il tuo agente di programmazione come `ut code`",
+        "en": "bring the code up to the current design: read the differences between the design "
+        "version the code is aligned with and the approved one, write a work order limited to "
+        "them and start your coding agent as `ut code` does",
     },
-    "align.heading": {"it": "Allineamento di «{name}»", "en": 'Alignment of "{name}"'},
-    "align.reference": {
-        "it": "Riferimento approvato: requisiti versione {requirements}, design versione "
-        "{design} (alternativa {alternative}).",
-        "en": "Approved reference: requirements version {requirements}, design version "
-        "{design} (alternative {alternative}).",
+    "align.option_max_agent_usd": {
+        "it": "con --from-design e Claude Code senza conversazione (scelto con "
+        "`ut code --headless`): quanto al massimo Claude Code può spendere in questa esecuzione "
+        "sul tuo account, in USD",
+        "en": "with --from-design and Claude Code without a conversation (chosen with "
+        "`ut code --headless`): the most Claude Code may spend in this run on your account, in "
+        "USD",
     },
-    "align.not_aligned": {
-        "it": "Nessun commit è ancora allineato.",
-        "en": "No commit is aligned yet.",
+    "align.heading": {
+        "it": "Conoscenza di «{name}» allineata al codice",
+        "en": 'Knowledge of "{name}" aligned with the code',
     },
-    "align.aligned": {
-        "it": "Punto allineato: commit {commit} del {date}, con i requisiti versione "
-        "{requirements} e il design versione {design}.",
-        "en": "Aligned point: commit {commit} of {date}, with requirements version "
-        "{requirements} and design version {design}.",
+    "align.start_since": {
+        "it": "Punto di partenza: il commit {commit} indicato con --since.",
+        "en": "Starting point: commit {commit}, given with --since.",
     },
-    "align.open_tasks": {
-        "it": "Compiti aperti per il codice: {count}.",
-        "en": "Open tasks for the code: {count}.",
+    "align.start_run": {
+        "it": "Punto di partenza: il commit {commit}, l'ultimo esaminato da `ut align`.",
+        "en": "Starting point: commit {commit}, the latest one reviewed by `ut align`.",
     },
-    "align.uncommitted": {
-        "it": "Nella cartella ci sono modifiche non ancora salvate in un commit: ut align "
-        "considera soltanto i commit.",
-        "en": "The folder has changes not saved in a commit yet: ut align considers only commits.",
+    "align.start_verify": {
+        "it": "Punto di partenza: il commit {commit}, il punto allineato di `ut verify`.",
+        "en": "Starting point: commit {commit}, the aligned point of `ut verify`.",
+    },
+    "align.start_all": {
+        "it": "Punto di partenza: nessun esame precedente, considero tutti i commit del "
+        "repository (al massimo gli ultimi {limit}).",
+        "en": "Starting point: no earlier review, every commit of the repository is considered "
+        "(the newest {limit} at most).",
+    },
+    "align.commits": {"it": "Commit da esaminare: {count}.", "en": "Commits to review: {count}."},
+    "align.folder_only": {
+        "it": "Commit che cambiano soltanto la cartella di conoscenza, lasciati fuori: {count} "
+        "({commits}).",
+        "en": "Commits that change only the knowledge folder, left out: {count} ({commits}).",
     },
     "align.nothing": {
-        "it": "Non ci sono commit nuovi da allineare.",
-        "en": "There is no new commit to align.",
+        "it": "Non ci sono commit nuovi da esaminare.",
+        "en": "There is no new commit to review.",
     },
-    "align.considered_since": {
-        "it": "Commit dopo {commit}: {count}.",
-        "en": "Commits after {commit}: {count}.",
-    },
-    "align.considered_after": {
-        "it": "Commit dopo il punto allineato: {count}.",
-        "en": "Commits after the aligned point: {count}.",
-    },
-    "align.considered_all": {
-        "it": "Commit del repository considerati (al massimo gli ultimi {limit}): {count}.",
-        "en": "Commits of the repository considered (the newest {limit} at most): {count}.",
-    },
-    "align.commit_line": {
-        "it": "{commit}  {date}  {line}  (file: {files})",
-        "en": "{commit}  {date}  {line}  (files: {files})",
+    "align.waiting_hint": {
+        "it": "Proposte che aspettano ancora una decisione: {count}. Decidile con "
+        "`ut align --pending`.",
+        "en": "Proposals still waiting for a decision: {count}. Decide them with "
+        "`ut align --pending`.",
     },
     "align.recorded": {
         "it": "Commit registrati ora nello Studio: {count}.",
         "en": "Commits recorded now in the Studio: {count}.",
     },
     "align.dry_run": {
-        "it": "Prova senza spesa (--dry-run). Commit che i twin esaminerebbero: {count}.",
-        "en": "Trial without spending (--dry-run). Commits the twins would review: {count}.",
-    },
-    "align.dry_run_none": {
-        "it": "Prova senza spesa (--dry-run): ogni commit ha già un esame dei twin, non ci "
-        "sarebbe niente da esaminare.",
-        "en": "Trial without spending (--dry-run): every commit already has a review of the "
-        "twins, there would be nothing to review.",
+        "it": "Prova senza spesa (--dry-run). Commit che il modello leggerebbe: {count}.",
+        "en": "Trial without spending (--dry-run). Commits the model would read: {count}.",
     },
     "align.dry_run_estimate": {
-        "it": "Stima di questi esami: {amount} USD, circa {minutes}. Senza --dry-run partono "
+        "it": "Stima di questo esame: {amount} USD, circa {minutes}. Senza --dry-run parte "
         "davvero.",
-        "en": "Estimate of these reviews: {amount} USD, about {minutes}. Without --dry-run they "
-        "really start.",
+        "en": "Estimate of this review: {amount} USD, about {minutes}. Without --dry-run it "
+        "really starts.",
     },
     "align.dry_run_subscription": {
-        "it": "Questi esami usano l'abbonamento di Claude: non spendono credito. Tempo stimato: "
-        "circa {minutes}. Senza --dry-run partono davvero.",
-        "en": "These reviews run on the Claude subscription: they spend no credit. Estimated "
-        "time: about {minutes}. Without --dry-run they really start.",
+        "it": "Questo esame usa l'abbonamento di Claude: non spende credito. Tempo stimato: "
+        "circa {minutes}. Senza --dry-run parte davvero.",
+        "en": "This review runs on the Claude subscription: it spends no credit. Estimated "
+        "time: about {minutes}. Without --dry-run it really starts.",
     },
-    "align.recheck_none": {
-        "it": "Nessun esame è stato fatto con versioni precedenti dei requisiti o del design: non "
-        "c'è niente da far esaminare di nuovo.",
-        "en": "No review was made against earlier versions of the requirements or of the design: "
-        "there is nothing to review again.",
+    "align.reading": {
+        "it": "Il modello legge il diff dei commit e propone aggiornamenti alla Definizione, "
+        "al Design e al piano dei test. Nessuna proposta cambia qualcosa finché non la approvi.",
+        "en": "The model reads the diff of the commits and proposes updates to the Definition, "
+        "the Design and the test plan. No proposal changes anything until you approve it.",
     },
-    "align.recheck_list": {
-        "it": "Esami fatti con versioni precedenti dei requisiti o del design, da rifare con i "
-        "requisiti versione {requirements} e il design versione {design} (alternativa "
-        "{alternative}): {count}.",
-        "en": "Reviews made against earlier versions of the requirements or of the design, to do "
-        "again with requirements version {requirements} and design version {design} "
-        "(alternative {alternative}): {count}.",
+    "align.run_label": {
+        "it": "Lettura delle modifiche del codice",
+        "en": "Reading of the code changes",
     },
-    "align.recheck_line": {
-        "it": "{commit}  {date}  {line}  (esaminato con i requisiti versione {requirements} e il "
-        "design versione {design}, alternativa {alternative})",
-        "en": "{commit}  {date}  {line}  (reviewed with requirements version {requirements} and "
-        "design version {design}, alternative {alternative})",
+    "align.run_heading": {
+        "it": "Che cosa ha cambiato il codice ({count} commit, fino a {commit})",
+        "en": "What the code changed ({count} commits, up to {commit})",
     },
-    "align.recheck_dry_run": {
-        "it": "Prova senza spesa (--dry-run): i twin esaminerebbero di nuovo questi commit.",
-        "en": "Trial without spending (--dry-run): the twins would review these commits again.",
+    "align.no_proposals": {
+        "it": "Il modello non propone aggiornamenti: il codice non cambia ciò che la conoscenza "
+        "dice.",
+        "en": "The model proposes no update: the code does not change what the knowledge says.",
     },
-    "align.recheck_reviewing": {
-        "it": "Commit da far esaminare di nuovo ai twin: {count}. Twin in ogni esame: {twins}. "
-        "Ogni twin dà di nuovo la sua opinione, con le versioni approvate adesso, poi il modello "
-        "dice se codice, design e requisiti sono ancora allineati.",
-        "en": "Commits for the twins to review again: {count}. Twins in each review: {twins}. "
-        "Each twin gives its opinion again, against the versions approved now, then the model "
-        "says whether code, design and requirements are still aligned.",
+    "align.section_requirements": {
+        "it": "Proposte per la Definizione",
+        "en": "Proposals for the Definition",
     },
-    "align.recheck_hint": {
-        "it": "Esami fatti con versioni precedenti dei requisiti o del design: {count}. "
-        "`ut align --recheck` fa riesaminare quei commit ai twin.",
-        "en": "Reviews made against earlier versions of the requirements or of the design: "
-        "{count}. `ut align --recheck` has the twins review those commits again.",
+    "align.section_design": {"it": "Proposte per il Design", "en": "Proposals for the Design"},
+    "align.section_tests": {
+        "it": "Proposte per il piano dei test",
+        "en": "Proposals for the test plan",
     },
-    "align.reviews_none": {
-        "it": "Ogni commit da considerare ha già un esame dei twin.",
-        "en": "Every commit to consider already has a review of the twins.",
+    "align.proposal": {"it": "{code}: {title}", "en": "{code}: {title}"},
+    "align.rationale": {"it": "Perché: {text}", "en": "Why: {text}"},
+    "align.origin_commits": {"it": "Commit: {items}", "en": "Commits: {items}"},
+    "align.origin_files": {"it": "File: {files}", "en": "Files: {files}"},
+    "align.excerpt": {"it": "Estratto del diff:", "en": "Excerpt of the diff:"},
+    "align.excerpt_more": {
+        "it": "(altre {count} righe nell'estratto)",
+        "en": "({count} more lines in the excerpt)",
     },
-    "align.reviewing": {
-        "it": "Commit da far esaminare ai twin: {count}. Twin in ogni esame: {twins}. Ogni twin "
-        "dà la sua opinione su ogni commit, poi il modello dice se codice, design e requisiti "
-        "sono ancora allineati.",
-        "en": "Commits for the twins to review: {count}. Twins in each review: {twins}. Each "
-        "twin gives its opinion on each commit, then the model says whether code, design and "
-        "requirements are still aligned.",
-    },
-    "align.review_label": {
-        "it": "Esame del commit {commit}",
-        "en": "Review of commit {commit}",
-    },
-    "align.review_heading": {
-        "it": "Esame del commit {commit}: {line}",
-        "en": "Review of commit {commit}: {line}",
-    },
-    "align.review_heading_plain": {
-        "it": "Esame del commit {commit}",
-        "en": "Review of commit {commit}",
-    },
-    "align.no_critiques": {
-        "it": "Nessun twin ha espresso un parere.",
-        "en": "No twin gave an opinion.",
-    },
-    "align.twin_unknown": {"it": "Un twin", "en": "A twin"},
-    "align.twin_line": {"it": "{name}: {verdict}", "en": "{name}: {verdict}"},
-    "align.critique_fine": {"it": "va bene così", "en": "fine"},
-    "align.critique_concern": {"it": "ha qualche dubbio", "en": "has a concern"},
-    "align.critique_drift": {
-        "it": "vede il codice allontanarsi da quanto approvato",
-        "en": "sees the code drift from what was approved",
-    },
-    "align.no_findings": {
-        "it": "Nessun problema segnalato.",
-        "en": "No problem reported.",
-    },
-    "align.review_cost": {
-        "it": "Costo di questo esame: {amount} USD.",
-        "en": "Cost of this review: {amount} USD.",
-    },
-    "align.verdict_heading": {"it": "Verdetto del modello", "en": "Verdict of the model"},
-    "align.verdict_aligned": {
-        "it": "Il codice è allineato ai requisiti e al design approvati (ALIGNED).",
-        "en": "The code is aligned with the approved requirements and design (ALIGNED).",
-    },
-    "align.verdict_code_drift": {
-        "it": "Il codice si allontana dal design o dai requisiti approvati: è il codice che "
-        "dovrebbe cambiare (CODE_DRIFT).",
-        "en": "The code departs from the approved design or requirements: the code should "
-        "change (CODE_DRIFT).",
-    },
-    "align.verdict_design_outdated": {
-        "it": "La modifica è un'evoluzione legittima che il design approvato non descrive: il "
-        "design dovrebbe avere una nuova versione (DESIGN_OUTDATED).",
-        "en": "The change is a legitimate evolution that the approved design does not "
-        "describe: the design should get a new version (DESIGN_OUTDATED).",
-    },
-    "align.verdict_requirements_outdated": {
-        "it": "La modifica è un'evoluzione legittima che i requisiti approvati non coprono: i "
-        "requisiti dovrebbero avere una nuova versione (REQUIREMENTS_OUTDATED).",
-        "en": "The change is a legitimate evolution that the approved requirements do not "
-        "cover: the requirements should get a new version (REQUIREMENTS_OUTDATED).",
-    },
-    "align.verdict_other": {
-        "it": "Verdetto del modello: {status}.",
-        "en": "Verdict of the model: {status}.",
-    },
-    "align.affected_requirements": {
-        "it": "Requisiti coinvolti: {items}",
+    "align.subjects_requirements": {
+        "it": "Requisiti toccati: {items}",
         "en": "Requirements concerned: {items}",
     },
-    "align.affected_screens": {
-        "it": "Schermate coinvolte: {items}",
+    "align.subjects_screens": {
+        "it": "Schermate toccate: {items}",
         "en": "Screens concerned: {items}",
     },
-    "align.proposed_design": {
-        "it": "Richiesta proposta per il design:",
-        "en": "Proposed request for the design:",
+    "align.subjects_criteria": {
+        "it": "Criteri toccati: {items}",
+        "en": "Criteria concerned: {items}",
     },
-    "align.proposed_requirements": {
-        "it": "Modifica proposta ai requisiti:",
-        "en": "Proposed change of the requirements:",
+    "align.hypothesis": {
+        "it": "Ipotesi del modello ricavata dal diff del codice: nessuna persona l'ha verificata.",
+        "en": "A hypothesis of the model drawn from the code diff: no person has verified it.",
     },
-    "align.proposed_tasks": {
-        "it": "Compiti proposti per il codice:",
-        "en": "Tasks proposed for the code:",
-    },
-    "align.quoted": {"it": "«{text}»", "en": '"{text}"'},
-    "align.finding": {"it": "{severity}: {text}", "en": "{severity}: {text}"},
-    "align.severity_low": {"it": "Importanza bassa", "en": "Low importance"},
-    "align.severity_medium": {"it": "Importanza media", "en": "Medium importance"},
-    "align.severity_high": {"it": "Importanza alta", "en": "High importance"},
-    "align.about_requirement": {
-        "it": "requisito {code} «{title}»",
-        "en": 'requirement {code} "{title}"',
-    },
-    "align.about_requirement_code": {"it": "requisito {code}", "en": "requirement {code}"},
-    "align.about_screen": {
-        "it": "schermata {code} «{title}»",
-        "en": 'screen {code} "{title}"',
-    },
-    "align.about_screen_code": {"it": "schermata {code}", "en": "screen {code}"},
-    "align.about_file": {"it": "file {path}", "en": "file {path}"},
-    "align.finding_about": {
-        "it": "{finding} (riguarda: {about})",
-        "en": "{finding} (about: {about})",
-    },
-    "align.finding_action": {
-        "it": "{finding} Cosa fare: {action}",
-        "en": "{finding} What to do: {action}",
-    },
-    "align.named": {"it": "{code} «{title}»", "en": '{code} "{title}"'},
     "align.decision_heading": {
-        "it": "La tua decisione sul commit {commit}: {line}",
-        "en": "Your decision on commit {commit}: {line}",
+        "it": "La tua decisione su {code}: {title}",
+        "en": "Your decision on {code}: {title}",
     },
     "align.decision_question": {
-        "it": "Che cosa fai con questo commit?",
-        "en": "What do you do with this commit?",
+        "it": "Che cosa fai con questa proposta?",
+        "en": "What do you do with this proposal?",
     },
-    "align.choice_mark_aligned": {
-        "it": "Segna questo commit come allineato",
-        "en": "Mark this commit as aligned",
+    "align.choice_apply": {"it": "Applica", "en": "Apply"},
+    "align.choice_edit": {
+        "it": "Modifica il testo e applica",
+        "en": "Edit the text and apply",
     },
-    "align.choice_aligned_anyway": {
-        "it": "Segnalo comunque come allineato",
-        "en": "Mark it as aligned anyway",
-    },
-    "align.choice_tasks": {
-        "it": "Registra dei compiti per il codice",
-        "en": "Record tasks for the code",
-    },
-    "align.choice_model_tasks": {
-        "it": "Registra questi compiti per il codice",
-        "en": "Record these tasks for the code",
-    },
-    "align.choice_later": {"it": "Lascialo per dopo", "en": "Leave it for later"},
-    "align.choice_design": {
-        "it": "Chiedi una nuova versione del design con questa richiesta",
-        "en": "Ask for a new version of the design with this request",
-    },
-    "align.choice_requirements": {
-        "it": "Chiedi una modifica dei requisiti con questa richiesta",
-        "en": "Ask for a change of the requirements with this request",
-    },
-    "align.choice_design_follow": {
-        "it": "Chiedi una nuova versione del design che segua questo commit",
-        "en": "Ask for a new version of the design that follows this commit",
-    },
-    "align.choice_requirements_follow": {
-        "it": "Chiedi una modifica dei requisiti che segua questo commit",
-        "en": "Ask for a change of the requirements that follows this commit",
-    },
+    "align.choice_skip": {"it": "Salta", "en": "Skip"},
+    "align.choice_later": {"it": "Più tardi", "en": "Later"},
     "align.decided_later": {
-        "it": "Non ho registrato niente: il commit aspetta la tua decisione. Rilancia "
-        "`ut align` quando vuoi.",
-        "en": "Nothing recorded: the commit waits for your decision. Launch `ut align` again "
-        "whenever you want.",
+        "it": "La proposta resta in attesa: decidila quando vuoi con `ut align --pending` o "
+        "nello Studio web.",
+        "en": "The proposal stays waiting: decide it whenever you want with `ut align --pending` "
+        "or in the web Studio.",
     },
-    "align.decided_aligned": {
-        "it": "Il commit {commit} è ora il punto allineato: i compiti aperti per il codice che "
-        "vengono da questo commit o da quelli precedenti sono chiusi; quelli dei commit più "
-        "recenti restano aperti.",
-        "en": "Commit {commit} is now the aligned point: the open tasks for the code that come "
-        "from this commit or from earlier ones are closed; those of newer commits stay open.",
+    "align.request_heading": {
+        "it": "Testo proposto dal modello:",
+        "en": "Text proposed by the model:",
     },
-    "align.tasks_none": {
-        "it": "Nessun compito scritto: non ho registrato niente.",
-        "en": "No task written: nothing recorded.",
+    "align.skip_reason": {
+        "it": "Perché la salti? (Invio per non dirlo)",
+        "en": "Why do you skip it? (Enter to leave it unsaid)",
     },
-    "align.decided_tasks": {
-        "it": "Compiti registrati per il codice: {count}. Restano aperti finché questo commit o "
-        "uno successivo non viene segnato come allineato.",
-        "en": "Tasks recorded for the code: {count}. They stay open until this commit or a "
-        "later one is marked as aligned.",
+    "align.skipped": {
+        "it": "Proposta {code} saltata: non cambia niente.",
+        "en": "Proposal {code} skipped: nothing changes.",
     },
-    "align.covered_note": {"it": "coperto da {commit}", "en": "covered by {commit}"},
-    "align.folder_note": {
-        "it": "solo cartella di conoscenza",
-        "en": "knowledge folder only",
+    "align.apply_label": {
+        "it": "Applicazione della proposta {code}",
+        "en": "Applying proposal {code}",
     },
-    "align.folder_only": {
-        "it": "Commit che cambiano soltanto la cartella di conoscenza, registrati senza farli "
-        "esaminare: {count} ({commits}).",
-        "en": "Commits that change only the knowledge folder, recorded without a review: "
-        "{count} ({commits}).",
+    "align.applied": {
+        "it": "Proposta {code} applicata.",
+        "en": "Proposal {code} applied.",
     },
-    "align.folder_only_dismissed": {
-        "it": "Commit che cambiano soltanto la cartella di conoscenza, registrati senza farli "
-        "esaminare: {count} ({commits}); il più recente non ha bisogno di una decisione ed è "
-        "segnato come scartato.",
-        "en": "Commits that change only the knowledge folder, recorded without a review: "
-        "{count} ({commits}); the newest needs no decision and is marked as dismissed.",
+    "align.already_decided": {
+        "it": "La proposta {code} è già stata decisa, forse dallo Studio web: non cambia niente.",
+        "en": "Proposal {code} was already decided, perhaps in the web Studio: nothing changes.",
     },
-    "align.earlier_decision": {
-        "it": "Decisione presa prima su questo commit: {decision}. Quella nuova la sostituisce.",
-        "en": "Decision taken before on this commit: {decision}. The new one replaces it.",
+    "align.revision_pending": {
+        "it": "Una modifica di questa sezione aspetta già la tua approvazione: approvala o "
+        "scartala prima, poi riprova.",
+        "en": "A change of this section already waits for your approval: approve or discard it "
+        "first, then try again.",
     },
-    "align.kind_aligned": {"it": "segnato come allineato", "en": "marked as aligned"},
-    "align.kind_design_change": {
-        "it": "chiesta una nuova versione del design",
-        "en": "a new version of the design asked for",
+    "align.unchanged": {
+        "it": "Il modello non ha trovato niente da cambiare con questa richiesta: la proposta "
+        "resta in attesa.",
+        "en": "The model found nothing to change with this request: the proposal stays waiting.",
     },
-    "align.kind_requirements_change": {
-        "it": "chiesta una modifica dei requisiti",
-        "en": "a change of the requirements asked for",
-    },
-    "align.kind_code_tasks": {
-        "it": "compiti registrati per il codice",
-        "en": "tasks recorded for the code",
-    },
-    "align.kind_dismissed": {"it": "scartato", "en": "dismissed"},
-    "align.dismissed": {
-        "it": "Commit {commit}: stesso verdetto di {newest}, registrato come coperto da quel "
-        "commit.",
-        "en": "Commit {commit}: same verdict as {newest}, recorded as covered by it.",
-    },
-    "align.design_request": {
-        "it": "Richiesta per il design proposta dal modello:",
-        "en": "Request for the design proposed by the model:",
-    },
-    "align.design_not_started": {
-        "it": "La nuova versione del design non è partita: non ho registrato nessuna decisione.",
-        "en": "The new version of the design did not start: no decision was recorded.",
-    },
-    "align.decided_design": {
-        "it": "Decisione registrata: dal commit {commit} è stata chiesta una nuova versione del "
-        "design.",
-        "en": "Decision recorded: a new version of the design was requested from commit {commit}.",
-    },
-    "align.design_approve": {
-        "it": "Approvi ora la versione {version} del design?",
-        "en": "Do you approve version {version} of the design now?",
-    },
-    "align.design_left": {
-        "it": "La versione {version} del design aspetta la tua approvazione: approvala con "
-        "`ut design approve`.",
-        "en": "Version {version} of the design waits for your approval: approve it with "
-        "`ut design approve`.",
-    },
-    "align.requirements_request": {
-        "it": "Modifica dei requisiti proposta dal modello:",
-        "en": "Change of the requirements proposed by the model:",
-    },
-    "align.requirements_missing": {
-        "it": "Lo Studio non ha una versione dei requisiti da modificare: non ho registrato "
-        "nessuna decisione.",
-        "en": "The Studio has no version of the requirements to change: no decision was recorded.",
-    },
-    "align.decided_requirements": {
-        "it": "Decisione registrata: dal commit {commit} è stata chiesta una modifica dei "
-        "requisiti.",
-        "en": "Decision recorded: a change of the requirements was requested from commit {commit}.",
+    "align.tests_marked": {
+        "it": "Il piano dei test va rifatto: al prossimo `ut test` lo Studio scrive un piano "
+        "nuovo che tiene conto di questa proposta.",
+        "en": "The test plan must be made again: at the next `ut test` the Studio writes a new "
+        "plan that takes this proposal into account.",
     },
     "align.requirements_approve": {
         "it": "Approvi i requisiti alla versione {version}? Dopo riaggancio il design approvato "
@@ -413,200 +226,318 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The requirements at version {version} wait for your approval: approve them with "
         "`ut init`.",
     },
-    "align.design_realigned": {
-        "it": "Il design è stato riagganciato alla Definizione nuova e confermato alla versione "
-        "{version}, senza ridisegnare le alternative.",
-        "en": "The design was re-anchored to the new Definition and confirmed at version "
-        "{version}, without redrawing the alternatives.",
+    "align.revision_left": {
+        "it": "Le differenze proposte aspettano la tua decisione nella sezione Definizione "
+        "dello Studio web.",
+        "en": "The proposed differences wait for your decision in the Definition section of the "
+        "web Studio.",
     },
-    "align.design_not_realigned": {
-        "it": "Questo Studio non sa ancora riagganciare il design alla Definizione nuova: "
-        "aggiornalo, poi lancia `ut sections update`.",
-        "en": "This Studio cannot re-anchor the design to the new Definition yet: update it, "
-        "then launch `ut sections update`.",
+    "align.design_changes": {
+        "it": "Che cosa cambia nel design:",
+        "en": "What changes in the design:",
     },
-    "align.design_realign_failed": {
-        "it": "Il design non è stato riagganciato alla Definizione nuova ({code}): riprova più "
-        "tardi con `ut sections update`.",
-        "en": "The design was not re-anchored to the new Definition ({code}): try again later "
-        "with `ut sections update`.",
+    "align.design_approve": {
+        "it": "Approvi questa modifica del design? Diventa una nuova versione, approvata subito.",
+        "en": "Do you approve this change of the design? It becomes a new version, approved at "
+        "once.",
     },
-    "align.request_keep": {
-        "it": "Premi Invio per inviarla così, oppure scrivi il tuo testo:",
-        "en": "Press Enter to send it as it is, or write your own text:",
+    "align.design_left": {
+        "it": "La modifica del design aspetta la tua decisione nella sezione Design dello Studio "
+        "web.",
+        "en": "The change of the design waits for your decision in the Design section of the web "
+        "Studio.",
     },
-    "align.request_write": {
-        "it": "Descrivi a parole che cosa deve cambiare perché segua questo commit (un testo "
-        "vuoto annulla e non registra niente):",
-        "en": "Describe in words what should change so that it follows this commit (an empty "
-        "text cancels and records nothing):",
+    "align.design_revised": {
+        "it": "Il design è ora alla versione {version}.",
+        "en": "The design is now at version {version}.",
     },
-    "align.request_none": {
-        "it": "Nessuna richiesta scritta: non ho registrato niente.",
-        "en": "No request written: nothing recorded.",
+    "align.pending_none": {
+        "it": "Nessuna proposta aspetta una decisione.",
+        "en": "No proposal waits for a decision.",
     },
-    "align.request_too_long": {
-        "it": "La richiesta ha al massimo {limit} caratteri: scrivila più breve.",
-        "en": "The request has at most {limit} characters: write it shorter.",
+    "align.pending_intro": {
+        "it": "Proposte che aspettano una decisione: {count}.",
+        "en": "Proposals waiting for a decision: {count}.",
     },
-    "align.tasks_intro": {
-        "it": "Scrivi i compiti per il codice, uno per riga (al massimo {limit}); una riga vuota "
-        "conclude.",
-        "en": "Write the tasks for the code, one per line (at most {limit}); an empty line ends "
-        "the list.",
+    "align.files_written": {
+        "it": "Esito salvato in {path}.",
+        "en": "Outcome saved in {path}.",
     },
-    "align.findings_intro": {
-        "it": "Rilievi dei twin su questo commit che possono diventare compiti:",
-        "en": "Findings of the twins on this commit that can become tasks:",
+    "align.design_heading": {
+        "it": "Codice di «{name}» allineato al design",
+        "en": 'Code of "{name}" aligned with the design',
     },
-    "align.findings_intro_verdict": {
-        "it": "Compiti proposti dal modello e rilievi dei twin su questo commit:",
-        "en": "Tasks proposed by the model and findings of the twins on this commit:",
+    "align.design_point_since": {
+        "it": "Punto di partenza: il design versione {version}, indicato con --since.",
+        "en": "Starting point: design version {version}, given with --since.",
     },
-    "align.findings_question": {
-        "it": "Quali rilievi diventano compiti? Scrivi i numeri separati da virgole o spazi, a per "
-        "tutti; Invio per nessuno:",
-        "en": "Which findings become tasks? Type their numbers separated by commas or spaces, a "
-        "for all; Enter for none:",
+    "align.design_point_run": {
+        "it": "Punto di partenza: il design versione {version}, l'ultimo portato nel codice.",
+        "en": "Starting point: design version {version}, the latest one brought into the code.",
     },
-    "align.findings_question_verdict": {
-        "it": "Quali diventano compiti? Scrivi i numeri separati da virgole o spazi, a per tutti; "
-        "Invio per i compiti proposti dal modello:",
-        "en": "Which become tasks? Type their numbers separated by commas or spaces, a for all; "
-        "Enter for the tasks proposed by the model:",
+    "align.design_point_verify": {
+        "it": "Punto di partenza: il design versione {version}, il punto allineato di `ut verify`.",
+        "en": "Starting point: design version {version}, the aligned point of `ut verify`.",
     },
-    "align.task_too_long": {
-        "it": "Un compito ha al massimo {limit} caratteri: scrivilo più breve.",
-        "en": "A task has at most {limit} characters: write it shorter.",
+    "align.design_current": {
+        "it": "Design approvato: versione {version}, alternativa {code}.",
+        "en": "Approved design: version {version}, alternative {code}.",
     },
-    "align.model_tasks_intro": {
-        "it": "Il modello propone questi compiti. Per ognuno premi Invio per tenerlo, scrivi un "
-        "testo nuovo per sostituirlo, oppure scrivi - per toglierlo.",
-        "en": "The model proposes these tasks. For each one press Enter to keep it, write a new "
-        "text to replace it, or write - to drop it.",
+    "align.design_nothing": {
+        "it": "Il codice è già allineato al design versione {version}: niente da fare.",
+        "en": "The code is already aligned with design version {version}: nothing to do.",
     },
-    "align.model_task": {"it": "Compito {number}: {text}", "en": "Task {number}: {text}"},
-    "align.model_task_edit": {
-        "it": "Invio lo tiene, - lo toglie:",
-        "en": "Enter keeps it, - drops it:",
+    "align.design_changes_heading": {
+        "it": "Che cosa cambia dal design {from} al design {to}: {count} differenze",
+        "en": "What changes from design {from} to design {to}: {count} differences",
     },
-    "align.folder_updated": {
-        "it": "Cartella di conoscenza aggiornata in orchestwin/ (versione {version}): "
-        "orchestwin/state contiene lo stato dello sviluppo.",
-        "en": "Knowledge folder updated in orchestwin/ (version {version}): orchestwin/state "
-        "holds the state of the development.",
+    "align.design_changes_heading_one": {
+        "it": "Che cosa cambia dal design {from} al design {to}: {count} differenza",
+        "en": "What changes from design {from} to design {to}: {count} difference",
     },
-    "align.folder_refused": {
-        "it": "Lo Studio non ha pubblicato la cartella di conoscenza ({code}): la decisione è "
-        "registrata; pubblicala più tardi con `ut package publish`.",
-        "en": "The Studio did not publish the knowledge folder ({code}): the decision is "
-        "recorded; publish it later with `ut package publish`.",
+    "align.design_other_changes": {
+        "it": "Altre {count} differenze riguardano critiche e criticità: non toccano il codice.",
+        "en": "{count} other differences concern critiques and concerns: they do not touch the "
+        "code.",
     },
-    "align.folder_not_updated": {
-        "it": "La cartella di conoscenza non è stata aggiornata ({code}): la decisione è "
-        "registrata; aggiornala più tardi con `ut package publish`.",
-        "en": "The knowledge folder was not updated ({code}): the decision is recorded; update "
-        "it later with `ut package publish`.",
+    "align.design_other_changes_one": {
+        "it": "Un'altra differenza riguarda critiche e criticità: non tocca il codice.",
+        "en": "One other difference concerns critiques and concerns: it does not touch the code.",
     },
+    "align.design_no_code_changes": {
+        "it": "Il design {to} non cambia schermate, flussi, testi né aspetto rispetto al design "
+        "{from}: niente da portare nel codice. Il punto allineato passa alla versione {to}.",
+        "en": "Design {to} changes no screen, flow, text or look compared with design {from}: "
+        "nothing to bring into the code. The aligned point moves to version {to}.",
+    },
+    "align.design_hand_commits": {
+        "it": "Il codice ha {count} commit dopo il punto allineato che lo Studio non ha ancora "
+        "esaminato: l'ordine di lavoro lo dice all'agente.",
+        "en": "The code has {count} commits after the aligned point that the Studio has not "
+        "examined yet: the work order tells the agent.",
+    },
+    "align.design_hand_commits_one": {
+        "it": "Il codice ha {count} commit dopo il punto allineato che lo Studio non ha ancora "
+        "esaminato: l'ordine di lavoro lo dice all'agente.",
+        "en": "The code has {count} commit after the aligned point that the Studio has not "
+        "examined yet: the work order tells the agent.",
+    },
+    "align.design_confirm": {
+        "it": "Avvio l'agente adesso? Lavora sul tuo account di Claude Code, non sullo Studio.",
+        "en": "Start the agent now? It works on your Claude Code account, not on the Studio.",
+    },
+    "align.design_next_steps": {
+        "it": "Rileggi le modifiche, registra il commit e lancia `ut verify`: quando lo segni "
+        "come allineato, il punto allineato di `ut verify` passa al design versione {version}.",
+        "en": "Review the changes, commit them and launch `ut verify`: when you mark the commit "
+        "as aligned, the aligned point of `ut verify` moves to design version {version}.",
+    },
+    "align.design_next_steps_failed": {
+        "it": "L'agente non ha finito: l'ordine di lavoro resta in {folder}; correggi e rilancia "
+        "`ut align --from-design`.",
+        "en": "The agent did not finish: the work order stays in {folder}; fix what went wrong "
+        "and launch `ut align --from-design` again.",
+    },
+    "align.design_line_selection": {
+        "it": "{sign} alternativa scelta: {to} al posto di {from}",
+        "en": "{sign} chosen alternative: {to} instead of {from}",
+    },
+    "align.design_line_alternative": {
+        "it": "{sign} alternativa {code} «{title}» cambiata{fields}",
+        "en": '{sign} alternative {code} "{title}" changed{fields}',
+    },
+    "align.design_line_workflow": {
+        "it": "{sign} flusso {code} «{title}» {what}{fields}",
+        "en": '{sign} flow {code} "{title}" {what}{fields}',
+    },
+    "align.design_line_visual": {
+        "it": "{sign} linguaggio visivo cambiato{fields}",
+        "en": "{sign} visual language changed{fields}",
+    },
+    "align.design_line_screen": {
+        "it": "{sign} schermata {code} «{title}» {what}{fields}",
+        "en": '{sign} screen {code} "{title}" {what}{fields}',
+    },
+    "align.design_line_element": {
+        "it": "{sign} schermata {screen}: elemento {code} «{title}» {what}{fields}",
+        "en": '{sign} screen {screen}: element {code} "{title}" {what}{fields}',
+    },
+    "align.design_line_transition": {
+        "it": "{sign} passaggio {code} «{title}» {what}{fields}",
+        "en": '{sign} transition {code} "{title}" {what}{fields}',
+    },
+    "align.design_line_mockup": {
+        "it": "{sign} mockup della schermata {code} «{title}» {what}",
+        "en": '{sign} mockup of screen {code} "{title}" {what}',
+    },
+    "align.design_line_styles": {
+        "it": "{sign} stili del mockup cambiati",
+        "en": "{sign} mockup styles changed",
+    },
+    "align.design_what_added": {"it": "aggiunta", "en": "added"},
+    "align.design_what_removed": {"it": "tolta", "en": "removed"},
+    "align.design_what_changed": {"it": "cambiata", "en": "changed"},
+    "align.design_what_added_masculine": {"it": "aggiunto", "en": "added"},
+    "align.design_what_removed_masculine": {"it": "tolto", "en": "removed"},
+    "align.design_what_changed_masculine": {"it": "cambiato", "en": "changed"},
+    "align.design_what_redrawn": {"it": "ridisegnato", "en": "redrawn"},
+    "align.design_field_title": {"it": "titolo", "en": "title"},
+    "align.design_field_summary": {"it": "sintesi", "en": "summary"},
+    "align.design_field_information_architecture": {
+        "it": "architettura delle informazioni",
+        "en": "information architecture",
+    },
+    "align.design_field_steps": {"it": "passi", "en": "steps"},
+    "align.design_field_state": {"it": "stato", "en": "state"},
+    "align.design_field_kind": {"it": "tipo", "en": "kind"},
+    "align.design_field_content": {"it": "contenuto", "en": "content"},
+    "align.design_field_accessible_name": {"it": "nome accessibile", "en": "accessible name"},
+    "align.design_field_options": {"it": "opzioni", "en": "options"},
+    "align.design_field_field_name": {"it": "nome del campo", "en": "field name"},
+    "align.design_field_required": {"it": "obbligatorietà", "en": "required"},
+    "align.design_field_product_name": {"it": "nome del prodotto", "en": "product name"},
+    "align.design_field_direction": {"it": "direzione visiva", "en": "visual direction"},
+    "align.design_field_palette": {"it": "colori", "en": "colours"},
+    "align.design_field_choices": {"it": "scelte visive", "en": "visual choices"},
+    "align.design_field_tokens": {"it": "token di stile", "en": "style tokens"},
+    "align.design_field_trigger": {"it": "elemento che lo avvia", "en": "element that starts it"},
+    "align.design_field_source": {"it": "schermata di partenza", "en": "starting screen"},
+    "align.design_field_target": {"it": "schermata di arrivo", "en": "destination screen"},
+    "align.design_field_outcome": {"it": "esito", "en": "outcome"},
+    "align.design_field_markup": {"it": "HTML", "en": "HTML"},
     "align.errors.ALIGN_SINCE_UNKNOWN": {
         "it": "Il commit {commit} indicato con --since non è in questo repository: controlla "
         "l'hash o il nome.",
         "en": "The commit {commit} given with --since is not in this repository: check the hash "
         "or the name.",
     },
-    "align.errors.ALIGN_DECIDE_UNKNOWN": {
-        "it": "Il commit {commit} indicato con --decide non è in questo repository: controlla "
-        "l'hash o il nome.",
-        "en": "The commit {commit} given with --decide is not in this repository: check the "
-        "hash or the name.",
+    "align.errors.ALIGN_PENDING_ALONE": {
+        "it": "--pending si usa da solo: non va insieme a --since o --dry-run.",
+        "en": "--pending goes alone: it cannot be used with --since or --dry-run.",
     },
-    "align.errors.ALIGN_DECIDE_ALONE": {
-        "it": "--decide si usa da solo: non va insieme a --since, --latest o --dry-run.",
-        "en": "--decide goes alone: it cannot be used with --since, --latest or --dry-run.",
+    "align.errors.ALIGN_PENDING_ALONE.FROM_DESIGN": {
+        "it": "--pending si usa da solo: non va insieme a --from-design.",
+        "en": "--pending goes alone: it cannot be used with --from-design.",
     },
-    "align.errors.ALIGN_RECHECK_ALONE": {
-        "it": "--recheck non va insieme a --since o --decide: usalo da solo, oppure con --latest "
-        "e --dry-run.",
-        "en": "--recheck cannot be used with --since or --decide: use it alone, or with --latest "
-        "and --dry-run.",
+    "align.errors.SPENDING_REFUSED.AGENT": {
+        "it": "L'agente non è partito: non hai confermato.",
+        "en": "The agent was not started: you did not confirm.",
     },
-    "align.errors.TASK_SOURCE_INVALID": {
-        "it": "Un rilievo scelto non è più nell'ultimo esame del commit (TASK_SOURCE_INVALID): non "
-        "è stato registrato niente. Rilancia `ut align --decide` su quel commit.",
-        "en": "A chosen finding is no longer in the latest review of the commit "
-        "(TASK_SOURCE_INVALID): nothing was recorded. Launch `ut align --decide` on that commit "
-        "again.",
+    "align.errors.CODE_AGENT_NOT_FOUND": {
+        "it": "Non trovo Claude Code (CODE_AGENT_NOT_FOUND): installalo, oppure indica il suo "
+        "programma con la variabile {variable}, oppure scegli un altro agente con "
+        "`ut code --agent custom --command`.",
+        "en": "Claude Code cannot be found (CODE_AGENT_NOT_FOUND): install it, or name its "
+        "program with the variable {variable}, or choose another agent with "
+        "`ut code --agent custom --command`.",
     },
-    "align.errors.ALIGN_NOT_REVIEWED": {
-        "it": "Il commit {commit} non ha ancora un esame dei twin nello Studio "
-        "(ALIGN_NOT_REVIEWED): lancia `ut align` per registrarlo e farlo esaminare, poi decidi.",
-        "en": "The commit {commit} has no review of the twins in the Studio yet "
-        "(ALIGN_NOT_REVIEWED): launch `ut align` to record it and have it reviewed, then "
-        "decide.",
+    "align.errors.CODE_AGENT_NOT_STARTED": {
+        "it": "L'agente {program} non è partito: {detail} (CODE_AGENT_NOT_STARTED).",
+        "en": "The agent {program} did not start: {detail} (CODE_AGENT_NOT_STARTED).",
     },
-    "align.errors.CHANGE_REVIEW_MODEL_NOT_CONFIGURED": {
-        "it": "I twin non possono esaminare il codice su questo Studio, perché non è collegato "
-        "nessun modello (CHANGE_REVIEW_MODEL_NOT_CONFIGURED). I commit restano registrati; chi "
-        "gestisce lo Studio può collegare un modello.",
-        "en": "The twins cannot review the code on this Studio, because no model is connected "
-        "(CHANGE_REVIEW_MODEL_NOT_CONFIGURED). The commits stay recorded; whoever runs the "
-        "Studio can connect a model.",
+    "align.errors.CODE_BUDGET_NEEDS_HEADLESS": {
+        "it": "--max-agent-usd vale solo quando l'agente è Claude Code senza conversazione, "
+        "scelto con `ut code --headless` (CODE_BUDGET_NEEDS_HEADLESS): Claude Code accetta un "
+        "tetto di spesa solo quando lavora da solo.",
+        "en": "--max-agent-usd works only when the agent is Claude Code without a conversation, "
+        "chosen with `ut code --headless` (CODE_BUDGET_NEEDS_HEADLESS): Claude Code accepts a "
+        "spending ceiling only when it works alone.",
+    },
+    "align.errors.CODE_MAX_USD_INVALID": {
+        "it": "--max-agent-usd vuole un importo maggiore di 0, per esempio 2.50 "
+        "(CODE_MAX_USD_INVALID).",
+        "en": "--max-agent-usd needs an amount above 0, for example 2.50 (CODE_MAX_USD_INVALID).",
+    },
+    "align.errors.CODE_COMMAND_INVALID": {
+        "it": "Il comando dell'agente custom salvato da `ut code` non si può usare "
+        "(CODE_COMMAND_INVALID): sceglilo di nuovo con `ut code --agent custom --command`.",
+        "en": "The command of the custom agent saved by `ut code` cannot be used "
+        "(CODE_COMMAND_INVALID): choose it again with `ut code --agent custom --command`.",
+    },
+    "align.errors.KNOWLEDGE_ALIGNMENT_MODEL_NOT_CONFIGURED": {
+        "it": "Questo Studio non può leggere le modifiche del codice, perché non è collegato "
+        "nessun modello. I commit restano registrati; chi gestisce lo Studio può collegare un "
+        "modello.",
+        "en": "This Studio cannot read the code changes, because no model is connected. The "
+        "commits stay recorded; whoever runs the Studio can connect a model.",
+    },
+    "align.errors.DESIGN_CHANGE_MODEL_NOT_CONFIGURED": {
+        "it": "Questo Studio non può modificare il design a parole, perché non è collegato "
+        "nessun modello: la proposta resta in attesa.",
+        "en": "This Studio cannot change the design from words, because no model is connected: "
+        "the proposal stays waiting.",
+    },
+    "align.errors.REQUIREMENTS_CHANGE_UNAVAILABLE": {
+        "it": "Questo Studio non può modificare la Definizione: la proposta resta in attesa.",
+        "en": "This Studio cannot change the Definition: the proposal stays waiting.",
+    },
+    "align.errors.DESIGN_CHANGE_UNAVAILABLE": {
+        "it": "Questo Studio non può modificare il Design: la proposta resta in attesa.",
+        "en": "This Studio cannot change the Design: the proposal stays waiting.",
     },
     "align.errors.REQUIREMENTS_APPROVAL_REQUIRED": {
-        "it": "In questo momento i requisiti non sono approvati "
-        "(REQUIREMENTS_APPROVAL_REQUIRED): approvali con `ut init`, poi rilancia `ut align`.",
-        "en": "The requirements are not approved at the moment (REQUIREMENTS_APPROVAL_REQUIRED): "
-        "approve them with `ut init`, then launch `ut align` again.",
+        "it": "In questo momento la Definizione non è approvata: approvala con `ut init`, poi "
+        "rilancia `ut align`.",
+        "en": "The Definition is not approved at the moment: approve it with `ut init`, then "
+        "launch `ut align` again.",
     },
     "align.errors.DESIGN_APPROVAL_REQUIRED": {
-        "it": "In questo momento il design non è approvato (DESIGN_APPROVAL_REQUIRED): "
-        "approvalo con `ut design approve`, poi rilancia `ut align`.",
-        "en": "The design is not approved at the moment (DESIGN_APPROVAL_REQUIRED): approve it "
-        "with `ut design approve`, then launch `ut align` again.",
+        "it": "In questo momento il Design non è approvato: approvalo con `ut design approve`, "
+        "poi rilancia `ut align`.",
+        "en": "The Design is not approved at the moment: approve it with `ut design approve`, "
+        "then launch `ut align` again.",
     },
-    "align.errors.USER_MODELING_APPROVAL_REQUIRED": {
-        "it": "In questo momento gli User Twin non sono approvati "
-        "(USER_MODELING_APPROVAL_REQUIRED): approvali con `ut init`, poi rilancia `ut align`.",
-        "en": "The User Twins are not approved at the moment (USER_MODELING_APPROVAL_REQUIRED): "
-        "approve them with `ut init`, then launch `ut align` again.",
+    "align.errors.DESIGN_ALTERNATIVE_NOT_CHOSEN": {
+        "it": "Il design non ha un'alternativa scelta: scegline una con `ut design`, poi riprova.",
+        "en": "The design has no chosen alternative: choose one with `ut design`, then try again.",
     },
     "align.errors.CODE_CHANGE_NOT_FOUND": {
-        "it": "Lo Studio non trova questo commit tra quelli registrati (CODE_CHANGE_NOT_FOUND): "
-        "rilancia `ut align`, che lo registra di nuovo.",
-        "en": "The Studio does not find this commit among the recorded ones "
-        "(CODE_CHANGE_NOT_FOUND): launch `ut align` again, and it records it again.",
+        "it": "Lo Studio non trova uno dei commit tra quelli registrati: rilancia `ut align`, "
+        "che lo registra di nuovo.",
+        "en": "The Studio does not find one of the commits among the recorded ones: launch "
+        "`ut align` again, and it records it again.",
     },
     "align.errors.CODE_CHANGE_AMBIGUOUS": {
-        "it": "L'inizio dell'hash indica più di un commit registrato (CODE_CHANGE_AMBIGUOUS): "
-        "usa l'hash completo.",
-        "en": "The start of the hash points to more than one recorded commit "
-        "(CODE_CHANGE_AMBIGUOUS): use the whole hash.",
+        "it": "L'inizio dell'hash indica più di un commit registrato: usa l'hash completo.",
+        "en": "The start of the hash points to more than one recorded commit: use the whole hash.",
+    },
+    "align.errors.ALIGNMENT_PROPOSAL_DECIDED": {
+        "it": "Questa proposta è già stata decisa: non cambia niente.",
+        "en": "This proposal was already decided: nothing changes.",
+    },
+    "align.errors.ALIGNMENT_PROPOSAL_NOT_FOUND": {
+        "it": "Lo Studio non trova questa proposta: rilancia `ut align --pending` per vedere "
+        "quelle in attesa.",
+        "en": "The Studio does not find this proposal: launch `ut align --pending` to see the "
+        "waiting ones.",
+    },
+    "align.errors.KNOWLEDGE_ALIGNMENT_RUN_NOT_FOUND": {
+        "it": "Lo Studio non trova questo esame delle modifiche del codice.",
+        "en": "The Studio does not find this review of the code changes.",
     },
     "align.errors.INVALID_PROVIDER_OUTPUT": {
-        "it": "Il modello ha dato una risposta che lo Studio non può usare "
-        "(INVALID_PROVIDER_OUTPUT): non è stato salvato niente. Rilanciando `ut align` si "
-        "riprova, ed è una nuova spesa.",
-        "en": "The model gave an answer that the Studio cannot use (INVALID_PROVIDER_OUTPUT): "
-        "nothing was stored. Launching `ut align` again tries once more, and it is a new "
-        "expense.",
-    },
-    "align.errors.RESPONSE_SCHEMA_ERROR": {
-        "it": "Il modello ha dato una risposta nella forma sbagliata (RESPONSE_SCHEMA_ERROR): "
-        "non è stato salvato niente. Rilanciando `ut align` si riprova, ed è una nuova spesa.",
-        "en": "The model gave an answer in the wrong shape (RESPONSE_SCHEMA_ERROR): nothing was "
-        "stored. Launching `ut align` again tries once more, and it is a new expense.",
-    },
-    "align.errors.INCOMPLETE_OUTPUT": {
-        "it": "La risposta del modello si è interrotta a metà (INCOMPLETE_OUTPUT): non è stato "
-        "salvato niente. Rilanciando `ut align` si riprova, ed è una nuova spesa.",
-        "en": "The answer of the model stopped halfway (INCOMPLETE_OUTPUT): nothing was stored. "
+        "it": "Il modello ha dato una risposta che lo Studio non può usare: non è stato salvato "
+        "niente. Rilanciando `ut align` si riprova, ed è una nuova spesa.",
+        "en": "The model gave an answer that the Studio cannot use: nothing was stored. "
         "Launching `ut align` again tries once more, and it is a new expense.",
     },
+    "align.errors.RESPONSE_SCHEMA_ERROR": {
+        "it": "Il modello ha dato una risposta nella forma sbagliata: non è stato salvato "
+        "niente. Rilanciando `ut align` si riprova, ed è una nuova spesa.",
+        "en": "The model gave an answer in the wrong shape: nothing was stored. Launching "
+        "`ut align` again tries once more, and it is a new expense.",
+    },
+    "align.errors.INCOMPLETE_OUTPUT": {
+        "it": "La risposta del modello si è interrotta a metà: non è stato salvato niente. "
+        "Rilanciando `ut align` si riprova, ed è una nuova spesa.",
+        "en": "The answer of the model stopped halfway: nothing was stored. Launching "
+        "`ut align` again tries once more, and it is a new expense.",
+    },
     "align.errors.CONTEXT_BUDGET_EXCEEDED": {
-        "it": "Il commit è troppo grande perché il modello lo esamini (CONTEXT_BUDGET_EXCEEDED): "
-        "dividi le modifiche in commit più piccoli.",
-        "en": "The commit is too large for the model to review (CONTEXT_BUDGET_EXCEEDED): split "
-        "the changes into smaller commits.",
+        "it": "I commit sono troppo grandi perché il modello li legga insieme: usa --since per "
+        "esaminarne meno alla volta.",
+        "en": "The commits are too large for the model to read together: use --since to review "
+        "fewer of them at a time.",
     },
     "align.errors.GENERATION_BUDGET_EXCEEDED": {
         "it": "Lo Studio ha rifiutato l'esame perché supererebbe un tetto di spesa. I commit "
@@ -641,21 +572,21 @@ MESSAGES: dict[str, dict[str, str]] = {
         "then launch `ut align` again.",
     },
     "align.errors.GENERATION_LOST": {
-        "it": "{label}: l'esame si è perso, forse perché lo Studio è ripartito. I commit restano "
-        "registrati: rilancia `ut align` (un nuovo esame è una nuova spesa).",
-        "en": "{label}: the review was lost, perhaps because the Studio restarted. The commits "
-        "stay recorded: launch `ut align` again (a new review is a new expense).",
+        "it": "{label}: la generazione si è persa, forse perché lo Studio è ripartito. I commit "
+        "restano registrati: rilancia `ut align` (un nuovo esame è una nuova spesa).",
+        "en": "{label}: the generation was lost, perhaps because the Studio restarted. The "
+        "commits stay recorded: launch `ut align` again (a new review is a new expense).",
     },
     "align.errors.GENERATION_STILL_RUNNING": {
-        "it": "{label}: l'esame continua nello Studio. Rilancia `ut align` più tardi: lo ritrova "
-        "senza spendere di nuovo.",
-        "en": "{label}: the review goes on in the Studio. Launch `ut align` again later: it "
-        "finds it without spending again.",
+        "it": "{label}: la generazione continua nello Studio. Rilancia `ut align` più tardi: "
+        "le proposte in attesa si decidono con `ut align --pending`.",
+        "en": "{label}: the generation goes on in the Studio. Launch `ut align` again later: "
+        "the waiting proposals are decided with `ut align --pending`.",
     },
     "align.errors.GENERATION_INTERRUPTED": {
-        "it": "Interrotto. {label}: l'esame continua nello Studio; rilanciando `ut align` lo "
-        "ritrovi senza spendere di nuovo.",
-        "en": "Interrupted. {label}: the review goes on in the Studio; launching `ut align` "
-        "again finds it without spending again.",
+        "it": "Interrotto. {label}: la generazione continua nello Studio; le proposte in attesa "
+        "si decidono con `ut align --pending`.",
+        "en": "Interrupted. {label}: the generation goes on in the Studio; the waiting "
+        "proposals are decided with `ut align --pending`.",
     },
 }

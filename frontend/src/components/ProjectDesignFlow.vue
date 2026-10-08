@@ -213,6 +213,7 @@ import {
 } from "vue";
 
 import { apiClient } from "@/api/client";
+import AlignmentProposalsNotice from "./AlignmentProposalsNotice.vue";
 import ArtifactViewSwitch, { type ArtifactView } from "./ArtifactViewSwitch.vue";
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
 import DesignAlternativeComparison, {
@@ -262,6 +263,11 @@ import type { DesignAlignmentApi } from "../api/designAlignment";
 import { designIterationsApi, type DesignIterationsApi } from "../api/designIterations";
 import { designLoopApi, DesignLoopApiError, type DesignLoopApi } from "../api/designLoop";
 import { designMockupsApi, type DesignMockupsApi } from "../api/designMockups";
+import {
+  designRestoreApi,
+  DesignRestoreApiError,
+  type DesignRestoreApi,
+} from "../api/designRestore";
 import { designReviewPinsApi, type DesignReviewPinsApi } from "../api/designReviewPins";
 import { isGenerationInterrupted } from "../api/generationJobs";
 import { modelUsageApi, type ModelUsageApi } from "../api/modelUsage";
@@ -375,6 +381,7 @@ const props = withDefaults(
     pinsApi?: DesignReviewPinsApi;
     usageApi?: ModelUsageApi;
     distanceApi?: DesignDistanceApi;
+    restoreApi?: DesignRestoreApi;
     upstream?: UpstreamValue;
     active?: boolean;
     sectionsMode?: boolean;
@@ -551,6 +558,27 @@ const messages = {
       "Gate 5 approves the exact Design Package ID, version, and content hash. Owner approval is governance, not empirical validation. Synthetic User Twin feedback remains a design hypothesis.",
     history: "Versions of the design",
     historyItem: "Version {n} · {date}",
+    historyTitle: "Versions of the design ({n})",
+    historyCurrent: "current",
+    restoreVersion: "Go back to this version",
+    restoreNamed: "version {n}",
+    restoreText:
+      "A new version is created, identical to version {n}: then it has to be approved, like every new version.",
+    restoreConfirm: "Go back to version {n}",
+    restoreCancel: "Cancel",
+    restoreRunning: "Going back to version {n}…",
+    restoreDone:
+      "Version {m} created from version {n}: approve it with “Approve the chosen design”.",
+    restoreCurrent:
+      "The current design is already the same as version {n}: there is nothing to restore.",
+    restoreMissing: "Version {n} is no longer in the Studio: reload the page.",
+    restoreRequirements:
+      "Version {n} cites requirements that the Definition no longer contains: it cannot come back.",
+    restoreTwins:
+      "Version {n} was prepared with twins different from the current ones: it cannot come back.",
+    restoreContext: "An earlier step needs updating: update it, then go back to this version.",
+    restoreFailed:
+      "Going back to version {n} did not work, so nothing changed. Try again in a moment.",
     decided: "Changes already decided",
     applied: "Applied",
     discarded: "Discarded",
@@ -719,6 +747,27 @@ const messages = {
       "Il Gate 5 approva ID, versione e hash esatti del Design Package. L'approvazione del proprietario è governance, non validazione empirica. Il feedback sintetico degli User Twin resta un'ipotesi progettuale.",
     history: "Versioni del design",
     historyItem: "Versione {n} · {date}",
+    historyTitle: "Versioni del design ({n})",
+    historyCurrent: "attuale",
+    restoreVersion: "Torna a questa versione",
+    restoreNamed: "versione {n}",
+    restoreText:
+      "Nasce una versione nuova, uguale alla versione {n}: poi va approvata, come ogni versione nuova.",
+    restoreConfirm: "Torna alla versione {n}",
+    restoreCancel: "Annulla",
+    restoreRunning: "Torno alla versione {n}…",
+    restoreDone:
+      "Versione {m} creata dalla versione {n}: approvala con «Approva il design scelto».",
+    restoreCurrent:
+      "Il design attuale è già uguale alla versione {n}: non c'è niente da ripristinare.",
+    restoreMissing: "La versione {n} non c'è più nello Studio: ricarica la pagina.",
+    restoreRequirements:
+      "La versione {n} cita requisiti che la Definizione non contiene più: non può tornare.",
+    restoreTwins:
+      "La versione {n} è stata preparata con twin diversi da quelli di adesso: non può tornare.",
+    restoreContext: "Un passo precedente è da aggiornare: aggiornalo, poi torna a questa versione.",
+    restoreFailed:
+      "Il ritorno alla versione {n} non è riuscito: non è cambiato nulla. Riprova tra poco.",
     decided: "Modifiche già decise",
     applied: "Applicata",
     discarded: "Scartata",
@@ -752,6 +801,7 @@ const iterationsApi = computed(() => props.iterationsApi ?? designIterationsApi)
 const pinsApi = computed(() => props.pinsApi ?? designReviewPinsApi);
 const usageApi = computed(() => props.usageApi ?? modelUsageApi);
 const distanceApi = computed(() => props.distanceApi ?? designApi);
+const restoreApi = computed(() => props.restoreApi ?? designRestoreApi);
 
 const uid = useId();
 const root = ref<HTMLElement | null>(null);
@@ -787,6 +837,11 @@ const distance = ref<DesignDistanceReportPayload | null>(null);
 const validationFailure = ref<{ key: string; code: string } | null>(null);
 const applyingSource = ref<string | null>(null);
 const applyFailure = ref<{ id: string; code: string } | null>(null);
+const restoringVersion = ref<number | null>(null);
+const restoreBusy = ref(false);
+const restoreError = ref<string | null>(null);
+const restoreStatus = ref("");
+const restoreStatusElement = ref<HTMLElement | null>(null);
 const prepared = new Set<string>();
 const stepShown = ref(false);
 const lifetime = new AbortController();
@@ -824,6 +879,18 @@ const requirementsSpecification = computed(() =>
 );
 const pendingDiff = computed(() => store.pendingDiffs[0] ?? null);
 const decidedDiffs = computed(() => store.diffHistory.filter((diff) => diff.status !== "PROPOSED"));
+const historyItems = computed(() => {
+  const notes = new Map<string, string>();
+  for (const diff of store.diffHistory) {
+    const reason = diff.decision_reason?.trim() ?? "";
+    if (diff.applied_version_id !== null && reason.length > 0) {
+      notes.set(diff.applied_version_id, reason);
+    }
+  }
+  return [...store.history]
+    .sort((left, right) => right.version_number - left.version_number)
+    .map((version) => ({ version, note: notes.get(version.id) ?? null }));
+});
 const twinReferences = computed(() => packageValue.value?.grounding.user_twin_references ?? []);
 const twinNames = computed(() =>
   Object.fromEntries(twinReferences.value.map((reference) => [reference.twin_id, reference.name])),
@@ -1987,6 +2054,11 @@ function onReapproved(): void {
   changed();
 }
 
+async function onProposalApplied(): Promise<void> {
+  await load();
+  changed();
+}
+
 async function onInsightApplied(application: InsightApplicationPayload): Promise<void> {
   if (application.id === handledApplicationId) {
     return;
@@ -2327,6 +2399,81 @@ async function removeAssertion(rule: string): Promise<void> {
   }
 }
 
+function restoreButtonId(number: number): string {
+  return `${uid}-restore-${number}`;
+}
+
+function restoreConfirmId(number: number): string {
+  return `${uid}-restore-confirm-${number}`;
+}
+
+function restoreTextId(number: number): string {
+  return `${uid}-restore-text-${number}`;
+}
+
+function restoreFailure(error: unknown, number: number): string {
+  const text = copy.value;
+  const code = error instanceof DesignRestoreApiError ? error.code : null;
+  const known: Record<string, string> = {
+    DESIGN_RESTORE_CURRENT: text.restoreCurrent,
+    DESIGN_VERSION_NOT_FOUND: text.restoreMissing,
+    REQUIREMENT_NO_LONGER_AVAILABLE: text.restoreRequirements,
+    TWIN_SET_CHANGED: text.restoreTwins,
+    DESIGN_CONTEXT_CHANGED: text.restoreContext,
+    DIFF_ALREADY_PENDING: text.pendingOther,
+  };
+  return fill((code === null ? undefined : known[code]) ?? text.restoreFailed, { n: number });
+}
+
+async function startRestore(version: DesignPackageVersionPayload): Promise<void> {
+  restoreError.value = null;
+  restoreStatus.value = "";
+  restoringVersion.value = version.version_number;
+  await nextTick();
+  document.getElementById(restoreConfirmId(version.version_number))?.focus();
+}
+
+async function cancelRestore(version: DesignPackageVersionPayload): Promise<void> {
+  restoringVersion.value = null;
+  restoreError.value = null;
+  await nextTick();
+  document.getElementById(restoreButtonId(version.version_number))?.focus();
+}
+
+async function restoreVersion(version: DesignPackageVersionPayload): Promise<void> {
+  if (restoreBusy.value || store.isBusy || deciding.value) {
+    return;
+  }
+  const number = version.version_number;
+  restoreBusy.value = true;
+  restoreError.value = null;
+  restoreStatus.value = fill(copy.value.restoreRunning, { n: number });
+  try {
+    const answer = await authorizedRequest((token) =>
+      restoreApi.value.restore(
+        props.projectId,
+        { version_number: number, locale: props.locale === "it" ? "it-IT" : "en-US" },
+        token,
+      ),
+    );
+    restoringVersion.value = null;
+    await load();
+    nextStepRefresh.value++;
+    changed();
+    restoreStatus.value = fill(copy.value.restoreDone, {
+      m: answer.revision.version?.version_number ?? "",
+      n: number,
+    });
+    await nextTick();
+    restoreStatusElement.value?.focus();
+  } catch (error) {
+    restoreStatus.value = "";
+    restoreError.value = restoreFailure(error, number);
+  } finally {
+    restoreBusy.value = false;
+  }
+}
+
 function prefersReducedMotion(): boolean {
   return (
     typeof window.matchMedia === "function" &&
@@ -2428,6 +2575,11 @@ function closeDialog(): void {
   dialogSequence++;
   dialog.value = null;
   dialogBusy.value = false;
+}
+
+function onDialogApplied(): void {
+  iterationScreen.value = null;
+  changed();
 }
 
 async function openDeclarative(alternativeId: string): Promise<void> {
@@ -3075,6 +3227,14 @@ onBeforeUnmount(() => {
         class="grid gap-6"
         data-testid="design-text-view"
       >
+        <AlignmentProposalsNotice
+          :project-id="projectId"
+          section="DESIGN"
+          :locale="locale"
+          :authorize="authorizedRequest"
+          @applied="onProposalApplied"
+        />
+
         <section
           v-if="store.pendingDiffs.length > 0"
           class="grid gap-3"
@@ -3158,6 +3318,129 @@ onBeforeUnmount(() => {
             @screen="iterationScreen = $event"
           />
         </div>
+
+        <details
+          v-if="store.history.length > 0"
+          class="group rounded-tile border border-night-line bg-night-raised"
+          data-testid="design-history"
+        >
+          <summary
+            class="flex min-h-12 cursor-pointer list-none items-center gap-3 px-5 py-3 [&::-webkit-details-marker]:hidden"
+            data-testid="design-history-summary"
+          >
+            <span
+              class="inline-block text-xs text-on-night-3 group-open:rotate-90"
+              aria-hidden="true"
+              >▸</span
+            >
+            <span class="text-[15px] font-semibold">
+              {{ fill(copy.historyTitle, { n: store.history.length }) }}
+            </span>
+          </summary>
+          <div class="grid gap-4 border-t border-night-line px-5 py-4">
+            <p
+              ref="restoreStatusElement"
+              class="m-0 text-sm leading-normal text-on-night-2"
+              role="status"
+              tabindex="-1"
+              data-testid="design-restore-status"
+            >
+              {{ restoreStatus }}
+            </p>
+            <ol class="m-0 grid list-none gap-4 p-0" data-testid="design-history-list">
+              <li
+                v-for="{ version, note } in historyItems"
+                :key="version.id"
+                class="grid gap-2 border-t border-night-line pt-4 first:border-t-0 first:pt-0"
+              >
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <span class="text-[15px] text-on-night">
+                    {{
+                      fill(copy.historyItem, {
+                        n: version.version_number,
+                        date: formatDate(version.created_at),
+                      })
+                    }}
+                  </span>
+                  <span
+                    v-if="version.id === current.id"
+                    class="inline-flex min-h-7 items-center gap-1.5 rounded-pill border border-petrol-on-night bg-petrol-on-night/16 px-3 text-xs font-semibold whitespace-nowrap text-petrol-on-night-2"
+                    data-testid="design-history-current"
+                  >
+                    <span
+                      class="inline-block h-2 w-2 rounded-full bg-petrol-on-night"
+                      aria-hidden="true"
+                    />
+                    {{ copy.historyCurrent }}
+                  </span>
+                </div>
+                <p
+                  v-if="note !== null"
+                  class="m-0 text-sm leading-normal text-on-night-2"
+                  data-testid="design-history-note"
+                >
+                  {{ note }}
+                </p>
+                <div v-if="version.id !== current.id" class="grid gap-2">
+                  <UiButton
+                    v-if="restoringVersion !== version.version_number"
+                    :id="restoreButtonId(version.version_number)"
+                    variant="outline"
+                    class="justify-self-start"
+                    :disabled="restoreBusy || store.isBusy || deciding || designJob !== null"
+                    data-testid="design-restore"
+                    @click="startRestore(version)"
+                  >
+                    {{ copy.restoreVersion
+                    }}<span class="sr-only"
+                      >: {{ fill(copy.restoreNamed, { n: version.version_number }) }}</span
+                    >
+                  </UiButton>
+                  <div
+                    v-else
+                    class="grid gap-3 rounded-field border border-night-line-strong px-4 py-3"
+                    data-testid="design-restore-panel"
+                  >
+                    <p
+                      :id="restoreTextId(version.version_number)"
+                      class="m-0 text-sm leading-normal text-on-night-2"
+                    >
+                      {{ fill(copy.restoreText, { n: version.version_number }) }}
+                    </p>
+                    <p
+                      v-if="restoreError !== null"
+                      class="m-0 text-sm leading-normal text-fail-on-night"
+                      role="alert"
+                      data-testid="design-restore-error"
+                    >
+                      {{ restoreError }}
+                    </p>
+                    <div class="flex flex-wrap gap-3">
+                      <UiButton
+                        :id="restoreConfirmId(version.version_number)"
+                        variant="pill"
+                        :disabled="restoreBusy || store.isBusy || deciding"
+                        :aria-describedby="restoreTextId(version.version_number)"
+                        data-testid="design-restore-confirm"
+                        @click="restoreVersion(version)"
+                      >
+                        {{ fill(copy.restoreConfirm, { n: version.version_number }) }}
+                      </UiButton>
+                      <UiButton
+                        variant="quiet"
+                        :disabled="restoreBusy"
+                        data-testid="design-restore-cancel"
+                        @click="cancelRestore(version)"
+                      >
+                        {{ copy.restoreCancel }}
+                      </UiButton>
+                    </div>
+                  </div>
+                </div>
+              </li>
+            </ol>
+          </div>
+        </details>
 
         <DesignAlternativeComparison
           :alternatives="current.package.alternatives"
@@ -3775,8 +4058,15 @@ onBeforeUnmount(() => {
         :workflows="workflowsByAlternative[dialog.alternativeId] ?? []"
         :busy="dialogBusy"
         :locale="locale"
+        :editable="iterationMode && dialog.alternativeId === chosenAlternativeId"
+        :authorize="authorizedRequest"
+        :iterations-api="iterationsApi"
+        :mockups-api="mockupsApi"
+        :signal="lifetime.signal"
         @close="closeDialog"
         @screen="onDialogScreen"
+        @version="openIterationSide('after', $event)"
+        @applied="onDialogApplied"
       />
     </template>
 

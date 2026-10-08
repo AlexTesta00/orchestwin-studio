@@ -19,7 +19,7 @@ from orchestwin.cli.messages import known
 from .support.fake_studio import FakeProject, FakeStudio
 from .support.folders import valid_archive, valid_files
 from .support.terminal import TEST_PASSWORD, Run, link_folder, run_ut, store_session
-from .support.transports import NoNetwork
+from .support.transports import API, NoNetwork, ScriptedTransport
 
 EMAIL = "owner@example.com"
 WIDE = {"COLUMNS": "200"}
@@ -90,6 +90,12 @@ def ut(tmp_path: Path, *arguments: str, answers: Sequence[str] = ()) -> Run:
 
 def offline(tmp_path: Path, *arguments: str) -> Run:
     return run_ut(list(arguments), tmp_path, transport=NoNetwork(), variables=WIDE)
+
+
+def accounts_only() -> ScriptedTransport:
+    return ScriptedTransport().expect(
+        "GET", f"{API}/auth/mode", body={"access_mode": "ACCOUNTS", "registration_open": True}
+    )
 
 
 def knowledge_folder(tmp_path: Path) -> Path:
@@ -628,7 +634,9 @@ def test_the_state_of_the_folder_when_the_studio_cannot_be_asked(tmp_path: Path)
     knowledge.unpack(valid_archive(), knowledge_folder(tmp_path))
     edit(knowledge_folder(tmp_path))
 
-    signed_out = offline(tmp_path, "--lang", "it", "package")
+    signed_out = run_ut(
+        ["--lang", "it", "package"], tmp_path, transport=accounts_only(), variables=WIDE
+    )
     store_session(tmp_path)
     unreachable_run = run_ut(["package"], tmp_path, transport=Offline(), variables=WIDE)
 
@@ -681,7 +689,7 @@ def test_history_without_versions_and_outside_the_studio(tmp_path: Path) -> None
     signed_out = run_ut(
         ["package", "history"],
         tmp_path,
-        transport=NoNetwork(),
+        transport=accounts_only(),
         working_directory=tmp_path / "other",
     )
 

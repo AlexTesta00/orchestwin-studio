@@ -9,6 +9,7 @@ from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import modeling as modeling_api
 from orchestwin.cli.api import twin_chat
+from orchestwin.cli.client import ensure_access
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows.code_order import project_language
@@ -24,20 +25,20 @@ if TYPE_CHECKING:
 
 MICRO_USD: Final = 1_000_000
 CRITIQUE_KEYS: Final[Mapping[str, str]] = {
-    changes_api.FINE: "align.critique_fine",
-    changes_api.CONCERN: "align.critique_concern",
-    changes_api.DRIFT: "align.critique_drift",
+    changes_api.FINE: "verify.critique_fine",
+    changes_api.CONCERN: "verify.critique_concern",
+    changes_api.DRIFT: "verify.critique_drift",
 }
 SEVERITY_KEYS: Final[Mapping[str, str]] = {
-    "LOW": "align.severity_low",
-    "MEDIUM": "align.severity_medium",
-    "HIGH": "align.severity_high",
+    "LOW": "verify.severity_low",
+    "MEDIUM": "verify.severity_medium",
+    "HIGH": "verify.severity_high",
 }
 VERDICT_KEYS: Final[Mapping[str, str]] = {
-    changes_api.ALIGNED: "align.verdict_aligned",
-    changes_api.CODE_DRIFT: "align.verdict_code_drift",
-    changes_api.DESIGN_OUTDATED: "align.verdict_design_outdated",
-    changes_api.REQUIREMENTS_OUTDATED: "align.verdict_requirements_outdated",
+    changes_api.ALIGNED: "verify.verdict_aligned",
+    changes_api.CODE_DRIFT: "verify.verdict_code_drift",
+    changes_api.DESIGN_OUTDATED: "verify.verdict_design_outdated",
+    changes_api.REQUIREMENTS_OUTDATED: "verify.verdict_requirements_outdated",
 }
 REQUIREMENTS_DOCUMENT: Final = ("requirements", "requirements.json")
 DESIGN_DOCUMENT: Final = ("design", "design.json")
@@ -66,9 +67,7 @@ def prepare(context: CommandContext, *, repository: bool = True) -> Workspace:
         raise CliError("PROJECT_NOT_LINKED")
     link = project.link()
     client = context.client()
-    session = context.sessions.read(client.studio)
-    if session is None or not session.signed_in:
-        raise CliError("NOT_SIGNED_IN", values={"studio": client.studio.origin})
+    ensure_access(context, client)
     root = git.repository_root(context, project.root) if repository else project.root
     if root is None:
         raise CliError("ALIGN_NO_GIT", values={"folder": str(project.root)})
@@ -123,7 +122,7 @@ def dismiss_folder_commit(
         workspace.project_id,
         newest.hash,
         changes_api.DISMISSED,
-        note=project_text(context, workspace, "align.folder_note"),
+        note=project_text(context, workspace, "verify.folder_note"),
     )
     return True
 
@@ -187,7 +186,7 @@ def review(
     locale: str,
     again: bool = False,
 ) -> Mapping[str, object]:
-    label = context.text("align.review_label", commit=git.short(commit))
+    label = context.text("verify.review_label", commit=git.short(commit))
     result = jobs.generate(
         context,
         workspace.client,
@@ -243,7 +242,7 @@ def titles(project: ProjectFolder) -> Titles:
 
 def commit_line(context: CommandContext, commit: git.Commit) -> str:
     return context.text(
-        "align.commit_line",
+        "verify.commit_line",
         commit=git.short(commit.hash),
         date=git.commit_date(commit.committed_at),
         line=git.first_line(commit.message),
@@ -262,20 +261,20 @@ def show_run(
     commit = git.short(run.get("commit"))
     console.write()
     if message:
-        console.heading(context.text("align.review_heading", commit=commit, line=message))
+        console.heading(context.text("verify.review_heading", commit=commit, line=message))
     else:
-        console.heading(context.text("align.review_heading_plain", commit=commit))
+        console.heading(context.text("verify.review_heading_plain", commit=commit))
     critiques = _mappings(run.get("critiques"))
     if not critiques:
-        console.say("align.no_critiques")
+        console.say("verify.no_critiques")
     for critique in critiques:
-        name = _text(critique.get("twin_name")) or context.text("align.twin_unknown")
+        name = _text(critique.get("twin_name")) or context.text("verify.twin_unknown")
         verdict = critique.get("verdict")
         key = CRITIQUE_KEYS.get(verdict) if isinstance(verdict, str) else None
         console.write()
         console.write(
             context.text(
-                "align.twin_line",
+                "verify.twin_line",
                 name=name,
                 verdict=context.text(key) if key else str(verdict or "-"),
             )
@@ -287,11 +286,11 @@ def show_run(
         if findings:
             bullets(context, [finding_line(context, item, names) for item in findings], indent="  ")
         else:
-            wrapped(context, context.text("align.no_findings"), indent="  ")
+            wrapped(context, context.text("verify.no_findings"), indent="  ")
     show_verdict(context, run, names)
     cost = run.get("cost_microusd")
     if isinstance(cost, int) and not isinstance(cost, bool) and cost > 0:
-        console.say("align.review_cost", amount=costs.usd_text(cost / MICRO_USD, context.language))
+        console.say("verify.review_cost", amount=costs.usd_text(cost / MICRO_USD, context.language))
 
 
 def show_verdict(context: CommandContext, run: Mapping[str, object], names: Titles) -> None:
@@ -300,11 +299,11 @@ def show_verdict(context: CommandContext, run: Mapping[str, object], names: Titl
     status = alignment.get("status")
     key = VERDICT_KEYS.get(status) if isinstance(status, str) else None
     console.write()
-    console.heading(context.text("align.verdict_heading"))
+    console.heading(context.text("verify.verdict_heading"))
     if key is not None:
         wrapped(context, context.text(key))
     else:
-        wrapped(context, context.text("align.verdict_other", status=str(status or "-")))
+        wrapped(context, context.text("verify.verdict_other", status=str(status or "-")))
     summary = _text(alignment.get("summary"))
     if summary:
         wrapped(context, summary, indent="  ")
@@ -314,22 +313,22 @@ def show_verdict(context: CommandContext, run: Mapping[str, object], names: Titl
     screens = [item for item in _list(affected.get("screens")) if isinstance(item, str)]
     if requirements:
         items = "; ".join(named(context, code, names.requirements) for code in requirements)
-        wrapped(context, context.text("align.affected_requirements", items=items))
+        wrapped(context, context.text("verify.affected_requirements", items=items))
     if screens:
         items = "; ".join(named(context, code, names.screens) for code in screens)
-        wrapped(context, context.text("align.affected_screens", items=items))
+        wrapped(context, context.text("verify.affected_screens", items=items))
     design_request = _text(alignment.get("design_request"))
     if design_request:
-        console.say("align.proposed_design")
-        wrapped(context, context.text("align.quoted", text=design_request), indent="  ")
+        console.say("verify.proposed_design")
+        wrapped(context, context.text("verify.quoted", text=design_request), indent="  ")
     requirements_request = _text(alignment.get("requirements_request"))
     if requirements_request:
-        console.say("align.proposed_requirements")
-        wrapped(context, context.text("align.quoted", text=requirements_request), indent="  ")
+        console.say("verify.proposed_requirements")
+        wrapped(context, context.text("verify.quoted", text=requirements_request), indent="  ")
     tasks = [_text(item) for item in _list(alignment.get("code_tasks"))]
     tasks = [item for item in tasks if item]
     if tasks:
-        console.say("align.proposed_tasks")
+        console.say("verify.proposed_tasks")
         bullets(context, tasks, indent="  ")
 
 
@@ -337,7 +336,7 @@ def finding_line(context: CommandContext, finding: Mapping[str, object], names: 
     severity = finding.get("severity")
     key = SEVERITY_KEYS.get(severity) if isinstance(severity, str) else None
     line = context.text(
-        "align.finding",
+        "verify.finding",
         severity=context.text(key) if key else str(severity or "-"),
         text=_text(finding.get("text")),
     )
@@ -348,32 +347,32 @@ def finding_line(context: CommandContext, finding: Mapping[str, object], names: 
     if isinstance(requirement, str) and requirement:
         title = names.requirements.get(requirement)
         parts.append(
-            context.text("align.about_requirement", code=requirement, title=title)
+            context.text("verify.about_requirement", code=requirement, title=title)
             if title
-            else context.text("align.about_requirement_code", code=requirement)
+            else context.text("verify.about_requirement_code", code=requirement)
         )
     screen = about.get("screen")
     if isinstance(screen, str) and screen:
         title = names.screens.get(screen)
         parts.append(
-            context.text("align.about_screen", code=screen, title=title)
+            context.text("verify.about_screen", code=screen, title=title)
             if title
-            else context.text("align.about_screen_code", code=screen)
+            else context.text("verify.about_screen_code", code=screen)
         )
     path = about.get("file")
     if isinstance(path, str) and path:
-        parts.append(context.text("align.about_file", path=path))
+        parts.append(context.text("verify.about_file", path=path))
     if parts:
-        line = context.text("align.finding_about", finding=line, about=", ".join(parts))
+        line = context.text("verify.finding_about", finding=line, about=", ".join(parts))
     action = _text(finding.get("action"))
     if action:
-        line = context.text("align.finding_action", finding=line, action=action)
+        line = context.text("verify.finding_action", finding=line, action=action)
     return line
 
 
 def named(context: CommandContext, code: str, titles_by_code: Mapping[str, str]) -> str:
     title = titles_by_code.get(code)
-    return context.text("align.named", code=code, title=title) if title else code
+    return context.text("verify.named", code=code, title=title) if title else code
 
 
 def _mappings(value: object) -> list[Mapping[str, object]]:

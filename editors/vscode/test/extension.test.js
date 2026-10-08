@@ -308,17 +308,23 @@ describe("the extension", () => {
 
   it("reuses the terminal while it is open and opens another one after it closed", () => {
     session = start({ folders: [root] });
-    session.view.send({ command: "align" });
+    session.view.send({ command: "verify" });
     session.view.send({ command: "recheck" });
     assert.equal(session.created.length, 1);
     assert.deepEqual(session.created[0].sent, [
-      ["ut align", true],
-      ["ut align --recheck", true],
+      ["ut verify", true],
+      ["ut verify --recheck", true],
     ]);
     session.created[0].close();
+    session.view.send({ command: "align" });
+    session.view.send({ command: "alignDesign" });
     session.view.send({ command: "tasksFromTest" });
     assert.equal(session.created.length, 2);
-    assert.deepEqual(session.created[1].sent, [["ut tasks from-test", true]]);
+    assert.deepEqual(session.created[1].sent, [
+      ["ut align", true],
+      ["ut align --from-design", true],
+      ["ut tasks from-test", true],
+    ]);
     assert.equal(session.created[1].options.cwd, root);
   });
 
@@ -327,8 +333,11 @@ describe("the extension", () => {
     const expected = {
       "orchestwin.status": "ut status",
       "orchestwin.test": "ut test",
+      "orchestwin.verify": "ut verify",
+      "orchestwin.recheck": "ut verify --recheck",
       "orchestwin.align": "ut align",
-      "orchestwin.recheck": "ut align --recheck",
+      "orchestwin.alignDesign": "ut align --from-design",
+      "orchestwin.push": "ut push",
       "orchestwin.code": "ut code",
       "orchestwin.tasks": "ut tasks",
       "orchestwin.twinsUpdate": "ut twins update",
@@ -367,6 +376,8 @@ describe("the extension", () => {
       ".orchestwin/project.json",
       ".orchestwin/tests/latest.json",
       ".orchestwin/code/latest.json",
+      ".orchestwin/code/design.json",
+      ".orchestwin/align/latest.json",
       ".vscode/mcp.json",
       "orchestwin/**",
     ]) {
@@ -414,6 +425,50 @@ describe("the extension", () => {
     session.watchers[0].fire("change");
     session.timers.run();
     assert.equal(session.view.htmls.length, 1);
+  });
+
+  it("shows the latest run of ut align once its file appears and drops a broken one", () => {
+    const project = fixtures.writeCompleteProject(path.join(base, "aligned"), "old");
+    session = start({ folders: [project] });
+    assert.ok(!session.view.webview.html.includes(text("en", "knowledge.run")));
+    assert.ok(session.view.webview.html.includes('data-step="DESIGN_AHEAD"'));
+    fixtures.writeJson(project, ".orchestwin/align/latest.json", {
+      schema_version: 1,
+      run_id: "0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+      finished_at: "2026-10-06T10:20:00+00:00",
+      from_commit: fixtures.ALIGNED_COMMIT,
+      to_commit: fixtures.DRIFT_COMMIT,
+      proposals: 5,
+      waiting: 2,
+      applied: 2,
+      skipped: 1,
+    });
+    session.watchers[0].fire("change");
+    session.timers.run();
+    assert.equal(session.view.htmls.length, 2);
+    const html = session.view.webview.html;
+    assert.ok(html.includes(text("en", "knowledge.run")));
+    assert.ok(html.includes('data-step="ALIGN"'));
+    assert.ok(plain(html).includes("ut align --pending"));
+    assert.equal(session.created.length, 0);
+    fixtures.writeText(project, ".orchestwin/align/latest.json", "{ broken");
+    session.watchers[0].fire("change");
+    session.timers.run();
+    assert.equal(session.view.htmls.length, 3);
+    assert.ok(!session.view.webview.html.includes(text("en", "knowledge.run")));
+    assert.ok(session.view.webview.html.includes('data-step="DESIGN_AHEAD"'));
+  });
+
+  it("moves to the next step once a run of the agent records the current design", () => {
+    const project = fixtures.writeCompleteProject(path.join(base, "design point"), "old");
+    session = start({ folders: [project] });
+    assert.ok(session.view.webview.html.includes('data-step="DESIGN_AHEAD"'));
+    fixtures.writeDesignPoint(project, 5);
+    session.watchers[0].fire("create");
+    session.timers.run();
+    assert.equal(session.view.htmls.length, 2);
+    assert.ok(session.view.webview.html.includes('data-step="CODE"'));
+    assert.equal(session.created.length, 0);
   });
 
   it("renders again on the refresh command and when the folders of the workspace change", () => {

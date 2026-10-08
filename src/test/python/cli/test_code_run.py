@@ -59,6 +59,9 @@ OUTCOME_KEYS = [
     "request",
     "exit_status",
     "changed_files",
+    "kind",
+    "design_from",
+    "design_version_number",
 ]
 LATEST_KEYS = [
     "schema_version",
@@ -68,6 +71,8 @@ LATEST_KEYS = [
     "agent",
     "exit_status",
     "changed_files",
+    "kind",
+    "design_version_number",
 ]
 
 
@@ -127,6 +132,9 @@ def launch_of(
     settings: CodeSettings | None = None,
     work: Work | None = None,
     spend: bool = False,
+    kind: str = code_run.CODE_KIND,
+    design_from: int | None = None,
+    design_version_number: int | None = None,
 ) -> Launch:
     files = write_run_files(project, START, "order\n", spend=spend, python="python")
     return Launch(
@@ -136,6 +144,9 @@ def launch_of(
         settings=CodeSettings(agent="custom", command=("agent",)) if settings is None else settings,
         work=Work() if work is None else work,
         spend=spend,
+        kind=kind,
+        design_from=design_from,
+        design_version_number=design_version_number,
     )
 
 
@@ -269,21 +280,22 @@ def test_the_model_is_kept_until_an_empty_name_clears_it() -> None:
 
 
 def test_run_folders_are_named_by_the_utc_start_and_never_reused(tmp_path: Path) -> None:
-    code = tmp_path / ".orchestwin" / "code"
+    project = link_folder(tmp_path / "project")
+    code = project.root / ".orchestwin" / "code"
     moment = datetime(2026, 9, 29, 11, 0, 5, tzinfo=timezone(timedelta(hours=2)))
 
-    first = run_folder(code, moment)
+    first = run_folder(project, moment)
     written = (code / ".gitignore").read_bytes()
     (code / ".gitignore").write_bytes(b"kept\n")
-    second = run_folder(code, moment)
-    third = run_folder(code, moment)
+    second = run_folder(project, moment)
+    third = run_folder(project, moment)
 
     assert [first.name, second.name, third.name] == [
         "20260929-090005",
         "20260929-090005-2",
         "20260929-090005-3",
     ]
-    assert all(folder.is_dir() for folder in (first, second, third))
+    assert all(folder.is_dir() and folder.parent == code for folder in (first, second, third))
     assert written == b"*\n"
     assert (code / ".gitignore").read_bytes() == b"kept\n"
 
@@ -526,6 +538,9 @@ def test_the_agent_starts_in_the_root_with_the_variables_and_its_outcome_is_writ
         "request": "Azzera i campi",
         "exit_status": 0,
         "changed_files": ["src/"],
+        "kind": "code",
+        "design_from": None,
+        "design_version_number": None,
     }
     assert list(latest) == LATEST_KEYS
     assert latest == {
@@ -536,9 +551,57 @@ def test_the_agent_starts_in_the_root_with_the_variables_and_its_outcome_is_writ
         "agent": "custom",
         "exit_status": 0,
         "changed_files": ["src/"],
+        "kind": "code",
+        "design_version_number": None,
     }
     assert finished.outcome.document() == outcome
     assert bundle.clock.slept == 0
+    assert not (launch.files.folder.parent / "design.json").exists()
+
+
+def test_a_run_that_follows_the_design_records_its_kind_and_the_two_versions(
+    tmp_path: Path,
+) -> None:
+    project = linked(tmp_path)
+    context, _ = context_of(tmp_path, agent=ScriptedAgent(status=0))
+    launch = launch_of(project, kind="design", design_from=3, design_version_number=5)
+
+    finished = start(context, launch)
+    outcome = read(launch.files.folder / "outcome.json")
+    latest = read(launch.files.folder.parent / "latest.json")
+
+    assert list(outcome) == OUTCOME_KEYS
+    assert (outcome["kind"], outcome["design_from"], outcome["design_version_number"]) == (
+        "design",
+        3,
+        5,
+    )
+    assert finished.outcome.document() == outcome
+    assert list(latest) == LATEST_KEYS
+    assert (latest["kind"], latest["design_version_number"]) == ("design", 5)
+    assert not (launch.files.folder.parent / "design.json").exists()
+
+
+def test_an_interrupted_run_that_follows_the_design_keeps_its_kind(tmp_path: Path) -> None:
+    project = linked(tmp_path)
+    context, _ = context_of(tmp_path, agent=ScriptedAgent(interrupt=True))
+    launch = launch_of(project, kind="design", design_from=2, design_version_number=4)
+
+    with pytest.raises(KeyboardInterrupt):
+        start(context, launch)
+    outcome = read(launch.files.folder / "outcome.json")
+    latest = read(launch.files.folder.parent / "latest.json")
+
+    assert (outcome["kind"], outcome["design_from"], outcome["design_version_number"]) == (
+        "design",
+        2,
+        4,
+    )
+    assert (latest["kind"], latest["design_version_number"], latest["exit_status"]) == (
+        "design",
+        4,
+        130,
+    )
 
 
 def test_the_outcome_names_the_program_and_the_model_of_claude(tmp_path: Path) -> None:

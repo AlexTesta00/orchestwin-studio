@@ -10,6 +10,7 @@ from orchestwin.cli import costs, jobs
 from orchestwin.cli import folder as knowledge
 from orchestwin.cli.api import brief, usage
 from orchestwin.cli.api import projects as project_api
+from orchestwin.cli.client import ensure_access
 from orchestwin.cli.console import Choice, ProgressOutcome, selected_choice
 from orchestwin.cli.errors import (
     BUDGET_CODES,
@@ -112,9 +113,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
 
 
 def require_sign_in(context: CommandContext, client: StudioClient) -> None:
-    session = context.sessions.read(client.studio)
-    if session is None or not session.signed_in:
-        raise CliError("NOT_SIGNED_IN", values={"studio": client.studio.origin})
+    ensure_access(context, client)
 
 
 def create(

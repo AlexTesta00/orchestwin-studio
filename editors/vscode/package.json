@@ -58,13 +58,28 @@
         "category": "OrchesTwin"
       },
       {
-        "command": "orchestwin.align",
-        "title": "%command.align%",
+        "command": "orchestwin.verify",
+        "title": "%command.verify%",
         "category": "OrchesTwin"
       },
       {
         "command": "orchestwin.recheck",
         "title": "%command.recheck%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.align",
+        "title": "%command.align%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.alignDesign",
+        "title": "%command.alignDesign%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.push",
+        "title": "%command.push%",
         "category": "OrchesTwin"
       },
       {

@@ -13,6 +13,7 @@ import {
 } from "vue";
 
 import { apiClient } from "@/api/client";
+import AlignmentProposalsNotice from "./AlignmentProposalsNotice.vue";
 import ArtifactViewSwitch, { type ArtifactView } from "./ArtifactViewSwitch.vue";
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import ProjectDiagramsView from "./ProjectDiagramsView.vue";
@@ -1749,6 +1750,14 @@ onBeforeUnmount(() => {
           @dismiss="dismissChangeFailure"
         />
       </section>
+
+      <AlignmentProposalsNotice
+        :project-id="projectId"
+        section="REQUIREMENTS"
+        :locale="locale"
+        :authorize="authorizedRequest"
+        @applied="reloadAndTell"
+      />
 
       <section
         v-if="pendingDiffs.length > 0"

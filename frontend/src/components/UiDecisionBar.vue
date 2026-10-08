@@ -126,6 +126,7 @@ defineExpose({ completeRequest });
     ref="root"
     class="sticky bottom-4 z-10 mt-10 rounded-tile border border-night-line-strong bg-night-panel/94 py-3.5 pr-3.5 pl-5 text-on-night shadow-bar backdrop-blur-[14px] sm:pl-[22px]"
     data-surface="night"
+    data-ui-decision-bar
     :aria-labelledby="titleId"
     :aria-busy="busy ? 'true' : undefined"
     data-testid="decision-bar"

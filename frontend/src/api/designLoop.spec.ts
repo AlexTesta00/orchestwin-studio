@@ -257,6 +257,26 @@ describe("designLoop api", () => {
     });
   });
 
+  it("sends the scope of a review of a changed element and nothing more without it", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      response(201, { id: "run-3", responses: [] }),
+    );
+    const api = createDesignLoopApi({ fetchImpl });
+    const body = { design_version_id: "v", design_content_hash: "a".repeat(64) };
+    await api.evaluate(
+      "p",
+      { ...body, mode: "TWIN_REVIEW", scope: { screen_code: "SCR-002", element_code: "ELM-012" } },
+      "token",
+    );
+    await api.evaluate("p", { ...body, scope: { screen_code: "SCR-002" } }, "token");
+    await api.evaluate("p", body, "token");
+    expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
+      { ...body, mode: "TWIN_REVIEW", scope: { screen_code: "SCR-002", element_code: "ELM-012" } },
+      { ...body, scope: { screen_code: "SCR-002" } },
+      body,
+    ]);
+  });
+
   it("starts, continues and decides a twin discussion", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "GET") {
