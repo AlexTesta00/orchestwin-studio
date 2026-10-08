@@ -57,7 +57,9 @@ from orchestwin.artifacts.bound_mockups import create_bound_mockup, markup_requi
 from orchestwin.artifacts.design_distance import design_distance_report
 from orchestwin.artifacts.design_evaluation import (
     ANCHOR_LABEL_LENGTH,
+    DESIGN_EVALUATION_SCOPE_INVALID,
     MATCH_SIMILARITY,
+    anchor_element,
     anchor_finding,
     finding_similarity,
     synthetic_finding_from_snapshot,
@@ -91,6 +93,10 @@ from orchestwin.evaluation.findings import (
     SyntheticFindingEpistemicStatus,
     SyntheticFindingSeverity,
     create_synthetic_finding,
+)
+from orchestwin.evaluation.proposer_evaluator import (
+    SCOPED_TWIN_REVIEW_PROMPT_VERSION,
+    scoped_prompt_version,
 )
 from orchestwin.identity.domain import InvalidEmailAddress, NormalizedEmail
 from orchestwin.identity.passwords import (
@@ -160,6 +166,13 @@ from orchestwin.knowledge.state import (
     ProjectStateSources,
     review_is_stale,
 )
+from orchestwin.models.design_change import (
+    ELEMENT_CODE_PATTERN,
+    SCREEN_CODE_PATTERN,
+    target_html,
+    target_label,
+)
+from orchestwin.models.design_change import TARGET_FIELDS as CHANGE_TARGET_FIELDS
 from orchestwin.models.evidence_update import (
     EvidenceUpdateOutput,
     bind_evidence_update,
@@ -630,7 +643,12 @@ SEED_PAGE = "http://127.0.0.1:41234/"
 ALIGNMENT_RUN_FIELDS = ("locale", "from_commit", "to_commit", "commits")
 PROPOSAL_APPLY_FIELDS = ("text", "locale")
 PROPOSAL_SKIP_FIELDS = ("reason",)
-DESIGN_CHANGE_FIELDS = ("request",)
+DESIGN_CHANGE_FIELDS = ("request", "target")
+ITERATION_FIELDS = ("design_version_id", "design_content_hash", "request", "assertions", "target")
+EVALUATION_FIELDS = ("design_version_id", "design_content_hash", "locale", "mode", "scope")
+SCOPE_FIELDS = ("screen_code", "element_code")
+SCREEN_CODE = re.compile(SCREEN_CODE_PATTERN)
+ELEMENT_CODE = re.compile(ELEMENT_CODE_PATTERN)
 PROPOSAL_STATUS_FILTERS = ("waiting", "all")
 APPLY_OPERATIONS = {"REQUIREMENTS": "REQUIREMENTS_CHANGE", "DESIGN": "DESIGN_CHANGE"}
 EXCERPT_LINES = 8
@@ -655,6 +673,8 @@ ALIGNMENT_TEXTS = {
         "tests_request": "Copri con un percorso di prova il criterio {code} dopo «{line}».",
         "tests_rationale": "Il piano dei test non copre ancora la modifica del codice.",
         "design_change": "L'alternativa «{title}» cambia come chiesto: {request}",
+        "targeted_element": "Modifica mirata a {element} di {screen}",
+        "targeted_screen": "Modifica mirata a {screen}",
     },
     "en": {
         "summary": "The code of {count} commits changes what the knowledge says about “{line}”.",
@@ -676,6 +696,8 @@ ALIGNMENT_TEXTS = {
         "tests_request": "Cover the criterion {code} with a test path after “{line}”.",
         "tests_rationale": "The test plan does not cover the code change yet.",
         "design_change": "The alternative “{title}” changes as asked: {request}",
+        "targeted_element": "Targeted change to {element} of {screen}",
+        "targeted_screen": "Targeted change to {screen}",
     },
 }
 PROPOSED_OBSERVATIONS = 2
@@ -1472,6 +1494,20 @@ FINDINGS = {
         ),
     },
 }
+SCOPED_FINDINGS = {
+    "it": (
+        "La modifica mi aiuta: ora trovo subito questo elemento al tavolo.",
+        "observation",
+        "actionability",
+        "Prova con un blu più scuro per farlo risaltare ancora di più.",
+    ),
+    "en": (
+        "The change helps me: now I find this element at once at the table.",
+        "observation",
+        "actionability",
+        "Try a darker blue to make it stand out even more.",
+    ),
+}
 CHAT = {
     "it": (
         "Sono {name}: mi serve vedere subito quanto lasciare di mancia, senza fare conti.",
@@ -1750,6 +1786,7 @@ ROUTES: tuple[Route, ...] = (
         "/projects/{project_id}/design/revisions/{diff_id}/decision",
         "design_revision_decision",
     ),
+    Route("POST", "/projects/{project_id}/design/revisions/restore", "design_restore"),
     Route("POST", "/projects/{project_id}/design/change-requests", "design_change"),
     Route("POST", "/projects/{project_id}/design/gate/submit", "design_gate_submit"),
     Route("POST", "/projects/{project_id}/design/gate/decision", "design_gate_decision"),
@@ -6899,15 +6936,21 @@ class FakeStudio:
     def _route_design_change(self, call: _Call) -> _Answer:
         fields = _Fields(call.json(), DESIGN_CHANGE_FIELDS)
         request = fields.text("request")
+        target = _change_target(fields)
         fields.check()
         text = (request or "").strip()
         if not 1 <= len(text) <= MAX_DESIGN_REQUEST_LENGTH:
             raise _Invalid([_error(("body", "request"), "value_error")])
         return self._later(
-            call, "DESIGN_CHANGE", {"request": text}, lambda: self._changed_design(call, text)
+            call,
+            "DESIGN_CHANGE",
+            {"request": text, "target": target},
+            lambda: self._changed_design(call, text, target),
         )
 
-    def _changed_design(self, call: _Call, text: str) -> _Answer:
+    def _changed_design(
+        self, call: _Call, text: str, target: Mapping[str, object] | None = None
+    ) -> _Answer:
         project = self._owned(call)
         if project is None:
             raise _Refusal(404, {"code": "PROJECT_NOT_FOUND"})
@@ -6933,11 +6976,15 @@ class FakeStudio:
             raise _Refusal(409, {"code": "DESIGN_UNCHANGED"})
         changed["summary"] = f"{changed['summary']} {sentence}"
         diff = self._design_diff(project, design, proposed, call.account)
-        changes = [
-            ALIGNMENT_TEXTS[self.language]["design_change"].format(
-                title=changed["title"], request=sentence
-            )
-        ]
+        changes = _with_targeted(
+            [
+                ALIGNMENT_TEXTS[self.language]["design_change"].format(
+                    title=changed["title"], request=sentence
+                )
+            ],
+            self.language,
+            target,
+        )
         return _Answer(
             201, {"revision": _design_revision_payload("CREATED", diff, None), "changes": changes}
         )
@@ -7028,6 +7075,65 @@ class FakeStudio:
             {key: value for key, value in diff.items() if key != "content_hash"}
         )
         return _Answer(200, _design_revision_payload("APPLIED", diff, version))
+
+    def _route_design_restore(self, call: _Call) -> _Answer:
+        from orchestwin.api.design import DESIGN_RESTORED, RESTORE_NOTES
+
+        fields = _Fields(call.json(), ("version_number", "locale"))
+        number = fields.integer("version_number", minimum=1)
+        locale = fields.text("locale", required=False, minimum=2, maximum=20, default="it-IT")
+        fields.check()
+        assert number is not None and locale is not None
+        project = self._owned(call)
+        current = None if project is None else project.design
+        if project is None or current is None:
+            raise _Refusal(404, {"code": "PACKAGE_NOT_FOUND"})
+        if number == current["version_number"]:
+            raise _Refusal(409, {"code": "DESIGN_RESTORE_CURRENT"})
+        restored = next(
+            (item for item in project.designs if item["version_number"] == number), None
+        )
+        if restored is None:
+            raise _Refusal(404, {"code": "DESIGN_VERSION_NOT_FOUND"})
+        if self._pending_design_diff(project) is not None:
+            raise _Refusal(409, {"code": "DIFF_ALREADY_PENDING"})
+        package = copy.deepcopy(restored["package"])
+        package["grounding"] = copy.deepcopy(current["package"]["grounding"])
+        if _fake_design(package).content_hash == current["content_hash"]:
+            raise _Refusal(409, {"code": "DESIGN_RESTORE_CURRENT"})
+        language = "en" if locale.strip().lower().startswith("en") else "it"
+        note = RESTORE_NOTES[language].format(number=number)
+        changes = _design_changes(current["package"], package)
+        version = self._append_design(project, package, call.account)
+        moment = _stamp(self._now())
+        diff = {
+            "id": self._new_id(),
+            "project_id": project.id,
+            "owner_user_id": call.account.id,
+            "base_version_id": current["id"],
+            "base_version_number": current["version_number"],
+            "base_content_hash": current["content_hash"],
+            "proposed_package": copy.deepcopy(package),
+            "proposal_hash": _digest(package),
+            "changes": changes,
+            "status": "APPROVED",
+            "created_at": moment,
+            "decided_by_user_id": call.account.id,
+            "decided_at": moment,
+            "decision_reason": note,
+            "applied_version_id": version["id"],
+        }
+        diff["content_hash"] = _digest(diff)
+        project.design_diffs.append(diff)
+        return _Answer(
+            201,
+            {
+                "reason": DESIGN_RESTORED,
+                "restored_version_number": number,
+                "note": note,
+                "revision": _design_revision_payload("APPLIED", diff, version),
+            },
+        )
 
     def _route_design_gate_submit(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -7246,13 +7352,12 @@ class FakeStudio:
         )
 
     def _route_iteration_job(self, call: _Call) -> _Answer:
-        fields = _Fields(
-            call.json(), ("design_version_id", "design_content_hash", "request", "assertions")
-        )
+        fields = _Fields(call.json(), ITERATION_FIELDS)
         version_id = fields.identifier("design_version_id")
         content_hash = fields.digest("design_content_hash")
         request = fields.text("request")
         assertions = fields.texts("assertions", nullable=False, default=[]) or []
+        target = _change_target(fields)
         fields.check()
         text, added = _normalized_iteration(request or "", assertions)
         project = self._owned(call)
@@ -7275,7 +7380,7 @@ class FakeStudio:
             key=str(content_hash),
             alternative_id=alternative_id,
             work=lambda job: self._iteration_work(
-                job, project, str(version_id), str(content_hash), added
+                job, project, str(version_id), str(content_hash), added, target
             ),
         )
         if not any(record["job_id"] == job.id for record in project.iterations):
@@ -7286,6 +7391,7 @@ class FakeStudio:
                     "generation_id": None,
                     "requested_at": _iso(job.started_at),
                     "request": text,
+                    "target": _target_snapshot(target),
                     "assertions": [
                         item for item in added if item not in package["owner_assertions"]
                     ],
@@ -7305,6 +7411,7 @@ class FakeStudio:
         version_id: str,
         content_hash: str,
         added: Sequence[str],
+        target: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
         current = project.design
         if current is None or (current["id"], current["content_hash"]) != (
@@ -7327,7 +7434,7 @@ class FakeStudio:
         project.variant += 1
         alternative_id = str(bound["mockup"]["design_alternative_id"])
         proposed = self._mockup_package(project, package, alternative_id, merged)
-        changes = list(ITERATION_CHANGES[self.language])
+        changes = _with_targeted(list(ITERATION_CHANGES[self.language]), self.language, target)
         for record in project.iterations:
             if record["job_id"] == job.id:
                 record["generation_id"] = generation
@@ -7374,6 +7481,7 @@ class FakeStudio:
                     "generation_id": record["generation_id"],
                     "requested_at": record["requested_at"],
                     "request": record["request"],
+                    "target": _copy(record.get("target")),
                     "assertions": list(record["assertions"]),
                     "changes": list(record["changes"]),
                     "status": status,
@@ -7385,29 +7493,38 @@ class FakeStudio:
         return _Answer(200, {"items": items})
 
     def _route_evaluation(self, call: _Call) -> _Answer:
-        fields = _Fields(
-            call.json(), ("design_version_id", "design_content_hash", "locale", "mode")
-        )
+        fields = _Fields(call.json(), EVALUATION_FIELDS)
         version_id = fields.identifier("design_version_id")
         content_hash = fields.digest("design_content_hash")
         locale = fields.text("locale", required=False, minimum=2, maximum=20, default="it-IT")
         mode = fields.choice("mode", ("TWIN_REVIEW", "STATIC_CHECK"), required=False, nullable=True)
+        scope = _review_scope(fields)
+        _model_rule(fields, lambda: _scope_of_a_twin_review(scope, mode))
         fields.check()
         body = {
             "design_version_id": version_id,
             "design_content_hash": content_hash,
             "locale": locale,
             "mode": mode,
+            **({} if scope is None else {"scope": scope}),
         }
         return self._later(
             call,
             "DESIGN_EVALUATION",
             body,
-            lambda: self._evaluated(call, str(version_id), str(content_hash), str(locale), mode),
+            lambda: self._evaluated(
+                call, str(version_id), str(content_hash), str(locale), mode, scope
+            ),
         )
 
     def _evaluated(
-        self, call: _Call, version_id: str, content_hash: str, locale: str, mode: str | None
+        self,
+        call: _Call,
+        version_id: str,
+        content_hash: str,
+        locale: str,
+        mode: str | None,
+        scope: Mapping[str, object] | None = None,
     ) -> _Answer:
         project = self._owned(call)
         current = None if project is None else project.design
@@ -7415,13 +7532,14 @@ class FakeStudio:
             raise _Refusal(404, {"code": "DESIGN_PACKAGE_NOT_FOUND"})
         if (current["id"], current["content_hash"]) != (version_id, content_hash):
             raise _Refusal(409, {"code": "DESIGN_CONTEXT_CHANGED"})
-        if mode == "STATIC_CHECK" or (mode is None and not self.hosted):
+        if mode == "STATIC_CHECK" or (mode is None and scope is None and not self.hosted):
             raise _Refusal(503, {"code": "DESIGN_EVALUATOR_NOT_CONFIGURED"})
         if not self.hosted:
             raise _Refusal(503, {"code": "DESIGN_REVIEWER_NOT_CONFIGURED"})
         package = current["package"]
         if package["owner_selected_alternative_id"] is None or package["prototype"] is None:
             raise _Refusal(409, {"code": "DESIGN_PROTOTYPE_REQUIRED"})
+        scoped = None if scope is None else _scope_anchor(package["prototype"], scope)
         twins = [dict(item) for item in package["grounding"]["user_twin_references"]]
         for twin in twins:
             known = project.twins.get(str(twin["twin_id"]))
@@ -7434,7 +7552,7 @@ class FakeStudio:
         started = self._now()
         for _ in twins:
             self._record(project, "DESIGN_EVALUATION")
-        run = self._run(project, current, twins, locale, started)
+        run = self._run(project, current, twins, locale, started, scoped)
         project.runs.insert(0, run)
         return _Answer(201, run)
 
@@ -7445,8 +7563,12 @@ class FakeStudio:
         twins: Sequence[Mapping[str, object]],
         locale: str,
         started: datetime,
+        scoped: tuple[str, str] | None = None,
     ) -> dict[str, object]:
         texts = FINDINGS[self.language]
+        evaluator = dict(EVALUATOR)
+        if scoped is not None:
+            evaluator["prompt_version_ref"] = scoped_prompt_version(EVALUATOR["prompt_version_ref"])
         run_id = self._new_id()
         package = version["package"]
         alternative = _by_id(package["alternatives"], str(package["owner_selected_alternative_id"]))
@@ -7493,9 +7615,24 @@ class FakeStudio:
                 templates = texts["first" if earlier == 0 else "later"][position]
             else:
                 templates = (texts["other"],)
+            placed = [
+                (anchors[template[0]], template[1:], texts["action"]) for template in templates
+            ]
+            if scoped is not None:
+                summary, severity, criterion, action = SCOPED_FINDINGS[self.language]
+                placed.insert(0, (scoped, (summary, severity, criterion), action))
             findings = [
-                self._finding(number, twin, version, anchors[template[0]], template[1:])
-                for number, template in enumerate(templates, start=1)
+                self._finding(
+                    number,
+                    twin,
+                    version,
+                    anchor,
+                    template,
+                    action=action,
+                    evaluator=evaluator,
+                    scoped=scoped is not None,
+                )
+                for number, (anchor, template, action) in enumerate(placed, start=1)
             ]
             response = {
                 "evaluation_run_id": run_id,
@@ -7503,7 +7640,7 @@ class FakeStudio:
                 "artifact_bundle_hash": bundle["content_hash"],
                 "twin_id": twin["twin_id"],
                 "twin_version": twin["version_number"],
-                "evaluator": dict(EVALUATOR),
+                "evaluator": dict(evaluator),
                 "findings": findings,
                 "summary": texts["summary"].format(name=twin["name"]),
                 "evidence_gaps": [],
@@ -7539,6 +7676,10 @@ class FakeStudio:
         version: Mapping[str, object],
         anchor: tuple[str, str],
         template: Sequence[str],
+        *,
+        action: str | None = None,
+        evaluator: Mapping[str, str] = EVALUATOR,
+        scoped: bool = False,
     ) -> dict[str, object]:
         texts = FINDINGS[self.language]
         key, location = anchor
@@ -7557,12 +7698,13 @@ class FakeStudio:
             epistemic_status=SyntheticFindingEpistemicStatus.MODEL_INFERRED,
             evidence_refs=(f"artifact:{version['id']}:v{version['version_number']}",),
             confidence=0.6,
-            recommended_action=texts["action"],
+            recommended_action=texts["action"] if action is None else action,
             requires_human_validation=True,
-            model_config_ref=EVALUATOR["model_config_ref"],
-            prompt_version_ref=EVALUATOR["prompt_version_ref"],
+            model_config_ref=evaluator["model_config_ref"],
+            prompt_version_ref=evaluator["prompt_version_ref"],
         )
-        return anchor_finding(finding, key).to_snapshot()
+        element = anchor_element(key) if scoped else None
+        return anchor_finding(finding, key, element).to_snapshot()
 
     def _route_evaluations(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -7570,7 +7712,7 @@ class FakeStudio:
 
     def _route_comparison(self, call: _Call) -> _Answer:
         project = self._owned(call)
-        runs = [] if project is None else project.runs
+        runs = [] if project is None else [run for run in project.runs if not _scoped_run(run)]
         if not runs:
             raise _Refusal(404, {"code": "DESIGN_EVALUATION_COMPARISON_UNAVAILABLE"})
         head = runs[0]
@@ -14232,6 +14374,81 @@ def _merged_assertions(current: Sequence[str], added: Sequence[str]) -> list[str
     if len(merged) > MAX_OWNER_ASSERTIONS:
         raise _Refusal(422, {"code": "ITERATION_REQUEST_INVALID"})
     return merged
+
+
+def _change_target(fields: _Fields) -> dict[str, object] | None:
+    child = fields.child("target", CHANGE_TARGET_FIELDS, required=False, nullable=True)
+    if child is None:
+        return None
+    screen = child.pattern("screen_code", SCREEN_CODE)
+    element = child.pattern("element_code", ELEMENT_CODE, required=False, nullable=True)
+    texts: dict[str, object] = {}
+    for name, normalizer in (("label", target_label), ("html", target_html)):
+        text = child.text(name, required=False, nullable=True)
+        texts[name] = None if text is None else child.normalized(name, text, normalizer)
+    valid = not child.errors
+    fields.adopt(child)
+    return {"screen_code": screen, "element_code": element, **texts} if valid else None
+
+
+def _target_snapshot(target: Mapping[str, object] | None) -> dict[str, object] | None:
+    if target is None:
+        return None
+    return {name: value for name, value in target.items() if value is not None}
+
+
+def _review_scope(fields: _Fields) -> dict[str, object] | None:
+    child = fields.child("scope", SCOPE_FIELDS, required=False, nullable=True)
+    if child is None:
+        return None
+    screen = child.pattern("screen_code", SCREEN_CODE)
+    element = child.pattern("element_code", ELEMENT_CODE, required=False, nullable=True)
+    valid = not child.errors
+    fields.adopt(child)
+    return {"screen_code": screen, "element_code": element} if valid else None
+
+
+def _scope_of_a_twin_review(scope: Mapping[str, object] | None, mode: str | None) -> None:
+    if scope is not None and mode == "STATIC_CHECK":
+        raise ValueError("a scope belongs only to the review of the twins")
+
+
+def _scope_anchor(prototype: Mapping[str, object], scope: Mapping[str, object]) -> tuple[str, str]:
+    refusal = _Refusal(422, {"code": DESIGN_EVALUATION_SCOPE_INVALID})
+    screen = next(
+        (item for item in prototype["screens"] if item["code"] == scope["screen_code"]), None
+    )
+    if screen is None:
+        raise refusal
+    place = f"{screen['code']} {_anchor_label(str(screen['title']))}"
+    code = scope["element_code"]
+    if code is None:
+        return str(screen["code"]), place
+    element = next((item for item in screen["elements"] if item["code"] == code), None)
+    if element is None:
+        raise refusal
+    label = _anchor_label(str(element["accessible_name"] or element["content"]))
+    return f"{screen['code']}/{code}", f"{place} · {code} {label}"
+
+
+def _scoped_run(run: Mapping[str, object]) -> bool:
+    evaluator = run["responses"][0]["evaluator"]
+    return str(evaluator["prompt_version_ref"]).endswith(f"+{SCOPED_TWIN_REVIEW_PROMPT_VERSION}")
+
+
+def _with_targeted(
+    changes: list[str], language: str, target: Mapping[str, object] | None
+) -> list[str]:
+    if target is None:
+        return changes
+    texts = ALIGNMENT_TEXTS[language]
+    if target["element_code"] is None:
+        line = texts["targeted_screen"].format(screen=target["screen_code"])
+    else:
+        line = texts["targeted_element"].format(
+            element=target["element_code"], screen=target["screen_code"]
+        )
+    return list(dict.fromkeys((line, *changes)))
 
 
 PACKAGE_KEYS = (

@@ -37,7 +37,12 @@ ASYNC = {"Prefer": RESPOND_ASYNC}
 NOW = datetime(2026, 10, 6, 9, 30, tzinfo=UTC)
 OWNER_REQUEST = "Aggiungi un passo di conferma prima del salvataggio della prenotazione."
 CHANGES_TEXT = ("Il flusso di prenotazione chiede una conferma prima del salvataggio.",)
-CALL = {"owner_user_id": OWNER, "project_id": PROJECT, "owner_request": OWNER_REQUEST}
+CALL = {
+    "owner_user_id": OWNER,
+    "project_id": PROJECT,
+    "owner_request": OWNER_REQUEST,
+    "target": None,
+}
 PAYLOAD_KEYS = {"revision", "changes"}
 
 

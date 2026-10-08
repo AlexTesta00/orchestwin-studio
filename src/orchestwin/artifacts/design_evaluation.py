@@ -61,6 +61,7 @@ HOSTED_DOCUMENT_BYTES: Final = 96 * 1024
 TABLE_ROWS_SHOWN: Final = 12
 MAX_ELEMENT_ANCHORS: Final = 120
 OTHER_ANCHORS_PER_SCREEN: Final = 8
+DESIGN_EVALUATION_SCOPE_INVALID: Final = "DESIGN_EVALUATION_SCOPE_INVALID"
 REMAINING_ROWS: Final = {
     "it": ("… e un'altra riga della tabella", "… e altre {count} righe della tabella"),
     "en": ("… and one more row in the table", "… and {count} more rows in the table"),
@@ -152,14 +153,22 @@ class DesignEvaluationError(ValueError):
         self.code = code
 
 
+def anchor_element(anchor_key: str) -> str | None:
+    _screen, _separator, element = anchor_key.partition("/")
+    return element or None
+
+
 @dataclass(frozen=True, slots=True)
 class AnchoredSyntheticFinding(SyntheticFinding):
     anchor_key: str
+    element_code: str | None = None
 
     def __post_init__(self) -> None:
         SyntheticFinding.__post_init__(self)
         if not isinstance(self.anchor_key, str) or _ANCHOR_KEY.fullmatch(self.anchor_key) is None:
             raise ValueError("synthetic finding anchor key must name a screen or an element")
+        if self.element_code is not None and self.element_code != anchor_element(self.anchor_key):
+            raise ValueError("synthetic finding element code must be the element of its anchor")
 
     def to_snapshot(self) -> dict[str, object]:
         snapshot: dict[str, object] = {}
@@ -167,13 +176,18 @@ class AnchoredSyntheticFinding(SyntheticFinding):
             snapshot[key] = value
             if key == "location":
                 snapshot["anchor_key"] = self.anchor_key
+                if self.element_code is not None:
+                    snapshot["element_code"] = self.element_code
         return snapshot
 
 
-def anchor_finding(finding: SyntheticFinding, anchor_key: str) -> AnchoredSyntheticFinding:
+def anchor_finding(
+    finding: SyntheticFinding, anchor_key: str, element_code: str | None = None
+) -> AnchoredSyntheticFinding:
     return AnchoredSyntheticFinding(
         **{item.name: getattr(finding, item.name) for item in fields(SyntheticFinding)},
         anchor_key=anchor_key,
+        element_code=element_code,
     )
 
 
@@ -357,8 +371,46 @@ def _anchored_elements(elements):
     return tuple(kept)
 
 
+@dataclass(frozen=True, slots=True)
+class DesignReviewScope:
+    screen_code: str
+    element_code: str | None
+    label: str
+    place: str
+
+    @property
+    def anchor_key(self) -> str:
+        if self.element_code is None:
+            return self.screen_code
+        return f"{self.screen_code}/{self.element_code}"
+
+
+def design_review_scope(
+    version: DesignPackageVersion, *, screen_code: str, element_code: str | None = None
+) -> DesignReviewScope:
+    _selected_alternative(version)
+    screen = next(
+        (item for item in version.package.prototype.screens if item.code == screen_code), None
+    )
+    if screen is None:
+        raise DesignEvaluationError(DESIGN_EVALUATION_SCOPE_INVALID)
+    title = _anchor_label(screen.title)
+    place = f"{screen.code} {title}"
+    if element_code is None:
+        return DesignReviewScope(screen.code, None, title, place)
+    element = next((item for item in screen.elements if item.code == element_code), None)
+    if element is None:
+        raise DesignEvaluationError(DESIGN_EVALUATION_SCOPE_INVALID)
+    label = _anchor_label(element.accessible_name or element.content)
+    return DesignReviewScope(screen.code, element.code, label, f"{place} · {element.code} {label}")
+
+
 def design_review_anchors(
-    version: DesignPackageVersion, *, hosted: bool = False, language: str = "und"
+    version: DesignPackageVersion,
+    *,
+    hosted: bool = False,
+    language: str = "und",
+    scope: DesignReviewScope | None = None,
 ) -> dict[str, str]:
     _selected_alternative(version)
     screens = review_screens(version, hosted=hosted, language=language)
@@ -370,6 +422,8 @@ def design_review_anchors(
         for element in _anchored_elements(elements) if bounded else elements:
             label = _anchor_label(element.accessible_name or element.content)
             anchors[f"{screen.code}/{element.code}"] = f"{place} · {element.code} {label}"
+    if scope is not None:
+        anchors.setdefault(scope.anchor_key, scope.place)
     return anchors
 
 
@@ -769,7 +823,9 @@ def synthetic_finding_from_snapshot(payload: Mapping[str, object]) -> SyntheticF
     if finding.content_hash != payload["content_hash"]:
         raise ValueError("synthetic finding snapshot is not canonical")
     if "anchor_key" in payload:
-        return anchor_finding(finding, payload["anchor_key"])
+        return anchor_finding(finding, payload["anchor_key"], payload.get("element_code"))
+    if "element_code" in payload:
+        raise ValueError("synthetic finding element code needs an anchor key")
     return finding
 
 
@@ -861,6 +917,7 @@ __all__ = [
     "ANCHOR_LABEL_LENGTH",
     "CONTENT_STEPS",
     "DESIGN_EVALUATION_SCHEMA_VERSION",
+    "DESIGN_EVALUATION_SCOPE_INVALID",
     "DESIGN_SPECIFICATION_LOCATION",
     "EVALUATION_DOCUMENT_LOCATION",
     "HOSTED_DOCUMENT_BYTES",
@@ -876,12 +933,15 @@ __all__ = [
     "DesignEvaluationDocument",
     "DesignEvaluationError",
     "DesignEvaluationRun",
+    "DesignReviewScope",
+    "anchor_element",
     "anchor_finding",
     "compare_design_evaluations",
     "create_design_evaluation_run",
     "design_evaluation_run_from_snapshot",
     "design_evaluation_run_hash",
     "design_review_anchors",
+    "design_review_scope",
     "design_review_view",
     "evaluation_bundle",
     "evaluation_bundle_from_snapshot",

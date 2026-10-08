@@ -194,7 +194,7 @@ def checks(table):
     }
 
 
-def test_revision_follows_the_guidance_choice_and_is_the_single_head():
+def test_revision_follows_the_guidance_choice_and_precedes_the_design_restore():
     module = migration()
     assert module.revision == "0073_knowledge_alignment"
     assert module.down_revision == "0072_guidance_choice"
@@ -207,8 +207,9 @@ def test_revision_follows_the_guidance_choice_and_is_the_single_head():
     scripts = ScriptDirectory.from_config(
         create_alembic_config("postgresql+psycopg://synthetic@localhost:5432/orchestwin")
     )
-    assert scripts.get_heads() == [module.revision]
+    assert len(scripts.get_heads()) == 1
     assert scripts.get_revision(module.revision).down_revision == module.down_revision
+    assert scripts.get_revision(module.revision).nextrev == {"0074_design_version_restore"}
 
 
 def test_upgrade_creates_the_two_tables_and_their_indexes_in_order(monkeypatch):

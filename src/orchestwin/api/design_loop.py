@@ -7,7 +7,7 @@ from typing import Annotated, Final
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.design import DesignGenerationPayload
@@ -16,9 +16,11 @@ from orchestwin.api.generation_requests import generation_request
 from orchestwin.artifacts.design_evaluation import (
     DesignEvaluationError,
     DesignEvaluationRun,
+    DesignReviewScope,
     compare_design_evaluations,
     create_design_evaluation_run,
     design_review_anchors,
+    design_review_scope,
     design_review_view,
     evaluation_bundle,
     evaluation_document,
@@ -49,8 +51,10 @@ from orchestwin.evaluation.proposer_evaluator import (
     INVALID_TWIN_REVIEW_OUTPUT,
     ProposerDesignTwinReviewer,
     hosted_twin_review,
+    scoped_review,
 )
 from orchestwin.identity.domain import UserAccount
+from orchestwin.models.design_change import ELEMENT_CODE_PATTERN, SCREEN_CODE_PATTERN
 from orchestwin.models.proposal_evidence import current_proposal_evidence, evidence_application
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.twins.persistence.repositories import SqlAlchemyUserTwinVersionRepository
@@ -76,6 +80,13 @@ class DesignEvaluationStatus(StrEnum):
     RECORDED = "DESIGN_EVALUATION_RECORDED"
 
 
+class DesignEvaluationScope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    screen_code: str = Field(pattern=SCREEN_CODE_PATTERN)
+    element_code: str | None = Field(default=None, pattern=ELEMENT_CODE_PATTERN)
+
+
 class DesignEvaluationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -83,6 +94,20 @@ class DesignEvaluationRequest(BaseModel):
     design_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     locale: str = Field(default="it-IT", min_length=2, max_length=20)
     mode: DesignEvaluationMode | None = None
+    scope: DesignEvaluationScope | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+    @model_validator(mode="after")
+    def scope_of_a_twin_review(self) -> DesignEvaluationRequest:
+        if self.scope is not None and self.mode is DesignEvaluationMode.STATIC_CHECK:
+            raise ValueError("a scope belongs only to the review of the twins")
+        return self
+
+    def requested_mode(self) -> DesignEvaluationMode | None:
+        if self.mode is None and self.scope is not None:
+            return DesignEvaluationMode.TWIN_REVIEW
+        return self.mode
 
 
 class FindingValidationRequest(BaseModel):
@@ -173,12 +198,28 @@ class DesignLoopApplication:
                 await self._retire("TWIN_REVIEW_REJECTED", request.evaluation_run_id)
         raise RuntimeError("twin review attempts are exhausted")
 
-    async def _twin_review(self, generator, version, twins, bundle, run_id, *, hosted, language):
+    @staticmethod
+    def _scope(version, body) -> DesignReviewScope | None:
+        if body.scope is None:
+            return None
+        try:
+            return design_review_scope(
+                version, screen_code=body.scope.screen_code, element_code=body.scope.element_code
+            )
+        except DesignEvaluationError as error:
+            raise HTTPException(422, detail={"code": error.code}) from error
+
+    async def _twin_review(
+        self, generator, version, twins, bundle, run_id, *, hosted, language, scope=None
+    ):
         try:
             reviewer = ProposerDesignTwinReviewer(
                 generator,
                 design_view=design_review_view(version, hosted=hosted, language=language),
-                anchors=design_review_anchors(version, hosted=hosted, language=language),
+                anchors=design_review_anchors(
+                    version, hosted=hosted, language=language, scope=scope
+                ),
+                scope=scope,
             )
         except DesignEvaluationError as error:
             raise HTTPException(409, detail={"code": error.code}) from error
@@ -240,7 +281,7 @@ class DesignLoopApplication:
         version = await self._current(owner_user_id, project_id)
         if (version.id, version.content_hash) != (body.design_version_id, body.design_content_hash):
             raise HTTPException(409, detail={"code": "DESIGN_CONTEXT_CHANGED"})
-        mode, engine = self._mode(body.mode)
+        mode, engine = self._mode(body.requested_mode())
         started_at = datetime.now(UTC)
         run_id = uuid4()
         language = body.locale.split("-")[0]
@@ -258,10 +299,18 @@ class DesignLoopApplication:
                 bundle = static_check_bundle(version, document, target, created_at=started_at)
         except DesignEvaluationError as error:
             raise HTTPException(409, detail={"code": error.code}) from error
+        scope = self._scope(version, body)
         twins = await self._twins(owner_user_id, project_id, version)
         if mode is DesignEvaluationMode.TWIN_REVIEW:
             responses = await self._twin_review(
-                engine, version, twins, bundle, run_id, hosted=hosted, language=language
+                engine,
+                version,
+                twins,
+                bundle,
+                run_id,
+                hosted=hosted,
+                language=language,
+                scope=scope,
             )
         else:
             responses = await self._static_check(
@@ -337,7 +386,11 @@ class DesignLoopApplication:
         )
 
     async def comparison(self, *, owner_user_id, project_id):
-        runs = await self.runs(owner_user_id=owner_user_id, project_id=project_id)
+        runs = [
+            run
+            for run in await self.runs(owner_user_id=owner_user_id, project_id=project_id)
+            if not scoped_review(run.evaluator)
+        ]
         if not runs:
             raise HTTPException(404, detail={"code": "DESIGN_EVALUATION_COMPARISON_UNAVAILABLE"})
         head = runs[0]
@@ -460,6 +513,7 @@ __all__ = [
     "DesignEvaluationMode",
     "DesignEvaluationRequest",
     "DesignEvaluationResult",
+    "DesignEvaluationScope",
     "DesignEvaluationStatus",
     "DesignLoopApplication",
     "FindingValidationRequest",

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Protocol
+from typing import Annotated, Final, Literal, Protocol
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict, JsonValue, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.clarification import HumanGateEventResponse, HumanGateResponse
@@ -31,7 +31,9 @@ from orchestwin.artifacts.design_packages import (
     DesignPackageVersion,
 )
 from orchestwin.artifacts.design_revision_application import (
+    DESIGN_VERSION_NOT_FOUND,
     DesignDiffPersistenceStatus,
+    DesignRestoreFailure,
     DesignRevisionApplicationIssueCode,
     DesignRevisionResult,
     DesignRevisionStatus,
@@ -84,6 +86,13 @@ from orchestwin.artifacts.visual_directions import (
 from orchestwin.identity.domain import UserAccount
 from orchestwin.knowledge.state import MAX_DESIGN_REQUEST_LENGTH
 from orchestwin.models.design import DesignProposalIssueCode
+from orchestwin.models.design_change import (
+    ELEMENT_CODE_PATTERN,
+    SCREEN_CODE_PATTERN,
+    DesignChangeTarget,
+    target_html,
+    target_label,
+)
 from orchestwin.projects.design_application import (
     DesignGenerationIssueCode,
     DesignGenerationResult,
@@ -109,6 +118,11 @@ from orchestwin.workflow.gates import (
 )
 
 DESIGN_API_PREFIX = "/projects/{project_id}/design"
+DESIGN_RESTORED: Final = "RESTORED"
+RESTORE_NOTES: Final = {
+    "it": "Ripristino della versione {number}",
+    "en": "Restored from version {number}",
+}
 
 
 class ApiModel(BaseModel):
@@ -553,8 +567,34 @@ class DesignRevisionPayload(ApiModel):
         )
 
 
+class DesignChangeTargetRequest(ApiModel):
+    screen_code: str = Field(pattern=SCREEN_CODE_PATTERN)
+    element_code: str | None = Field(default=None, pattern=ELEMENT_CODE_PATTERN)
+    label: str | None = None
+    html: str | None = None
+
+    @field_validator("label")
+    @classmethod
+    def normalized_label(cls, value: str | None) -> str | None:
+        return None if value is None else target_label(value)
+
+    @field_validator("html")
+    @classmethod
+    def trimmed_html(cls, value: str | None) -> str | None:
+        return None if value is None else target_html(value)
+
+    def to_domain(self) -> DesignChangeTarget:
+        return DesignChangeTarget(
+            screen_code=self.screen_code,
+            element_code=self.element_code,
+            label=self.label,
+            html=self.html,
+        )
+
+
 class DesignChangeRequest(ApiModel):
     request: str
+    target: DesignChangeTargetRequest | None = None
 
     @field_validator("request")
     @classmethod
@@ -565,6 +605,9 @@ class DesignChangeRequest(ApiModel):
             raise ValueError(f"request must hold 1 to {MAX_DESIGN_REQUEST_LENGTH} characters")
 
         return text
+
+    def target_of_change(self) -> DesignChangeTarget | None:
+        return None if self.target is None else self.target.to_domain()
 
 
 class DesignChangePayload(ApiModel):
@@ -583,6 +626,22 @@ class DesignRevisionDecisionRequest(ApiModel):
 
     decision: DesignRevisionDecision
     reason: str | None = None
+
+
+class DesignRestoreRequest(ApiModel):
+    version_number: int = Field(ge=1, strict=True)
+    locale: str = Field(default="it-IT", min_length=2, max_length=20)
+
+    def note(self) -> str:
+        language = "en" if self.locale.strip().lower().startswith("en") else "it"
+        return RESTORE_NOTES[language].format(number=self.version_number)
+
+
+class DesignRestorePayload(ApiModel):
+    reason: Literal["RESTORED"]
+    restored_version_number: int
+    note: str
+    revision: DesignRevisionPayload
 
 
 class DesignGateDecisionRequest(ApiModel):
@@ -708,6 +767,15 @@ class DesignRevisionService(Protocol):
     ) -> DesignRevisionResult:
         """Approve or reject one Design Package diff."""
 
+    async def restore_version(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        version_number: int,
+        note: str,
+    ) -> DesignRevisionResult: ...
+
 
 class DesignChangeService(Protocol):
     async def request_change(
@@ -716,6 +784,7 @@ class DesignChangeService(Protocol):
         owner_user_id: UUID,
         project_id: UUID,
         owner_request: str,
+        target: DesignChangeTarget | None = None,
     ) -> DesignChangeResult: ...
 
 
@@ -1011,6 +1080,7 @@ def create_design_router() -> APIRouter:
                 owner_user_id=user.id,
                 project_id=project_id,
                 owner_request=payload.request,
+                target=payload.target_of_change(),
             )
 
             return design_change_payload(result)
@@ -1101,6 +1171,45 @@ def create_design_router() -> APIRouter:
         _raise_revision_failure(result)
 
         return DesignRevisionPayload.from_domain(result)
+
+    @router.post(
+        "/revisions/restore",
+        response_model=DesignRestorePayload,
+        status_code=status.HTTP_201_CREATED,
+        operation_id="restoreDesignVersion",
+    )
+    async def restore_version_endpoint(
+        project_id: UUID,
+        payload: DesignRestoreRequest,
+        request: Request,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+    ) -> DesignRestorePayload:
+        service = design_revision_service_dependency(request)
+        await require_current_design_context(
+            getattr(request.app.state, "application_runtime", None),
+            owner_user_id=user.id,
+            project_id=project_id,
+        )
+        note = payload.note()
+        try:
+            result = await service.restore_version(
+                owner_user_id=user.id,
+                project_id=project_id,
+                version_number=payload.version_number,
+                note=note,
+            )
+        except DesignRestoreFailure as error:
+            if error.code == DESIGN_VERSION_NOT_FOUND:
+                raise _not_found(error.code) from error
+            raise _conflict(error.code) from error
+        _raise_revision_failure(result)
+
+        return DesignRestorePayload(
+            reason=DESIGN_RESTORED,
+            restored_version_number=payload.version_number,
+            note=note,
+            revision=DesignRevisionPayload.from_domain(result),
+        )
 
     @router.post(
         "/gate/submit",
@@ -1372,6 +1481,7 @@ __all__ = [
     "DesignChangePayload",
     "DesignChangeRequest",
     "DesignChangeService",
+    "DesignChangeTargetRequest",
     "DesignGenerationPayload",
     "DesignPackageChangePayload",
     "DesignPackageDiffPayload",
@@ -1379,6 +1489,8 @@ __all__ = [
     "DesignPackageVersionPayload",
     "DesignQueryService",
     "DesignReadinessPayload",
+    "DesignRestorePayload",
+    "DesignRestoreRequest",
     "DesignRevisionPayload",
     "GeneratedMockupPayload",
     "GeneratedScreenPayload",
