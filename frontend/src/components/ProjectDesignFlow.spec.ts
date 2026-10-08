@@ -79,6 +79,8 @@ import type {
   RequirementsSpecificationVersionPayload,
 } from "../types/requirements";
 import DesignAlternativeComparison from "./DesignAlternativeComparison.vue";
+import DesignIterationPanel from "./DesignIterationPanel.vue";
+import GeneratedMockupDialog from "./GeneratedMockupDialog.vue";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
 import ProjectDesignEvaluationPanel from "./ProjectDesignEvaluationPanel.vue";
 import ProjectDesignDiscussionPanel from "./ProjectDesignDiscussionPanel.vue";
@@ -2858,6 +2860,176 @@ describe("ProjectDesignFlow", () => {
       design_version_id: iterated.id,
       mode: "TWIN_REVIEW",
     });
+  });
+
+  it("points at an element of the chosen mockup, asks for a change aimed at it and shows the new version there", async () => {
+    const api = new FakeDesignApi(GENERATED_SELECTED);
+    const proposal = mockupResult(DESIGN_ALTERNATIVE_ID, GENERATED_SELECTED, {
+      generation_id: "generation-pointed",
+      changes: ["The booking link becomes a button"],
+    });
+    const iterationsApi = fakeIterationsApi(() =>
+      job(null, "SUCCEEDED", { result: proposal, alternative_id: DESIGN_ALTERNATIVE_ID }),
+    );
+    const marked = (
+      alternativeId: string,
+      source: "applied" | "latest",
+      label: string,
+    ): MockupDocumentPayload => ({
+      ...mockupDocument(alternativeId, source),
+      html: [
+        '<!doctype html><html lang="en"><body>',
+        '<section class="ot-screen" id="SCR-001" data-entry><h1 data-elm="ELM-001">Desk</h1>',
+        `<a href="#SCR-002" data-elm="ELM-002">${label}</a></section>`,
+        '<section class="ot-screen" id="SCR-002"><h1 data-elm="ELM-003">Booking</h1></section>',
+        "</body></html>",
+      ].join(""),
+    });
+    const mockupsApi = fakeMockupsApi({
+      capabilities: GENERATED,
+      latest: {
+        [SECOND_DESIGN_ALTERNATIVE_ID]: mockupResult(
+          SECOND_DESIGN_ALTERNATIVE_ID,
+          GENERATED_SELECTED,
+        ),
+      },
+      documents: {
+        [`${DESIGN_ALTERNATIVE_ID}|applied`]: marked(DESIGN_ALTERNATIVE_ID, "applied", "Book"),
+        [`${DESIGN_ALTERNATIVE_ID}|latest`]: marked(
+          DESIGN_ALTERNATIVE_ID,
+          "latest",
+          "Book a table",
+        ),
+        [`${SECOND_DESIGN_ALTERNATIVE_ID}|latest`]: marked(
+          SECOND_DESIGN_ALTERNATIVE_ID,
+          "latest",
+          "Reserve",
+        ),
+      },
+    });
+    const body = () => document.body;
+    const loadFrame = async (): Promise<void> => {
+      await flushPromises();
+      const frame = body().querySelector<HTMLIFrameElement>("[data-testid='mockup-dialog'] iframe");
+      const page = frame?.contentDocument ?? null;
+      if (frame === null || page === null) {
+        throw new Error("missing mockup frame");
+      }
+      const parsed = new DOMParser().parseFromString(
+        frame.getAttribute("srcdoc") ?? "",
+        "text/html",
+      );
+      page.replaceChild(page.importNode(parsed.documentElement, true), page.documentElement);
+      frame.dispatchEvent(new Event("load"));
+      await flushPromises();
+    };
+    const wrapper = mountFlow(api, { mockupsApi, iterationsApi, attach: true });
+    await flushPromises();
+
+    await card(wrapper, "DES-002").get('[data-testid="alternative-open"]').trigger("click");
+    await flushPromises();
+    expect(body().querySelector("[data-testid='mockup-dialog'] iframe")).not.toBeNull();
+    expect(body().querySelector("[data-testid='mockup-inspect']")).toBeNull();
+    body().querySelector<HTMLElement>("[data-testid='mockup-dialog-close']")?.click();
+    await flushPromises();
+
+    await card(wrapper, "DES-001").get('[data-testid="alternative-open"]').trigger("click");
+    await flushPromises();
+    const toggle = body().querySelector<HTMLElement>("[data-testid='mockup-inspect']");
+    expect(toggle?.textContent?.trim()).toBe("Point at an element");
+    toggle?.click();
+    await loadFrame();
+    body()
+      .querySelector<HTMLElement>("[data-testid='mockup-element'][data-code='ELM-002']")
+      ?.click();
+    await flushPromises();
+    const field = body().querySelector<HTMLTextAreaElement>("[data-testid='mockup-request']");
+    if (field === null) {
+      throw new Error("missing request field");
+    }
+    field.value = "Make the link a button";
+    field.dispatchEvent(new Event("input"));
+    await flushPromises();
+    expect(iterationsApi.startJob).not.toHaveBeenCalled();
+
+    body().querySelector<HTMLElement>("[data-testid='mockup-apply']")?.click();
+    await flushPromises();
+
+    expect(iterationsApi.startJob.mock.calls[0]?.[1]).toEqual({
+      design_version_id: GENERATED_SELECTED.id,
+      design_content_hash: GENERATED_SELECTED.content_hash,
+      request: "Make the link a button",
+      assertions: [],
+      target: {
+        screen_code: "SCR-001",
+        element_code: "ELM-002",
+        label: "Book",
+        html: '<a href="#SCR-002" data-elm="ELM-002">Book</a>',
+      },
+    });
+    expect(mockupsApi.document).toHaveBeenLastCalledWith(
+      DESIGN_PROJECT_ID,
+      { alternative_id: DESIGN_ALTERNATIVE_ID, source: "latest", entry_screen: "SCR-001" },
+      "access-token",
+    );
+    expect(
+      body().querySelector("[data-testid='mockup-dialog'] iframe")?.getAttribute("srcdoc"),
+    ).toContain("Book a table");
+    await loadFrame();
+    expect(body().querySelector("[data-testid='mockup-selection-code']")?.textContent?.trim()).toBe(
+      "ELM-002",
+    );
+    expect(body().querySelector("[data-testid='mockup-selection-text']")?.textContent?.trim()).toBe(
+      "Book a table",
+    );
+    expect(wrapper.get('[data-testid="design-iteration-panel"]').attributes("data-phase")).toBe(
+      "ready",
+    );
+  });
+
+  it("hears a version applied in the mockup dialog like one applied from its own bar", async () => {
+    const api = new FakeDesignApi(GENERATED_SELECTED);
+    const proposal = mockupResult(DESIGN_ALTERNATIVE_ID, GENERATED_SELECTED, {
+      generation_id: "generation-iteration",
+      changes: ["The search moves to the top"],
+    });
+    const iterationsApi = fakeIterationsApi(() =>
+      job(null, "SUCCEEDED", { result: proposal, alternative_id: DESIGN_ALTERNATIVE_ID }),
+    );
+    const mockupsApi = fakeMockupsApi({
+      capabilities: GENERATED,
+      documents: {
+        [`${DESIGN_ALTERNATIVE_ID}|applied`]: mockupDocument(DESIGN_ALTERNATIVE_ID, "applied"),
+        [`${DESIGN_ALTERNATIVE_ID}|latest`]: mockupDocument(DESIGN_ALTERNATIVE_ID, "latest"),
+      },
+    });
+    const wrapper = mountFlow(api, { mockupsApi, iterationsApi, attach: true });
+    await flushPromises();
+    await barOf(wrapper).get('[data-testid="decision-secondary"]').trigger("click");
+    await wrapper.get('[data-testid="decision-note"]').setValue("Search first");
+    await wrapper.get('[data-testid="decision-send"]').trigger("click");
+    await flushPromises();
+
+    const panel = wrapper.getComponent(DesignIterationPanel);
+    expect(panel.props("before")?.entry_screen).toBe("SCR-001");
+    panel.vm.$emit("screen", "SCR-002");
+    await flushPromises();
+    expect(panel.props("before")?.entry_screen).toBe("SCR-002");
+    expect(panel.props("after")?.entry_screen).toBe("SCR-002");
+
+    await card(wrapper, "DES-001").get('[data-testid="alternative-open"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
+    wrapper
+      .getComponent(GeneratedMockupDialog)
+      .vm.$emit("applied", "00000000-0000-4000-8000-000000000190");
+    await flushPromises();
+
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+    expect(panel.props("before")?.entry_screen).toBe("SCR-001");
+    expect(panel.props("after")?.entry_screen).toBe("SCR-001");
+    expect(document.body.querySelector("[data-testid='mockup-dialog']")).not.toBeNull();
+    expect(api.proposals).toEqual([]);
   });
 
   it("approves the design in one press: it brings it to approval and approves it", async () => {

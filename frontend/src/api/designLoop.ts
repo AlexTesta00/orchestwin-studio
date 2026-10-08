@@ -25,10 +25,17 @@ export interface DesignLoopApiOptions {
   fetchImpl?: typeof fetch;
 }
 
+export interface DesignEvaluationScope {
+  screen_code: string;
+  element_code?: string;
+}
+
+export type DesignEvaluationBody = DesignEvaluationRequest & { scope?: DesignEvaluationScope };
+
 export interface DesignLoopApi {
   evaluate(
     projectId: string,
-    body: DesignEvaluationRequest,
+    body: DesignEvaluationBody,
     accessToken: string,
   ): Promise<DesignEvaluationRunPayload>;
   runs(projectId: string, accessToken: string): Promise<DesignEvaluationRunPayload[]>;

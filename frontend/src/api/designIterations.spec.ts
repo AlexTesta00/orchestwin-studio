@@ -83,6 +83,33 @@ describe("design iterations api", () => {
     ]);
   });
 
+  it("sends the screen and the element that a change is aimed at with the request", async () => {
+    const fetchImpl = vi.fn(async () =>
+      response(202, { job_id: "job-1", kind: "ITERATION", status: "RUNNING" }),
+    );
+    const api = createDesignIterationsApi({ fetchImpl });
+    const body = {
+      design_version_id: "version-2",
+      design_content_hash: "b".repeat(64),
+      request: "Rendi il pulsante più scuro",
+      assertions: [],
+      target: {
+        screen_code: "SCR-002",
+        element_code: "ELM-012",
+        label: "Prenota",
+        html: '<button data-elm="ELM-012" type="button">Prenota</button>',
+      },
+    };
+
+    await api.startJob(PROJECT_ID, body, "token");
+
+    expect(calls(fetchImpl)[0]).toMatchObject({
+      url: `/api/v1/projects/${ENCODED_PROJECT}/design/iterations/jobs`,
+      method: "POST",
+      body,
+    });
+  });
+
   it.each([
     [409, "DESIGN_CONTEXT_CHANGED"],
     [409, "GENERATED_MOCKUP_REQUIRED"],

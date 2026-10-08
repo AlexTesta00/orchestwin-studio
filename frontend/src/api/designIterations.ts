@@ -23,10 +23,19 @@ export interface DesignIterationsApiOptions {
 
 export class DesignIterationsApiError extends ApiRequestError {}
 
+export interface DesignChangeTarget {
+  screen_code: string;
+  element_code?: string;
+  label: string;
+  html: string;
+}
+
+export type IterationJobBody = IterationJobRequest & { target?: DesignChangeTarget };
+
 export interface DesignIterationsApi {
   startJob(
     projectId: string,
-    request: IterationJobRequest,
+    request: IterationJobBody,
     accessToken: string,
   ): Promise<GenerationJobPayload>;
   job(projectId: string, jobId: string, accessToken: string): Promise<GenerationJobPayload>;

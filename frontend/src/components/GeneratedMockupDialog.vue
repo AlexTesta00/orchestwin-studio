@@ -52,13 +52,25 @@ import {
   onUnmounted,
   provide,
   ref,
+  shallowRef,
   useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
 
+import type { DesignApi } from "../api/design";
+import type { DesignIterationsApi } from "../api/designIterations";
+import type { DesignLoopApi } from "../api/designLoop";
+import type { DesignMockupsApi } from "../api/designMockups";
 import { activitySignalKey } from "../stores/activityJournal";
+import type { AuthorizedMockupRequest } from "../stores/designMockups";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
+import MockupInspector, {
+  markedElements,
+  NO_HIGHLIGHT,
+  type InspectorBox,
+  type InspectorHighlight,
+} from "./MockupInspector.vue";
 import MockupWhyElements from "./MockupWhyElements.vue";
 import MockupScenarioWalkthrough from "./MockupScenarioWalkthrough.vue";
 import { whyContextKey } from "./whyContext";
@@ -88,6 +100,13 @@ const props = withDefaults(
     workflows?: readonly WorkflowName[] | undefined;
     busy?: boolean | undefined;
     locale?: Locale | undefined;
+    editable?: boolean | undefined;
+    authorize?: AuthorizedMockupRequest | undefined;
+    iterationsApi?: DesignIterationsApi | undefined;
+    mockupsApi?: DesignMockupsApi | undefined;
+    designApi?: DesignApi | undefined;
+    loopApi?: DesignLoopApi | undefined;
+    signal?: AbortSignal | undefined;
   }>(),
   {
     pins: () => [],
@@ -97,10 +116,22 @@ const props = withDefaults(
     workflows: () => [],
     busy: false,
     locale: undefined,
+    editable: false,
+    authorize: undefined,
+    iterationsApi: undefined,
+    mockupsApi: undefined,
+    designApi: undefined,
+    loopApi: undefined,
+    signal: undefined,
   },
 );
 
-const emit = defineEmits<{ close: []; screen: [code: string] }>();
+const emit = defineEmits<{
+  close: [];
+  screen: [code: string];
+  version: [screen: string];
+  applied: [versionId: string];
+}>();
 
 const messages = {
   it: {
@@ -110,6 +141,9 @@ const messages = {
     widths: { desktop: "Desktop", tablet: "Tablet", phone: "Telefono" },
     frame: "Mockup navigabile: {title}",
     hint: "Il mockup è navigabile: i suoi collegamenti portano alle altre schermate.",
+    inspect: "Indica un elemento",
+    inspectHint: "Un clic sul mockup sceglie l'elemento; Esc toglie la scelta.",
+    noElements: "Questo mockup non ha elementi indicabili",
     opening: "Apro la schermata…",
     empty: "Il mockup non è ancora disponibile.",
     observations: "Osservazioni dei twin",
@@ -135,6 +169,9 @@ const messages = {
     widths: { desktop: "Desktop", tablet: "Tablet", phone: "Phone" },
     frame: "Navigable mockup: {title}",
     hint: "The mockup can be navigated: its links lead to the other screens.",
+    inspect: "Point at an element",
+    inspectHint: "A click on the mockup chooses the element; Esc clears the choice.",
+    noElements: "This mockup has no elements to point at",
     opening: "Opening the screen…",
     empty: "The mockup is not available yet.",
     observations: "What the twins noticed",
@@ -168,6 +205,8 @@ const FOCUSABLE =
 
 const ALTERNATIVE_CODE = /^([A-Z]{2,8}-[0-9]{1,6}) · /;
 
+const LABEL_ROOM = 22;
+
 provide(
   surfaceKey,
   computed<SurfaceContext>(() => "night"),
@@ -180,23 +219,30 @@ const copy = computed(() => messages[lang.value]);
 const whyContext = inject(whyContextKey, null);
 const activity = inject(activitySignalKey, null);
 const hasSidecar = computed(
-  () => items.value.length > 0 || (whyContext !== null && props.document !== null),
+  () =>
+    items.value.length > 0 || inspecting.value || (whyContext !== null && props.document !== null),
 );
 
 const overlay = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const tablist = ref<HTMLElement | null>(null);
+const frameView = ref<InstanceType<typeof GeneratedMockupFrame> | null>(null);
 const titleId = useId();
 const listTitleId = useId();
 const noteId = useId();
 const regionId = useId();
 const tabPrefix = useId();
+const inspectNoteId = useId();
 
 const requested = ref<string | null>(null);
 const reloads = ref(0);
 const focusIndex = ref(0);
 const width = ref<FrameWidth>(initialWidth());
 const knownScreens = ref<readonly MockupScreen[]>([]);
+const inspecting = ref(false);
+const inspectFrame = shallowRef<HTMLIFrameElement | null>(null);
+const frameLoads = ref(0);
+const highlight = shallowRef<InspectorHighlight>(NO_HIGHLIGHT);
 
 let opener: HTMLElement | null = null;
 let focusScreen: string | null = null;
@@ -267,6 +313,20 @@ const items = computed(() =>
 const countLabel = computed(() =>
   items.value.length === 1 ? copy.value.one : fill(copy.value.many, { n: items.value.length }),
 );
+
+const marked = computed(() =>
+  props.document === null ? null : markedElements(props.document.html),
+);
+
+const pointable = computed(() => marked.value !== false);
+
+const highlightBoxes = computed(() => {
+  const { hover, selected } = highlight.value;
+  return [
+    ...(selected === null ? [] : [{ ...selected, kind: "selected" as const }]),
+    ...(hover === null ? [] : [{ ...hover, kind: "hover" as const }]),
+  ].filter((box) => box.width > 0 && box.height > 0);
+});
 
 function initialWidth(): FrameWidth {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -398,6 +458,37 @@ function focusLast(): void {
   (focusables().at(-1) ?? panel.value)?.focus();
 }
 
+function toggleInspect(): void {
+  if (pointable.value) {
+    inspecting.value = !inspecting.value;
+  }
+}
+
+function onFrameLoad(): void {
+  if (inspecting.value) {
+    inspectFrame.value = frameView.value?.iframe ?? null;
+    frameLoads.value += 1;
+  }
+}
+
+function onApplied(versionId: string): void {
+  reloads.value += 1;
+  emit("applied", versionId);
+}
+
+function boxStyle(box: InspectorBox, factor: number): Record<string, string> {
+  return {
+    left: `${box.left * factor}px`,
+    top: `${box.top * factor}px`,
+    width: `${box.width * factor}px`,
+    height: `${box.height * factor}px`,
+  };
+}
+
+function labelInside(box: InspectorBox, factor: number): boolean {
+  return box.top * factor < LABEL_ROOM;
+}
+
 watch(
   () => props.document?.screens,
   (value) => {
@@ -418,6 +509,20 @@ watch(
 watch(frameKey, async () => {
   await nextTick();
   keepFocus();
+});
+
+watch(
+  () => [marked.value, props.editable] as const,
+  ([value, editable]) => {
+    if (value === false || !editable) {
+      inspecting.value = false;
+    }
+  },
+);
+
+watch([frameKey, inspecting], () => {
+  inspectFrame.value = null;
+  highlight.value = NO_HIGHLIGHT;
 });
 
 watch(
@@ -494,7 +599,9 @@ onUnmounted(() => {
             <h2 :id="titleId" class="min-w-0 flex-1 text-base font-semibold break-words">
               {{ title }}
             </h2>
-            <p class="hidden text-[13px] text-on-night-3 lg:block">{{ copy.hint }}</p>
+            <p class="hidden text-[13px] text-on-night-3 lg:block">
+              {{ inspecting ? copy.inspectHint : copy.hint }}
+            </p>
             <button
               type="button"
               class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-pill bg-on-night/8 text-lg text-on-night transition-colors duration-150 hover:bg-on-night/16"
@@ -546,6 +653,34 @@ onUnmounted(() => {
               kind="radio"
               class="shrink-0"
             />
+            <div v-if="editable" class="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <button
+                type="button"
+                :class="[
+                  'inline-flex min-h-11 items-center rounded-pill border px-4 text-sm font-semibold transition-colors duration-150',
+                  inspecting
+                    ? 'border-on-night bg-on-night text-ink'
+                    : pointable
+                      ? 'border-night-line-strong text-on-night hover:bg-night-hover'
+                      : 'cursor-not-allowed border-night-line text-on-night-3',
+                ]"
+                :aria-pressed="inspecting ? 'true' : 'false'"
+                :aria-disabled="pointable ? undefined : 'true'"
+                :aria-describedby="pointable ? undefined : inspectNoteId"
+                data-testid="mockup-inspect"
+                @click="toggleInspect"
+              >
+                {{ copy.inspect }}
+              </button>
+              <p
+                v-if="!pointable"
+                :id="inspectNoteId"
+                class="text-[13px] text-on-night-3"
+                data-testid="mockup-inspect-none"
+              >
+                {{ copy.noElements }}
+              </p>
+            </div>
           </div>
         </header>
         <div
@@ -570,10 +705,39 @@ onUnmounted(() => {
             <GeneratedMockupFrame
               v-if="document !== null"
               :key="frameKey"
+              ref="frameView"
               :html="document.html"
               :title="frameTitle"
               :width="width"
-            />
+              :inspect="inspecting"
+              @load="onFrameLoad"
+            >
+              <template v-if="inspecting" #overlay="{ factor }">
+                <div
+                  v-for="box in highlightBoxes"
+                  :key="box.kind"
+                  :class="[
+                    'absolute rounded-[3px] border-2 ring-2 ring-night-deep/80',
+                    box.kind === 'selected'
+                      ? 'border-petrol-on-night'
+                      : 'border-dashed border-on-night',
+                  ]"
+                  :style="boxStyle(box, factor)"
+                  :data-kind="box.kind"
+                  :data-code="box.code"
+                  data-testid="mockup-inspect-highlight"
+                >
+                  <span
+                    :class="[
+                      'absolute left-0 rounded-[3px] bg-night-deep px-1.5 py-0.5 font-mono text-[11px] leading-4 font-semibold whitespace-nowrap text-on-night',
+                      labelInside(box, factor) ? 'top-0' : 'bottom-full mb-1',
+                    ]"
+                  >
+                    {{ box.code }}
+                  </span>
+                </div>
+              </template>
+            </GeneratedMockupFrame>
             <div v-else class="grid h-full place-items-center p-6">
               <UiStateBlock
                 :kind="busy ? 'loading' : 'empty'"
@@ -598,6 +762,23 @@ onUnmounted(() => {
             class="min-h-0 min-w-0 xl:overflow-y-auto"
             data-testid="mockup-dialog-sidecar"
           >
+            <MockupInspector
+              v-if="inspecting"
+              :frame="inspectFrame"
+              :loads="frameLoads"
+              :screen="selectedScreen"
+              :screens="screens"
+              :locale="lang"
+              :authorize="authorize"
+              :api="iterationsApi"
+              :mockups-api="mockupsApi"
+              :design-api="designApi"
+              :loop-api="loopApi"
+              :signal="signal"
+              @highlight="highlight = $event"
+              @version="emit('version', $event)"
+              @applied="onApplied"
+            />
             <MockupWhyElements
               v-if="document !== null"
               :alternative-id="document.alternative_id"

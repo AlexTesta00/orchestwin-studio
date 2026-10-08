@@ -1,5 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { h } from "vue";
 
 import { expectAccessible } from "@/test/axe";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
@@ -96,13 +97,92 @@ describe("generated mockup frame", () => {
     );
   });
 
-  it("never inserts raw markup and never grants a permission in its source", () => {
+  it("never inserts raw markup and grants only the same origin, only while pointing", () => {
     expect(source).not.toMatch(/v-html/);
     expect(source).not.toMatch(/innerHTML/);
-    expect(source).not.toMatch(/allow-/);
+    expect(source.match(/allow-[a-z-]+/g)).toEqual(["allow-same-origin"]);
     expect(source).not.toMatch(/\ballow=/);
-    expect(source.match(/sandbox=""/g)).toHaveLength(1);
+    expect(source).toContain(`:sandbox="inspecting ? 'allow-same-origin' : ''"`);
+    expect(source).toContain(
+      "const inspecting = computed(() => props.inspect && props.interactive);",
+    );
     expect(source.match(/<iframe/g)).toHaveLength(1);
+  });
+
+  it("opens the document to the dialog only while pointing and loads it again each time", async () => {
+    const wrapper = mount(GeneratedMockupFrame, { props: { html: HTML, title: "Mockup" } });
+    const first = frameOf(wrapper);
+    expect(first.getAttribute("sandbox")).toBe("");
+
+    await wrapper.setProps({ inspect: true });
+    const pointing = frameOf(wrapper);
+    expect(pointing).not.toBe(first);
+    expect(pointing.getAttribute("sandbox")).toBe("allow-same-origin");
+    expect(pointing.getAttribute("srcdoc")).toBe(HTML);
+    expect(pointing.hasAttribute("allow")).toBe(false);
+    expect(wrapper.findAll("iframe")).toHaveLength(1);
+
+    await wrapper.setProps({ inspect: false });
+    expect(frameOf(wrapper)).not.toBe(pointing);
+    expect(frameOf(wrapper).getAttribute("sandbox")).toBe("");
+
+    await wrapper.setProps({ inspect: true, interactive: false });
+    expect(frameOf(wrapper).getAttribute("sandbox")).toBe("");
+  });
+
+  it("says when its document is ready and exposes the frame with its scale", async () => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    boxSize(512, 400);
+    const wrapper = mount(GeneratedMockupFrame, { props: { html: HTML, title: "Mockup" } });
+    await flushPromises();
+    const frame = frameOf(wrapper);
+
+    frame.dispatchEvent(new Event("load"));
+
+    expect(wrapper.emitted("load")).toHaveLength(1);
+    expect(wrapper.vm.iframe).toBe(frame);
+    expect(wrapper.vm.factor).toBe(0.5);
+    await wrapper.setProps({ inspect: true });
+    expect(wrapper.vm.iframe).toBe(frameOf(wrapper));
+    expect(wrapper.vm.iframe).not.toBe(frame);
+  });
+
+  it("lays the overlay of the dialog exactly over the scaled document, out of the way of the mouse", async () => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    boxSize(1000, 700);
+    const wrapper = mount(GeneratedMockupFrame, {
+      props: { html: HTML, title: "Mockup", width: 2000 },
+      slots: {
+        overlay: (props: { factor: number }) =>
+          h("span", { class: "marker" }, `factor ${props.factor}`),
+      },
+    });
+    await flushPromises();
+    const layer = wrapper.get("[data-testid='generated-mockup-overlay']");
+
+    expect(layer.text()).toBe("factor 0.5");
+    expect(layer.attributes("aria-hidden")).toBe("true");
+    expect(layer.classes()).toEqual(
+      expect.arrayContaining([
+        "pointer-events-none",
+        "absolute",
+        "overflow-hidden",
+        "rounded-[18px]",
+      ]),
+    );
+    const style = (layer.element as HTMLElement).style;
+    const frame = frameOf(wrapper).style;
+    expect(style.width).toBe("1000px");
+    expect(style.height).toBe(`${((700 - 32) * 2) / 2}px`);
+    expect(style.left).toBe(frame.left);
+    expect(style.top).toBe(frame.top);
+    expect(style.top).toBe("16px");
+    expect(wrapper.element.lastElementChild).toBe(layer.element);
+    expect(
+      mount(GeneratedMockupFrame, { props: { html: HTML, title: "Mockup" } })
+        .find("[data-testid='generated-mockup-overlay']")
+        .exists(),
+    ).toBe(false);
   });
 
   it("is interactive by default, reachable with the keyboard and visible to assistive technology", () => {
