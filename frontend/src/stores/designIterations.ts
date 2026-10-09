@@ -4,13 +4,13 @@ import { computed, ref } from "vue";
 import {
   designIterationsApi,
   type DesignChangeTarget,
+  type DesignIterationItem,
   type DesignIterationsApi,
   type IterationJobBody,
 } from "../api/designIterations";
 import { designMockupsApi, type DesignMockupsApi } from "../api/designMockups";
 import type { DesignPackageVersionPayload } from "../types/design";
 import type {
-  DesignIterationPayload,
   GenerationJobPayload,
   MockupIssuePayload,
   MockupResultPayload,
@@ -51,6 +51,7 @@ export interface IterationRequest {
   request: string;
   assertions: string[];
   target?: DesignChangeTarget;
+  critiqueSourceId?: string;
 }
 
 export interface IterationRequestInput {
@@ -99,6 +100,7 @@ interface RememberedIteration {
   request: string;
   assertions: string[];
   target?: DesignChangeTarget;
+  critiqueSourceId?: string;
 }
 
 interface IterationMemory {
@@ -140,7 +142,8 @@ function isRememberedIteration(value: unknown): value is RememberedIteration {
     typeof value.hash === "string" &&
     typeof value.request === "string" &&
     isStringList(value.assertions) &&
-    (value.target === undefined || isTarget(value.target))
+    (value.target === undefined || isTarget(value.target)) &&
+    (value.critiqueSourceId === undefined || typeof value.critiqueSourceId === "string")
   );
 }
 
@@ -241,7 +244,7 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
   const request = ref<IterationRequest | null>(null);
   const result = ref<MockupResultPayload | null>(null);
   const failure = ref<IterationFailure | null>(null);
-  const items = ref<DesignIterationPayload[]>([]);
+  const items = ref<DesignIterationItem[]>([]);
   const loaded = ref(false);
   const listing = ref(false);
   const listError = ref<string | null>(null);
@@ -422,7 +425,7 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
   async function loadList(
     authorize: AuthorizedMockupRequest,
     options: { api?: DesignIterationsApi } = {},
-  ): Promise<DesignIterationPayload[]> {
+  ): Promise<DesignIterationItem[]> {
     const project = projectId.value;
 
     if (project === null) {
@@ -610,12 +613,14 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
   ): Promise<IterationOutcome> {
     const replaced = result.value;
     const target = value.target === undefined ? {} : { target: value.target };
+    const source = value.critiqueSourceId;
     const body: IterationJobBody = {
       design_version_id: context.versionId,
       design_content_hash: context.contentHash,
       request: value.request,
       assertions: value.assertions,
       ...target,
+      ...(source === undefined ? {} : { critique_source_id: source }),
     };
     starting.value = true;
     request.value = value;
@@ -629,6 +634,7 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
         request: value.request,
         assertions: value.assertions,
         ...target,
+        ...(source === undefined ? {} : { critiqueSourceId: source }),
       });
 
       if (replaced !== null) {
@@ -661,6 +667,7 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
     replace: boolean,
     authorize: AuthorizedMockupRequest,
     api: DesignIterationsApi,
+    critiqueSourceId: string | null,
   ): Promise<IterationOutcome> {
     const project = projectId.value;
     const epoch = projectEpoch.value;
@@ -670,11 +677,14 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
       return "inactive";
     }
 
-    const value = normalizedIterationRequest(input);
+    const normalized = normalizedIterationRequest(input);
+    const source = critiqueSourceId?.trim() ?? null;
 
-    if (value === null) {
+    if (normalized === null || source === "") {
       return "invalid";
     }
+
+    const value = source === null ? normalized : { ...normalized, critiqueSourceId: source };
 
     if (state.value === "drawing") {
       return "running";
@@ -777,6 +787,9 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
         request: remembered.request,
         assertions: [...remembered.assertions],
         ...(remembered.target === undefined ? {} : { target: { ...remembered.target } }),
+        ...(remembered.critiqueSourceId === undefined
+          ? {}
+          : { critiqueSourceId: remembered.critiqueSourceId }),
       };
 
       try {
@@ -817,12 +830,19 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
     input: IterationRequestInput,
     authorize: AuthorizedMockupRequest,
     options: IterationStartOptions = {},
+    critiqueSourceId: string | null = null,
   ): Promise<IterationOutcome> {
     const holder = pollingHolder(options.signal);
 
     return settled(
       () =>
-        runStart(input, options.replace === true, authorize, options.api ?? designIterationsApi),
+        runStart(
+          input,
+          options.replace === true,
+          authorize,
+          options.api ?? designIterationsApi,
+          critiqueSourceId,
+        ),
       options,
       authorize,
       holder,

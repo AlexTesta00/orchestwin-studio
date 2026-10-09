@@ -1,7 +1,7 @@
 import { ApiRequestError } from "./requestError";
 
 import type {
-  DesignIterationListPayload,
+  DesignIterationPayload,
   GenerationJobPayload,
   IterationJobRequest,
 } from "../types/designMockups";
@@ -30,7 +30,18 @@ export interface DesignChangeTarget {
   html: string;
 }
 
-export type IterationJobBody = IterationJobRequest & { target?: DesignChangeTarget };
+export type IterationJobBody = IterationJobRequest & {
+  target?: DesignChangeTarget;
+  critique_source_id?: string;
+};
+
+export type DesignIterationItem = DesignIterationPayload & {
+  critique_source_id?: string | null;
+};
+
+export interface DesignIterationItemsPayload {
+  items: DesignIterationItem[];
+}
 
 export interface DesignIterationsApi {
   startJob(
@@ -39,7 +50,7 @@ export interface DesignIterationsApi {
     accessToken: string,
   ): Promise<GenerationJobPayload>;
   job(projectId: string, jobId: string, accessToken: string): Promise<GenerationJobPayload>;
-  list(projectId: string, accessToken: string): Promise<DesignIterationListPayload>;
+  list(projectId: string, accessToken: string): Promise<DesignIterationItemsPayload>;
 }
 
 function normalizedBasePath(value: string): string {

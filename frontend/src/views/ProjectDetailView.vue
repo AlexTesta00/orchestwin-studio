@@ -1277,6 +1277,7 @@ onUnmounted(() => {
               v-if="!providedDesignApproved"
               id="studio-design"
               :prerequisite-ready="requirements.isReadyForDesign"
+              :twins-ready="modeling.isReadyForRequirements"
               :key="`${projectId}:design:${remounts[4]}`"
               :project-id="projectId"
               :locale="locale === 'it' ? 'it' : 'en'"
