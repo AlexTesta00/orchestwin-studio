@@ -220,6 +220,7 @@ import DesignAlternativeComparison, {
   type AlternativePreview,
   MOCKUP_READ_FAILURE,
 } from "./DesignAlternativeComparison.vue";
+import DesignCritiquePanel from "./DesignCritiquePanel.vue";
 import DesignIterationPanel, {
   generationFailureText,
   generationReasonText,
@@ -260,6 +261,7 @@ import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 import { workflowStatusLabel } from "./workflowLabels";
 import { designApi, type DesignApi, type DesignDistanceApi } from "../api/design";
 import type { DesignAlignmentApi } from "../api/designAlignment";
+import type { DesignCritiqueApi } from "../api/designCritique";
 import { designIterationsApi, type DesignIterationsApi } from "../api/designIterations";
 import { designLoopApi, DesignLoopApiError, type DesignLoopApi } from "../api/designLoop";
 import { designMockupsApi, type DesignMockupsApi } from "../api/designMockups";
@@ -275,7 +277,11 @@ import type { RequirementsApi } from "../api/requirements";
 import { useAuthStore } from "../stores/auth";
 import { useGuidanceStore } from "../stores/guidance";
 import { type AuthorizedRequest, useDesignStore } from "../stores/design";
-import { ITERATION_ASSERTION_LIMIT, useDesignIterationsStore } from "../stores/designIterations";
+import {
+  ITERATION_ASSERTION_LIMIT,
+  useDesignIterationsStore,
+  type IterationOutcome,
+} from "../stores/designIterations";
 import { findingKey, runMode, useDesignLoopStore } from "../stores/designLoop";
 import { errorStatusOf, useDesignMockupsStore } from "../stores/designMockups";
 import { useGenerationResume } from "../stores/generationJobs";
@@ -382,6 +388,8 @@ const props = withDefaults(
     usageApi?: ModelUsageApi;
     distanceApi?: DesignDistanceApi;
     restoreApi?: DesignRestoreApi;
+    critiqueApi?: DesignCritiqueApi;
+    twinsReady?: boolean;
     upstream?: UpstreamValue;
     active?: boolean;
     sectionsMode?: boolean;
@@ -391,6 +399,7 @@ const props = withDefaults(
     locale: "en",
     autoLoad: true,
     prerequisiteReady: true,
+    twinsReady: true,
     upstream: null,
     active: true,
     sectionsMode: false,
@@ -591,6 +600,8 @@ const messages = {
     mockupNotesIntro: "The Studio accepted these mockups and noted these points.",
     mockupNotesOf: "{code} · {title}",
     onScreen: "On the screen “{title}”: {text}",
+    redrawRequest:
+      "Redraw the mockup so that it reproduces the look and the structure of the supplied design “{title}”: same layout, colours and hierarchy of the content, with the screens and the requirements of the project.",
   },
   it: {
     designer: "Designer UX/UI",
@@ -780,6 +791,8 @@ const messages = {
     mockupNotesIntro: "Lo Studio ha accettato questi mockup e ha annotato questi punti.",
     mockupNotesOf: "{code} · {title}",
     onScreen: "Nella schermata «{title}»: {text}",
+    redrawRequest:
+      "Ridisegna il mockup perché riproduca l'aspetto e la struttura del design fornito «{title}»: stessa disposizione, stessi colori e stessa gerarchia dei contenuti, con le schermate e i requisiti del progetto.",
   },
 } as const;
 
@@ -1495,6 +1508,9 @@ const iterationVisible = computed(
     (iterations.state !== "idle" ||
       (packageValue.value?.owner_assertions ?? []).length > 0 ||
       iterations.items.length > 0),
+);
+const redrawBusy = computed(
+  () => iterations.isBusy || iterations.state === "ready" || pendingDiff.value !== null,
 );
 
 const agentText = computed(() => {
@@ -2299,6 +2315,10 @@ async function startIteration(note: string): Promise<void> {
     await revealIteration();
     return;
   }
+  await explainIteration(outcome);
+}
+
+async function explainIteration(outcome: IterationOutcome): Promise<void> {
   if (outcome === "pending") {
     localError.value = copy.value.iterationPending;
   } else if (outcome === "invalid") {
@@ -2308,6 +2328,34 @@ async function startIteration(note: string): Promise<void> {
   } else if (outcome === "refused") {
     await revealIteration();
   }
+}
+
+async function redraw(sourceId: string, title: string): Promise<void> {
+  if (deciding.value || store.isBusy) {
+    return;
+  }
+  deciding.value = true;
+  localError.value = null;
+  try {
+    const outcome = await iterations.start(
+      { request: fill(copy.value.redrawRequest, { title }), assertions: [], target: null },
+      authorizedRequest,
+      { api: iterationsApi.value, mockupsApi: mockupsApi.value, signal: lifetime.signal },
+      sourceId,
+    );
+    if (outcome === "started" || outcome === "running") {
+      iterationScreen.value = null;
+      await revealIteration();
+      return;
+    }
+    await explainIteration(outcome);
+  } finally {
+    deciding.value = false;
+  }
+}
+
+function onCritiqued(): void {
+  void loadUsage();
 }
 
 async function requestChanges(note: string): Promise<void> {
@@ -3179,6 +3227,15 @@ onBeforeUnmount(() => {
       >
         {{ copy.generate }}
       </UiButton>
+      <DesignCritiquePanel
+        :project-id="projectId"
+        :locale="locale"
+        :authorize="authorizedRequest"
+        :twins-ready="twinsReady"
+        :redraw-ready="false"
+        :api="critiqueApi"
+        @critiqued="onCritiqued"
+      />
     </section>
 
     <template v-else>
@@ -3461,6 +3518,18 @@ onBeforeUnmount(() => {
           @select="choose"
           @open="openMockup"
           @retry="retryMockup"
+        />
+
+        <DesignCritiquePanel
+          :project-id="projectId"
+          :locale="locale"
+          :authorize="authorizedRequest"
+          :twins-ready="twinsReady"
+          :redraw-ready="iterationMode"
+          :redraw-busy="redrawBusy"
+          :api="critiqueApi"
+          @critiqued="onCritiqued"
+          @redraw="redraw"
         />
 
         <div
