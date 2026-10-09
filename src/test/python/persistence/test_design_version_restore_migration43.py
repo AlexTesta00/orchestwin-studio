@@ -13,6 +13,7 @@ from orchestwin.persistence.migrate import create_alembic_config
 URL = "postgresql+psycopg://synthetic@localhost:5432/orchestwin"
 REVISION = "0074_design_version_restore"
 PREVIOUS = "0073_knowledge_alignment"
+NEXT = "0075_design_critiques"
 TABLE = "design_package_versions"
 CONSTRAINT = "uq_design_package_versions_project_hash"
 DROP = f"ALTER TABLE {TABLE} DROP CONSTRAINT {CONSTRAINT}"
@@ -45,7 +46,7 @@ def statements(sql: str) -> list[str]:
     return [" ".join(part.split()) for part in text.split(";\n") if part.strip()]
 
 
-def test_revision_follows_the_knowledge_alignment_and_is_the_single_head():
+def test_revision_follows_the_knowledge_alignment_and_precedes_the_design_critiques():
     module = migration()
     assert (module.revision, module.down_revision) == (REVISION, PREVIOUS)
     assert (module.branch_labels, module.depends_on) == (None, None)
@@ -54,9 +55,10 @@ def test_revision_follows_the_knowledge_alignment_and_is_the_single_head():
         name.split(".")[0] for name in re.findall(r"^(?:from|import) ([\w.]+)", source, re.M)
     } == {"alembic"}
     scripts = ScriptDirectory.from_config(create_alembic_config(URL))
-    assert scripts.get_heads() == [REVISION]
+    assert len(scripts.get_heads()) == 1
     assert scripts.get_revision(REVISION).down_revision == PREVIOUS
     assert scripts.get_revision(PREVIOUS).nextrev == {REVISION}
+    assert scripts.get_revision(REVISION).nextrev == {NEXT}
 
 
 def test_upgrade_only_drops_the_uniqueness_of_the_content_hash(monkeypatch):
