@@ -243,6 +243,7 @@ def test_the_list_of_the_iterations_follows_their_evidence_and_the_design_versio
         "requested_at",
         "request",
         "target",
+        "critique_source_id",
         "assertions",
         "changes",
         "status",

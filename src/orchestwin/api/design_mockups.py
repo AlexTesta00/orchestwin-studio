@@ -550,9 +550,11 @@ class ModelMockupApplication:
         context_for: Callable,
         propose: Callable,
         progress: GenerationJobProgress,
+        attachments=(),
     ):
         generator = self.design_generator()
         code = None if language is None else language["code"]
+        attached = {"attachments": tuple(attachments)} if attachments else {}
         cost = 0
         previous_answer = rejection = None
         for attempt in range(1, MAX_GENERATIONS + 1):
@@ -572,6 +574,7 @@ class ModelMockupApplication:
                     max_output_tokens=GENERATED_OUTPUT_TOKENS,
                     retry_schema_errors=False,
                     retry_transient_failures=False,
+                    **attached,
                 )
             except ProposalGenerationError as error:
                 cost += _result_cost(error.result)
