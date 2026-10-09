@@ -24,6 +24,7 @@ from orchestwin.cli.errors import (
 from orchestwin.cli.flows import (
     design_change,
     design_choice,
+    design_critique,
     design_generate,
     design_recovery,
     design_state,
@@ -49,7 +50,8 @@ APPROVE: Final = "approve"
 REGENERATE: Final = design_recovery.REGENERATE
 UPDATE: Final = design_recovery.UPDATE
 RESTORE: Final = "restore"
-ACTIONS: Final = (SHOW, OPEN, CHOOSE, CHANGE, REVIEW, APPROVE, REGENERATE, RESTORE)
+CRITIQUE: Final = "critique"
+ACTIONS: Final = (SHOW, OPEN, CHOOSE, CHANGE, REVIEW, APPROVE, REGENERATE, RESTORE, CRITIQUE)
 WITH_VALUE: Final = frozenset({OPEN, CHOOSE, CHANGE, RESTORE})
 RESTORE_CURRENT: Final = "DESIGN_RESTORE_CURRENT"
 VERSION_NOT_FOUND: Final = "DESIGN_VERSION_NOT_FOUND"
@@ -90,6 +92,9 @@ class Options:
     elements: bool = False
     screen: str | None = None
     version: int | None = None
+    image: str | None = None
+    url: str | None = None
+    redraw: int | None = None
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -108,6 +113,15 @@ def configure(parser: argparse.ArgumentParser) -> None:
         metavar="SCREEN",
         help="design.option_elements",
     )
+    parser.add_argument("--image", metavar="FILE", help="design.option_image")
+    parser.add_argument("--url", metavar="ADDRESS", help="design.option_url")
+    parser.add_argument(
+        "--redraw",
+        nargs="?",
+        const=design_critique.LATEST,
+        metavar="N",
+        help="design.option_redraw",
+    )
 
 
 def run(context: CommandContext, arguments: argparse.Namespace) -> int:
@@ -124,6 +138,12 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         return USAGE_STATUS
     if arguments.elements is not None and action != SHOW:
         console.error("design.usage_elements")
+        return USAGE_STATUS
+    critiqued = [
+        item for item in (arguments.image, arguments.url, arguments.redraw) if item is not None
+    ]
+    if critiqued and (action != CRITIQUE or len(critiqued) > 1):
+        console.error("design.usage_critique")
         return USAGE_STATUS
     if value is not None and action not in WITH_VALUE:
         console.error("design.usage_value", action=action or NAME)
@@ -143,10 +163,17 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         if arguments.elements in (None, EVERY_SCREEN)
         else design_change.screen_code(arguments.elements),
         version=restore_number(value) if action == RESTORE else None,
+        image=arguments.image,
+        url=arguments.url,
+        redraw=None
+        if arguments.redraw is None
+        else design_critique.critique_number(arguments.redraw),
     )
     project = context.project()
     client = context.client()
-    source = workflow_inputs.state(client, project.link().project_id)
+    source = (
+        None if action == CRITIQUE else workflow_inputs.state(client, project.link().project_id)
+    )
     if source is not None and source["source"] == "PROVIDED_PROTOTYPE":
         return provided_design.perform(context, client, project, source, action, value)
     if action is None:
@@ -169,6 +196,10 @@ def perform(
     value: str | None,
     options: Options,
 ) -> int:
+    if action == CRITIQUE:
+        return design_critique.run(
+            context, client, project, image=options.image, url=options.url, redraw=options.redraw
+        )
     state = design_state.read_state(client, project)
     prices = design_generate.Prices(client)
     if state.kind == design_state.REQUIREMENTS_PENDING:
