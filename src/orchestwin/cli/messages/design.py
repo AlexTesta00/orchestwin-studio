@@ -130,12 +130,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "che cosa fare: show (mostra), open (apre le anteprime), choose (sceglie "
         "un'alternativa), change (chiede una modifica), review (revisione dei twin), approve "
         "(approva), regenerate (rigenera le alternative), restore N (torna alla versione N "
-        "con una versione nuova uguale, da approvare); senza azione il comando ti guida "
+        "con una versione nuova uguale, da approvare), critique (il parere dei twin su un "
+        "design già fatto, da un'immagine con --image o da un sito con --url; da solo elenca "
+        "le critiche fatte; con --redraw ridisegna il mockup come quel design); senza azione "
+        "il comando ti guida "
         "passo per passo; show --elements elenca gli elementi del mockup scelto, a cui una "
         "modifica può mirare con --screen e --element",
         "en": "what to do: show, open (the previews), choose (an alternative), change (ask for "
         "a change), review (by the twins), approve, regenerate (the alternatives), restore N "
-        "(go back to version N with a new identical version, to approve); without "
+        "(go back to version N with a new identical version, to approve), critique (what the "
+        "twins think of a design that already exists, from an image with --image or from a "
+        "website with --url; alone it lists the critiques made; with --redraw it redraws the "
+        "mockup like that design); without "
         "an action the command guides you "
         "step by step; show --elements lists the elements of the chosen mockup, which a change "
         "can aim at with --screen and --element",
@@ -176,6 +182,29 @@ MESSAGES: dict[str, dict[str, str]] = {
         "(per esempio SCR-002); solo con show",
         "en": "list the elements of the chosen mockup, of every screen or only of the one given "
         "(for example SCR-002); only with show",
+    },
+    "design.option_image": {
+        "it": "il file PNG o JPEG di un design già fatto, per esempio la schermata di un sito: i "
+        "twin dicono che cosa ne pensano; solo con critique",
+        "en": "the PNG or JPEG file of a design that already exists, for example the screenshot "
+        "of a website: the twins say what they think of it; only with critique",
+    },
+    "design.option_url": {
+        "it": "l'indirizzo di un sito: ut lo apre nel browser, lo fotografa largo 1440 e 390 "
+        "pixel e i twin dicono che cosa ne pensano; solo con critique",
+        "en": "the address of a website: ut opens it in the browser, takes a picture of it 1440 "
+        "and 390 pixels wide and the twins say what they think of it; only with critique",
+    },
+    "design.option_redraw": {
+        "it": "ridisegna il mockup del design scelto come il design fornito nella critica N "
+        "dell'elenco (senza N, l'ultima); solo con critique",
+        "en": "redraw the mockup of the chosen design like the supplied design of critique N in "
+        "the list (without N, the latest); only with critique",
+    },
+    "design.usage_critique": {
+        "it": "--image, --url e --redraw si usano solo con `ut design critique`, uno alla volta.",
+        "en": "--image, --url and --redraw can be used only with `ut design critique`, one at a "
+        "time.",
     },
     "design.usage_target": {
         "it": "--screen, --element e --no-review si usano solo con `ut design change`.",
@@ -952,6 +981,101 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Version {version} created from version {restored}: choose an alternative with "
         "`ut design choose CODE`, then approve it with `ut design approve`.",
     },
+    "design.critique_capturing": {
+        "it": "Apro la pagina con {browser}, larga {width} pixel, e la fotografo.",
+        "en": "I open the page with {browser}, {width} pixels wide, and take a picture of it.",
+    },
+    "design.critique_uploading": {
+        "it": "Carico nello Studio il design fornito «{title}».",
+        "en": "I upload the supplied design “{title}” to the Studio.",
+    },
+    "design.critique_about": {
+        "it": "Adesso chiedo ai twin che cosa pensano del design fornito «{title}». Il design "
+        "attuale non cambia.",
+        "en": "I am about to ask the twins what they think of the supplied design “{title}”. The "
+        "current design does not change.",
+    },
+    "design.label_critique": {
+        "it": "I twin guardano il design fornito",
+        "en": "The twins are looking at the supplied design",
+    },
+    "design.critique_heading": {
+        "it": "Che cosa pensano i twin di «{title}»",
+        "en": "What the twins think of “{title}”",
+    },
+    "design.critique_twin": {"it": "{name}: «{summary}»", "en": "{name}: “{summary}”"},
+    "design.critique_verdict": {"it": "{screen}: {verdict}", "en": "{screen}: {verdict}"},
+    "design.critique_verdict_WORKS": {"it": "Funziona per me", "en": "Works for me"},
+    "design.critique_verdict_SLOWS": {"it": "Mi rallenta", "en": "Slows me down"},
+    "design.critique_verdict_BLOCKS": {"it": "Mi blocca", "en": "Blocks me"},
+    "design.critique_screen": {
+        "it": "Schermata {number} · {width} px",
+        "en": "Screen {number} · {width} px",
+    },
+    "design.critique_image": {"it": "Immagine fornita", "en": "Supplied image"},
+    "design.critique_what_to_do": {"it": "Cosa fare: {action}", "en": "What to do: {action}"},
+    "design.critique_gaps": {
+        "it": "Che cosa manca per giudicare meglio: {gaps}",
+        "en": "What is missing to judge better: {gaps}",
+    },
+    "design.critique_done": {
+        "it": "Parere in {seconds} s, costo {cost} USD.",
+        "en": "Review in {seconds} s, cost {cost} USD.",
+    },
+    "design.critique_done_subscription": {
+        "it": "Parere in {seconds} s, con l'abbonamento di Claude: nessun credito speso.",
+        "en": "Review in {seconds} s, on the Claude subscription: no credit spent.",
+    },
+    "design.critique_none": {
+        "it": "Non hai ancora chiesto ai twin che cosa pensano di un design già fatto. Usa "
+        "`ut design critique --image FILE` per un'immagine o `ut design critique --url "
+        "INDIRIZZO` per un sito.",
+        "en": "You have not asked the twins yet what they think of a design that already "
+        "exists. Use `ut design critique --image FILE` for an image or `ut design critique "
+        "--url ADDRESS` for a website.",
+    },
+    "design.critique_list_heading": {
+        "it": "Critiche dei design forniti",
+        "en": "Critiques of supplied designs",
+    },
+    "design.critique_list_line": {
+        "it": "{number}. {date} · «{title}» ({kind}) · twin: {twins} · funziona: {works} · "
+        "rallenta: {slows} · blocca: {blocks}",
+        "en": "{number}. {date} · “{title}” ({kind}) · twins: {twins} · works: {works} · "
+        "slows down: {slows} · blocks: {blocks}",
+    },
+    "design.critique_kind_IMAGE": {"it": "immagine", "en": "image"},
+    "design.critique_kind_WEB_PAGE": {"it": "sito", "en": "website"},
+    "design.critique_list_next": {
+        "it": "Per ridisegnare il mockup come uno di questi design: `ut design critique --redraw "
+        "N`, con N il numero nell'elenco.",
+        "en": "To redraw the mockup like one of these designs: `ut design critique --redraw N`, "
+        "with N the number in the list.",
+    },
+    "design.critique_redraw_about": {
+        "it": "Adesso chiedo al modello di ridisegnare il mockup del design scelto come il design "
+        "fornito «{title}». I twin non lo rivedono adesso: il loro parere sul design fornito "
+        "c'è già.",
+        "en": "I am about to ask the model to redraw the mockup of the chosen design like the "
+        "supplied design “{title}”. The twins do not review it now: their opinion on the "
+        "supplied design is already there.",
+    },
+    "design.label_redraw": {
+        "it": "Ridisegno il mockup dal design fornito",
+        "en": "Redrawing the mockup from the supplied design",
+    },
+    "design.critique_redraw_needs_design": {
+        "it": "Per ridisegnare serve un design dello Studio con il suo mockup: prepara il design, "
+        "poi ridisegna.",
+        "en": "To redraw you need a Studio design with its mockup: prepare the design, then "
+        "redraw.",
+    },
+    "design.critique_redrawn": {
+        "it": "Il mockup ridisegnato come «{title}» è nella versione {version}: guardalo nelle "
+        "anteprime e, se ti va bene, approvalo con `ut design approve`.",
+        "en": "The mockup redrawn like “{title}” is in version {version}: look at it in the "
+        "previews and, if it suits you, approve it with `ut design approve`.",
+    },
     "design.choice_not_reviewed": {
         "it": "La scelta resta applicata nella versione {version}, ma i twin non l'hanno "
         "rivista, per il motivo indicato. Quando il motivo è risolto, lancia `ut design review` "
@@ -1418,6 +1542,104 @@ MESSAGES: dict[str, dict[str, str]] = {
         "non ho speso nulla.",
         "en": "There are already {count} rules in force and the maximum is {limit}: add fewer; "
         "nothing was spent.",
+    },
+    "design.errors.DESIGN_CRITIQUE_FILE_TYPE": {
+        "it": "Il file {path} non è un'immagine PNG o JPEG: usa un file .png, .jpg o .jpeg.",
+        "en": "The file {path} is not a PNG or JPEG image: use a .png, .jpg or .jpeg file.",
+    },
+    "design.errors.DESIGN_CRITIQUE_FILE_TOO_LARGE": {
+        "it": "L'immagine {name} pesa {size} MB, ma lo Studio ne accetta al massimo 5. Riducila "
+        "e riprova; non ho speso nulla.",
+        "en": "The image {name} weighs {size} MB, but the Studio accepts at most 5. Make it "
+        "smaller and try again; nothing was spent.",
+    },
+    "design.errors.DESIGN_CRITIQUE_FILE_MISSING": {
+        "it": "Non trovo il file {path}: controlla il percorso e riprova.",
+        "en": "The file {path} does not exist: check the path and try again.",
+    },
+    "design.errors.DESIGN_CRITIQUE_FILE_UNREADABLE": {
+        "it": "Non riesco a leggere il file {path}: forse è aperto in un altro programma. "
+        "Chiudilo e riprova.",
+        "en": "The file {path} cannot be read: perhaps it is open in another program. Close it "
+        "and try again.",
+    },
+    "design.errors.DESIGN_CRITIQUE_URL_INVALID": {
+        "it": "«{address}» non è un indirizzo che il browser possa aprire: scrivilo per intero, "
+        "con http:// o https://, per esempio https://www.esempio.it.",
+        "en": "“{address}” is not an address that the browser can open: write it in full, with "
+        "http:// or https://, for example https://www.example.com.",
+    },
+    "design.errors.DESIGN_CRITIQUE_NOT_FOUND": {
+        "it": "Non c'è la critica numero {number}: quelle fatte sono {count}. "
+        "`ut design critique` le elenca.",
+        "en": "There is no critique number {number}: {count} have been made. "
+        "`ut design critique` lists them.",
+    },
+    "design.errors.DESIGN_CRITIQUE_NUMBER_INVALID": {
+        "it": "«{value}» non è il numero di una critica: scrivilo come 1, cioè un numero intero "
+        "da 1 in su. `ut design critique` elenca le critiche.",
+        "en": "“{value}” is not the number of a critique: write it like 1, that is a whole "
+        "number from 1 up. `ut design critique` lists the critiques.",
+    },
+    "design.errors.BROWSER_NOT_FOUND": {
+        "it": "Su questo computer non trovo un browser per aprire la pagina: installa Chrome o "
+        "Firefox, oppure indica dove si trova con la variabile ORCHESTWIN_CHROME o "
+        "ORCHESTWIN_FIREFOX, poi riprova.",
+        "en": "No browser to open the page can be found on this computer: install Chrome or "
+        "Firefox, or say where it is with the variable ORCHESTWIN_CHROME or ORCHESTWIN_FIREFOX, "
+        "then try again.",
+    },
+    "design.errors.DESIGN_CRITIQUE_IMAGE_INVALID": {
+        "it": "Lo Studio non legge l'immagine: deve essere un PNG o un JPEG, con i lati tra 16 e "
+        "8000 pixel ({code}). Non ho speso nulla.",
+        "en": "The Studio cannot read the image: it must be a PNG or a JPEG, with sides between "
+        "16 and 8000 pixels ({code}). Nothing was spent.",
+    },
+    "design.errors.DESIGN_CRITIQUE_IMAGE_TOO_LARGE": {
+        "it": "L'immagine supera i 5 MB che lo Studio accetta ({code}). Riducila e riprova; non "
+        "ho speso nulla.",
+        "en": "The image is larger than the 5 MB that the Studio accepts ({code}). Make it "
+        "smaller and try again; nothing was spent.",
+    },
+    "design.errors.DESIGN_CRITIQUE_PAGE_INVALID": {
+        "it": "Lo Studio non accetta il testo della pagina letto dal browser ({code}). Riprova; "
+        "se succede ancora, fotografa la pagina e usa --image.",
+        "en": "The Studio does not accept the text of the page read by the browser ({code}). "
+        "Try again; if it happens again, take a screenshot of the page and use --image.",
+    },
+    "design.errors.DESIGN_CRITIQUE_SOURCE_INVALID": {
+        "it": "Lo Studio non accetta il design fornito così com'è ({code}): controlla l'immagine "
+        "o l'indirizzo e riprova. Non ho speso nulla.",
+        "en": "The Studio does not accept the supplied design as it is ({code}): check the image "
+        "or the address and try again. Nothing was spent.",
+    },
+    "design.errors.DESIGN_CRITIQUE_SOURCE_NOT_FOUND": {
+        "it": "Lo Studio non trova più il design fornito ({code}). `ut design critique` elenca "
+        "le critiche che ci sono.",
+        "en": "The Studio no longer finds the supplied design ({code}). `ut design critique` "
+        "lists the critiques that exist.",
+    },
+    "design.errors.DESIGN_CRITIQUE_TWINS_REQUIRED": {
+        "it": "Prima approva i twin: poi possono dire la loro sul design fornito.",
+        "en": "Approve the twins first: then they can give their opinion on the supplied design.",
+    },
+    "design.errors.DESIGN_CRITIQUE_PROVIDER_UNSUPPORTED": {
+        "it": "Su questo Studio i twin non possono guardare le immagini: serve il modello "
+        "collegato con l'abbonamento di Claude ({code}). Chi gestisce lo Studio può collegarlo.",
+        "en": "On this Studio the twins cannot look at images: they need the model connected "
+        "through the Claude subscription ({code}). Whoever runs the Studio can connect it.",
+    },
+    "design.errors.DESIGN_CRITIQUE_FAILED": {
+        "it": "Il parere dei twin non è arrivato ({code}). Il design fornito resta nello Studio; "
+        "riprovare è una nuova spesa.",
+        "en": "The opinion of the twins did not arrive ({code}). The supplied design stays in "
+        "the Studio; trying again is a new expense.",
+    },
+    "design.errors.DESIGN_CRITIQUE_INVALID": {
+        "it": "Il modello ha dato un parere che non si può usare ({code}). Riprovare è una nuova "
+        "spesa.",
+        "en": "The model gave an opinion that cannot be used ({code}). Trying again is a new "
+        "expense.",
     },
     **{
         f"design.visual_{dimension}_{value}": {"it": italian, "en": english}

@@ -250,6 +250,7 @@ def test_the_estimates_of_the_contract() -> None:
     assert ESTIMATES["TEST_PLAN"] == Estimate(0.15, 0.30, 2.0)
     assert ESTIMATES["TEST_REVIEW"] == Estimate(0.10, 0.20, 1.0)
     assert ESTIMATES["TWIN_UPDATE"] == Estimate(0.10, 0.25, 1.0)
+    assert ESTIMATES["DESIGN_CRITIQUE"] == Estimate(0.35, 0.60, 3.0)
     assert set(ESTIMATES) == {
         "BRIEF_DIALOGUE",
         "TEAM_PROPOSAL",
@@ -261,6 +262,7 @@ def test_the_estimates_of_the_contract() -> None:
         "MOCKUP",
         "ITERATION",
         "DESIGN_EVALUATION",
+        "DESIGN_CRITIQUE",
         "TWIN_CHAT",
         "CODE_CHANGE_REVIEW",
         "CODE_ALIGNMENT",
