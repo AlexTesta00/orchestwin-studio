@@ -26,6 +26,14 @@ from orchestwin.api.generation_jobs import (
     generation_jobs,
 )
 from orchestwin.artifacts.design import contains_control_character
+from orchestwin.artifacts.design_critique import (
+    DESIGN_CRITIQUE_SOURCE_NOT_FOUND,
+    DesignCritiqueError,
+    critique_attachments,
+    critique_source_view,
+    shot_content,
+)
+from orchestwin.artifacts.design_critique_persistence import SqlAlchemyDesignCritiqueRepository
 from orchestwin.artifacts.design_packages import MAX_OWNER_ASSERTION_LENGTH, MAX_OWNER_ASSERTIONS
 from orchestwin.identity.domain import UserAccount
 from orchestwin.models.design_change import with_targeted_change
@@ -48,6 +56,7 @@ class IterationRequest(BaseModel):
     request: str
     assertions: list[str] = Field(default_factory=list)
     target: DesignChangeTargetRequest | None = None
+    critique_source_id: UUID | None = None
 
 
 class IterationStatus(StrEnum):
@@ -134,6 +143,7 @@ def iteration_items(records, versions) -> list[dict[str, object]]:
                 "requested_at": group[0]["recorded_at"],
                 "request": first.get("owner_request"),
                 "target": first.get("target"),
+                "critique_source_id": first.get("critique_source_id"),
                 "assertions": [item for item in first.get("assertions") or [] if item not in known],
                 "changes": list((accepted.get("result") or {}).get("changes") or []),
                 "status": status.value,
@@ -158,11 +168,34 @@ class DesignIterationApplication(ModelMockupApplication):
             raise MockupCommandError(409, GENERATED_MOCKUP_REQUIRED)
         return bound
 
+    async def _critique_source(self, owner_user_id, project_id, source_id):
+        database = getattr(self.runtime, "database_runtime", None)
+        if database is None:
+            raise MockupCommandError(503, "DATABASE_UNAVAILABLE")
+        try:
+            async with database.session_factory() as session:
+                repository = SqlAlchemyDesignCritiqueRepository(
+                    session, owner_user_id=owner_user_id
+                )
+                source = await repository.source(project_id, source_id)
+                if source is None:
+                    raise MockupCommandError(404, DESIGN_CRITIQUE_SOURCE_NOT_FOUND)
+                found = {
+                    shot.code: await repository.shot(project_id, source_id, shot.code)
+                    for shot in source.shots
+                }
+            stored = {code: item[1] for code, item in found.items() if item is not None}
+            return source, {shot.code: shot_content(shot, stored) for shot in source.shots}
+        except DesignCritiqueError as error:
+            raise MockupCommandError(404, DESIGN_CRITIQUE_SOURCE_NOT_FOUND) from error
+
     async def prepare_iteration(self, *, owner_user_id, project_id, body):
         _request, assertions = normalized_iteration(body)
         current = await self.checked_version(
             owner_user_id, project_id, body.design_version_id, body.design_content_hash
         )
+        if body.critique_source_id is not None:
+            await self._critique_source(owner_user_id, project_id, body.critique_source_id)
         bound = self.applied_mockup(current.package)
         merged_assertions(current.package, assertions)
         route = self.hosted_route(DESIGN_ITERATION)
@@ -197,9 +230,17 @@ class DesignIterationApplication(ModelMockupApplication):
         observations = await self.observations(owner_user_id, project_id, current, alternative)
         selected_agent_ids = await self.selected_agent_ids(owner_user_id, project_id, current)
         command_id = uuid4()
+        source = redraw = None
+        attachments = ()
+        if body.critique_source_id is not None:
+            source, contents = await self._critique_source(
+                owner_user_id, project_id, body.critique_source_id
+            )
+            redraw = critique_source_view(source, "en" if language is None else language["code"])
+            attachments = critique_attachments(source, contents)
 
         def context_for(previous_answer, rejection):
-            return mockup_context(
+            context = mockup_context(
                 project_id=project_id,
                 purpose=DESIGN_ITERATION,
                 command_id=command_id,
@@ -214,7 +255,11 @@ class DesignIterationApplication(ModelMockupApplication):
                 assertions=merged,
                 previous_answer=previous_answer,
                 rejection=rejection,
+                redraw=redraw,
             )
+            if source is not None:
+                context["critique_source_id"] = str(source.id)
+            return context
 
         def propose(_draft, binding):
             return replace(
@@ -233,6 +278,7 @@ class DesignIterationApplication(ModelMockupApplication):
             context_for=context_for,
             propose=propose,
             progress=progress,
+            attachments=attachments,
         )
         return await self.accept(
             owner_user_id=owner_user_id,

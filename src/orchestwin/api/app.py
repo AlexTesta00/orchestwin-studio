@@ -21,6 +21,7 @@ from orchestwin.api.brief_dialogue import create_brief_dialogue_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.code_changes import create_code_change_router
 from orchestwin.api.design import create_design_router
+from orchestwin.api.design_critique import create_design_critique_router
 from orchestwin.api.design_discussion import create_design_discussion_router
 from orchestwin.api.design_distance import create_design_distance_router
 from orchestwin.api.design_iterations import create_design_iteration_router
@@ -245,6 +246,7 @@ def create_app(
         create_design_mockup_router(),
         create_design_iteration_router(),
         create_design_loop_router(),
+        create_design_critique_router(),
         create_design_review_pins_router(),
         create_design_discussion_router(),
         create_design_distance_router(),

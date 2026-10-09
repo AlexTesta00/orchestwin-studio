@@ -23,6 +23,11 @@ REQUIRED = (
     ("GET", "/iterations"),
     ("GET", "/evaluations/{run_id}/pins"),
     ("GET", "/evaluations/{run_id}/document"),
+    ("POST", "/critiques/sources"),
+    ("GET", "/critiques/sources"),
+    ("GET", "/critiques/sources/{source_id}/shots/{code}"),
+    ("POST", "/critiques"),
+    ("GET", "/critiques"),
 )
 LITERAL = (
     ("GET", "/mockups/capabilities"),
@@ -32,6 +37,10 @@ LITERAL = (
     ("POST", "/evaluations"),
     ("GET", "/evaluations/comparison"),
     ("GET", "/evaluations/validations"),
+    ("POST", "/critiques/sources"),
+    ("GET", "/critiques/sources"),
+    ("POST", "/critiques"),
+    ("GET", "/critiques"),
 )
 
 
