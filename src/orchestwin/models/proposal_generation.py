@@ -12,7 +12,7 @@ import ipaddress
 import json
 import re
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import fields, is_dataclass
 from enum import Enum
 from pathlib import Path
@@ -51,6 +51,7 @@ from orchestwin.models.proposal_evidence import (
 from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.models.strict_evaluator_json import strict_json_object
 from orchestwin.models.structured_generation import (
+    GenerationAttachment,
     ModelRuntimeIdentity,
     StructuredGenerationFailureCode,
     StructuredGenerationFinishReason,
@@ -250,9 +251,14 @@ class ProposalGenerator:
         temperature: float | None = None,
         retry_schema_errors: bool = True,
         retry_transient_failures: bool = True,
+        attachments: Sequence[GenerationAttachment] = (),
     ):
         if task not in TASKS:
             raise ValueError("unsupported proposal task")
+        kind = self.configuration.provider_kind
+        attached = tuple(attachments)
+        if attached and kind is not StructuredGenerationProviderKind.CLAUDE_CODE_CLI:
+            raise ProposalGenerationError("ATTACHMENTS_UNSUPPORTED")
         budget = (
             min(DEFAULT_OUTPUT_TOKENS, self.configuration.max_output_tokens)
             if max_output_tokens is None
@@ -315,9 +321,9 @@ class ProposalGenerator:
                 temperature=self.configuration.temperature if temperature is None else temperature,
                 max_output_tokens=budget,
                 timeout_seconds=self.configuration.timeout_seconds,
+                attachments=attached,
             )
 
-        kind = self.configuration.provider_kind
         hosted = kind is not StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL
         if hosted:
             request, result, output_ceiling = await self._hosted_result(

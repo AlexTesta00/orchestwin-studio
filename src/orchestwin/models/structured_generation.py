@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
-from dataclasses import dataclass
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final, Protocol, runtime_checkable
 from uuid import UUID
@@ -19,9 +22,13 @@ from orchestwin.projects.requirements_primitives import (
 )
 
 STRUCTURED_GENERATION_SCHEMA_VERSION: Final = 1
+MAX_ATTACHMENTS: Final = 4
+MAX_ATTACHMENT_BYTES: Final = 5 * 1024 * 1024
+ATTACHMENT_MEDIA_TYPES: Final = frozenset({"image/png", "image/jpeg"})
 _MAX_IDENTIFIER_LENGTH: Final = 256
 _MAX_TEXT_LENGTH: Final = 20_000
 _MAX_PAYLOAD_LENGTH: Final = 1_000_000
+_ATTACHMENT_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 
 
 class StructuredGenerationProviderKind(StrEnum):
@@ -165,6 +172,39 @@ class ModelRuntimeIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationAttachment:
+    name: str
+    media_type: str
+    content: bytes = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or _ATTACHMENT_NAME.fullmatch(self.name) is None:
+            raise ValueError("generation attachment name is invalid")
+        if not isinstance(self.media_type, str) or self.media_type not in ATTACHMENT_MEDIA_TYPES:
+            raise ValueError("generation attachment media type is not supported")
+        if not isinstance(self.content, bytes):
+            raise ValueError("generation attachment content must be bytes")
+        if not 0 < len(self.content) <= MAX_ATTACHMENT_BYTES:
+            raise ValueError("generation attachment content has an invalid size")
+
+    @property
+    def sha256(self) -> str:
+        return hashlib.sha256(self.content).hexdigest()
+
+    @property
+    def byte_size(self) -> int:
+        return len(self.content)
+
+    def reference(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "media_type": self.media_type,
+            "sha256": self.sha256,
+            "byte_size": self.byte_size,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class StructuredGenerationRequest:
     """Canonical structured request containing no provider-specific message objects."""
 
@@ -181,6 +221,7 @@ class StructuredGenerationRequest:
     timeout_seconds: int
     content_hash: str
     schema_version: int = STRUCTURED_GENERATION_SCHEMA_VERSION
+    attachments: tuple[GenerationAttachment, ...] = ()
 
     def __post_init__(self) -> None:
         _require_normalized_identifier(self.task_id, label="structured generation task ID")
@@ -218,6 +259,7 @@ class StructuredGenerationRequest:
         )
         if self.schema_version != STRUCTURED_GENERATION_SCHEMA_VERSION:
             raise ValueError("unsupported structured generation schema version")
+        _require_attachments(self.attachments)
         validate_sha256(self.content_hash, label="structured generation request content hash")
         if self.content_hash != structured_generation_request_hash(
             request_id=self.request_id,
@@ -232,11 +274,12 @@ class StructuredGenerationRequest:
             max_output_tokens=self.max_output_tokens,
             timeout_seconds=self.timeout_seconds,
             schema_version=self.schema_version,
+            attachments=self.attachments,
         ):
             raise ValueError("structured generation request content hash is inconsistent")
 
     def to_snapshot(self) -> dict[str, object]:
-        return {
+        snapshot: dict[str, object] = {
             "schema_version": self.schema_version,
             "request_id": str(self.request_id),
             "task_id": self.task_id,
@@ -251,6 +294,9 @@ class StructuredGenerationRequest:
             "timeout_seconds": self.timeout_seconds,
             "content_hash": self.content_hash,
         }
+        if self.attachments:
+            snapshot["attachments"] = [item.reference() for item in self.attachments]
+        return snapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -460,10 +506,13 @@ def create_structured_generation_request(
     temperature: float,
     max_output_tokens: int,
     timeout_seconds: int,
+    attachments: Sequence[GenerationAttachment] = (),
 ) -> StructuredGenerationRequest:
     """Canonicalize and content-address a provider-neutral request."""
     canonical_input = canonical_json(input_payload)
     canonical_refs = tuple(sorted(set(allowed_evidence_refs)))
+    attached = tuple(attachments)
+    _require_attachments(attached)
     content_hash = structured_generation_request_hash(
         request_id=request_id,
         task_id=task_id,
@@ -477,6 +526,7 @@ def create_structured_generation_request(
         max_output_tokens=max_output_tokens,
         timeout_seconds=timeout_seconds,
         schema_version=STRUCTURED_GENERATION_SCHEMA_VERSION,
+        attachments=attached,
     )
     return StructuredGenerationRequest(
         request_id=request_id,
@@ -491,6 +541,7 @@ def create_structured_generation_request(
         max_output_tokens=max_output_tokens,
         timeout_seconds=timeout_seconds,
         content_hash=content_hash,
+        attachments=attached,
     )
 
 
@@ -577,23 +628,36 @@ def structured_generation_request_hash(
     max_output_tokens: int,
     timeout_seconds: int,
     schema_version: int,
+    attachments: Sequence[GenerationAttachment] = (),
 ) -> str:
-    return snapshot_content_hash(
-        {
-            "schema_version": schema_version,
-            "request_id": str(request_id),
-            "task_id": task_id,
-            "expected_identity": expected_identity.to_snapshot(),
-            "output_schema": output_schema.to_snapshot(),
-            "system_instruction": system_instruction,
-            "input_payload": json.loads(input_payload_json),
-            "allowed_evidence_refs": list(allowed_evidence_refs),
-            "prompt_version_ref": prompt_version_ref,
-            "temperature": float(temperature),
-            "max_output_tokens": max_output_tokens,
-            "timeout_seconds": timeout_seconds,
-        }
-    )
+    material: dict[str, object] = {
+        "schema_version": schema_version,
+        "request_id": str(request_id),
+        "task_id": task_id,
+        "expected_identity": expected_identity.to_snapshot(),
+        "output_schema": output_schema.to_snapshot(),
+        "system_instruction": system_instruction,
+        "input_payload": json.loads(input_payload_json),
+        "allowed_evidence_refs": list(allowed_evidence_refs),
+        "prompt_version_ref": prompt_version_ref,
+        "temperature": float(temperature),
+        "max_output_tokens": max_output_tokens,
+        "timeout_seconds": timeout_seconds,
+    }
+    if attachments:
+        material["attachments"] = [item.reference() for item in attachments]
+    return snapshot_content_hash(material)
+
+
+def _require_attachments(value: object) -> None:
+    if not isinstance(value, tuple) or not all(
+        isinstance(item, GenerationAttachment) for item in value
+    ):
+        raise ValueError("structured generation attachments must be a tuple of attachments")
+    if len(value) > MAX_ATTACHMENTS:
+        raise ValueError(f"structured generation accepts at most {MAX_ATTACHMENTS} attachments")
+    if len({item.name for item in value}) != len(value):
+        raise ValueError("structured generation attachment names must be unique")
 
 
 def _require_canonical_json_object(value: str, *, label: str) -> None:
