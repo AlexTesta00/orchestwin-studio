@@ -36,6 +36,7 @@ from orchestwin.models.openai_compatible import (
 from orchestwin.models.proposal_evidence import AuditedProposalTransport
 from orchestwin.models.strict_evaluator_json import strict_json_object
 from orchestwin.models.structured_generation import (
+    GenerationAttachment,
     ModelRuntimeIdentity,
     StructuredGenerationFailureCode,
     StructuredGenerationFinishReason,
@@ -82,6 +83,7 @@ _MAX_IDENTIFIER_LENGTH: Final = 256
 _MAX_VERSION_LENGTH: Final = 64
 _MAX_SUBSCRIPTION_LENGTH: Final = 64
 _FOLDER_PREFIX: Final = "orchestwin-claude-"
+_READ_TOOL: Final = "Read"
 _FINISHED: Final = frozenset({"end_turn", "tool_use"})
 _NOT_LOGGED_IN: Final = re.compile(
     r"not logged in|/login|log ?in again|invalid api key|oauth token", re.IGNORECASE
@@ -205,7 +207,9 @@ def _removed(name: str) -> bool:
 
 
 def command_options(
-    configuration: HostedModelConfiguration, schema: dict[str, Any] | None = None
+    configuration: HostedModelConfiguration,
+    schema: dict[str, Any] | None = None,
+    attachments: Sequence[GenerationAttachment] = (),
 ) -> list[str]:
     options = ["--print", "--output-format", "json", "--model", configuration.model]
     if configuration.effort is not None:
@@ -215,11 +219,22 @@ def command_options(
             "--no-session-persistence",
             "--safe-mode",
             "--tools",
-            "",
-            SYSTEM_PROMPT_OPTION,
-            SYSTEM_PROMPT_FILE,
+            _READ_TOOL if attachments else "",
         ]
     )
+    if attachments:
+        options.extend(
+            [
+                "--allowedTools",
+                ",".join(f"{_READ_TOOL}(./{item.name})" for item in attachments),
+                "--restricted",
+                "--permission-mode",
+                "dontAsk",
+                "--permission-prompts",
+                "none",
+            ]
+        )
+    options.extend([SYSTEM_PROMPT_OPTION, SYSTEM_PROMPT_FILE])
     if schema is not None:
         options.extend([SCHEMA_OPTION, canonical_json(schema)])
     return options
@@ -257,6 +272,15 @@ def _working_directory() -> Iterator[Path]:
         yield Path(name)
 
 
+def _write_attachments(directory: Path, attachments: Sequence[GenerationAttachment]) -> None:
+    for item in attachments:
+        try:
+            with (directory / item.name).open("xb") as file:
+                file.write(item.content)
+        except OSError:
+            raise OpenAICompatibleTransportError("the attachment could not be written") from None
+
+
 def _elapsed(started: float) -> int:
     return max(0, round((time.perf_counter() - started) * 1000))
 
@@ -280,6 +304,7 @@ class ClaudeCodeTransport:
         payload: dict[str, Any],
         headers: dict[str, str],
         timeout_seconds: int,
+        attachments: Sequence[GenerationAttachment] = (),
     ) -> ClaudeCodeResponse:
         if url != CLAUDE_CODE_URL:
             raise OpenAICompatibleTransportError("the Claude Code transport has one address")
@@ -294,6 +319,7 @@ class ClaudeCodeTransport:
                 raise OpenAICompatibleTransportError(
                     "the system instruction could not be written"
                 ) from None
+            _write_attachments(directory, attachments)
             outcome = await self._run(
                 command_arguments(self._executable, payload["options"], directory),
                 payload["prompt"].encode("utf-8"),
@@ -358,6 +384,7 @@ class ClaudeCodeStructuredAdapter(StructuredGenerationPort):
                 payload=payload,
                 headers={},
                 timeout_seconds=request.timeout_seconds,
+                **({"attachments": request.attachments} if request.attachments else {}),
             )
         except OpenAICompatibleTimeoutError:
             return _failure(
@@ -488,10 +515,12 @@ def request_payload(
         "max_output_tokens": max_tokens,
         "system": request.system_instruction,
         "prompt": hosted_user_message(request.input_payload_json, retry_note),
-        "options": command_options(configuration, schema),
+        "options": command_options(configuration, schema, request.attachments),
     }
     if schema is not None:
         payload["schema"] = schema
+    if request.attachments:
+        payload["attachments"] = [item.reference() for item in request.attachments]
     return payload
 
 
