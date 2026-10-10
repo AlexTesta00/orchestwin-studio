@@ -24,6 +24,10 @@ const rationaleLabel = computed(() => {
 const direction = computed(() => {
   const value = props.node.declared_context.direction;
   if (!value) return null;
+  const systems: Readonly<Record<string, string>> = copy.value.directionSystems;
+  const system = value.design_system ?? null;
+  const systemOrigin =
+    system !== null && Object.hasOwn(systems, system) ? systems[system] : undefined;
   return {
     title: `${copy.value.visualDirection}: ${value.name}`,
     concept: value.concept,
@@ -32,7 +36,7 @@ const direction = computed(() => {
       if (label === null) return [];
       return [{ axis, text: `${directionAxisLabel(props.locale, axis)}: ${label}` }];
     }),
-    origin: copy.value.directionOrigin.replace("{count}", String(value.candidates)),
+    origin: systemOrigin ?? copy.value.directionOrigin.replace("{count}", String(value.candidates)),
   };
 });
 </script>

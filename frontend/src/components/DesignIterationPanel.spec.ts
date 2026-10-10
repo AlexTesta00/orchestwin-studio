@@ -120,7 +120,10 @@ const REVIEW_CODES = {
     "STYLE_DECLARATION_REMOVED",
     "STYLE_RULE_REMOVED",
     "STYLE_REST_REMOVED",
+    "ICON_UNKNOWN",
+    "PLACEHOLDER_EMPTIED",
   ],
+  "generated_mockup_contrast.py": ["TEXT_COLOUR_REPLACED", "CONTROL_BORDER_REPLACED"],
 };
 
 const CONTRACT_FAILURES = [
@@ -584,6 +587,7 @@ describe("design iteration panel", () => {
       "BACKGROUND_WITHOUT_TEXT_COLOUR",
       "NO_RESPONSIVE_RULE",
       "SINGLE_STATE",
+      "WEAK_CONTROL_BORDER",
     ];
     for (const locale of ["it", "en"] as const) {
       const generic = generationReasonText("UNKNOWN_CODE", locale);
@@ -794,6 +798,77 @@ describe("design iteration panel", () => {
       "Lo Studio ha tolto dagli stili una regola che non accetta: il mockup resta valido",
     );
     expect(warnings.text()).not.toMatch(/ELEMENT_REMOVED|STYLE_RULE_REMOVED|img \(2\)/);
+  });
+
+  it.each([
+    [
+      "TEXT_COLOUR_REPLACED",
+      "Lo Studio ha sostituito il colore di un testo poco leggibile con un colore della tavolozza che si legge bene: il mockup resta valido",
+      "The Studio replaced the colour of a text that was hard to read with a palette colour that reads well: the mockup is still valid",
+    ],
+    [
+      "CONTROL_BORDER_REPLACED",
+      "Lo Studio ha reso ben visibile il bordo di un campo o di un pulsante: il mockup resta valido",
+      "The Studio made the border of a field or of a button clearly visible: the mockup is still valid",
+    ],
+    [
+      "ICON_UNKNOWN",
+      "Lo Studio ha sostituito con un'icona semplice un'icona dal nome sconosciuto: il mockup resta valido",
+      "The Studio replaced an icon whose name it does not know with a plain one: the mockup is still valid",
+    ],
+    [
+      "PLACEHOLDER_EMPTIED",
+      "Lo Studio ha svuotato il segnaposto di un'icona o di una foto che conteneva un disegno: il mockup resta valido",
+      "The Studio emptied an icon or picture placeholder that held a drawing of its own: the mockup is still valid",
+    ],
+  ])(
+    "explains the note %s of a new version in plain words, in both languages",
+    (code, italian, english) => {
+      expect(generationReasonText(code, "it")).toBe(italian);
+      expect(generationReasonText(code, "en")).toBe(english);
+    },
+  );
+
+  it("shows the colours, the icons and the placeholders that the Studio repaired among the points to check", () => {
+    const wrapper = mountPanel({
+      job: {
+        ...ready,
+        result: {
+          ...ready.result!,
+          warnings: [
+            {
+              code: "TEXT_COLOUR_REPLACED",
+              screen_code: null,
+              detail: ".badge #9ca3af→var(--vl-color-text) 7.12",
+            },
+            {
+              code: "CONTROL_BORDER_REPLACED",
+              screen_code: null,
+              detail: "input #e5e7eb→var(--vl-color-text-muted) 4.61",
+            },
+            {
+              code: "TEXT_COLOUR_REPLACED",
+              screen_code: null,
+              detail: ".hint #d1d5db→var(--vl-color-text-muted) 4.83",
+            },
+            { code: "ICON_UNKNOWN", screen_code: "SCR-001", detail: "rocket-ship" },
+            { code: "PLACEHOLDER_EMPTIED", screen_code: "SCR-002", detail: "package" },
+          ],
+        },
+      },
+      before: documentOf("before"),
+      after: documentOf("after"),
+    });
+    const warnings = wrapper.get("[data-testid='design-iteration-warnings']");
+    expect(warnings.findAll("li").map((item) => item.text())).toEqual([
+      "Lo Studio ha sostituito il colore di un testo poco leggibile con un colore della tavolozza che si legge bene: il mockup resta valido",
+      "Lo Studio ha reso ben visibile il bordo di un campo o di un pulsante: il mockup resta valido",
+      "Nella schermata «Registro dei prestiti»: Lo Studio ha sostituito con un'icona semplice un'icona dal nome sconosciuto: il mockup resta valido",
+      "Nella schermata «Nuovo prestito»: Lo Studio ha svuotato il segnaposto di un'icona o di una foto che conteneva un disegno: il mockup resta valido",
+    ]);
+    expect(warnings.text()).not.toMatch(
+      /TEXT_COLOUR|CONTROL_BORDER|ICON_UNKNOWN|PLACEHOLDER_EMPTIED|var\(--vl|→|rocket-ship|SCR-00/,
+    );
   });
 
   it("has a sentence of its own for every failure of the contract, of the store and of the provider", () => {

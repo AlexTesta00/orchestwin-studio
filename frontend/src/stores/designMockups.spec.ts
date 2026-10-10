@@ -529,6 +529,7 @@ describe("design mockups store", () => {
       { code: "TABLE_TOO_SHORT", screen_code: "SCR-002", detail: "2 body rows" },
       { code: "LOW_CONTRAST", screen_code: "SCR-001", detail: ".badge 2.10" },
       { code: "TABLE_TOO_SHORT", screen_code: "SCR-003", detail: "1 body row" },
+      { code: "WEAK_CONTROL_BORDER", screen_code: null, detail: "input 1.20" },
     ];
     api.job.mockResolvedValue(
       job("REJECTED", { failure: { code: "MOCKUP_QUALITY_REJECTED", reasons } }),
@@ -543,6 +544,7 @@ describe("design mockups store", () => {
     expect(entry.state === "rejected" && generationReasonMessages(entry.reasons, "it")).toEqual([
       "Una tabella aveva troppo poche righe per sembrare vera.",
       "Un testo non si leggeva bene sul suo sfondo.",
+      "Il bordo di un campo o di un pulsante è troppo chiaro per essere visto.",
     ]);
   });
 
@@ -1105,6 +1107,7 @@ describe("messages of the generations", () => {
     "BACKGROUND_WITHOUT_TEXT_COLOUR",
     "NO_RESPONSIVE_RULE",
     "SINGLE_STATE",
+    "WEAK_CONTROL_BORDER",
   ];
 
   it("gives every code of the contract its own sentence in Italian and in English", () => {
@@ -1154,5 +1157,49 @@ describe("messages of the generations", () => {
     expect(generationFailureMessage("LOW_CONTRAST", "it")).toBe(
       "Un testo non si leggeva bene sul suo sfondo.",
     );
+    expect(generationFailureMessage("WEAK_CONTROL_BORDER", "it")).toBe(
+      "Il bordo di un campo o di un pulsante è troppo chiaro per essere visto.",
+    );
+    expect(generationFailureMessage("WEAK_CONTROL_BORDER", "en")).toBe(
+      "The border of a field or of a button is too light to be seen.",
+    );
   });
+
+  it.each([
+    [
+      "TEXT_COLOUR_REPLACED",
+      ".badge #9ca3af→var(--vl-color-text) 7.12",
+      "Lo Studio ha sostituito il colore di un testo poco leggibile con un colore della tavolozza che si legge bene: il mockup resta valido.",
+      "The Studio replaced the colour of a text that was hard to read with a palette colour that reads well: the mockup is still valid.",
+    ],
+    [
+      "CONTROL_BORDER_REPLACED",
+      "input #e5e7eb→var(--vl-color-text-muted) 4.61",
+      "Lo Studio ha reso ben visibile il bordo di un campo o di un pulsante: il mockup resta valido.",
+      "The Studio made the border of a field or of a button clearly visible: the mockup is still valid.",
+    ],
+    [
+      "ICON_UNKNOWN",
+      "rocket-ship",
+      "Lo Studio ha sostituito con un'icona semplice un'icona dal nome sconosciuto: il mockup resta valido.",
+      "The Studio replaced an icon whose name it does not know with a plain one: the mockup is still valid.",
+    ],
+    [
+      "PLACEHOLDER_EMPTIED",
+      "package",
+      "Lo Studio ha svuotato il segnaposto di un'icona o di una foto che conteneva un disegno: il mockup resta valido.",
+      "The Studio emptied an icon or picture placeholder that held a drawing of its own: the mockup is still valid.",
+    ],
+  ])(
+    "explains the note %s of an accepted mockup once, in plain words and in both languages",
+    (code, detail, italian, english) => {
+      const warnings = [
+        { code, screen_code: "SCR-001", detail },
+        { code, screen_code: null, detail: `${detail} (2)` },
+      ];
+
+      expect(generationReasonMessages(warnings, "it")).toEqual([italian]);
+      expect(generationReasonMessages(warnings, "en")).toEqual([english]);
+    },
+  );
 });

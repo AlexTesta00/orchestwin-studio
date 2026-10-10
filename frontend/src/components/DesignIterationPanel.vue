@@ -465,6 +465,22 @@ const REASONS: Sentences = {
     "The Studio removed the last part of the styles because it could not be read: the mockup is still valid",
     "Lo Studio ha tolto l'ultima parte degli stili perché non si poteva leggere: il mockup resta valido",
   ],
+  ICON_UNKNOWN: [
+    "The Studio replaced an icon whose name it does not know with a plain one: the mockup is still valid",
+    "Lo Studio ha sostituito con un'icona semplice un'icona dal nome sconosciuto: il mockup resta valido",
+  ],
+  PLACEHOLDER_EMPTIED: [
+    "The Studio emptied an icon or picture placeholder that held a drawing of its own: the mockup is still valid",
+    "Lo Studio ha svuotato il segnaposto di un'icona o di una foto che conteneva un disegno: il mockup resta valido",
+  ],
+  TEXT_COLOUR_REPLACED: [
+    "The Studio replaced the colour of a text that was hard to read with a palette colour that reads well: the mockup is still valid",
+    "Lo Studio ha sostituito il colore di un testo poco leggibile con un colore della tavolozza che si legge bene: il mockup resta valido",
+  ],
+  CONTROL_BORDER_REPLACED: [
+    "The Studio made the border of a field or of a button clearly visible: the mockup is still valid",
+    "Lo Studio ha reso ben visibile il bordo di un campo o di un pulsante: il mockup resta valido",
+  ],
 };
 
 const DEFAULT_REASON = [
