@@ -19,6 +19,7 @@ from orchestwin.artifacts.visual_catalog import (
     require_distinct_visual_choices,
     visual_differences,
 )
+from orchestwin.artifacts.visual_directions import direction_exploration
 from orchestwin.artifacts.visual_exploration import (
     BACKGROUND_GROUP_SIZE,
     EXPLORED_ALTERNATIVES,
@@ -33,7 +34,10 @@ from orchestwin.artifacts.visual_exploration import (
     visual_exploration,
 )
 
+from .test_visual_directions import SYSTEM_BOUND, system_direction
+
 PROJECTS = tuple(UUID(int=index + 1, version=4) for index in range(500))
+THREE_ALTERNATIVES = (*EXPLORED_ALTERNATIVES, "DES-003")
 GROUP_SIZES = {
     "hue_family": HUE_GROUP_SIZE,
     "heading_family": HEADING_GROUP_SIZE,
@@ -127,6 +131,62 @@ def test_every_exploration_admits_two_valid_and_distinct_alternatives():
         assert len(explored) >= DISTINCT_VISUAL_DIMENSIONS
         for code, choices in zip(EXPLORED_ALTERNATIVES, pair, strict=True):
             require_explored_choices(code, choices, exploration)
+
+
+def _third(exploration, chosen, archetype):
+    values = _choices("DES-003", exploration, archetype).to_snapshot()
+    values["hue_family"] = next(
+        hue.value
+        for hue in offered_visual_values("hue_family")
+        if all(hue_families_are_distinct(hue, item.hue_family) for item in chosen)
+    )
+    return VisualChoices.from_snapshot(values)
+
+
+def _trio(project, archetypes):
+    exploration = direction_exploration(
+        visual_exploration(project), {"DES-003": system_direction()}
+    )
+    pair = [
+        _choices(code, exploration, archetypes[index])
+        for index, code in enumerate(EXPLORED_ALTERNATIVES)
+    ]
+    return exploration, [*pair, _third(exploration, pair, archetypes[2])]
+
+
+def test_every_exploration_admits_three_distinct_alternatives_with_the_system_direction():
+    archetypes = tuple(ARCHETYPES)
+    for project in PROJECTS:
+        base = visual_exploration(project)
+        exploration, trio = _trio(project, archetypes)
+        assert tuple(exploration) == THREE_ALTERNATIVES
+        assert {code: exploration[code] for code in EXPLORED_ALTERNATIVES} == base
+        assert exploration["DES-003"] == SYSTEM_BOUND
+        assert len({choices.archetype for choices in trio}) == 3
+        require_distinct_visual_choices(trio)
+        for code, choices in zip(THREE_ALTERNATIVES, trio, strict=True):
+            require_explored_choices(code, choices, exploration)
+        assert visual_exploration(project) == base
+
+
+def test_the_third_alternative_keeps_its_own_archetype_and_the_bindings_of_the_system():
+    archetypes = tuple(ARCHETYPES)
+    exploration, trio = _trio(PROJECTS[0], archetypes)
+    first, second, third = trio
+    shared = _third(exploration, (first, second), archetypes[0])
+    outside = VisualChoices.from_snapshot({**third.to_snapshot(), "corners": "PILL"})
+
+    with pytest.raises(ValueError, match="different layout archetypes"):
+        require_distinct_visual_choices([first, second, shared])
+    with pytest.raises(ValueError, match="DES-003 must choose corners"):
+        require_explored_choices("DES-003", outside, exploration)
+    require_explored_choices("DES-003", outside, visual_exploration(PROJECTS[0]))
+    assert exploration_bindings(exploration, "DES-003") == {
+        "visual": {
+            "properties": {name: {"enum": list(values)} for name, values in SYSTEM_BOUND.items()}
+        }
+    }
+    assert exploration_bindings(visual_exploration(PROJECTS[0]), "DES-003") == {}
 
 
 def test_choices_outside_the_exploration_are_rejected_with_the_dimension_name():

@@ -110,12 +110,15 @@ SEVERITIES = [
 ]
 
 
-def review(mockup=None, *, tokens=LIGHT_TOKENS, codes=BASE_CODES, threshold=4.5) -> MockupReport:
+def review(
+    mockup=None, *, tokens=LIGHT_TOKENS, codes=BASE_CODES, threshold=4.5, large=3.0
+) -> MockupReport:
     return review_generated_mockup(
         build() if mockup is None else mockup,
         tokens=tokens,
         requirement_codes=codes,
         text_contrast_threshold=threshold,
+        large_text_threshold=large,
     )
 
 
@@ -456,72 +459,116 @@ def test_the_severity_of_each_issue_follows_the_harm_it_does(code, mockup, sever
     assert {issue.severity for issue in issues} == {severity}
 
 
-def test_the_contrast_floor_depends_on_the_threshold_of_the_mode() -> None:
-    assert contrast_floor(4.5) == 3.0
-    assert contrast_floor(7.0) == 4.5
+def test_the_contrast_floor_is_the_threshold_itself() -> None:
+    assert contrast_floor(4.5) == 4.5
+    assert contrast_floor(7.0) == 7.0
     assert contrast_floor(2.0) == 2.0
 
 
 @pytest.mark.parametrize(
-    ("tokens", "threshold", "rule", "code", "severity"),
+    ("tokens", "threshold", "rule", "code"),
     [
         (
             LIGHT_TOKENS,
             4.5,
             ".a{color:var(--vl-color-accent);background:var(--vl-color-surface-alt)}",
             "LOW_CONTRAST",
-            WARNING,
         ),
         (
             LIGHT_TOKENS,
             4.5,
             ".a{color:var(--vl-color-primary-soft);background:var(--vl-color-surface)}",
             "LOW_CONTRAST",
-            ERROR,
         ),
-        (LIGHT_TOKENS, 4.5, ".a{color:var(--vl-color-accent)}", "UNREADABLE_TEXT_COLOUR", WARNING),
-        (
-            LIGHT_TOKENS,
-            4.5,
-            ".a{color:var(--vl-color-on-primary)}",
-            "UNREADABLE_TEXT_COLOUR",
-            ERROR,
-        ),
+        (LIGHT_TOKENS, 4.5, ".a{color:var(--vl-color-accent)}", "UNREADABLE_TEXT_COLOUR"),
+        (LIGHT_TOKENS, 4.5, ".a{color:var(--vl-color-on-primary)}", "UNREADABLE_TEXT_COLOUR"),
         (
             LIGHT_TOKENS,
             7.0,
             ".a{color:var(--vl-color-primary);background:var(--vl-color-background)}",
             "LOW_CONTRAST",
-            WARNING,
         ),
         (
             LIGHT_TOKENS,
             7.0,
             ".a{color:var(--vl-color-accent);background:var(--vl-color-surface-alt)}",
             "LOW_CONTRAST",
-            ERROR,
         ),
         (
             HIGH_CONTRAST_TOKENS,
             7.0,
             ".a{color:var(--vl-color-border);background:var(--vl-color-surface-alt)}",
             "LOW_CONTRAST",
-            WARNING,
         ),
         (
             HIGH_CONTRAST_TOKENS,
             7.0,
             ".a{color:var(--vl-color-primary-soft);background:var(--vl-color-surface)}",
             "LOW_CONTRAST",
-            ERROR,
         ),
     ],
 )
-def test_contrast_below_the_floor_is_an_error_and_above_it_a_warning(
-    tokens: dict[str, str], threshold: float, rule: str, code: str, severity: MockupIssueSeverity
+def test_contrast_below_the_threshold_is_an_error_even_close_to_it(
+    tokens: dict[str, str], threshold: float, rule: str, code: str
 ) -> None:
-    issues = found(with_styles(rule, tokens=tokens, threshold=threshold), code)
-    assert [issue.severity for issue in issues] == [severity]
+    report = with_styles(rule, tokens=tokens, threshold=threshold)
+    assert [issue.severity for issue in found(report, code)] == [ERROR]
+    assert report.is_acceptable is False
+
+
+def test_a_pair_between_three_and_four_and_a_half_is_no_longer_a_warning() -> None:
+    rule = ".a{color:var(--vl-color-accent);background:var(--vl-color-surface-alt)}"
+    assert 3.0 <= ratio(LIGHT_TOKENS, "accent", "surface-alt") < 4.5
+    report = with_styles(rule)
+    expected = f".a {ratio(LIGHT_TOKENS, 'accent', 'surface-alt'):.2f}"
+    assert found(report, "LOW_CONTRAST") == [MockupIssue("LOW_CONTRAST", ERROR, None, expected)]
+
+
+LARGE_PAIR = "color:var(--vl-color-text);background:var(--vl-color-accent)"
+
+
+@pytest.mark.parametrize(
+    ("declarations", "rejected"),
+    [
+        ("font-size:24px", False),
+        ("font-size:1.5rem", False),
+        ("font-size:var(--vl-size-display)", False),
+        ("font-size:20px;font-weight:700", False),
+        ("font-size:20px;font-weight:bold", False),
+        ("font-size:1.25rem;font-weight:var(--vl-heading-weight)", False),
+        ("font-size:20px", True),
+        ("font-size:18px;font-weight:700", True),
+        ("font-size:20px;font-weight:600", True),
+        ("font-size:min(var(--vl-size-display), 8vw)", True),
+        ("font-weight:900", True),
+    ],
+)
+def test_large_text_is_held_to_the_large_text_threshold(declarations: str, rejected: bool) -> None:
+    assert 3.0 <= ratio(LIGHT_TOKENS, "text", "accent") < 4.5
+    report = with_styles(f".t{{{LARGE_PAIR};{declarations}}}")
+    assert [issue.severity for issue in found(report, "LOW_CONTRAST")] == (
+        [ERROR] if rejected else []
+    )
+    assert report.is_acceptable is not rejected
+
+
+def test_large_text_without_a_background_is_held_to_the_large_text_threshold() -> None:
+    best = max(
+        ratio(LIGHT_TOKENS, "accent", role) for role in ("background", "surface", "surface-alt")
+    )
+    assert 3.0 <= best < 4.5
+    assert found(with_styles(".t{color:var(--vl-color-accent)}"), "UNREADABLE_TEXT_COLOUR")
+    large = with_styles(".t{color:var(--vl-color-accent);font-size:24px}")
+    assert not found(large, "UNREADABLE_TEXT_COLOUR")
+
+
+def test_the_large_text_threshold_is_given_by_the_caller() -> None:
+    rule = ".t{color:var(--vl-color-text);background:var(--vl-color-border);font-size:2rem}"
+    assert 3.0 <= ratio(HIGH_CONTRAST_TOKENS, "text", "border") < 4.5
+    lenient = with_styles(rule, tokens=HIGH_CONTRAST_TOKENS, threshold=7.0)
+    assert not found(lenient, "LOW_CONTRAST")
+    strict = with_styles(rule, tokens=HIGH_CONTRAST_TOKENS, threshold=7.0, large=4.5)
+    assert [issue.severity for issue in found(strict, "LOW_CONTRAST")] == [ERROR]
 
 
 @BOTH_MODES
@@ -571,10 +618,12 @@ def weak(tokens: dict[str, str], role: str) -> bool:
         "p,textarea{border:1px solid var(--vl-color-border)}",
     ],
 )
-def test_weak_borders_on_form_controls_are_warnings(tokens: dict[str, str], rule: str) -> None:
+def test_weak_borders_on_form_controls_are_errors(tokens: dict[str, str], rule: str) -> None:
     assert weak(tokens, "border")
-    issues = found(with_styles(rule, tokens=tokens), "WEAK_CONTROL_BORDER")
-    assert [(issue.screen_code, issue.severity) for issue in issues] == [(None, WARNING)]
+    report = with_styles(rule, tokens=tokens)
+    issues = found(report, "WEAK_CONTROL_BORDER")
+    assert [(issue.screen_code, issue.severity) for issue in issues] == [(None, ERROR)]
+    assert report.is_acceptable is False
     selector = rule.split("{", 1)[0]
     assert selector in issues[0].detail
     expected = max(ratio(tokens, "border", "background"), ratio(tokens, "border", "surface"))
@@ -655,6 +704,19 @@ def test_empty_containers_are_warnings_except_for_controls_and_fillers() -> None
         )
     )
     assert not found(report, "EMPTY_CONTAINER")
+
+
+def test_icon_and_picture_placeholders_are_not_empty_containers() -> None:
+    placeholders = (
+        '<p><svg data-icon="search" aria-hidden="true"></svg> Cerca nel registro</p>'
+        '<figure><svg data-picture="package" data-tone="accent" role="img" '
+        'aria-label="Foto del pacco"></svg><figcaption>Pacco in arrivo</figcaption></figure>'
+    )
+    assert not found(review(with_first(placeholders)), "EMPTY_CONTAINER")
+    report = review(with_first(placeholders + '<div class="spacer"></div>'))
+    assert [(issue.screen_code, issue.detail) for issue in found(report, "EMPTY_CONTAINER")] == [
+        ("SCR-001", "div 1")
+    ]
 
 
 def test_icons_are_hidden_or_named() -> None:

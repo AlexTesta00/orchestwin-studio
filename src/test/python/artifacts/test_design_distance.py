@@ -4,6 +4,7 @@ import json
 import math
 from collections import Counter
 from dataclasses import replace
+from itertools import combinations
 from uuid import UUID
 
 import pytest
@@ -44,11 +45,22 @@ from orchestwin.artifacts.visual_catalog import (
     visual_differences,
 )
 from orchestwin.artifacts.visual_color import colour_distance
-from orchestwin.artifacts.visual_directions import DIRECTION_AXES, DIRECTION_AXIS_VALUES
+from orchestwin.artifacts.visual_directions import (
+    DIRECTION_AXES,
+    DIRECTION_AXIS_VALUES,
+    differing_axes,
+)
 from orchestwin.artifacts.visual_language import create_visual_language
 
 from . import design_fixtures
-from .test_visual_directions import axes, directed_language, direction
+from .test_visual_directions import (
+    SYSTEM_AXES,
+    SYSTEM_NAME,
+    axes,
+    directed_language,
+    direction,
+    system_language,
+)
 
 TOKENS = {
     "--vl-size-body": "16px",
@@ -1265,6 +1277,95 @@ def test_the_report_measures_every_pair_of_alternatives_in_order() -> None:
     ]
     assert [item["code"] for item in report["alternatives"]] == ["DES-001", "DES-002", "DES-003"]
     assert {item["verdict"] for item in report["pairs"]} == {"UNKNOWN"}
+
+
+def three_alternatives(third_language):
+    second_language = PACKAGE.alternatives[1].visual_language
+    first, second = pair(directed(FIRST_AXES), directed(SECOND_AXES, "Tool bench", second_language))
+    third = replace(
+        second,
+        id=UUID("00000000-0000-4000-8000-000000000072"),
+        code="DES-003",
+        approach=DesignApproach.TASK_FOCUSED,
+        visual_language=third_language,
+    )
+    critique = PACKAGE.critiques[1]
+    package = replace(
+        PACKAGE,
+        alternatives=(first, second, third),
+        critiques=(
+            *PACKAGE.critiques,
+            replace(
+                critique,
+                id=UUID("00000000-0000-4000-8000-000000000203"),
+                code="CRQ-003",
+                design_alternative_id=third.id,
+            ),
+        ),
+    )
+    return design_fixtures.design_version(package=package), (first, second, third)
+
+
+def test_three_alternatives_are_measured_on_every_pair_with_a_verdict_each() -> None:
+    language = system_language(PACKAGE.alternatives[1].visual_language)
+    version, alternatives = three_alternatives(language)
+    first, second, third = alternatives
+    soft = ".c{max-width:880px}.p{border-radius:20px;background:var(--vl-color-surface)}" + (
+        rules("n", "background:var(--vl-color-primary-soft)", 3)
+    )
+    mockups = {
+        first.id: mockup(first, STRONG),
+        second.id: mockup(second, GENTLE, OTHER_SCREENS),
+        third.id: mockup(third, soft),
+    }
+
+    report = design_distance_report(version, mockups)
+
+    assert [(item["first"], item["second"]) for item in report["pairs"]] == [
+        ("DES-001", "DES-002"),
+        ("DES-001", "DES-003"),
+        ("DES-002", "DES-003"),
+    ]
+    assert report["pairs"] == [
+        design_distance(one, other, first_mockup=mockups[one.id], second_mockup=mockups[other.id])
+        for one, other in combinations(alternatives, 2)
+    ]
+    assert all(item["verdict"] in {"FAR", "CLOSE"} for item in report["pairs"])
+    assert all(item["styles"]["available"] for item in report["pairs"])
+    assert [item["declared"]["axes"] for item in report["pairs"]] == [
+        list(differing_axes(FIRST_AXES, SECOND_AXES)),
+        list(differing_axes(FIRST_AXES, SYSTEM_AXES)),
+        list(differing_axes(SECOND_AXES, SYSTEM_AXES)),
+    ]
+    assert [item["code"] for item in report["alternatives"]] == ["DES-001", "DES-002", "DES-003"]
+    assert [item["direction"] for item in report["alternatives"]] == [
+        "Printed register",
+        "Tool bench",
+        SYSTEM_NAME,
+    ]
+    assert report["alternatives"][2]["adherence"] == direction_adherence(third, mockups[third.id])
+    assert all(item["adherence"]["available"] for item in report["alternatives"])
+    assert third.visual_language.design_system == "apple-hig"
+
+
+def test_the_name_of_the_design_system_alone_leaves_the_measure_unchanged() -> None:
+    language = system_language(PACKAGE.alternatives[1].visual_language)
+    named, alternatives = three_alternatives(language)
+    unnamed, others = three_alternatives(replace(language, design_system=None))
+    styles = (STRONG, GENTLE, ".p{border-radius:20px}")
+
+    reports = [
+        design_distance_report(
+            version,
+            {item.id: mockup(item, sheet) for item, sheet in zip(items, styles, strict=True)},
+        )
+        for version, items in ((named, alternatives), (unnamed, others))
+    ]
+
+    assert named.content_hash != unnamed.content_hash
+    assert reports[0]["design_content_hash"] != reports[1]["design_content_hash"]
+    assert reports[0]["pairs"] == reports[1]["pairs"]
+    assert reports[0]["alternatives"] == reports[1]["alternatives"]
 
 
 def test_the_measure_is_deterministic() -> None:

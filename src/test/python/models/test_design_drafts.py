@@ -8,9 +8,23 @@ import pytest
 from pydantic import ValidationError
 
 from orchestwin.artifacts.visual_catalog import (
+    ColorMode,
+    ColorScheme,
+    FontFamily,
+    HueFamily,
     LayoutArchetype,
     NavigationPattern,
+    Saturation,
+    SurfaceTone,
+    resolve_palette,
+    resolve_visual_tokens,
     visual_catalog_summary,
+)
+from orchestwin.artifacts.visual_fonts import (
+    BODY_FONTS,
+    HEADING_FONTS,
+    BundledFamily,
+    bundled_font_tokens,
 )
 from orchestwin.artifacts.visual_language import MAX_TWIN_FIT_LENGTH
 from orchestwin.models import design_drafts
@@ -28,6 +42,8 @@ from orchestwin.models.design_drafts import (
     ConcernDraft,
     CritiqueDraft,
     DesignDraft,
+    HostedDesignDraft,
+    HostedSystemDesignDraft,
     TwinFitDraft,
     VisualLanguageDraft,
     WorkflowDraft,
@@ -191,6 +207,53 @@ def draft(context, first: AlternativeDraft | None = None, second=None) -> Design
     )
 
 
+def palette_of(visual_values) -> dict[str, str]:
+    return dict(
+        resolve_palette(
+            HueFamily(visual_values["hue_family"]),
+            ColorScheme(visual_values["color_scheme"]),
+            ColorMode(visual_values["color_mode"]),
+            Saturation(visual_values["saturation"]),
+            SurfaceTone(visual_values["surface_tone"]),
+        )
+    )
+
+
+def type_pair_of(visual_values) -> dict[str, str]:
+    heading = FontFamily(visual_values["heading_family"])
+    body = FontFamily(visual_values["body_family"])
+    return {
+        "heading": HEADING_FONTS.get(heading, BundledFamily.SOURCE_SANS_3).value,
+        "body": BODY_FONTS.get(body, BundledFamily.SOURCE_SANS_3).value,
+    }
+
+
+def with_palettes(payload) -> dict:
+    return {
+        **payload,
+        "alternatives": [
+            {
+                **item,
+                "visual": {
+                    **item["visual"],
+                    "palette": palette_of(item["visual"]),
+                    "type_pair": type_pair_of(item["visual"]),
+                },
+            }
+            for item in payload["alternatives"]
+        ],
+    }
+
+
+def hosted(design_draft: DesignDraft, verdict="Clear for my shift") -> HostedDesignDraft:
+    payload = with_palettes(design_draft.model_dump(mode="json"))
+    payload["critiques"] = [
+        {**item, "verdict": verdict, "quote": "I find the next booking without opening a screen."}
+        for item in payload["critiques"]
+    ]
+    return HostedDesignDraft.model_validate(payload)
+
+
 def reference(code: str) -> EvidenceReference:
     return EvidenceReference(
         source_kind=EvidenceSourceKind.MODEL_OUTPUT,
@@ -221,6 +284,30 @@ def test_bind_design_attaches_a_resolved_visual_language_to_each_alternative():
         != first.visual_language.palette_roles["background"]
     )
     assert first.to_snapshot()["visual_language"]["choices"]["hue_family"] == "COBALT"
+
+
+def test_a_hosted_draft_with_the_catalog_palettes_binds_the_colours_of_the_local_draft():
+    request = proposal_request()
+    context, _ = design_context(request)
+    local = bind(request, draft(context))
+    written = hosted(draft(context))
+    package = bind(request, written)
+    for plain, item, drafted in zip(
+        local.alternatives, package.alternatives, written.alternatives, strict=True
+    ):
+        language, choices = item.visual_language, item.visual_language.choices
+        catalog = resolve_visual_tokens(choices)
+        pair = (drafted.visual.type_pair.heading, drafted.visual.type_pair.body)
+        assert choices == plain.visual_language.choices
+        assert language.palette_roles == plain.visual_language.palette_roles
+        assert language.palette_roles == drafted.visual.palette.model_dump()
+        assert language.token_values == {**catalog, **bundled_font_tokens(choices, catalog, pair)}
+        assert set(language.to_snapshot()) == set(plain.visual_language.to_snapshot())
+    assert [item.visual.type_pair.heading for item in written.alternatives] == [
+        BundledFamily.SOURCE_SANS_3,
+        BundledFamily.GEIST,
+    ]
+    assert {item.verdict for item in package.critiques} == {"Clear for my shift"}
 
 
 @pytest.mark.parametrize(
@@ -1044,3 +1131,32 @@ def test_a_server_with_a_higher_ceiling_gives_the_design_room_for_more_twins(mon
         budgets[count] = generator.calls[0]["max_output_tokens"]
 
     assert budgets == {2: 6144, 3: 8192, 4: 10240, 5: 12288, 8: 12288}
+
+
+def test_the_hosted_draft_of_a_design_system_has_exactly_three_alternatives():
+    from .test_design_directions import (
+        alternatives_answer,
+        selected_directions,
+        system_alternatives,
+        system_directions,
+    )
+
+    request = proposal_request()
+    three = system_alternatives(request, system_directions(request))
+    two = alternatives_answer(request, selected_directions(request))
+    four = {**three, "alternatives": [*three["alternatives"], three["alternatives"][0]]}
+    governed = HostedSystemDesignDraft.model_json_schema()["properties"]["alternatives"]
+    plain = HostedDesignDraft.model_json_schema()["properties"]["alternatives"]
+
+    assert issubclass(HostedSystemDesignDraft, HostedDesignDraft)
+    assert (governed["minItems"], governed["maxItems"]) == (3, 3)
+    assert (plain["minItems"], plain["maxItems"]) == (2, 4)
+    assert [item.code for item in HostedSystemDesignDraft.model_validate(three).alternatives] == [
+        "DES-001",
+        "DES-002",
+        "DES-003",
+    ]
+    assert len(HostedDesignDraft.model_validate(two).alternatives) == 2
+    for payload in (two, four):
+        with pytest.raises(ValidationError):
+            HostedSystemDesignDraft.model_validate(payload)

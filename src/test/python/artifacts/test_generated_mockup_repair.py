@@ -10,8 +10,10 @@ from orchestwin.artifacts.generated_mockup_repair import (
     ATTRIBUTE_REMOVED,
     ELEMENT_REMOVED,
     ELEMENT_UNWRAPPED,
+    ICON_UNKNOWN,
     LINK_REMOVED,
     MAX_NOTE_NAME_LENGTH,
+    PLACEHOLDER_EMPTIED,
     REPAIR_NOTE_CODES,
     REQUIREMENT_CODE_REMOVED,
     REQUIREMENT_INHERITED,
@@ -199,6 +201,12 @@ MESSY = [
     BASE_FIRST.replace("</main>", "<section><p>Fine</p></main>"),
     BASE_FIRST.replace("</main>", "<p>Q&A e a < b<span class='dot'/></p></main>"),
     BASE_FIRST.replace(' data-req="REQ-001"', ""),
+    BASE_FIRST.replace(
+        "</main>",
+        '<svg data-icon="nope" viewBox="0 0 1 1"><path d="M0 0"></path></svg>'
+        '<svg data-tone="x"></svg><svg data-icon="search" data-picture="image" data-tone="accent"> '
+        "</svg></main>",
+    ),
 ]
 
 
@@ -639,6 +647,143 @@ def test_markup_that_cannot_be_repaired_without_guessing_is_still_rejected(
     slipped = repair(markup.replace("<select ", '<select autocomplete="off" '))
     with pytest.raises(GeneratedMockupError):
         built(slipped)
+
+
+@pytest.mark.parametrize(
+    ("snippet", "remaining", "expected"),
+    [
+        (
+            '<svg data-icon="magnifying-glass" aria-hidden="true"></svg>',
+            '<svg aria-hidden="true" data-icon="circle"></svg>',
+            [(ICON_UNKNOWN, "SCR-001", "magnifying-glass")],
+        ),
+        (
+            '<svg data-picture="pacco" role="img" aria-label="Foto"></svg>',
+            '<svg aria-label="Foto" data-picture="image" role="img"></svg>',
+            [(ICON_UNKNOWN, "SCR-001", "pacco")],
+        ),
+        (
+            '<svg data-icon aria-hidden="true"></svg>',
+            '<svg aria-hidden="true" data-icon="circle"></svg>',
+            [(ICON_UNKNOWN, "SCR-001", "(empty)")],
+        ),
+        (
+            '<svg data-icon="arrow_right"></svg>',
+            '<svg data-icon="circle"></svg>',
+            [(ICON_UNKNOWN, "SCR-001", "arrow_right")],
+        ),
+        (
+            '<svg data-picture="image" data-tone="blue" role="img" aria-label="Foto"></svg>',
+            '<svg aria-label="Foto" data-picture="image" role="img"></svg>',
+            [(ATTRIBUTE_REMOVED, "SCR-001", "data-tone")],
+        ),
+        (
+            '<svg data-icon="search" data-tone="accent"></svg>',
+            '<svg data-icon="search"></svg>',
+            [(ATTRIBUTE_REMOVED, "SCR-001", "data-tone")],
+        ),
+        (
+            '<svg data-tone="accent" viewBox="0 0 1 1"><path d="M0 0"></path></svg>',
+            '<svg viewBox="0 0 1 1"><path d="M0 0"></path></svg>',
+            [(ATTRIBUTE_REMOVED, "SCR-001", "data-tone")],
+        ),
+        (
+            '<svg data-icon="search" data-picture="image" data-tone="accent"></svg>',
+            '<svg data-icon="search"></svg>',
+            [
+                (ATTRIBUTE_REMOVED, "SCR-001", "data-picture"),
+                (ATTRIBUTE_REMOVED, "SCR-001", "data-tone"),
+            ],
+        ),
+        (
+            '<svg data-icon="search"><path d="M0 0"></path><text>x</text></svg>',
+            '<svg data-icon="search"></svg>',
+            [(PLACEHOLDER_EMPTIED, "SCR-001", "search")],
+        ),
+        (
+            '<svg data-picture="package" role="img" aria-label="Foto">Foto</svg>',
+            '<svg aria-label="Foto" data-picture="package" role="img"></svg>',
+            [(PLACEHOLDER_EMPTIED, "SCR-001", "package")],
+        ),
+        (
+            '<svg data-icon="nope"><circle r="1"></circle></svg>',
+            '<svg data-icon="circle"></svg>',
+            [(ICON_UNKNOWN, "SCR-001", "nope"), (PLACEHOLDER_EMPTIED, "SCR-001", "circle")],
+        ),
+        (
+            '<svg data-icon="search" style="color:red" onclick="x"></svg>',
+            '<svg data-icon="search"></svg>',
+            [(ATTRIBUTE_REMOVED, "SCR-001", "onclick"), (ATTRIBUTE_REMOVED, "SCR-001", "style")],
+        ),
+    ],
+)
+def test_placeholders_are_repaired_with_a_fallback_and_a_note(
+    snippet: str, remaining: str, expected: list[tuple[str, str, str]]
+) -> None:
+    result = with_snippet(snippet)
+    assert inner(result) == remaining
+    assert notes(result) == expected
+    built(result)
+
+
+@pytest.mark.parametrize(
+    ("snippet", "remaining"),
+    [
+        ('<svg data-icon="search">\n  </svg>', '<svg data-icon="search"></svg>'),
+        (
+            '<svg data-icon="search" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+            'stroke-width="2" transform="scale(2)"></svg>',
+            '<svg data-icon="search"></svg>',
+        ),
+        (
+            '<svg data-icon=" Search " aria-hidden="true"></svg>',
+            '<svg aria-hidden="true" data-icon="search"></svg>',
+        ),
+        (
+            '<svg data-picture="IMAGE" data-tone="Accent" role="img" aria-label="Foto"></svg>',
+            '<svg aria-label="Foto" data-picture="image" data-tone="accent" role="img"></svg>',
+        ),
+        ('<span data-icon="search">x</span>', "<span>x</span>"),
+        ('<svg data-icon="search" data-elm="ELM-001"></svg>', '<svg data-icon="search"></svg>'),
+    ],
+)
+def test_harmless_slips_of_a_placeholder_are_written_again_without_a_note(
+    snippet: str, remaining: str
+) -> None:
+    result = with_snippet(snippet)
+    assert inner(result) == remaining
+    assert result.notes == ()
+    built(result)
+
+
+def test_valid_placeholders_come_back_byte_for_byte_and_without_notes() -> None:
+    markup = BASE_FIRST.replace(
+        "</main>",
+        "<button type='button'><svg data-icon='search' aria-hidden='true'></svg>Cerca</button>"
+        '<svg data-picture="package" data-tone="accent" role="img" aria-label="Foto"/></main>',
+    )
+    result = repair(markup)
+    assert result.markups[0] == markup
+    assert result.notes == ()
+
+
+def test_a_placeholder_at_the_top_of_an_untraced_screen_inherits_its_codes() -> None:
+    picture = '<svg data-picture="image" role="img" aria-label="Foto"></svg>'
+    result = repair(
+        second=picture + BASE_SECOND.replace(' data-req="REQ-002"', ""), declared=("REQ-002",)
+    )
+    assert result.markups[1].startswith(
+        '<svg aria-label="Foto" data-picture="image" data-req="REQ-001" role="img"></svg>'
+        '<main data-req="REQ-001">'
+    )
+    assert notes(result) == [(REQUIREMENT_INHERITED, "SCR-002", "REQ-001 (2)")]
+    built(result)
+
+
+def test_the_placeholder_notes_are_repair_notes() -> None:
+    assert (ICON_UNKNOWN, PLACEHOLDER_EMPTIED) == ("ICON_UNKNOWN", "PLACEHOLDER_EMPTIED")
+    assert {ICON_UNKNOWN, PLACEHOLDER_EMPTIED} <= set(REPAIR_NOTE_CODES)
+    assert len(set(REPAIR_NOTE_CODES)) == len(REPAIR_NOTE_CODES) == 11
 
 
 def test_markup_whose_structure_is_broken_comes_back_as_it_was() -> None:

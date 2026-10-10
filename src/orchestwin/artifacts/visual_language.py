@@ -3,14 +3,16 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final
+from typing import TYPE_CHECKING, Final
 from uuid import UUID
 
 from orchestwin.artifacts.visual_catalog import (
+    MODES,
     PALETTE_ROLES,
     VISUAL_CATALOG_CONTENT_HASH,
     VISUAL_CATALOG_VERSION,
     VisualChoices,
+    enforce_palette_contrast,
     resolve_palette,
     resolve_visual_tokens,
 )
@@ -30,11 +32,16 @@ from orchestwin.projects.requirements_primitives import (
     validate_sha256,
 )
 
+if TYPE_CHECKING:
+    from orchestwin.models.design_systems import DesignSystem
+
 MAX_PRODUCT_NAME_LENGTH: Final = 80
 MAX_VISUAL_RATIONALE_LENGTH: Final = 2000
 MAX_TWIN_FIT_LENGTH: Final = 1000
 MAX_TOKEN_VALUE_LENGTH: Final = 200
+MAX_DESIGN_SYSTEM_LENGTH: Final = 40
 _TOKEN_NAME: Final = re.compile(r"--vl-[a-z0-9]+(?:-[a-z0-9]+)*")
+_DESIGN_SYSTEM: Final = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 _CSS_TEXT: Final = r"[A-Za-z0-9 #,.%-]"
 _CSS_VALUE: Final = re.compile(
     rf'(?:{_CSS_TEXT}|"{_CSS_TEXT}*"|(?<![A-Za-z0-9-])(?:rgba?|hsla?)\({_CSS_TEXT}*\))+'
@@ -47,6 +54,14 @@ def _plain_css_value(value: object) -> bool:
         and len(value) <= MAX_TOKEN_VALUE_LENGTH
         and value == value.strip()
         and _CSS_VALUE.fullmatch(value) is not None
+    )
+
+
+def _design_system_identifier(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) <= MAX_DESIGN_SYSTEM_LENGTH
+        and _DESIGN_SYSTEM.fullmatch(value) is not None
     )
 
 
@@ -79,10 +94,13 @@ class VisualLanguage:
     catalog_content_hash: str
     twin_fit: tuple[TwinFit, ...] = ()
     direction: VisualDirection | None = None
+    design_system: str | None = None
 
     def __post_init__(self) -> None:
         if self.direction is not None and not isinstance(self.direction, VisualDirection):
             raise ValueError("visual direction must be a VisualDirection")
+        if self.design_system is not None and not _design_system_identifier(self.design_system):
+            raise ValueError("visual design system must be a lowercase identifier")
         validate_positive_integer(self.catalog_version, label="visual catalog version")
         identifiers = [item.twin_id for item in self.twin_fit]
         if len(set(identifiers)) != len(identifiers):
@@ -132,6 +150,8 @@ class VisualLanguage:
         }
         if self.direction is not None:
             snapshot["direction"] = self.direction.to_snapshot()
+        if self.design_system is not None:
+            snapshot["design_system"] = self.design_system
         return snapshot
 
     def canonical_json(self) -> str:
@@ -152,6 +172,25 @@ def create_twin_fit(*, reference: UserTwinVersionReference, statement: str) -> T
     )
 
 
+def _system_palette(design_system: DesignSystem, choices: VisualChoices) -> dict[str, str]:
+    neutral = (
+        design_system.neutral_dark
+        if MODES[choices.color_mode].dark
+        else design_system.neutral_light
+    )
+    return {
+        **resolve_palette(
+            choices.hue_family,
+            choices.color_scheme,
+            choices.color_mode,
+            choices.saturation,
+            choices.surface_tone,
+        ),
+        **neutral,
+        "primary": next(iter(design_system.system_colours.values())),
+    }
+
+
 def create_visual_language(
     *,
     choices: VisualChoices,
@@ -159,18 +198,34 @@ def create_visual_language(
     rationale: str,
     twin_fit: tuple[TwinFit, ...] = (),
     direction: VisualDirection | None = None,
+    palette: Mapping[str, str] | None = None,
+    type_pair: tuple[str, str] | None = None,
+    design_system: DesignSystem | None = None,
 ) -> VisualLanguage:
-    palette = resolve_palette(
-        choices.hue_family,
-        choices.color_scheme,
-        choices.color_mode,
-        choices.saturation,
-        choices.surface_tone,
-    )
+    if palette is None and design_system is not None:
+        palette = _system_palette(design_system, choices)
+    if palette is None:
+        colours = resolve_palette(
+            choices.hue_family,
+            choices.color_scheme,
+            choices.color_mode,
+            choices.saturation,
+            choices.surface_tone,
+        )
+    else:
+        colours, _ = enforce_palette_contrast(palette, choices.color_mode)
     tokens = dict(resolve_visual_tokens(choices))
+    if palette is not None:
+        tokens.update(
+            {f"--vl-color-{role.replace('_', '-')}": colours[role] for role in PALETTE_ROLES}
+        )
     if isinstance(direction, VisualDirection):
         tokens.update(direction_tokens(direction, tokens))
-        tokens.update(bundled_font_tokens(choices, tokens))
+    pair = type_pair if design_system is None else design_system.font_pair
+    if isinstance(direction, VisualDirection) or pair is not None:
+        tokens.update(bundled_font_tokens(choices, tokens, pair=pair))
+    if design_system is not None:
+        tokens.update(design_system.tokens)
     return VisualLanguage(
         choices=choices,
         product_name=normalize_required_text(
@@ -183,12 +238,13 @@ def create_visual_language(
             label="visual rationale",
             maximum_length=MAX_VISUAL_RATIONALE_LENGTH,
         ),
-        palette=tuple(palette.items()),
+        palette=tuple(colours.items()),
         tokens=tuple(tokens.items()),
         catalog_version=VISUAL_CATALOG_VERSION,
         catalog_content_hash=VISUAL_CATALOG_CONTENT_HASH,
         twin_fit=tuple(twin_fit),
         direction=direction,
+        design_system=None if design_system is None else design_system.identifier,
     )
 
 
@@ -257,6 +313,7 @@ def visual_language_from_snapshot(payload: Mapping[str, object]) -> VisualLangua
         catalog_content_hash=str(payload["catalog_content_hash"]),
         twin_fit=_twin_fit(payload["twin_fit"]),
         direction=None if direction is None else visual_direction_from_snapshot(direction),
+        design_system=payload.get("design_system"),
     )
     if language.to_snapshot() != dict(payload):
         raise ValueError("visual language snapshot is not canonical")
@@ -264,6 +321,7 @@ def visual_language_from_snapshot(payload: Mapping[str, object]) -> VisualLangua
 
 
 __all__ = [
+    "MAX_DESIGN_SYSTEM_LENGTH",
     "MAX_PRODUCT_NAME_LENGTH",
     "MAX_TOKEN_VALUE_LENGTH",
     "MAX_TWIN_FIT_LENGTH",

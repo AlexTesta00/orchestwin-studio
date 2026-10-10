@@ -7,11 +7,18 @@ import pytest
 
 from orchestwin.artifacts.generated_mockup_styles import MAX_STYLES_LENGTH
 from orchestwin.artifacts.generated_mockups import (
+    DATA_ICON,
+    DATA_PICTURE,
+    DATA_TONE,
+    ELEMENT_ATTRIBUTES,
+    GLOBAL_ATTRIBUTES,
     MAX_DEPTH,
     MAX_ELEMENTS,
     MAX_MARKUP_LENGTH,
     MAX_MOCKUP_LENGTH,
     MOCKUP_CONTRACT_VERSION,
+    PLACEHOLDER_ATTRIBUTES,
+    SVG_ATTRIBUTES,
     GeneratedMockup,
     GeneratedMockupError,
     GeneratedScreen,
@@ -467,6 +474,16 @@ ACCEPTED_SNIPPETS = [
     "</g></svg></button>",
     '<main lang="it-IT" dir="ltr" role="region" hidden tabindex="-1" aria-label="Area" '
     'aria-describedby="d1" data-req="REQ-001 AC-002"><p id="d1" tabindex="0">Descrizione</p></main>',
+    '<button type="button" aria-label="Cerca"><svg data-icon="search" aria-hidden="true" '
+    'class="glyph" width="20" height="20" focusable="false"></svg></button>',
+    '<figure><svg data-picture="package" data-tone="accent" role="img" '
+    'aria-label="Foto del prodotto" id="foto"></svg><figcaption>Pacco</figcaption></figure>',
+    '<p><svg data-picture="image" role="img" aria-label="Immagine" lang="it" dir="ltr" '
+    'title="Foto" tabindex="-1" data-req="REQ-001" hidden></svg>Testo</p>',
+    '<svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16" fill="none" '
+    'stroke="var(--vl-color-primary)" stroke-width="4" pathLength="100" '
+    'stroke-dasharray="70 30" stroke-dashoffset="25" stroke-opacity="0.9" fill-opacity="0.2">'
+    "</circle></svg>",
 ]
 
 
@@ -624,6 +641,17 @@ def test_a_comment_can_open_and_close_the_markup() -> None:
         '<p d="M0 0">x</p>',
         '<li value="3">x</li>',
         '<svg class="i" lang="it" style="x"></svg>',
+        '<svg data-icon="search" viewBox="0 0 24 24"></svg>',
+        '<svg data-icon="search" fill="none"></svg>',
+        '<svg data-picture="image" stroke="currentColor"></svg>',
+        '<svg data-picture="image" transform="scale(2)"></svg>',
+        '<svg data-icon="search" opacity="0.5"></svg>',
+        '<svg data-icon="search" data-elm="ELM-001"></svg>',
+        '<svg preserveAspectRatio="none"></svg>',
+        '<span data-icon="search">x</span>',
+        '<p data-tone="accent">x</p>',
+        '<svg viewBox="0 0 1 1"><path d="M0 0" data-icon="search"></path></svg>',
+        '<svg><g data-picture="image"></g></svg>',
     ],
 )
 def test_attributes_outside_the_allowed_list_are_rejected(snippet: str) -> None:
@@ -973,6 +1001,22 @@ def test_every_allowed_input_type_is_accepted(input_type: str) -> None:
         '<svg focusable="yes"></svg>',
         '<svg><polyline points="0,0 x"></polyline></svg>',
         '<svg><path d="M0 0" opacity="half"></path></svg>',
+        '<svg><circle r="1" pathLength="full"></circle></svg>',
+        '<svg><circle r="1" stroke-dashoffset="10px"></circle></svg>',
+        '<svg><circle r="1" fill-opacity="50%"></circle></svg>',
+        '<svg><circle r="1" stroke-opacity="high"></circle></svg>',
+        '<svg data-icon="magnifying-glass"></svg>',
+        '<svg data-icon="Search"></svg>',
+        '<svg data-icon="arrow_right"></svg>',
+        '<svg data-icon=""></svg>',
+        "<svg data-icon></svg>",
+        '<svg data-icon="' + "a" * 49 + '"></svg>',
+        '<svg data-picture="pacco" role="img" aria-label="Foto"></svg>',
+        '<svg data-picture="image" data-tone="blue" role="img" aria-label="Foto"></svg>',
+        '<svg data-picture="image" data-tone="" role="img" aria-label="Foto"></svg>',
+        '<svg data-tone="accent"></svg>',
+        '<svg data-icon="search" data-tone="accent"></svg>',
+        '<svg data-icon="search" data-picture="image"></svg>',
     ],
 )
 def test_svg_attribute_values_are_restricted(snippet: str) -> None:
@@ -1154,10 +1198,74 @@ def test_self_closing_syntax_is_accepted_on_void_and_svg_elements() -> None:
         '<textarea name="t" aria-label="t">\nabc</textarea>',
         '<textarea name="t" aria-label="t">&#10;abc</textarea>',
         '<textarea name="t" aria-label="t">\r\nabc</textarea>',
+        '<svg data-icon="search"><path d="M0 0"></path></svg>',
+        '<svg data-picture="image" role="img" aria-label="Foto"><g></g></svg>',
+        '<svg data-icon="search"><svg data-icon="x"></svg></svg>',
+        '<svg data-icon="search"> </svg>',
+        '<svg data-icon="search">Cerca</svg>',
     ],
 )
 def test_content_rules_keep_a_single_reading_of_the_tree(snippet: str) -> None:
     rejects(snippet, "CONTENT_RULE")
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        '<svg data-icon="search"><circle r="1"></circle></svg>',
+        '<svg data-picture="image" role="img" aria-label="Foto">\n</svg>',
+        '<svg data-icon="search"><span>x</span></svg>',
+    ],
+)
+def test_a_placeholder_svg_holds_nothing(snippet: str) -> None:
+    error = rejects(snippet, "CONTENT_RULE")
+    assert error.detail == "SCR-001: a placeholder svg is empty"
+
+
+def test_the_placeholder_attributes_belong_to_the_svg_element() -> None:
+    assert {"data-icon", "data-picture", "data-tone"} == PLACEHOLDER_ATTRIBUTES
+    assert ELEMENT_ATTRIBUTES["svg"] == PLACEHOLDER_ATTRIBUTES
+    assert (DATA_ICON, DATA_PICTURE, DATA_TONE) == ("data-icon", "data-picture", "data-tone")
+    assert {"stroke-dashoffset", "fill-opacity", "stroke-opacity", "pathlength"} <= SVG_ATTRIBUTES
+    assert "preserveaspectratio" not in SVG_ATTRIBUTES
+    assert PLACEHOLDER_ATTRIBUTES.isdisjoint(SVG_ATTRIBUTES | GLOBAL_ATTRIBUTES)
+
+
+@pytest.mark.parametrize(
+    ("snippet", "expected"),
+    [
+        (
+            "<svg data-icon='search' aria-hidden='true'/>",
+            '<svg aria-hidden="true" data-icon="search"></svg>',
+        ),
+        (
+            '<SVG DATA-PICTURE="package" data-tone="success" ROLE="img" aria-label="Foto"></SVG>',
+            '<svg aria-label="Foto" data-picture="package" data-tone="success" role="img"></svg>',
+        ),
+        (
+            '<svg xmlns="http://www.w3.org/2000/svg" data-icon="x" class=" icon  big "></svg>',
+            '<svg class="icon big" data-icon="x"></svg>',
+        ),
+        (
+            '<svg data-icon="x">' + HTML_COMMENT_OPEN + " vuoto " + HTML_COMMENT_CLOSE + "</svg>",
+            '<svg data-icon="x"></svg>',
+        ),
+    ],
+)
+def test_a_placeholder_is_stored_empty_in_its_canonical_form(snippet: str, expected: str) -> None:
+    assert stored(snippet) == expected
+    mockup = with_first(snippet)
+    assert generated_mockup_from_snapshot(mockup.to_snapshot(), token_names=TOKEN_NAMES) == mockup
+    assert "viewBox" not in mockup.screens[0].markup
+
+
+def test_the_new_svg_attributes_keep_their_svg_spelling() -> None:
+    assert stored('<svg viewBox="0 0 1 1"><circle r="1" pathlength="100"></circle></svg>') == (
+        '<svg viewBox="0 0 1 1"><circle pathLength="100" r="1"></circle></svg>'
+    )
+    assert serialize_markup(
+        (MarkupElement("svg", (("preserveaspectratio", "xMidYMid slice"),), ()),)
+    ) == ('<svg preserveAspectRatio="xMidYMid slice"></svg>')
 
 
 @pytest.mark.parametrize(

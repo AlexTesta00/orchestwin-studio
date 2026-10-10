@@ -1,20 +1,31 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable, Sequence
+import math
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields
 from enum import StrEnum
 from functools import cache
 from types import MappingProxyType
 from typing import Final
 
-from orchestwin.artifacts.visual_color import contrast_ratio, hue_difference, oklch_to_hex
+from orchestwin.artifacts.visual_color import (
+    contrast_ratio,
+    hex_to_oklab,
+    hue_difference,
+    is_hex_colour,
+    oklch_to_hex,
+    relative_luminance,
+)
 from orchestwin.projects.requirements_primitives import canonical_json
 
 VISUAL_CATALOG_VERSION: Final = 1
 DISTINCT_VISUAL_DIMENSIONS: Final = 3
 HUE_FAMILY_SEPARATION_DEGREES: Final = 30.0
 CHROMA_SCALE_SEPARATION: Final = 0.3
+PRIMARY_HUE_SEPARATION_DEGREES: Final = 30.0
+PRIMARY_CHROMA_SEPARATION: Final = 0.06
+DARK_BACKGROUND_LUMINANCE: Final = 0.18
 _SOLVE_STEPS: Final = 14
 _SAFETY_STEPS: Final = 40
 _SAFETY_STEP_SIZE: Final = 0.005
@@ -997,6 +1008,126 @@ def _solve_emphasis(
     return colour, _WHITE
 
 
+def _oklch(colour: str) -> tuple[float, float, float]:
+    lightness, a, b = hex_to_oklab(colour)
+    return lightness, math.hypot(a, b), math.degrees(math.atan2(b, a)) % 360
+
+
+def _ink(dark: bool, chroma: float, hue: float) -> str:
+    if dark:
+        return oklch_to_hex(0.16, min(chroma, 0.03), hue)
+    return oklch_to_hex(0.13, min(chroma, 0.02), hue)
+
+
+def _lightness(colour: str, references: tuple[tuple[str, float], ...], darker: bool) -> str:
+    if _satisfies(colour, references):
+        return colour
+    return _solve(*_oklch(colour), references, darker)
+
+
+def _fit_emphasis(
+    colour: str, on_colour: str, grounds: tuple[tuple[str, float], ...], mode: ModeSpec
+) -> str | None:
+    label = ((on_colour, mode.text_threshold),)
+    references = (*grounds, *label)
+    if _satisfies(colour, references):
+        return colour
+    lightness, chroma, hue = _oklch(colour)
+    away = not mode.dark
+    for partial, darker in ((references, away), (grounds, away), (label, mode.dark)):
+        candidate = _solve(lightness, chroma, hue, partial, darker)
+        if _satisfies(candidate, references):
+            return candidate
+    return None
+
+
+def _enforce_emphasis(
+    colour: str, on_colour: str, grounds: tuple[tuple[str, float], ...], mode: ModeSpec
+) -> tuple[str, str]:
+    fitted = _fit_emphasis(colour, on_colour, grounds, mode)
+    if fitted is not None:
+        return fitted, on_colour
+    lightness, chroma, hue = _oklch(colour)
+    ink = _ink(mode.dark, chroma, hue)
+    fits = [
+        (candidate, option)
+        for option in ((ink, _WHITE) if mode.dark else (_WHITE, ink))
+        if (candidate := _fit_emphasis(colour, option, grounds, mode)) is not None
+    ]
+    if not fits:
+        return colour, on_colour
+    return min(fits, key=lambda item: abs(_oklch(item[0])[0] - lightness))
+
+
+def palette_contrast_pairs(mode: ColorMode) -> tuple[tuple[str, str, float], ...]:
+    spec = MODES[ColorMode(mode)]
+    text, ui = spec.text_threshold, spec.ui_threshold
+    surfaces = ("background", "surface", "surface_alt")
+    grounds = ("background", "surface")
+    return (
+        *((role, surface, text) for role in ("text", "text_muted") for surface in surfaces),
+        *(("primary", ground, ui) for ground in grounds),
+        ("on_primary", "primary", text),
+        *(("accent", ground, ui) for ground in grounds),
+        ("on_accent", "accent", text),
+        ("text", "primary_soft", text),
+        *((role, ground, text) for role in ("success", "danger") for ground in grounds),
+        ("success", "success_soft", text),
+        ("danger", "danger_soft", text),
+    )
+
+
+def enforce_palette_contrast(
+    palette: Mapping[str, str], mode: ColorMode
+) -> tuple[dict[str, str], tuple[str, ...]]:
+    if len(palette) != len(PALETTE_ROLES) or set(palette) != set(PALETTE_ROLES):
+        raise ValueError("palette must define every role exactly once")
+    if not all(is_hex_colour(palette[role]) for role in PALETTE_ROLES):
+        raise ValueError("palette colours must be lowercase hex values")
+    spec = MODES[ColorMode(mode)]
+    if (relative_luminance(palette["background"]) < DARK_BACKGROUND_LUMINANCE) != spec.dark:
+        raise ValueError("palette does not match the colour mode")
+    text, ui = spec.text_threshold, spec.ui_threshold
+    away = not spec.dark
+    final = {role: palette[role] for role in PALETTE_ROLES}
+    surfaces = tuple((final[name], text) for name in ("background", "surface", "surface_alt"))
+    for role in ("text", "text_muted"):
+        final[role] = _lightness(final[role], surfaces, away)
+    grounds = ((final["background"], ui), (final["surface"], ui))
+    for role in ("primary", "accent"):
+        final[role], final[f"on_{role}"] = _enforce_emphasis(
+            final[role], final[f"on_{role}"], grounds, spec
+        )
+    final["primary_soft"] = _lightness(final["primary_soft"], ((final["text"], text),), spec.dark)
+    statuses = ((final["background"], text), (final["surface"], text))
+    for role in ("success", "danger"):
+        final[role] = _lightness(final[role], statuses, away)
+    for role in ("success", "danger"):
+        final[f"{role}_soft"] = _lightness(final[f"{role}_soft"], ((final[role], text),), spec.dark)
+    for first, second, threshold in palette_contrast_pairs(mode):
+        if contrast_ratio(final[first], final[second]) < threshold:
+            raise ValueError(
+                f"palette cannot reach the contrast of the colour mode: {first} on {second}"
+            )
+    return final, tuple(role for role in PALETTE_ROLES if final[role] != palette[role])
+
+
+def primaries_are_distinct(first: str, second: str) -> bool:
+    _, first_chroma, first_hue = _oklch(first)
+    _, second_chroma, second_hue = _oklch(second)
+    return (
+        hue_difference(first_hue, second_hue) >= PRIMARY_HUE_SEPARATION_DEGREES
+        or abs(first_chroma - second_chroma) >= PRIMARY_CHROMA_SEPARATION
+    )
+
+
+def require_distinct_primaries(primaries: Sequence[str]) -> None:
+    for index, first in enumerate(primaries):
+        for second in primaries[index + 1 :]:
+            if not primaries_are_distinct(first, second):
+                raise ValueError("design alternatives must use clearly different primary colours")
+
+
 def resolve_typography(choices: VisualChoices) -> dict[str, str]:
     return {
         "heading_stack": FONTS[choices.heading_family].stack,
@@ -1200,6 +1331,7 @@ NEUTRAL_VISUAL_CHOICES: Final = VisualChoices(
 __all__ = [
     "ARCHETYPES",
     "CHROMA_SCALE_SEPARATION",
+    "DARK_BACKGROUND_LUMINANCE",
     "DISTINCT_VISUAL_DIMENSIONS",
     "FONTS",
     "HUES",
@@ -1207,6 +1339,8 @@ __all__ = [
     "MODES",
     "NEUTRAL_VISUAL_CHOICES",
     "PALETTE_ROLES",
+    "PRIMARY_CHROMA_SEPARATION",
+    "PRIMARY_HUE_SEPARATION_DEGREES",
     "RETIRED_VISUAL_VALUES",
     "VISUAL_CATALOG_CONTENT_HASH",
     "VISUAL_CATALOG_VERSION",
@@ -1238,8 +1372,12 @@ __all__ = [
     "SurfaceTone",
     "TypeScale",
     "VisualChoices",
+    "enforce_palette_contrast",
     "hue_families_are_distinct",
     "offered_visual_values",
+    "palette_contrast_pairs",
+    "primaries_are_distinct",
+    "require_distinct_primaries",
     "require_distinct_visual_choices",
     "resolve_palette",
     "resolve_typography",

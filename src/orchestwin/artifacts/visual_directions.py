@@ -572,8 +572,11 @@ def direction_exploration(
     directions: Mapping[str, VisualDirection],
 ) -> dict[str, dict[str, tuple[str, ...]]]:
     exploration: dict[str, dict[str, tuple[str, ...]]] = {}
-    for code, dimensions in base.items():
-        explored = {name: tuple(values) for name, values in dimensions.items()}
+    added = tuple(
+        code for code, direction in directions.items() if code not in base and direction is not None
+    )
+    for code in (*base, *added):
+        explored = {name: tuple(values) for name, values in base.get(code, {}).items()}
         direction = directions.get(code)
         if direction is not None:
             explored.update(_bound_dimensions(direction))

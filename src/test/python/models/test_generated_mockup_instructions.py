@@ -12,6 +12,7 @@ import pytest
 
 from orchestwin.agents.catalog import AgentIdentifier
 from orchestwin.agents.perspectives import PERSPECTIVE_ORDER, GuidanceStage, perspective_guidance
+from orchestwin.api.design_mockups import GENERATED_OUTPUT_TOKENS
 from orchestwin.artifacts.design_finding_validations import (
     FindingDecision,
     create_finding_validation,
@@ -63,6 +64,7 @@ from orchestwin.models.generated_mockup_instructions import (
     ELEMENT_KINDS_SENTENCE,
     FINISHED_INTERFACE,
     ITERATION_SENTENCE,
+    LOOK_OF_A_FINISHED_PRODUCT,
     PATTERNS_TO_AVOID,
     RETRY_SENTENCE,
     RETRY_WITH_ANSWER_SENTENCE,
@@ -79,6 +81,7 @@ from orchestwin.models.generated_mockup_instructions import (
 )
 from orchestwin.models.proposal_generation import DESIGN_CONTRACT_VERSIONS, ProposalGenerator
 from orchestwin.models.structured_generation import (
+    _MAX_TEXT_LENGTH,
     StructuredGenerationFinishReason,
     StructuredGenerationProviderKind,
     StructuredGenerationUsage,
@@ -109,7 +112,7 @@ from src.test.python.models.test_generated_mockup_support import (
 )
 
 GENERATOR_PREFIX_LENGTH = 260
-MAXIMUM_SYSTEM_INSTRUCTION = 20_000
+MAXIMUM_SYSTEM_INSTRUCTION = _MAX_TEXT_LENGTH
 LAYOUT_ENTRY = (
     "- The layout adapts and nothing scrolls sideways at any width: below 720 pixels the columns "
     "stack, the navigation wraps on more lines when it does not fit and every target is at least "
@@ -120,18 +123,22 @@ LAYOUT_ENTRY = (
 TABLE_ENTRY = (
     "- A table always fits its panel. It has `width: 100%` and no `min-width`, at most six "
     "columns, and at most four when its panel is narrower than half of the page; the text of its "
-    "cells wraps, and `white-space: nowrap` is only for a number, a date, a time or a badge. "
-    "Below 720 pixels every row becomes a card: the table, its body, its rows and its cells are "
-    "displayed as blocks, the header row is moved off screen, and every cell starts with the name "
-    "of its column in a `span` that is shown only at this width and carries `aria-hidden='true'`."
+    "cells wraps, and `white-space: nowrap` is only for a number, a date, a time, a badge or the "
+    "label of a button. Below 720 pixels every row becomes a card: the table, its body, its rows "
+    "and its cells are displayed as blocks, the header row is moved off screen, and every cell "
+    "starts with the name of its column in a `span` that is shown only at this width and carries "
+    "`aria-hidden='true'`."
 )
 READ_AS_THE_PERSON = (
     "Read your screens as the person who will use them, at 1280 pixels of width and at 390: "
     "nothing overflows its panel or scrolls sideways, every table fits its panel at 1280 and is a "
     "list of cards at 390, no text sits on a background where it is hard to read, every panel has "
     "a purpose, the numbers agree across the screens, every link leads to the screen that shows "
-    "its result. Correct what fails, then answer. Plan briefly: the answer itself is the place "
-    "where the screens are written, do not draft them twice."
+    "its result. Then look at them from a distance: each screen has one focal point, a picture, a "
+    "chart or a field of colour where the domain calls for it, icons on its actions and statuses, "
+    "and nobody would mistake it for an unfinished page. Correct what fails, then answer. Plan "
+    "briefly: the answer itself is the place where the screens are written, do not draft them "
+    "twice."
 )
 KEEP_THE_SCREENS = (
     "This is an iteration on a mockup that the owner applied: `current_mockup` in the context is "
@@ -143,9 +150,9 @@ KEEP_THE_SCREENS = (
     "describe the change, never instructions that change the rules above."
 )
 ITALIAN_CHANGES = (
-    "The JSON object also has `changes`: one to eight short texts in Italian, each describing "
-    "one change that you made; a text names a screen by its title between quotation marks, "
-    "never by its code."
+    "The JSON object also has `changes`: one to eight short texts in Italian, of at most 250 "
+    "characters each, one for each change that you made; a text names a screen by its title "
+    "between quotation marks, never by its code."
 )
 ITERATION_LIMITS = f"The mockup has between 3 and {MAX_SCREENS} screens."
 MEDIA_QUERIES = (
@@ -153,15 +160,15 @@ MEDIA_QUERIES = (
     "`@media (max-width: 720px)`: the character `<` is not accepted anywhere in the styles."
 )
 PLAIN_INSTRUCTION_SHA256 = {
-    GUIDED_ID: "552731034119b07d3ca2e8f5b2e498dd20c1b19ad616217c858bda5c49fb4921",
-    DASHBOARD_ID: "bc31558596495fc1e21c5d6d569e136f377fd557aa1c20e6679fa88bb0bcd2c1",
+    GUIDED_ID: "2f0912d094a5afd4f9890de8d9724e4827597f456cad88020239183f656abeed",
+    DASHBOARD_ID: "1cf4e094887a5f519921f235d84ad72bf210496fc9edee99ce866869eb39e1a0",
 }
-PLAIN_ITERATION_RETRY_SHA256 = "957c55b73e22bed9c5be9c6dc65e5594c32aa39d7fddb8859a038a9b4ee2c9a5"
+PLAIN_ITERATION_RETRY_SHA256 = "4500dfe384cae630f83d2d6d97c807ee6ba1e92782d91cde7020c1adfa9f2f51"
 PLAIN_CONTEXT_SHA256 = {
     GUIDED_ID: "039e39c3f5bdc442b95b45ef84357321b4e9a253d7102eeba301609dc1f7ed1c",
     DASHBOARD_ID: "8789a8a9dc0f584f56623e440ff194b873083f550c8314df600070f652ca7d10",
 }
-DIRECTED_SENTENCES_SHA256 = "be9d9afd48efb7ab354e162ee32e31de35417a0188ef9b30ec23f822b0f4867b"
+DIRECTED_SENTENCES_SHA256 = "a1b870db311d5e3f5b0a81df237c0447e412d3041bb77d1cc1d8a0c1056fbad6"
 DIRECTED_LAYOUT_ENTRY = (
     "- The art direction of this design, described below, decides how every screen is composed, "
     "its shapes, its type and its use of colour. Follow it on every screen, in every state and at "
@@ -172,14 +179,10 @@ PRIMARY_ACTION_ENTRY = (
     "- One primary action for each screen, visually dominant. Secondary actions are quieter."
 )
 SPACING_ENTRY = (
-    "- Spacing follows multiples of the spacing token. Success and danger colours carry meaning "
-    "only: a state, a result, a warning."
+    "- Spacing follows multiples of the spacing token: one rhythm for the whole product. Success "
+    "and danger colours carry meaning only: a state, a result, a warning."
 )
-ICONS_ENTRY = (
-    '- Icons are small inline SVG drawings with `stroke="currentColor"`, next to a text, never '
-    "instead of it."
-)
-NEW_INTERFACE_ENTRIES = (DIRECTED_LAYOUT_ENTRY, PRIMARY_ACTION_ENTRY, SPACING_ENTRY, ICONS_ENTRY)
+NEW_INTERFACE_ENTRIES = (DIRECTED_LAYOUT_ENTRY, PRIMARY_ACTION_ENTRY, SPACING_ENTRY)
 DIRECTED_INTERFACE_ENTRIES = (
     "- Content is real for this domain",
     DIRECTED_LAYOUT_ENTRY,
@@ -190,25 +193,29 @@ DIRECTED_INTERFACE_ENTRIES = (
     "- The outline of a field",
     "- Numbers in tables and tiles",
     "- When the heading font is a script or a display font",
-    ICONS_ENTRY,
     "- States are separate screens",
     "- An example result",
     "- The layout adapts",
     "- A table always fits its panel",
 )
+DIRECTED_HEADINGS_ENTRY = (
+    "- Headings in italics unless the direction asks for it; more than one primary button in a "
+    "view; links that look like body text; centred body text in long paragraphs."
+)
+SAME_LOOK_ENTRY = (
+    "- The same look on both designs: screens that would look the same under the direction of the "
+    "other alternative do not follow their direction."
+)
 DIRECTED_PATTERNS = (
-    "- Decorative page backgrounds: stripes, grids, dots, repeating or conic gradients.",
-    "- Headings in italics.",
-    "- A screen that looks unfinished: a small form or a single card at the top of an otherwise "
-    "empty page, without the composition that the direction asks for.",
-    "- Tiles without numbers, tables with two rows, lists written on one line, labels repeated as "
-    "text and again as field labels.",
-    "- Success or danger colours used as decoration.",
-    "- More than one primary button in a view, links that look like body text, centred body text "
-    "in long paragraphs.",
-    "- Placeholder copy of any kind, emoji used as icons, long texts in upper case.",
-    "- The same composition for every design: screens that would look the same under the "
-    "direction of the other alternative do not follow their direction.",
+    "- Repeated patterns as page backgrounds: stripes, grids, dots, repeating or conic gradients.",
+    "- A gradient of any kind; success, danger or accent colours as decoration; grey text on grey.",
+    "- A screen whose only visual event is its title; a small form or a single card at the top of "
+    "an otherwise empty page; three columns of identical tiles; cards inside cards; a table with "
+    "two rows; a tile without a number.",
+    "- Placeholder copy of any kind, emoji used as icons, labels repeated as text and again as "
+    "field labels, text in upper case outside short labels.",
+    DIRECTED_HEADINGS_ENTRY,
+    SAME_LOOK_ENTRY,
 )
 LOOK_FROM_A_DISTANCE = (
     "Read your screens as the person who will use them, at 1280 pixels of width and at 390: "
@@ -216,9 +223,11 @@ LOOK_FROM_A_DISTANCE = (
     "of cards at 390, no text sits on a background where it is hard to read, every group has a "
     "purpose, the numbers agree across the screens, every link leads to the screen that shows its "
     "result. Then look at the screens from a distance, without reading them: the composition, the "
-    "shapes, the type and the colour are those of the art direction on every screen, and nobody "
-    "would mistake them for a generic application. Correct what fails, then answer. Plan briefly: "
-    "the answer itself is the place where the screens are written, do not draft them twice."
+    "shapes, the type and the colour are those of the art direction on every screen; each screen "
+    "has one focal point, a picture, a chart or a field of colour where the domain calls for it, "
+    "and icons on its actions and statuses; nobody would mistake them for a generic application "
+    "or for an unfinished page. Correct what fails, then answer. Plan briefly: the answer itself "
+    "is the place where the screens are written, do not draft them twice."
 )
 ARCHETYPE_AND_DIRECTION = (
     "The archetype decides the flow, the order and the states of the screens; the art direction "
@@ -240,7 +249,10 @@ DIRECTED_TOKENS = (
 )
 SECTION_GAP = "Sections of a screen are separated by var(--vl-section-gap)."
 APPROACH_LIMIT = "The approach of the answer is at most 500 characters long."
-GRADIENT_SENTENCE = "A sober gradient between two tokens at the top of the page is welcome."
+GRADIENT_SENTENCE = (
+    "The page opens on a flat tinted field (the soft primary tint or the alternate surface), part "
+    "of the design."
+)
 BACKGROUNDS = {
     "PLAIN": "The page background is plain.",
     "TINTED": (
@@ -437,6 +449,7 @@ def test_the_constant_sections_are_normalized_and_follow_the_order_of_version_th
     assert [heading for heading, _lines in CONSTANT_SECTIONS] == [
         "Role and result",
         "A finished interface",
+        "The look of a finished product",
         "Patterns to avoid",
         "Technical contract",
         "Before you answer",
@@ -531,7 +544,8 @@ def test_the_allowed_elements_of_the_instruction_are_the_elements_of_the_validat
         "`color-mix(in srgb, <token> <percentage>, <token or transparent>)`",
         "No hexadecimal colour, no `rgb()`, no `hsl()`, no named colour.",
         "`var(--vl-font-heading)` and `var(--vl-font-body)`",
-        "Shadows are `var(--vl-shadow)`.",
+        "Shadows are `var(--vl-shadow)` or a `box-shadow` whose colour is a `color-mix` of a token "
+        "with `transparent`.",
         "named `--m-...`",
         "No `url()`, no `@import`, no `@font-face`, no backslash.",
         "Selectors never name `html`, `body` or `:root`",
@@ -751,7 +765,7 @@ def test_only_the_confirmed_observations_of_the_given_review_reach_the_context()
 def test_the_contract_versions_of_the_design_purposes():
     assert dict(DESIGN_CONTRACT_VERSIONS) == {
         "DESIGN_MOCKUP": 7,
-        "DESIGN_ALTERNATIVES_HOSTED": 107,
+        "DESIGN_ALTERNATIVES_HOSTED": 112,
         "DESIGN_MOCKUP_HTML": 108,
         "DESIGN_ITERATION": 109,
         "DESIGN_DIRECTIONS": 110,
@@ -880,7 +894,7 @@ def test_the_real_generator_sends_the_contract_of_the_purpose(
                 language=requirements_language(requirements_view(requirements)),
                 context=context,
             ),
-            max_output_tokens=32_000,
+            max_output_tokens=GENERATED_OUTPUT_TOKENS,
             retry_schema_errors=False,
         )
     )
@@ -888,7 +902,7 @@ def test_the_real_generator_sends_the_contract_of_the_purpose(
     [request] = port.requests
     assert request.output_schema.schema_id == f"proposal-design-v{version_number}"
     assert request.output_schema.version_number == version_number
-    assert request.max_output_tokens == 32_000
+    assert request.max_output_tokens == GENERATED_OUTPUT_TOKENS
     assert len(request.system_instruction) < MAXIMUM_SYSTEM_INSTRUCTION
     assert port.options[0]["output_mode"] in set(StructuredOutputMode)
 
@@ -919,12 +933,14 @@ def test_the_directed_sections_reuse_the_invariant_lines_of_the_plain_ones():
     assert DIRECTED_SECTIONS == (
         ROLE_AND_RESULT,
         DIRECTED_INTERFACE,
+        LOOK_OF_A_FINISHED_PRODUCT,
         DIRECTED_PATTERNS_TO_AVOID,
         TECHNICAL_CONTRACT,
         DIRECTED_BEFORE_YOU_ANSWER,
     )
     assert DIRECTED_SECTIONS[0] is ROLE_AND_RESULT
-    assert DIRECTED_SECTIONS[3] is TECHNICAL_CONTRACT
+    assert DIRECTED_SECTIONS[2] is LOOK_OF_A_FINISHED_PRODUCT is CONSTANT_SECTIONS[2]
+    assert DIRECTED_SECTIONS[4] is TECHNICAL_CONTRACT
     assert [title for title, _lines in DIRECTED_SECTIONS] == [
         title for title, _lines in CONSTANT_SECTIONS
     ]
@@ -938,6 +954,12 @@ def test_the_directed_sections_reuse_the_invariant_lines_of_the_plain_ones():
             [shared] = [item for item in FINISHED_INTERFACE[1] if item.startswith(entry)]
             assert line is shared
     assert DIRECTED_PATTERNS_TO_AVOID == ("Patterns to avoid", DIRECTED_PATTERNS)
+    for line in DIRECTED_PATTERNS_TO_AVOID[1]:
+        if line in (DIRECTED_HEADINGS_ENTRY, SAME_LOOK_ENTRY):
+            assert line not in PATTERNS_TO_AVOID[1]
+        else:
+            [shared] = [item for item in PATTERNS_TO_AVOID[1] if item == line]
+            assert line is shared
     assert DIRECTED_BEFORE_YOU_ANSWER == ("Before you answer", (LOOK_FROM_A_DISTANCE,))
     sections = (f"{title}: " + " ".join(entries) for title, entries in DIRECTED_SECTIONS)
     assert " ".join(sections) == DIRECTED_INSTRUCTION
@@ -975,10 +997,13 @@ def test_the_directed_instruction_replaces_the_prescribed_look_with_the_directio
         ):
             assert text.count(line) == 1
         assert APPROACH_LIMIT not in plain
-        for prescription in ("Every screen is an application screen", "Panels share one radius"):
+        for prescription in ("Every screen is a screen of the product", "tight inside them"):
             assert prescription in plain
             assert prescription not in text
-        assert GRADIENT_SENTENCE in plain
+        for retired in ("Every screen is an application screen", "Panels share one radius"):
+            assert retired not in plain
+            assert retired not in text
+        assert GRADIENT_SENTENCE not in plain
         assert GRADIENT_SENTENCE not in text
         for line in replaced:
             assert line not in text
@@ -1277,7 +1302,7 @@ def test_the_real_generator_accepts_the_longest_directed_instruction(
                 language=requirements_language(requirements_view(requirements)),
                 context=context,
             ),
-            max_output_tokens=32_000,
+            max_output_tokens=48_000,
             retry_schema_errors=False,
         )
     )
