@@ -400,6 +400,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Direzione visiva: {name} ({axes})",
         "en": "Visual direction: {name} ({axes})",
     },
+    "design.alternative_system": {
+        "it": "Sistema di design: {name}",
+        "en": "Design system: {name}",
+    },
+    "design.system_apple_hig": {
+        "it": "Apple Human Interface Guidelines",
+        "en": "Apple Human Interface Guidelines",
+    },
     "design.distance_heading": {
         "it": "Distanza fra le alternative",
         "en": "Distance between the alternatives",
@@ -585,10 +593,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "seconds and try again (attempt {attempt} of {attempts}).",
     },
     "design.about_design_and_mockups": {
-        "it": "Adesso preparo le alternative di design; poi faccio disegnare insieme i mockup "
-        "di due alternative, così puoi vederli nel browser.",
-        "en": "I am about to prepare the design alternatives; then I have the mockups of two "
-        "alternatives drawn at the same time, so that you can see them in the browser.",
+        "it": "Adesso preparo le alternative di design; poi faccio disegnare insieme i loro "
+        "mockup, così puoi vederli nel browser.",
+        "en": "I am about to prepare the design alternatives; then I have their mockups drawn "
+        "at the same time, so that you can see them in the browser.",
     },
     "design.about_design": {
         "it": "Adesso preparo le alternative di design.",

@@ -269,6 +269,7 @@ class Alternative:
     choices: Mapping[str, str]
     recommended: bool
     direction: Direction | None = None
+    design_system: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,6 +352,7 @@ class DesignState:
                     },
                     recommended=identifier == recommended,
                     direction=_direction(visual.get("direction")),
+                    design_system=_optional_text(visual.get("design_system")),
                 )
             )
         return tuple(found)
@@ -630,6 +632,9 @@ def show_alternative(
     direction = direction_line(context, alternative)
     if direction is not None:
         wrapped(context, direction, indent="  ")
+    system = system_line(context, alternative)
+    if system is not None:
+        wrapped(context, system, indent="  ")
     if mockups and state.generated and state.chosen is None:
         ready = alternative.id in state.documents
         console.say("design.mockup_present" if ready else "design.mockup_absent")
@@ -905,6 +910,11 @@ def direction_line(context: CommandContext, alternative: Alternative) -> str | N
         return None
     words = directions.value_labels(context.text, direction.axes)
     return context.text("design.alternative_direction", name=direction.name, axes=", ".join(words))
+
+
+def system_line(context: CommandContext, alternative: Alternative) -> str | None:
+    name = directions.system_name(context.text, alternative.design_system)
+    return None if name is None else context.text("design.alternative_system", name=name)
 
 
 def _latest_folder(client: StudioClient, project_id: str) -> int | None:

@@ -173,6 +173,7 @@ from orchestwin.models.design_change import (
     target_label,
 )
 from orchestwin.models.design_change import TARGET_FIELDS as CHANGE_TARGET_FIELDS
+from orchestwin.models.design_systems import APPLE_HIG, system_direction
 from orchestwin.models.evidence_update import (
     EvidenceUpdateOutput,
     bind_evidence_update,
@@ -1084,6 +1085,32 @@ ALTERNATIVES = {
         },
     ),
 }
+SYSTEM_ALTERNATIVES = {
+    "it": {
+        "code": "DES-003",
+        "approach": "INFORMATION_RICH",
+        "title": "Calcolo in stile iPhone",
+        "summary": "Importo, mancia e totale su pannelli chiari, come in un'app di sistema.",
+        "rationale": "Chi usa un iPhone ritrova le forme e i gesti che conosce già.",
+        "product_name": "Mancia",
+        "archetype": "SINGLE_CARD",
+        "hue": "COBALT",
+        "mode": "LIGHT",
+        "tone": "CALM",
+    },
+    "en": {
+        "code": "DES-003",
+        "approach": "INFORMATION_RICH",
+        "title": "iPhone-style calculation",
+        "summary": "Amount, tip and total on clear panels, as in an app of the system.",
+        "rationale": "People who use an iPhone find the shapes and gestures they already know.",
+        "product_name": "Tip",
+        "archetype": "SINGLE_CARD",
+        "hue": "COBALT",
+        "mode": "LIGHT",
+        "tone": "CALM",
+    },
+}
 DIRECTED_ALTERNATIVES = {
     "DES-001": (
         {
@@ -1208,6 +1235,10 @@ CRITIQUES = {
             ("Tutto a portata di mano", "Una sola scheda mi basta."),
             ("Troppo scuro", "Con il tema scuro leggo male i numeri."),
         ),
+        "DES-003": (
+            ("Familiare", "Sembra un'app che uso ogni giorno."),
+            ("Ordinato", "I pannelli tengono separati importo e mancia."),
+        ),
     },
     "en": {
         "DES-001": (
@@ -1217,6 +1248,10 @@ CRITIQUES = {
         "DES-002": (
             ("Everything at hand", "One card is enough for me."),
             ("Too dark", "With the dark theme I misread the numbers."),
+        ),
+        "DES-003": (
+            ("Familiar", "It feels like an app I use every day."),
+            ("Tidy", "The panels keep the amount and the tip apart."),
         ),
     },
 }
@@ -2874,6 +2909,7 @@ class FakeStudio:
         job_polls: int = 2,
         now: Callable[[], datetime] | None = None,
         directions: bool = False,
+        design_system: bool = False,
         access_mode: str = ACCOUNTS,
         local_owner_email: str = LOCAL_OWNER_EMAIL,
     ) -> None:
@@ -2883,6 +2919,8 @@ class FakeStudio:
             raise ValueError("access_mode must be ACCOUNTS or LOCAL_OWNER")
         if directions and not hosted:
             raise ValueError("directions need a hosted model")
+        if design_system and not directions:
+            raise ValueError("a design system needs the directions")
         if isinstance(twins, bool) or not isinstance(twins, int) or not 1 <= twins <= MAX_TWINS:
             raise ValueError(f"twins must be between 1 and {MAX_TWINS}")
         if isinstance(job_polls, bool) or not isinstance(job_polls, int) or job_polls < 0:
@@ -2897,6 +2935,7 @@ class FakeStudio:
         self.twins = twins
         self.hosted = hosted
         self.directions = directions
+        self.design_system = design_system
         self.billing = billing
         self.job_polls = job_polls
         self.requests: list[RecordedRequest] = []
@@ -6703,14 +6742,21 @@ class FakeStudio:
             )
             for twin in twins
         )
-        for spec in ALTERNATIVES[self.language]:
-            direction = self._direction(spec["code"]) if self.directions else None
+        system = SYSTEM_ALTERNATIVES[self.language] if self.design_system else None
+        for spec in (*ALTERNATIVES[self.language], *(() if system is None else (system,))):
+            if spec is system:
+                direction = system_direction(APPLE_HIG)
+            elif self.directions:
+                direction = self._direction(spec["code"])
+            else:
+                direction = None
             language = create_visual_language(
                 choices=VisualChoices.from_snapshot(_choices(spec, direction)),
                 product_name=spec["product_name"],
                 rationale=spec["rationale"],
                 twin_fit=fits,
                 direction=direction,
+                design_system=APPLE_HIG if spec is system else None,
             )
             alternatives.append(
                 {
@@ -6839,8 +6885,9 @@ class FakeStudio:
 
     def _screens(self, code: str, variant: int) -> list[dict[str, object]]:
         screens = []
+        screens_of = SCREENS[self.language]
         for index, (screen, title, state, heading, markup) in enumerate(
-            SCREENS[self.language][code]
+            screens_of.get(code) or screens_of["DES-001"]
         ):
             shown = ITERATED_HEADING[self.language] if index == 0 and variant > 0 else heading
             screens.append(

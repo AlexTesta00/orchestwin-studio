@@ -292,6 +292,33 @@ def test_mockup_elements_and_alternatives_are_visible_before_choice_and_when_out
     assert len([node for node in unchosen["nodes"] if node["kind"] == "DESIGN_ALTERNATIVE"]) == 2
 
 
+@pytest.mark.parametrize("system", ["apple-hig", None, ""], ids=["system", "none", "empty"])
+def test_the_declared_direction_names_the_design_system_only_when_the_alternative_has_one(system):
+    from orchestwin.models.design_systems import APPLE_HIG, system_direction
+
+    version = design_version().to_snapshot()
+    direction = system_direction(APPLE_HIG).to_snapshot()
+    alternatives = version["package"]["alternatives"]
+    for alternative in alternatives:
+        alternative["visual_language"] = {"direction": deepcopy(direction)}
+    plain = build_why_document(project_id="p", stages={"design": deepcopy(version)})
+    alternatives[1]["visual_language"]["design_system"] = system
+    document = build_why_document(project_id="p", stages={"design": version})
+    declared = {
+        node["code"]: node["declared_context"]["direction"]
+        for node in document["nodes"]
+        if node["kind"] == "DESIGN_ALTERNATIVE"
+    }
+    first, second = (item["code"] for item in alternatives)
+
+    assert "design_system" not in declared[first]
+    assert ("design_system" in declared[second]) is bool(system)
+    if system:
+        assert declared[second].pop("design_system") == APPLE_HIG.identifier
+    assert document == plain
+    assert declared[second]["name"] == "Apple Human Interface Guidelines"
+
+
 def test_missing_version_does_not_replace_a_historical_claim_with_current():
     stages, evidence, twin, _ = chain()
     source_ref = stages["requirements"]["specification"]["requirements"][0]["sources"][0]
