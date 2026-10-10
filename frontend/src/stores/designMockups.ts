@@ -288,6 +288,26 @@ const REASON_MESSAGES: Readonly<Record<string, LocalizedText>> = {
     en: "Every screen showed the normal state: no error, confirmation or empty list.",
     it: "Tutte le schermate mostravano lo stato normale: nessun errore, conferma o elenco vuoto.",
   },
+  WEAK_CONTROL_BORDER: {
+    en: "The border of a field or of a button is too light to be seen.",
+    it: "Il bordo di un campo o di un pulsante è troppo chiaro per essere visto.",
+  },
+  ICON_UNKNOWN: {
+    en: "The Studio replaced an icon whose name it does not know with a plain one: the mockup is still valid.",
+    it: "Lo Studio ha sostituito con un'icona semplice un'icona dal nome sconosciuto: il mockup resta valido.",
+  },
+  PLACEHOLDER_EMPTIED: {
+    en: "The Studio emptied an icon or picture placeholder that held a drawing of its own: the mockup is still valid.",
+    it: "Lo Studio ha svuotato il segnaposto di un'icona o di una foto che conteneva un disegno: il mockup resta valido.",
+  },
+  TEXT_COLOUR_REPLACED: {
+    en: "The Studio replaced the colour of a text that was hard to read with a palette colour that reads well: the mockup is still valid.",
+    it: "Lo Studio ha sostituito il colore di un testo poco leggibile con un colore della tavolozza che si legge bene: il mockup resta valido.",
+  },
+  CONTROL_BORDER_REPLACED: {
+    en: "The Studio made the border of a field or of a button clearly visible: the mockup is still valid.",
+    it: "Lo Studio ha reso ben visibile il bordo di un campo o di un pulsante: il mockup resta valido.",
+  },
 };
 
 const GENERIC_FAILURE: LocalizedText = {

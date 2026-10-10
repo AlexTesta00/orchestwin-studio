@@ -85,6 +85,7 @@ export interface WhyNode {
       candidates: number;
       origin: "MODEL";
       selected_by: "STUDIO";
+      design_system?: string | null;
     };
   };
 }

@@ -247,6 +247,7 @@ export interface VisualLanguagePayload {
   tokens: Record<string, string>;
   twin_fit: TwinFitPayload[];
   direction?: VisualDirection | null;
+  design_system?: string | null;
 }
 
 export interface DesignAlternativePayload {

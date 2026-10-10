@@ -3094,7 +3094,7 @@ describe("ProjectDesignFlow", () => {
     await barOf(wrapper).get('[data-testid="decision-secondary"]').trigger("click");
     const note = wrapper.get('[data-testid="decision-note"]');
     expect(note.attributes("placeholder")).toBe(
-      "Write what is wrong: the request is recorded with your note. For a different design, choose the other alternative or regenerate the alternatives.",
+      "Write what is wrong: the request is recorded with your note. For a different design, choose another alternative or regenerate the alternatives.",
     );
     expect(barOf(wrapper).text()).toContain(
       "The current design does not change: your note stays in the history of the design.",

@@ -55,6 +55,11 @@ interface DirectionView {
   origin: string;
 }
 
+interface SystemCopy {
+  label: string;
+  origin: string;
+}
+
 interface DistanceLevel {
   key: DistanceLevelKey;
   label: string;
@@ -172,6 +177,12 @@ const messages = {
     rules: "Rules",
     origin:
       "Proposed by the model among {n} candidates; chosen by the Studio because it is far from the other.",
+    systems: {
+      "apple-hig": {
+        label: "Apple guidelines",
+        origin: "Direction of the Apple Human Interface Guidelines design system.",
+      },
+    },
     adherence: "The mockup does not follow the direction on: {axes}",
     distance: "Distance between the alternatives",
     verdicts: {
@@ -267,6 +278,12 @@ const messages = {
     rules: "Regole",
     origin:
       "Proposta dal modello fra {n} candidate; scelta dallo Studio perché lontana dall'altra.",
+    systems: {
+      "apple-hig": {
+        label: "Linee guida Apple",
+        origin: "Direzione del sistema di design Apple Human Interface Guidelines.",
+      },
+    },
     adherence: "Il mockup non segue la direzione su: {axes}",
     distance: "Distanza fra le alternative",
     verdicts: {
@@ -336,6 +353,7 @@ const cards = computed(() =>
       busy: props.choosing === alternative.id,
       hint: props.hints[alternative.id] ?? null,
       notes: notesOf(alternative),
+      system: systemOf(alternative),
       direction: directionOf(alternative),
       layout: layoutRow(alternative),
       fits: fitsOf(alternative),
@@ -371,17 +389,26 @@ function axisLabels(axes: readonly string[]): string[] {
   );
 }
 
+function systemOf(alternative: DesignAlternativePayload): SystemCopy | null {
+  const identifier = alternative.visual_language?.design_system ?? null;
+  const systems: Readonly<Record<string, SystemCopy>> = copy.value.systems;
+  return identifier !== null && Object.hasOwn(systems, identifier)
+    ? (systems[identifier] ?? null)
+    : null;
+}
+
 function directionOf(alternative: DesignAlternativePayload): DirectionView | null {
   const direction = alternative.visual_language?.direction ?? null;
   if (direction === null) {
     return null;
   }
+  const system = systemOf(alternative);
   return {
     name: direction.name,
     concept: direction.concept,
     rules: direction.rules,
     chips: axisChips(direction),
-    origin: fill(copy.value.origin, { n: direction.candidates }),
+    origin: system === null ? fill(copy.value.origin, { n: direction.candidates }) : system.origin,
   };
 }
 
@@ -814,6 +841,13 @@ onBeforeUnmount(() => {
             data-testid="alternative-recommended"
           >
             · {{ copy.recommended }}
+          </span>
+          <span
+            v-if="card.system !== null"
+            class="inline-flex max-w-full items-center rounded-pill border border-night-line-strong px-2.5 py-0.5 text-xs font-semibold break-words text-on-night-2"
+            data-testid="alternative-system"
+          >
+            {{ card.system.label }}
           </span>
         </div>
         <h3 class="-mt-1 text-[22px] leading-tight font-semibold tracking-[-0.015em] break-words">

@@ -504,14 +504,14 @@ const messages = {
     barDrawing:
       "The designer is drawing the new version you asked for: you can wait for it or approve the current one.",
     barRevision:
-      "You asked for changes: ask the designer for a new version, choose the other alternative or regenerate the alternatives.",
+      "You asked for changes: ask the designer for a new version, choose another alternative or regenerate the alternatives.",
     barRequestIteration: "Until you apply the new version, the current design stays as it is.",
     barRequestRevision:
       "The current design does not change: your note stays in the history of the design.",
     iterationPlaceholder:
       "Write what to change: the designer draws a new version and you decide whether to apply it.",
     revisionPlaceholder:
-      "Write what is wrong: the request is recorded with your note. For a different design, choose the other alternative or regenerate the alternatives.",
+      "Write what is wrong: the request is recorded with your note. For a different design, choose another alternative or regenerate the alternatives.",
     keepRule: "Keep it as a rule for the next versions",
     keepRuleHint: "The designer will follow it every time it draws a new version.",
     submitFailed:
@@ -532,7 +532,7 @@ const messages = {
     rejectedTitle: "You rejected this design",
     cancelledTitle: "You cancelled the approval",
     closedText:
-      "To change it, choose the other alternative, ask for changes or regenerate the alternatives: the new version comes back here for your approval.",
+      "To change it, choose another alternative, ask for changes or regenerate the alternatives: the new version comes back here for your approval.",
     yourNote: "Your note",
     ready: "Design approved by you. Next: the Dossier.",
     reanchoredReview:
@@ -696,13 +696,13 @@ const messages = {
     barDrawing:
       "Il designer sta disegnando la nuova versione che hai chiesto: puoi aspettarla o approvare quella attuale.",
     barRevision:
-      "Hai chiesto modifiche: chiedi al designer una nuova versione, scegli l'altra alternativa o rigenera le alternative.",
+      "Hai chiesto modifiche: chiedi al designer una nuova versione, scegli un'altra alternativa o rigenera le alternative.",
     barRequestIteration: "Finché non applichi la nuova versione, il design attuale resta com'è.",
     barRequestRevision: "Il design attuale non cambia: la tua nota resta nella storia del design.",
     iterationPlaceholder:
       "Scrivi che cosa cambiare: il designer disegna una nuova versione e decidi tu se applicarla.",
     revisionPlaceholder:
-      "Scrivi che cosa non va: la richiesta viene registrata con la tua nota. Per un design diverso scegli l'altra alternativa o rigenera le alternative.",
+      "Scrivi che cosa non va: la richiesta viene registrata con la tua nota. Per un design diverso scegli un'altra alternativa o rigenera le alternative.",
     keepRule: "Tienila come regola per le prossime versioni",
     keepRuleHint: "Il designer la rispetterà ogni volta che disegna una nuova versione.",
     submitFailed:
@@ -723,7 +723,7 @@ const messages = {
     rejectedTitle: "Hai respinto questo design",
     cancelledTitle: "Hai annullato l'approvazione",
     closedText:
-      "Per cambiarlo scegli l'altra alternativa, chiedi modifiche o rigenera le alternative: la nuova versione torna qui per la tua approvazione.",
+      "Per cambiarlo scegli un'altra alternativa, chiedi modifiche o rigenera le alternative: la nuova versione torna qui per la tua approvazione.",
     yourNote: "La tua nota",
     ready: "Design approvato da te. Ora il Dossier.",
     reanchoredReview:
