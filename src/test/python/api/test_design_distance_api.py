@@ -4,7 +4,7 @@ import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -18,7 +18,13 @@ from orchestwin.artifacts.design_distance import design_distance_report
 from orchestwin.config import ApplicationSettings, LogLevel, RuntimeEnvironment
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
 from orchestwin.models.generated_mockup_drafts import bind_generated_mockup
-from src.test.python.artifacts.test_visual_directions import axes, directed_language, direction
+from src.test.python.artifacts.test_visual_directions import (
+    SYSTEM_NAME,
+    axes,
+    directed_language,
+    direction,
+    system_direction,
+)
 from src.test.python.models.test_generated_mockup_support import (
     DASHBOARD,
     DASHBOARD_ID,
@@ -31,6 +37,7 @@ from src.test.python.models.test_generated_mockup_support import (
     MemoryMockupStore,
     ScriptedMockupGenerator,
     applied_package,
+    critique,
     draft,
     package,
     requirements_version,
@@ -38,6 +45,7 @@ from src.test.python.models.test_generated_mockup_support import (
 )
 
 NOW = datetime(2026, 10, 4, 9, 0, tzinfo=UTC)
+THIRD_ID = UUID("00000000-0000-4000-8000-000000002412")
 PREFIX = "/api/v1"
 DISTANCE = f"{PREFIX}/projects/{PROJECT_ID}/design/distance"
 TEMPLATE = f"{PREFIX}/projects/{{project_id}}/design/distance"
@@ -227,6 +235,58 @@ def test_an_alternative_without_a_kept_mockup_has_no_mockup_in_the_report() -> N
     assert body["pairs"][0]["verdict"] == "UNKNOWN"
     assert body["alternatives"][0]["adherence"]["available"] is True
     assert body["alternatives"][1]["adherence"] == {"available": False, "axes": {}}
+
+
+def three_alternatives():
+    base = directed(package())
+    dashboard = next(item for item in base.alternatives if item.id == DASHBOARD_ID)
+    third = replace(
+        dashboard,
+        id=THIRD_ID,
+        code="DES-003",
+        visual_language=directed_language(dashboard.visual_language, system_direction()),
+    )
+    return replace(
+        base,
+        alternatives=(*base.alternatives, third),
+        critiques=(*base.critiques, critique(THIRD_ID, "CRQ-003")),
+    )
+
+
+def test_three_kept_mockups_are_measured_on_every_pair() -> None:
+    versions = DesignVersions(three_alternatives())
+    version = versions.versions[-1]
+    kept = {
+        alternative_id: kept_result(version, alternative_id, name)
+        for alternative_id, name in (
+            (GUIDED_ID, GUIDED),
+            (DASHBOARD_ID, DASHBOARD),
+            (THIRD_ID, DASHBOARD),
+        )
+    }
+    store = KeptMockups({key: result for key, (result, _mockup) in kept.items()})
+    client = client_for(runtime(ScriptedMockupGenerator(), store, versions))
+
+    answer = client.get(DISTANCE)
+
+    mockups = {key: mockup for key, (_result, mockup) in kept.items()}
+    body = answer.json()
+    assert answer.status_code == 200
+    assert body == wire(design_distance_report(version, mockups))
+    assert DesignDistancePayload.model_validate(body).model_dump(mode="json") == body
+    assert [(item["first"], item["second"]) for item in body["pairs"]] == [
+        ("DES-001", "DES-002"),
+        ("DES-001", "DES-003"),
+        ("DES-002", "DES-003"),
+    ]
+    assert all(item["verdict"] in {"FAR", "CLOSE"} for item in body["pairs"])
+    assert [item["direction"] for item in body["alternatives"]] == [
+        "Registro stampato",
+        "Banco di lavoro",
+        SYSTEM_NAME,
+    ]
+    assert all(item["adherence"]["available"] for item in body["alternatives"])
+    assert store.reads == [GUIDED_ID, DASHBOARD_ID, THIRD_ID]
 
 
 def test_a_project_without_a_design_answers_the_design_not_found_problem() -> None:
