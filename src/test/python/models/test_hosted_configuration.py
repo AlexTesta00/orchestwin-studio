@@ -93,10 +93,12 @@ def test_the_example_file_routes_design_to_opus_design_and_every_other_task_to_o
     )
     assert budget.period_start is None
     largest = design.max_tokens(max(GENERATED_OUTPUT_TOKENS, HOSTED_DESIGN_OUTPUT_TOKENS))
-    assert largest == 96_000
+    assert largest == 112_000
     estimate = cost_microusd(input_tokens=70_000, output_tokens=largest, prices=design.prices)
-    assert estimate == 2_200_000
-    assert estimate <= budget.per_generation_microusd
+    assert estimate == 2_520_000
+    assert estimate > budget.per_generation_microusd
+    fitting = cost_microusd(input_tokens=65_000, output_tokens=largest, prices=design.prices)
+    assert fitting == budget.per_generation_microusd
 
 
 def test_routes_resolve_purpose_then_task_then_default():

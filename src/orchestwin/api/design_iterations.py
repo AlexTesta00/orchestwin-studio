@@ -35,6 +35,7 @@ from orchestwin.artifacts.design_critique import (
 )
 from orchestwin.artifacts.design_critique_persistence import SqlAlchemyDesignCritiqueRepository
 from orchestwin.artifacts.design_packages import MAX_OWNER_ASSERTION_LENGTH, MAX_OWNER_ASSERTIONS
+from orchestwin.artifacts.visual_icons import mockup_resources
 from orchestwin.identity.domain import UserAccount
 from orchestwin.models.design_change import with_targeted_change
 from orchestwin.models.design_drafts import requirements_language, requirements_view
@@ -224,7 +225,7 @@ class DesignIterationApplication(ModelMockupApplication):
         bound = self.applied_mockup(current.package)
         merged = merged_assertions(current.package, assertions)
         alternative = self.drawable_alternative(current.package, bound.design_alternative_id)
-        self.hosted_route(DESIGN_ITERATION)
+        route = self.hosted_route(DESIGN_ITERATION)
         requirements = await self.grounded_requirements(owner_user_id, project_id, current)
         language = requirements_language(requirements_view(requirements))
         observations = await self.observations(owner_user_id, project_id, current, alternative)
@@ -238,6 +239,12 @@ class DesignIterationApplication(ModelMockupApplication):
             )
             redraw = critique_source_view(source, "en" if language is None else language["code"])
             attachments = critique_attachments(source, contents)
+        references = self.design_references(route, len(attachments))
+        if references is not None:
+            attachments = (*attachments, *references.attachments)
+        reference = None if references is None else references.view()
+        resources = mockup_resources()
+        system = self.alternative_design_system(alternative)
 
         def context_for(previous_answer, rejection):
             context = mockup_context(
@@ -256,6 +263,9 @@ class DesignIterationApplication(ModelMockupApplication):
                 previous_answer=previous_answer,
                 rejection=rejection,
                 redraw=redraw,
+                reference=reference,
+                resources=resources,
+                design_system=system,
             )
             if source is not None:
                 context["critique_source_id"] = str(source.id)

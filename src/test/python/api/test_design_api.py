@@ -19,6 +19,7 @@ from orchestwin.api.design import (
     create_design_router,
 )
 from orchestwin.api.services import ApplicationRuntime
+from orchestwin.artifacts.design import DesignApproach
 from orchestwin.artifacts.design_gate import (
     DesignGateDecisionResult,
     DesignGateDecisionStatus,
@@ -72,11 +73,17 @@ from src.test.python.artifacts.test_design_package_extension import (
     VERDICTS,
     fixture_package,
 )
-from src.test.python.artifacts.test_visual_directions import directed_package, direction
+from src.test.python.artifacts.test_visual_directions import (
+    directed_package,
+    direction,
+    system_language,
+)
 
 FIXTURE_PATH = Path(__file__).resolve().parents[1] / "artifacts" / "design_fixtures.py"
 DIFF_ID = UUID("00000000-0000-4000-8000-000000000701")
 GATE_ID = UUID("00000000-0000-4000-8000-000000000702")
+THIRD_ALTERNATIVE_ID = UUID("00000000-0000-4000-8000-000000000072")
+THIRD_CRITIQUE_ID = UUID("00000000-0000-4000-8000-000000000203")
 NOW = datetime(2026, 8, 20, 15, 0, tzinfo=UTC)
 
 
@@ -859,6 +866,96 @@ def visual_languages(package: dict) -> list[dict]:
         for item in package["alternatives"]
         if item["visual_language"] is not None
     ]
+
+
+def with_third_alternative(package, *, named: bool = True):
+    second = next(item for item in package.alternatives if item.visual_language is not None)
+    language = system_language(second.visual_language)
+    critique = next(item for item in package.critiques if item.design_alternative_id == second.id)
+    third = replace(
+        second,
+        id=THIRD_ALTERNATIVE_ID,
+        code="DES-003",
+        approach=DesignApproach.TASK_FOCUSED,
+        visual_language=language if named else replace(language, design_system=None),
+    )
+    return replace(
+        package,
+        alternatives=(*package.alternatives, third),
+        critiques=(
+            *package.critiques,
+            replace(
+                critique,
+                id=THIRD_CRITIQUE_ID,
+                code="CRQ-003",
+                design_alternative_id=THIRD_ALTERNATIVE_ID,
+            ),
+        ),
+    )
+
+
+@pytest.mark.parametrize("named", [True, False])
+def test_three_alternatives_round_trip_with_and_without_the_design_system(named: bool) -> None:
+    client, _generation, _queries, revisions, _gates = client_fixture()
+    package = with_third_alternative(design_version().package, named=named)
+    snapshot = package.to_snapshot()
+    payload = DesignPackagePayload.from_domain(package)
+    dumped = payload.model_dump(mode="json")
+
+    response = client.post(path("/revisions"), json={"package": dumped})
+
+    restored = DesignPackagePayload.model_validate(json.loads(json.dumps(dumped))).to_domain()
+    assert [item["code"] for item in dumped["alternatives"]] == ["DES-001", "DES-002", "DES-003"]
+    assert [language["design_system"] for language in visual_languages(dumped)] == [
+        None,
+        "apple-hig" if named else None,
+    ]
+    assert [
+        "design_system" in item.get("visual_language", {}) for item in snapshot["alternatives"]
+    ] == [False, False, named]
+    assert payload.to_domain().to_snapshot() == snapshot
+    assert restored.to_snapshot() == snapshot
+    assert restored == package
+    assert restored.content_hash == package.content_hash
+    assert response.status_code == 201
+    assert revisions.proposed == package
+
+
+def test_a_package_without_a_third_alternative_keeps_its_payload_snapshot() -> None:
+    package = design_version().package
+    dumped = DesignPackagePayload.from_domain(package).model_dump(mode="json")
+    omitted = json.loads(json.dumps(dumped))
+    for language in visual_languages(omitted):
+        del language["design_system"]
+
+    assert [language["design_system"] for language in visual_languages(dumped)] == [None]
+    assert DesignPackagePayload.model_validate(dumped).to_domain().to_snapshot() == (
+        package.to_snapshot()
+    )
+    assert DesignPackagePayload.model_validate(omitted).to_domain() == package
+    assert DesignPackagePayload.model_validate(dumped).to_domain().content_hash == (
+        package.content_hash
+    )
+
+
+def test_the_revision_endpoint_refuses_a_design_system_that_is_not_an_identifier() -> None:
+    client, _generation, _queries, revisions, _gates = client_fixture()
+    dumped = DesignPackagePayload.from_domain(
+        with_third_alternative(design_version().package)
+    ).model_dump(mode="json")
+
+    def variant(value: object) -> dict:
+        changed = json.loads(json.dumps(dumped))
+        visual_languages(changed)[1]["design_system"] = value
+        return changed
+
+    named = client.post(path("/revisions"), json={"package": variant("Apple HIG")})
+    typed = client.post(path("/revisions"), json={"package": variant(7)})
+
+    assert named.status_code == 422
+    assert named.json() == {"detail": {"code": "INVALID_DESIGN_PACKAGE"}}
+    assert typed.status_code == 422
+    assert revisions.proposed is None
 
 
 def test_the_current_design_without_directions_answers_null_and_converts_back() -> None:

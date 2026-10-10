@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
@@ -37,7 +38,10 @@ from orchestwin.api.design import (
     DesignRevisionService,
 )
 from orchestwin.api.human_validation import HumanValidationService
-from orchestwin.api.runtime_configuration import load_runtime_connection_settings
+from orchestwin.api.runtime_configuration import (
+    RuntimeConfigurationError,
+    load_runtime_connection_settings,
+)
 from orchestwin.api.sections import build_sections_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.artifacts.human_validation_runtime import SqlAlchemyHumanValidationService
@@ -45,6 +49,8 @@ from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQue
 from orchestwin.artifacts.why_runtime import SqlAlchemyWhyQueryService
 from orchestwin.artifacts.workflow_inputs_runtime import SqlAlchemyWorkflowInputsService
 from orchestwin.config import (
+    DESIGN_SYSTEM_OFF,
+    DESIGN_SYSTEM_VARIABLE,
     ApplicationSettings,
     ModelRuntimeMode,
     RuntimeEnvironment,
@@ -70,6 +76,8 @@ from orchestwin.knowledge.project_import_service import ProjectImportService
 from orchestwin.knowledge.research_evidence import SqlAlchemyKnowledgeEvidenceQueryService
 from orchestwin.knowledge.twin_import_service import TwinImportService
 from orchestwin.knowledge.twin_import_sources import SqlAlchemyTwinImportCandidateQuery
+from orchestwin.models import design_systems
+from orchestwin.models.design_systems import DesignSystem
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
 from orchestwin.models.real_runtime import (
     RealModelRuntime,
@@ -241,6 +249,8 @@ class ApplicationRuntime:
     team_realignment_service: TeamRealignmentService | None = None
     project_import_service: ProjectImportService | None = None
     training_api_service: TrainingApiService | None = None
+    design_references_dir: Path | None = None
+    design_system: DesignSystem | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""
@@ -253,12 +263,28 @@ class ApplicationRuntime:
                 await self.database_runtime.dispose()
 
 
+def _design_system(identifier: str | None) -> DesignSystem | None:
+    if identifier is None:
+        return None
+    try:
+        return design_systems.design_system(identifier)
+    except ValueError:
+        known = ", ".join(design_systems.DESIGN_SYSTEMS)
+        raise RuntimeConfigurationError(
+            f"DESIGN_SYSTEM_UNKNOWN: {DESIGN_SYSTEM_VARIABLE} must name one of: {known}, "
+            f"or be {DESIGN_SYSTEM_OFF} to turn it off"
+        ) from None
+
+
 def create_default_runtime(
     settings: ApplicationSettings | None = None,
 ) -> ApplicationRuntime:
     """Compose services from validated process/dotenv credentials, not os.getenv alone."""
     connection_settings = load_runtime_connection_settings()
     resolved_settings = settings if settings is not None else load_settings()
+    references = resolved_settings.design_references_dir
+    design_references_dir = None if references is None else references.absolute()
+    design_system = _design_system(resolved_settings.design_system)
 
     real_required = resolved_settings.model_runtime_mode is ModelRuntimeMode.REAL_REQUIRED
     if not real_required and resolved_settings.model_runtime_config_file is not None:
@@ -269,10 +295,14 @@ def create_default_runtime(
     if connection_settings is None:
         if real_required:
             raise RealModelRuntimeError("REAL_MODEL_RUNTIME_REQUIRES_DATABASE_AND_AUTH")
-        return ApplicationRuntime()
+        return ApplicationRuntime(
+            design_references_dir=design_references_dir, design_system=design_system
+        )
 
     real_models = (
-        build_real_model_runtime(resolved_settings.model_runtime_config_file)
+        build_real_model_runtime(
+            resolved_settings.model_runtime_config_file, design_system=design_system
+        )
         if real_required
         else None
     )
@@ -476,4 +506,6 @@ def create_default_runtime(
                 resolved_settings.training_adapter_registry_root
             ),
         ),
+        design_references_dir=design_references_dir,
+        design_system=design_system,
     )

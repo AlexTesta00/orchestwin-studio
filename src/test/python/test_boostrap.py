@@ -14,6 +14,7 @@ SETTING_ENVIRONMENT_VARIABLES = (
     "ORCHESTWIN_DEBUG",
     "ORCHESTWIN_LOG_LEVEL",
     "ORCHESTWIN_API_PREFIX",
+    "ORCHESTWIN_DESIGN_SYSTEM",
 )
 
 
@@ -39,6 +40,7 @@ def test_settings_use_safe_development_defaults() -> None:
     assert settings.debug is False
     assert settings.log_level is LogLevel.INFO
     assert settings.api_prefix == "/api/v1"
+    assert settings.design_system == "apple-hig"
 
 
 def test_settings_read_prefixed_environment_variables(

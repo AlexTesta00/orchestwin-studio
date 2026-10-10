@@ -4,12 +4,16 @@ from enum import StrEnum
 from pathlib import Path
 from typing import ClassVar, Final, Self
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from orchestwin.identity.domain import NormalizedEmail
 
 LOCAL_OWNER_DEFAULT_EMAIL: Final = "local-owner@example.com"
+DESIGN_REFERENCES_VARIABLE: Final = "ORCHESTWIN_DESIGN_REFERENCES"
+DESIGN_SYSTEM_VARIABLE: Final = "ORCHESTWIN_DESIGN_SYSTEM"
+DESIGN_SYSTEM_DEFAULT: Final = "apple-hig"
+DESIGN_SYSTEM_OFF: Final = "none"
 
 
 class RuntimeEnvironment(StrEnum):
@@ -52,6 +56,7 @@ class ApplicationSettings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
         frozen=True,
+        validate_by_name=True,
     )
 
     application_name: str = "OrchesTwin Studio API"
@@ -67,6 +72,12 @@ class ApplicationSettings(BaseSettings):
     local_owner_email: str | None = None
 
     training_adapter_registry_root: Path = Path("var/artifacts/model-adapters")
+    design_references_dir: Path | None = Field(
+        default=Path("var/studio/references"), validation_alias=DESIGN_REFERENCES_VARIABLE
+    )
+    design_system: str | None = Field(
+        default=DESIGN_SYSTEM_DEFAULT, validation_alias=DESIGN_SYSTEM_VARIABLE
+    )
 
     @field_validator("api_prefix")
     @classmethod
@@ -108,6 +119,19 @@ class ApplicationSettings(BaseSettings):
     @classmethod
     def validate_local_owner_email(cls, value: str | None) -> str | None:
         return None if value is None else NormalizedEmail.parse(value).value
+
+    @field_validator("design_references_dir", mode="before")
+    @classmethod
+    def validate_design_references_dir(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("design_system", mode="before")
+    @classmethod
+    def validate_design_system(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        identifier = value.strip()
+        return None if identifier.casefold() in {"", DESIGN_SYSTEM_OFF} else identifier
 
     @model_validator(mode="after")
     def validate_environment_safety(self) -> Self:

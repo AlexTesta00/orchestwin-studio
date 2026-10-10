@@ -559,7 +559,7 @@ def test_the_real_generator_sends_the_target_in_the_context_of_an_iteration():
                 language=requirements_language(requirements_view(requirements)),
                 context=context,
             ),
-            max_output_tokens=32_000,
+            max_output_tokens=48_000,
             retry_schema_errors=False,
         )
     )

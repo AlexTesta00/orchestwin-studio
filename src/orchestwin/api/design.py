@@ -239,6 +239,7 @@ class VisualLanguagePayload(ApiModel):
     tokens: dict[str, str]
     twin_fit: tuple[TwinFitPayload, ...]
     direction: VisualDirectionPayload | None = None
+    design_system: str | None = None
 
 
 class DesignAlternativePayload(ApiModel):
@@ -414,10 +415,13 @@ class DesignPackagePayload(ApiModel):
         for alternative in payload["alternatives"]:
             if alternative["approach"] is None:
                 del alternative["approach"]
-            if alternative["visual_language"] is None:
+            language = alternative["visual_language"]
+            if language is None:
                 del alternative["visual_language"]
-            elif alternative["visual_language"]["direction"] is None:
-                del alternative["visual_language"]["direction"]
+            else:
+                for key in ("direction", "design_system"):
+                    if language[key] is None:
+                        del language[key]
         for critique in payload["critiques"]:
             for key in ("verdict", "quote"):
                 if critique[key] is None:
