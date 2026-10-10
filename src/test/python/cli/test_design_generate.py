@@ -656,16 +656,18 @@ def test_following_stops_after_the_time_limit(tmp_path: Path) -> None:
     assert bundle.clock.slept == 2 * jobs.POLL_SECONDS
 
 
-def test_two_mockups_are_the_recommended_one_and_the_first_other() -> None:
-    first, second, third = (
+def test_at_most_three_mockups_are_drawn_together_with_the_recommended_one() -> None:
+    first, second, third, fourth = (
         alternative("DES-001", number=1),
         alternative("DES-002", number=2),
-        alternative("DES-003", recommended=True, number=3),
+        alternative("DES-003", number=3),
+        alternative("DES-004", recommended=True, number=4),
     )
 
     assert design_generate.pair([first, second]) == (first, second)
-    assert design_generate.pair([first, second, third]) == (first, third)
-    assert design_generate.pair([third, first, second]) == (third, first)
+    assert design_generate.pair([first, second, third]) == (first, second, third)
+    assert design_generate.pair([first, second, third, fourth]) == (first, second, fourth)
+    assert design_generate.pair([fourth, first, second, third]) == (fourth, first, second)
 
 
 def test_the_failure_of_an_answer_or_of_a_job_names_its_code() -> None:

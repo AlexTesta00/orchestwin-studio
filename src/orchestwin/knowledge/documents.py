@@ -33,6 +33,7 @@ from orchestwin.knowledge.layout import (
     twin_slug,
     twin_text,
 )
+from orchestwin.models.design_systems import DESIGN_SYSTEMS
 from orchestwin.projects.briefs import BriefField, ProjectBriefVersion
 from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
 from orchestwin.twins.persistence.snapshots import (
@@ -190,6 +191,7 @@ _VISUAL_DIRECTION_ORIGIN: Final = (
     "Proposed by the model among {count} candidates; chosen by the Studio because it is far from "
     "the other."
 )
+_SYSTEM_DIRECTION_ORIGIN: Final = "Direction of the {name} design system."
 
 
 def plain_text(value: object) -> str:
@@ -1051,7 +1053,20 @@ def _owner_assertion_lines(assertions: Sequence[str]) -> list[str]:
     ]
 
 
-def _visual_direction_lines(direction: Mapping[str, object] | None) -> list[str]:
+def _design_system_name(identifier: str) -> str:
+    system = DESIGN_SYSTEMS.get(identifier)
+    return identifier if system is None else system.name
+
+
+def _design_system_lines(identifier: str | None) -> list[str]:
+    if identifier is None:
+        return []
+    return [f"Design system: {_design_system_name(identifier)}.", ""]
+
+
+def _visual_direction_lines(
+    direction: Mapping[str, object] | None, *, system: str | None = None
+) -> list[str]:
     if direction is None:
         return []
     axes = direction["axes"]
@@ -1068,7 +1083,9 @@ def _visual_direction_lines(direction: Mapping[str, object] | None) -> list[str]
         "",
         *markdown_bullets(direction["rules"]),
         "",
-        _VISUAL_DIRECTION_ORIGIN.format(count=direction["candidates"]),
+        _VISUAL_DIRECTION_ORIGIN.format(count=direction["candidates"])
+        if system is None
+        else _SYSTEM_DIRECTION_ORIGIN.format(name=_design_system_name(system)),
         "",
     ]
 
@@ -1080,11 +1097,14 @@ def _visual_language_lines(visual: Mapping[str, object] | None) -> list[str]:
     described = ", ".join(
         f"{name.replace('_', ' ')} {title_text(value)}" for name, value in choices.items()
     )
+    identifier = visual.get("design_system")
+    system = identifier if isinstance(identifier, str) else None
     return [
         "",
         "#### Visual language",
         "",
-        *_visual_direction_lines(visual.get("direction")),
+        *_design_system_lines(system),
+        *_visual_direction_lines(visual.get("direction"), system=system),
         f"Product name: {visual['product_name']}. Catalog version {visual['catalog_version']}. "
         f"{described}.",
         "",

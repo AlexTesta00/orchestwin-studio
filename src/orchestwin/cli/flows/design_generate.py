@@ -25,7 +25,7 @@ BUSY_ATTEMPTS: Final = 8
 BUSY_SECONDS: Final = 15.0
 LIMIT_SECONDS: Final = 1800.0
 ACCEPTED: Final = 202
-MOCKUPS_AT_ONCE: Final = 2
+MOCKUPS_AT_ONCE: Final = 3
 SUCCEEDED: Final = "SUCCEEDED"
 REJECTED: Final = "REJECTED"
 FAILED: Final = "FAILED"
@@ -363,8 +363,9 @@ def pair(alternatives: Sequence[Alternative]) -> tuple[Alternative, ...]:
     if len(alternatives) <= MOCKUPS_AT_ONCE:
         return tuple(alternatives)
     recommended = next((item for item in alternatives if item.recommended), alternatives[0])
-    other = next(item for item in alternatives if item.id != recommended.id)
-    return tuple(item for item in alternatives if item.id in {recommended.id, other.id})
+    others = [item.id for item in alternatives if item.id != recommended.id]
+    kept = {recommended.id, *others[: MOCKUPS_AT_ONCE - 1]}
+    return tuple(item for item in alternatives if item.id in kept)
 
 
 def draw_missing(

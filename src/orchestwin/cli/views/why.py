@@ -107,7 +107,11 @@ def direction_lines(console, direction):
             for axis in directions.AXES
         ),
     ]
+    system = direction.get("design_system")
     count = direction.get("candidates")
-    if isinstance(count, int) and not isinstance(count, bool):
+    if isinstance(system, str) and system:
+        name = directions.system_name(console.text, system) or direction.get("name") or "-"
+        lines.append(console.text("why.direction_system", name=name))
+    elif isinstance(count, int) and not isinstance(count, bool):
         lines.append(console.text("why.direction_origin", count=count))
     return lines

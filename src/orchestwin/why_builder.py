@@ -774,7 +774,8 @@ class _Builder:
                     rationale_origin="MODEL",
                 )
                 self.note_stage(node, envelope)
-                direction = _mapping(_mapping(alternative.get("visual_language")).get("direction"))
+                visual = _mapping(alternative.get("visual_language"))
+                direction = _mapping(visual.get("direction"))
                 if direction:
                     node["declared_context"]["direction"] = {
                         "name": direction.get("name"),
@@ -784,6 +785,9 @@ class _Builder:
                         "origin": "MODEL",
                         "selected_by": "STUDIO",
                     }
+                    system = visual.get("design_system")
+                    if isinstance(system, str) and system:
+                        node["declared_context"]["direction"]["design_system"] = system
                 self.index[("DESIGN_ALTERNATIVE", str(alternative.get("id")), context)] = node
                 self.artifact_links(node, alternative, req_context)
                 for workflow in _items(alternative.get("workflows")):

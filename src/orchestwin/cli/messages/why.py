@@ -65,6 +65,10 @@ MESSAGES = {
         "en": "Proposed by the model among {count} candidates; chosen by the Studio because it "
         "is far from the other.",
     },
+    "why.direction_system": {
+        "it": "Direzione del sistema di design {name}.",
+        "en": "Direction of the {name} design system.",
+    },
     "why.limit.LEGACY_DOSSIER": {
         "it": "Dossier precedente: catena ricalcolata dai soli dati disponibili.",
         "en": "Legacy Dossier: chain rebuilt from the available data.",

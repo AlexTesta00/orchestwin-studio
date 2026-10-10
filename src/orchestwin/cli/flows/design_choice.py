@@ -62,6 +62,9 @@ def choose(
     version = apply_package(client, state, choice_package(state, alternative, result))
     number = version.get("version_number") or "-"
     console.say("design.chosen", code=alternative.code, title=alternative.title, version=number)
+    system = design_state.system_line(context, alternative)
+    if system is not None:
+        design_state.wrapped(context, system, indent="  ")
     return review.review_after(
         context, client, project, key="design.choice_not_reviewed", number=number
     )
