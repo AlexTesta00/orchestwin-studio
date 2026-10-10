@@ -35,6 +35,7 @@ from orchestwin.artifacts.visual_fonts import (
     FONT_PACKAGE,
     HEADING_FONTS,
     MONO_FALLBACK,
+    BundledFamily,
     bundled_families,
     bundled_font_tokens,
     font_faces,
@@ -60,7 +61,47 @@ EXPECTED_FONTS = {
     "IBM Plex Mono": ("ibm-plex-mono", (400, 600)),
     "Libre Franklin": ("libre-franklin", (400, 700, 900)),
     "Lexend Zetta": ("lexend-zetta", (500, 800)),
+    "Source Sans 3": ("source-sans-3", (400, 600, 700)),
+    "Nunito": ("nunito", (400, 700, 900)),
+    "Archivo Narrow": ("archivo-narrow", (400, 700)),
+    "Source Serif 4": ("source-serif-4", (400, 600, 700)),
+    "Lora": ("lora", (400, 600, 700)),
+    "Playfair Display": ("playfair-display", (400, 700, 900)),
+    "Zilla Slab": ("zilla-slab", (400, 600, 700)),
+    "Bricolage Grotesque": ("bricolage-grotesque", (400, 700, 800)),
+    "Caveat": ("caveat", (500, 700)),
 }
+EXPECTED_HEADINGS = {
+    FontFamily.HUMANIST_SANS: "Source Sans 3",
+    FontFamily.GEOMETRIC_SANS: "Geist",
+    FontFamily.GROTESQUE_SANS: "Libre Franklin",
+    FontFamily.SOFT_SANS: "Nunito",
+    FontFamily.NARROW_SANS: "Archivo Narrow",
+    FontFamily.WIDE_SANS: "Lexend Zetta",
+    FontFamily.TRANSITIONAL_SERIF: "Source Serif 4",
+    FontFamily.OLD_STYLE_SERIF: "Lora",
+    FontFamily.MODERN_SERIF: "Playfair Display",
+    FontFamily.SLAB_SERIF: "Zilla Slab",
+    FontFamily.MONOSPACE: "Geist Mono",
+    FontFamily.DISPLAY_HEAVY: "Bricolage Grotesque",
+    FontFamily.SCRIPT: "Caveat",
+}
+EXPECTED_BODIES = {
+    FontFamily.HUMANIST_SANS: "Source Sans 3",
+    FontFamily.GEOMETRIC_SANS: "Geist",
+    FontFamily.GROTESQUE_SANS: "Libre Franklin",
+    FontFamily.SOFT_SANS: "Nunito",
+    FontFamily.NARROW_SANS: "Archivo Narrow",
+    FontFamily.WIDE_SANS: "Geist",
+    FontFamily.TRANSITIONAL_SERIF: "Source Serif 4",
+    FontFamily.OLD_STYLE_SERIF: "Lora",
+    FontFamily.MODERN_SERIF: "Lora",
+    FontFamily.SLAB_SERIF: "Zilla Slab",
+    FontFamily.MONOSPACE: "IBM Plex Mono",
+    FontFamily.DISPLAY_HEAVY: "Libre Franklin",
+    FontFamily.SCRIPT: "Nunito",
+}
+DISPLAY_FACES = {"Lexend Zetta", "Playfair Display", "Bricolage Grotesque", "Caveat"}
 GEIST_MONO = '"Geist Mono", ui-monospace, Consolas, monospace'
 IBM_PLEX_MONO = '"IBM Plex Mono", ui-monospace, Consolas, monospace'
 MIXED_TOKENS = {
@@ -69,8 +110,8 @@ MIXED_TOKENS = {
     "--vl-font-heading": '"Geist", "Century Gothic", Avenir, sans-serif',
     "--vl-color-text": "#1b1f24",
 }
-MAXIMUM_FONT_DIRECTORY = 200_000
-MAXIMUM_FACES = 150_000
+MAXIMUM_FONT_DIRECTORY = 800_000
+MAXIMUM_FACES = 300_000
 TONES = (DesignTone.ESSENTIAL, DesignTone.PLAYFUL, DesignTone.TECHNICAL)
 
 
@@ -104,29 +145,31 @@ def selected_language(package):
     )
 
 
-def test_the_bundled_fonts_are_the_five_families_and_weights_of_the_contract() -> None:
+def test_the_bundled_fonts_are_the_fourteen_families_and_weights_of_the_contract() -> None:
     assert {family: (font.package, font.weights) for family, font in BUNDLED_FONTS.items()} == (
         EXPECTED_FONTS
     )
     assert list(BUNDLED_FONTS) == list(EXPECTED_FONTS)
     assert all(font.family == family for family, font in BUNDLED_FONTS.items())
     assert {font.licence for font in BUNDLED_FONTS.values()} == {"OFL-1.1"}
-    assert dict(HEADING_FONTS) == {
-        FontFamily.GEOMETRIC_SANS: "Geist",
-        FontFamily.GROTESQUE_SANS: "Libre Franklin",
-        FontFamily.DISPLAY_HEAVY: "Libre Franklin",
-        FontFamily.WIDE_SANS: "Lexend Zetta",
-    }
-    assert dict(BODY_FONTS) == {
-        FontFamily.GEOMETRIC_SANS: "Geist",
-        FontFamily.GROTESQUE_SANS: "Libre Franklin",
-    }
-    assert all(FONTS[family].body_safe for family in BODY_FONTS)
-    assert set(HEADING_FONTS.values()) | {"Geist Mono", "IBM Plex Mono"} == set(BUNDLED_FONTS)
+    assert dict(HEADING_FONTS) == EXPECTED_HEADINGS
+    assert dict(BODY_FONTS) == EXPECTED_BODIES
+    assert set(HEADING_FONTS) == set(BODY_FONTS) == set(FontFamily) - {FontFamily.SYSTEM_UI}
+    assert set(HEADING_FONTS.values()) | set(BODY_FONTS.values()) == set(BUNDLED_FONTS)
+    assert set(BODY_FONTS.values()).isdisjoint(DISPLAY_FACES)
     assert MONO_FALLBACK == "ui-monospace, Consolas, monospace"
     for table in (BUNDLED_FONTS, HEADING_FONTS, BODY_FONTS, FONT_FILE_HASHES):
         with pytest.raises(TypeError):
             table["Geist"] = "changed"
+
+
+def test_the_bundled_family_names_are_the_keys_of_the_bundled_fonts() -> None:
+    assert list(BundledFamily) == list(BUNDLED_FONTS)
+    assert [family.value for family in BundledFamily] == list(EXPECTED_FONTS)
+    assert {BundledFamily(family) for family in EXPECTED_FONTS} == set(BundledFamily)
+    for name in ("geist", "Source Sans", "SYSTEM_UI", ""):
+        with pytest.raises(ValueError):
+            BundledFamily(name)
 
 
 def test_every_font_file_is_found_through_the_package_with_its_hash_and_its_licence() -> None:
@@ -139,7 +182,7 @@ def test_every_font_file_is_found_through_the_package_with_its_hash_and_its_lice
         Path(str(directory)).resolve() == (Path(visual_fonts.__file__).parent / "fonts").resolve()
     )
     assert set(FONT_FILE_HASHES) == names
-    assert (len(names), len(licences)) == (12, 5)
+    assert (len(names), len(licences)) == (37, 14)
     assert {item.name for item in directory.iterdir()} == names | licences
     for name in sorted(names):
         content = (directory / name).read_bytes()
@@ -188,6 +231,59 @@ def test_the_bundled_tokens_need_the_catalog_stack_they_extend() -> None:
         bundled_font_tokens(geometric, {"--vl-font-body": "serif"})
 
 
+def test_a_pair_of_bundled_families_wins_over_the_families_of_the_catalog() -> None:
+    geometric = replace(
+        NEUTRAL_VISUAL_CHOICES,
+        heading_family=FontFamily.GEOMETRIC_SANS,
+        body_family=FontFamily.GROTESQUE_SANS,
+    )
+    for choices in (NEUTRAL_VISUAL_CHOICES, geometric):
+        catalog = resolve_visual_tokens(choices)
+        heading = FONTS[choices.heading_family].stack
+        body = FONTS[choices.body_family].stack
+
+        assert bundled_font_tokens(choices, catalog, None) == bundled_font_tokens(choices, catalog)
+        assert bundled_font_tokens(
+            choices, catalog, pair=(BundledFamily.PLAYFAIR_DISPLAY, BundledFamily.SOURCE_SERIF_4)
+        ) == {
+            "--vl-font-heading": f'"Playfair Display", {heading}',
+            "--vl-font-body": f'"Source Serif 4", {body}',
+            "--vl-font-mono": IBM_PLEX_MONO,
+        }
+        assert bundled_font_tokens(choices, catalog, pair=("Caveat", "Geist")) == {
+            "--vl-font-heading": f'"Caveat", {heading}',
+            "--vl-font-body": f'"Geist", {body}',
+            "--vl-font-mono": GEIST_MONO,
+        }
+
+
+def test_every_pair_of_bundled_families_names_both_faces_and_the_mono_of_the_rule() -> None:
+    catalog = resolve_visual_tokens(NEUTRAL_VISUAL_CHOICES)
+    for heading, body in product(BundledFamily, BundledFamily):
+        tokens = bundled_font_tokens(NEUTRAL_VISUAL_CHOICES, catalog, pair=(heading, body))
+        mono = "Geist Mono" if "Geist" in (heading, body) else "IBM Plex Mono"
+
+        assert tokens == {
+            "--vl-font-heading": f'"{heading.value}", {catalog["--vl-font-heading"]}',
+            "--vl-font-body": f'"{body.value}", {catalog["--vl-font-body"]}',
+            "--vl-font-mono": f'"{mono}", {MONO_FALLBACK}',
+        }, (heading, body)
+        assert all(_plain_css_value(value) for value in tokens.values())
+        assert set(bundled_families({**catalog, **tokens})) == {heading, body, mono}
+
+
+def test_a_pair_names_two_bundled_families_and_needs_the_stacks_it_extends() -> None:
+    catalog = resolve_visual_tokens(NEUTRAL_VISUAL_CHOICES)
+
+    for pair in (("Geist", "geist"), ("Arial", "Lora"), ("Lora",), ("Lora", "Lora", "Lora")):
+        with pytest.raises(ValueError):
+            bundled_font_tokens(NEUTRAL_VISUAL_CHOICES, catalog, pair=pair)
+    with pytest.raises(ValueError, match="--vl-font-heading"):
+        bundled_font_tokens(
+            NEUTRAL_VISUAL_CHOICES, {"--vl-font-body": "serif"}, pair=("Lora", "Lora")
+        )
+
+
 def test_the_bundled_families_are_read_from_the_start_of_the_font_tokens() -> None:
     assert bundled_families(MIXED_TOKENS) == ("Geist", "Geist Mono", "Libre Franklin")
     assert bundled_families(dict(reversed(MIXED_TOKENS.items()))) == bundled_families(MIXED_TOKENS)
@@ -227,6 +323,14 @@ def test_the_faces_embed_every_weight_of_every_named_family_in_a_stable_order() 
     assert font_faces({}) == ""
 
 
+def test_every_bundled_family_embeds_each_of_its_weights_from_its_verified_file() -> None:
+    for family, font in BUNDLED_FONTS.items():
+        tokens = {"--vl-font-heading": f'"{family}", serif'}
+
+        assert bundled_families(tokens) == (family,)
+        assert font_faces(tokens) == "".join(face(family, weight) for weight in font.weights)
+
+
 def test_every_font_file_is_read_once() -> None:
     visual_fonts._font_data.cache_clear()
     try:
@@ -256,25 +360,17 @@ def test_a_font_file_that_does_not_match_its_hash_is_refused(monkeypatch) -> Non
 
 def test_every_combination_of_families_adds_a_bounded_style_to_the_document() -> None:
     sizes = {}
-    for heading, body in product((*HEADING_FONTS, None), (*BODY_FONTS, None)):
-        choices = replace(
-            NEUTRAL_VISUAL_CHOICES,
-            heading_family=heading or FontFamily.SYSTEM_UI,
-            body_family=body or FontFamily.SYSTEM_UI,
-        )
+    for choices in family_choices():
         tokens = {**resolve_visual_tokens(choices)}
         tokens.update(bundled_font_tokens(choices, tokens))
         sizes[bundled_families(tokens)] = len(font_faces(tokens))
+    catalog = resolve_visual_tokens(NEUTRAL_VISUAL_CHOICES)
+    for pair in product(BundledFamily, BundledFamily):
+        tokens = {**catalog, **bundled_font_tokens(NEUTRAL_VISUAL_CHOICES, catalog, pair=pair)}
+        sizes[bundled_families(tokens)] = len(font_faces(tokens))
 
-    assert set(sizes) == {
-        ("IBM Plex Mono",),
-        ("Geist", "Geist Mono"),
-        ("IBM Plex Mono", "Libre Franklin"),
-        ("IBM Plex Mono", "Lexend Zetta"),
-        ("Geist", "Geist Mono", "Libre Franklin"),
-        ("Geist", "Geist Mono", "Lexend Zetta"),
-        ("IBM Plex Mono", "Libre Franklin", "Lexend Zetta"),
-    }
+    assert {family for families in sizes for family in families} == set(BUNDLED_FONTS)
+    assert ("IBM Plex Mono",) in sizes
     assert all(0 < size < MAXIMUM_FACES for size in sizes.values())
 
 
