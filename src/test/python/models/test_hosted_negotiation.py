@@ -46,7 +46,7 @@ from src.test.python.models.test_hosted_support import (
 
 BUDGET = GenerationBudget(1_500_000, 10_000_000, 60_000_000)
 VALID = {"assessment": "Clear."}
-TOO_LONG = {"assessment": "x" * 41}
+INVALID = {"assessment": ["x" * 41]}
 GRAMMAR_TOO_LARGE = {
     "type": "error",
     "error": {
@@ -334,7 +334,7 @@ def test_a_schema_the_provider_cannot_express_starts_in_prompted_mode():
 
 
 def test_a_schema_violation_is_retried_once_with_the_violations():
-    generator, client = anthropic_generator(message(TOO_LONG), message(VALID))
+    generator, client = anthropic_generator(message(INVALID), message(VALID))
     store = SpendingEvidence()
     output, scope = run(generator, store)
     assert output.assessment == "Clear."
@@ -342,7 +342,7 @@ def test_a_schema_violation_is_retried_once_with_the_violations():
     assert "format" in first["output_config"] and "format" in second["output_config"]
     assert first["messages"][0]["content"].endswith(HOSTED_TASK_REQUEST)
     assert second["messages"][0]["content"].endswith(
-        "The previous answer did not follow output_schema at $.assessment (maxLength); answer "
+        "The previous answer did not follow output_schema at $.assessment (type); answer "
         "again with the complete JSON object."
     )
     assert "x" * 41 not in second["messages"][0]["content"]
@@ -368,19 +368,29 @@ def test_an_unparseable_answer_is_retried_like_a_violation():
 
 
 def test_two_invalid_answers_fail_and_a_disabled_retry_fails_at_once():
-    generator, client = anthropic_generator(message(TOO_LONG), message(TOO_LONG))
+    generator, client = anthropic_generator(message(INVALID), message(INVALID))
     store = SpendingEvidence()
     failure = failing(generator, store, "RESPONSE_SCHEMA_ERROR")
     assert len(client.messages.calls) == 2 and failure.result.failure.usage is not None
     assert kinds(store)[0][-1] == "APPLICATION_RESULT"
     assert kinds(store)[1] == ["HTTP_REQUEST", "HTTP_RESPONSE", "PROVIDER_RESULT"]
-    once, single = anthropic_generator(message(TOO_LONG), message(VALID))
+    once, single = anthropic_generator(message(INVALID), message(VALID))
     failing(once, SpendingEvidence(), "RESPONSE_SCHEMA_ERROR", retry_schema_errors=False)
     assert len(single.messages.calls) == 1
 
 
+def test_a_long_text_is_shortened_instead_of_answered_again():
+    generator, client = anthropic_generator(message({"assessment": "x" * 41}))
+    store = SpendingEvidence()
+    output, scope = run(generator, store)
+    assert output.assessment == "x" * 39 + "…"
+    assert len(client.messages.calls) == 1 and scope.related_generations == []
+    [accepted] = results(store)
+    assert accepted["shortened_paths"] == ["$.assessment"]
+
+
 def test_the_longest_sequence_has_two_paid_generations():
-    generator, client = anthropic_generator(rejected(), message(TOO_LONG), message(TOO_LONG))
+    generator, client = anthropic_generator(rejected(), message(INVALID), message(INVALID))
     store = SpendingEvidence()
     failing(generator, store, "RESPONSE_SCHEMA_ERROR")
     assert len(client.messages.calls) == 3
@@ -402,7 +412,7 @@ def test_the_budget_is_checked_before_every_generation():
                 return 9_999_000
             return 0
 
-    generator, client = anthropic_generator(message(TOO_LONG), message(VALID))
+    generator, client = anthropic_generator(message(INVALID), message(VALID))
     store = Rising()
     failing(generator, store, "GENERATION_BUDGET_EXCEEDED")
     assert len(client.messages.calls) == 1
@@ -438,7 +448,7 @@ def test_the_openai_adapter_falls_back_after_a_bad_request():
 
 
 def test_callers_can_turn_the_retry_off_through_the_router():
-    generator, client = anthropic_generator(message(TOO_LONG), message(VALID))
+    generator, client = anthropic_generator(message(INVALID), message(VALID))
     router = RoutingProposalGenerator({"general": generator}, ModelRoutes(default="general"))
     failing(router, SpendingEvidence(), "RESPONSE_SCHEMA_ERROR", retry_schema_errors=False)
     assert len(client.messages.calls) == 1

@@ -171,7 +171,7 @@ def test_the_payload_uses_strict_json_schema_and_no_local_fields():
         (completion(finish_reason="content_filter"), Code.PROVIDER_REFUSED),
         (completion(finish_reason="tool_calls"), Code.RESPONSE_SCHEMA_ERROR),
         (
-            completion(content=json.dumps({**VALID_REVIEW, "assessment": "y" * 41})),
+            completion(content=json.dumps({**VALID_REVIEW, "score": 2})),
             Code.RESPONSE_SCHEMA_ERROR,
         ),
         (completion(content="plain text"), Code.RESPONSE_SCHEMA_ERROR),

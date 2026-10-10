@@ -26,7 +26,7 @@ MAX_ATTACHMENTS: Final = 4
 MAX_ATTACHMENT_BYTES: Final = 5 * 1024 * 1024
 ATTACHMENT_MEDIA_TYPES: Final = frozenset({"image/png", "image/jpeg"})
 _MAX_IDENTIFIER_LENGTH: Final = 256
-_MAX_TEXT_LENGTH: Final = 20_000
+_MAX_TEXT_LENGTH: Final = 30_000
 _MAX_PAYLOAD_LENGTH: Final = 1_000_000
 _ATTACHMENT_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 
@@ -431,6 +431,7 @@ class StructuredGenerationResult:
     success: StructuredGenerationSuccess | None
     failure: StructuredGenerationFailure | None
     output_mode: StructuredOutputMode | None = None
+    shortened_paths: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         succeeded = self.status is StructuredGenerationStatus.SUCCEEDED
@@ -443,6 +444,12 @@ class StructuredGenerationResult:
             or self.provider_kind not in _HOSTED_PROVIDER_KINDS
         ):
             raise ValueError("an output mode is recorded only for hosted results")
+        if not isinstance(self.shortened_paths, tuple) or not all(
+            isinstance(path, str) and path.startswith("$") for path in self.shortened_paths
+        ):
+            raise ValueError("shortened paths must be a tuple of JSON paths")
+        if self.shortened_paths and self.output_mode is None:
+            raise ValueError("shortened paths are recorded only for hosted results")
 
     @property
     def content_hash(self) -> str:
@@ -457,6 +464,8 @@ class StructuredGenerationResult:
         }
         if self.output_mode is not None:
             snapshot["output_mode"] = self.output_mode.value
+        if self.shortened_paths:
+            snapshot["shortened_paths"] = list(self.shortened_paths)
         return snapshot
 
 
@@ -579,6 +588,7 @@ def successful_structured_generation_result(
     provider_kind: StructuredGenerationProviderKind,
     success: StructuredGenerationSuccess,
     output_mode: StructuredOutputMode | None = None,
+    shortened_paths: tuple[str, ...] = (),
 ) -> StructuredGenerationResult:
     return StructuredGenerationResult(
         provider_kind=provider_kind,
@@ -586,6 +596,7 @@ def successful_structured_generation_result(
         success=success,
         failure=None,
         output_mode=output_mode,
+        shortened_paths=shortened_paths,
     )
 
 
@@ -598,11 +609,13 @@ def failed_structured_generation_result(
     provider_status_code: int | None = None,
     usage: StructuredGenerationUsage | None = None,
     output_mode: StructuredOutputMode | None = None,
+    shortened_paths: tuple[str, ...] = (),
 ) -> StructuredGenerationResult:
     return StructuredGenerationResult(
         provider_kind=provider_kind,
         status=StructuredGenerationStatus.FAILED,
         output_mode=output_mode,
+        shortened_paths=shortened_paths,
         success=None,
         failure=StructuredGenerationFailure(
             code=code,

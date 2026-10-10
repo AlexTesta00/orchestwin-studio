@@ -444,10 +444,11 @@ def test_a_different_served_model_is_refused_by_the_generator():
 
 
 def test_an_answer_outside_the_full_schema_or_the_envelope_is_a_schema_error():
-    long_text = {**VALID_REVIEW, "assessment": "x" * 41}
-    failure = generate(FakeClaudeRunner(finished(claude_answer(long_text)))).failure
+    outside = {**VALID_REVIEW, "assessment": "x" * 41, "score": 2}
+    failure = generate(FakeClaudeRunner(finished(claude_answer(outside)))).failure
     assert failure.code is Code.RESPONSE_SCHEMA_ERROR
-    assert "$.assessment (maxLength)" in failure.message and "xxxxxxxxxx" not in failure.message
+    assert failure.message.endswith(" at $.score (maximum).")
+    assert "xxxxxxxxxx" not in failure.message
     missing = generate(FakeClaudeRunner(finished(without(claude_answer(), "structured_output"))))
     assert missing.failure.message == "The hosted model answer is not one JSON object."
     prompted = generate(
@@ -457,6 +458,29 @@ def test_an_answer_outside_the_full_schema_or_the_envelope_is_a_schema_error():
     envelope = generate(FakeClaudeRunner(finished(without(claude_answer(), "usage")))).failure
     assert envelope.message == "The Claude Code program returned an invalid result envelope."
     assert envelope.usage is None
+
+
+def test_a_text_over_its_limit_is_shortened_at_a_word_and_accepted():
+    store = MemoryEvidence()
+    selected = configuration()
+    request = structured_request(selected)
+    review = {**VALID_REVIEW, "assessment": "The flow is clear and every step is short enough"}
+    stdout = claude_answer(review)
+    runner = FakeClaudeRunner(finished(stdout))
+    port = build_claude_code_adapter(selected, executable=PROGRAM, run=runner)
+    result = asyncio.run(_in_scope(store, port, request))
+    shortened = {**VALID_REVIEW, "assessment": "The flow is clear and every step is…"}
+    assert result.output_mode is STRICT
+    assert json.loads(result.success.payload_json) == shortened
+    events = store.events[request.request_id]
+    assert events[1][2] == stdout
+    assert events[2][1] == result.to_snapshot()
+    assert list(events[2][1])[-2:] == ["output_mode", "shortened_paths"]
+    assert events[2][1]["shortened_paths"] == ["$.assessment"]
+    answer = claude_answer(review, strict=False)
+    prompted = generate(FakeClaudeRunner(finished(answer)), mode=PROMPTED)
+    assert json.loads(prompted.success.payload_json) == shortened
+    assert prompted.to_snapshot()["shortened_paths"] == ["$.assessment"]
 
 
 def test_a_timeout_a_program_that_cannot_start_and_a_long_output_are_transport_failures():
