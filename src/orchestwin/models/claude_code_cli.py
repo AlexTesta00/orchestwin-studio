@@ -26,6 +26,7 @@ from orchestwin.models.hosted_schema import (
     hosted_user_message,
     parse_prompted_answer,
     prune_undefined_properties,
+    shorten_overlong_strings,
     validate_against_schema,
     violation_message,
 )
@@ -467,6 +468,7 @@ class ClaudeCodeStructuredAdapter(StructuredGenerationPort):
                 retryable=False,
                 usage=usage,
             )
+        output, shortened = shorten_overlong_strings(output, full_schema)
         violations = validate_against_schema(output, full_schema)
         if violations and mode is StructuredOutputMode.PROMPTED:
             pruned = prune_undefined_properties(output, full_schema)
@@ -479,6 +481,7 @@ class ClaudeCodeStructuredAdapter(StructuredGenerationPort):
                 mode=mode,
                 retryable=False,
                 usage=usage,
+                shortened_paths=shortened,
             )
         try:
             success = create_structured_generation_success(
@@ -495,9 +498,10 @@ class ClaudeCodeStructuredAdapter(StructuredGenerationPort):
                 mode=mode,
                 retryable=False,
                 usage=usage,
+                shortened_paths=shortened,
             )
         return successful_structured_generation_result(
-            provider_kind=_KIND, success=success, output_mode=mode
+            provider_kind=_KIND, success=success, output_mode=mode, shortened_paths=shortened
         )
 
 
@@ -562,6 +566,7 @@ def _failure(
     retryable: bool,
     status: int | None = None,
     usage: StructuredGenerationUsage | None = None,
+    shortened_paths: tuple[str, ...] = (),
 ) -> StructuredGenerationResult:
     return failed_structured_generation_result(
         provider_kind=_KIND,
@@ -571,6 +576,7 @@ def _failure(
         provider_status_code=status,
         usage=usage,
         output_mode=mode,
+        shortened_paths=shortened_paths,
     )
 
 

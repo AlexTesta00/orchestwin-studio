@@ -150,7 +150,7 @@ def test_stop_reasons_other_than_end_turn_fail_and_keep_their_cost(stop_reason, 
 @pytest.mark.parametrize(
     "text,path",
     [
-        (json.dumps({**VALID_REVIEW, "assessment": "x" * 41}), "$.assessment (maxLength)"),
+        (json.dumps({**VALID_REVIEW, "assessment": ""}), "$.assessment (minLength)"),
         (json.dumps({**VALID_REVIEW, "score": 2}), "$.score (maximum)"),
         (json.dumps({**VALID_REVIEW, "tags": ["fast"] * 3}), "$.tags (maxItems)"),
     ],

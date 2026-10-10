@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from uuid import UUID
 
 import pytest
@@ -8,6 +9,7 @@ from fastapi import HTTPException
 
 from orchestwin.api.design_iterations import DesignIterationApplication, IterationRequest
 from orchestwin.api.design_mockups import (
+    GENERATED_OUTPUT_TOKENS,
     MOCKUP_ATTEMPT,
     MockupRequest,
     MockupStatus,
@@ -20,8 +22,9 @@ from orchestwin.api.generation_jobs import (
     GenerationJobProgress,
     GenerationJobStage,
 )
-from orchestwin.artifacts.generated_mockups import MAX_SCREENS
+from orchestwin.artifacts.generated_mockups import MAX_MARKUP_LENGTH, MAX_SCREENS
 from orchestwin.models.generated_mockup_drafts import (
+    MAX_CHANGE_LENGTH,
     MOCKUP_QUALITY_REJECTED,
     GeneratedIterationDraft,
     GeneratedMockupDraft,
@@ -51,14 +54,26 @@ from src.test.python.models.test_generated_mockup_support import (
     applied_package,
     draft_payload,
     failure,
+    iteration_payload,
     package,
     refusal,
     runtime,
     with_markup,
 )
+from src.test.python.models.test_hosted_support import message as anthropic_message
 from src.test.python.models.test_hosted_transient_retry import anthropic_generator, overloaded
 
 BROKEN = with_markup(draft_payload(), "<h1>", "<h1>Lorem ipsum ")
+KEPT_CHANGE = (
+    "Il riepilogo finale ora mostra la sede in cui ritirare la tessera, con l'indirizzo "
+    "completo della biblioteca, gli orari del banco prestiti, il numero della segreteria e "
+    "una nota breve sui documenti da portare il giorno del ritiro, così chi si iscrive sa "
+    "subito dove andare e che cosa preparare"
+)
+LONG_CHANGE = (
+    f"{KEPT_CHANGE}, conseguentemente la visita: la volontaria non cerca più queste "
+    "informazioni altrove e il lettore non torna al banco prestiti."
+)
 
 
 class Progress(GenerationJobProgress):
@@ -111,7 +126,7 @@ def test_an_answer_accepted_at_the_first_generation():
     assert result.status is MockupStatus.GENERATED
     [call] = generator.calls
     assert call["retry_schema_errors"] is False
-    assert call["max_output_tokens"] == 32_000
+    assert call["max_output_tokens"] == GENERATED_OUTPUT_TOKENS
     assert call["output_type"] is GeneratedMockupDraft
     assert call["context"]["purpose"] == DESIGN_MOCKUP_HTML
     assert "previous_answer" not in call["context"] and "rejection" not in call["context"]
@@ -303,6 +318,83 @@ def test_an_answer_that_breaks_the_schema_is_answered_again_with_the_reasons():
     }
     assert second["instruction"].endswith(RETRY_SENTENCE)
     assert result.cost_microusd == 1_210_000
+
+
+def test_an_iteration_with_a_long_change_is_accepted_at_once_with_the_change_shortened():
+    second = "Il pulsante principale del primo passo dice Continua con i contatti."
+    answer = iteration_payload(changes=[LONG_CHANGE, second])
+    generator, client, _pauses = anthropic_generator(anthropic_message(answer))
+    store = MemoryMockupStore()
+    versions = DesignVersions(package(), applied_package())
+    app = DesignIterationApplication(runtime(generator, store, versions))
+    current = versions.versions[-1]
+    body = IterationRequest(
+        design_version_id=current.id,
+        design_content_hash=current.content_hash,
+        request="Mostra nel riepilogo dove ritirare la tessera.",
+    )
+    result = asyncio.run(
+        app.generate_iteration(owner_user_id=OWNER_ID, project_id=PROJECT_ID, body=body)
+    )
+    shortened = f"{KEPT_CHANGE}…"
+    assert len(LONG_CHANGE) == 420 and len(shortened) <= MAX_CHANGE_LENGTH
+    assert len(client.messages.calls) == 1
+    assert result.changes == (shortened, second)
+    generation = store.order[0]
+    assert kinds(store, 0) == [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT",
+        "ADAPTER_ACCEPTED",
+        "APPLICATION_RESULT",
+    ]
+    outcome = store.payload(generation, "PROVIDER_RESULT")
+    assert outcome["shortened_paths"] == ["$.changes[0]"]
+    assert json.loads(outcome["success"]["payload_json"])["changes"] == [shortened, second]
+    assert store.payload(generation, "ADAPTER_ACCEPTED")["result"]["changes"] == [
+        shortened,
+        second,
+    ]
+    assert b"conseguentemente la visita" in store.events[generation][1][2]
+
+
+def test_a_markup_over_its_limit_is_still_a_schema_error_answered_again():
+    payload = draft_payload()
+    first, *others = payload["screens"]
+    long_markup = first["markup"].ljust(MAX_MARKUP_LENGTH + 1)
+    broken = {**payload, "screens": [{**first, "markup": long_markup}, *others]}
+    generator, client, _pauses = anthropic_generator(
+        anthropic_message(broken), anthropic_message(draft_payload())
+    )
+    store = MemoryMockupStore()
+    versions = DesignVersions(package())
+    app = ModelMockupApplication(runtime(generator, store, versions))
+    result = asyncio.run(
+        app.generate_mockup(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID, body=request_for(versions)
+        )
+    )
+    expected = (
+        "The hosted model answer violates the output schema at $.screens[0].markup (maxLength)."
+    )
+    assert len(long_markup) == 40_001
+    assert len(client.messages.calls) == 2
+    assert kinds(store, 0) == [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT",
+        "APPLICATION_RESULT",
+    ]
+    rejected = store.payload(store.order[0], "PROVIDER_RESULT")
+    assert rejected["failure"]["code"] == "RESPONSE_SCHEMA_ERROR"
+    assert rejected["failure"]["message"] == expected
+    assert "shortened_paths" not in rejected
+    assert store.payload(store.order[0], "APPLICATION_RESULT") == {
+        "status": "RESPONSE_SCHEMA_ERROR",
+        "role": MOCKUP_ATTEMPT,
+    }
+    assert expected in client.messages.calls[1]["messages"][0]["content"]
+    assert result.status is MockupStatus.GENERATED
 
 
 def test_an_answer_that_breaks_the_draft_model_is_answered_again():
