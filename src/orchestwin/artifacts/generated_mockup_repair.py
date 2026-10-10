@@ -16,14 +16,19 @@ from orchestwin.artifacts.generated_mockup_styles import (
     parse_style_sheet,
 )
 from orchestwin.artifacts.generated_mockups import (
+    _ASCII_WHITESPACE,
     _CLASS,
     _HREF,
     _IDENTIFIER,
     _REQUIREMENTS,
     ALLOWED_ELEMENTS,
     BOOLEAN_ATTRIBUTES,
+    DATA_ICON,
+    DATA_PICTURE,
+    DATA_TONE,
     INPUT_TYPES,
     MAX_DEPTH,
+    PLACEHOLDER_ATTRIBUTES,
     REFERENCE_ATTRIBUTES,
     SVG_ELEMENTS,
     MarkupElement,
@@ -31,9 +36,17 @@ from orchestwin.artifacts.generated_mockups import (
     MarkupText,
     _allowed_attribute,
     _Context,
+    _placeholder,
+    _placeholder_attribute,
     _value_rule,
     parse_markup,
     serialize_markup,
+)
+from orchestwin.artifacts.visual_icons import (
+    FALLBACK_ICON,
+    FALLBACK_PICTURE,
+    PICTURE_TONES,
+    is_bundled_icon,
 )
 
 ELEMENT_REMOVED: Final = "ELEMENT_REMOVED"
@@ -42,6 +55,8 @@ ATTRIBUTE_REMOVED: Final = "ATTRIBUTE_REMOVED"
 LINK_REMOVED: Final = "LINK_REMOVED"
 REQUIREMENT_CODE_REMOVED: Final = "REQUIREMENT_CODE_REMOVED"
 REQUIREMENT_INHERITED: Final = "REQUIREMENT_INHERITED"
+ICON_UNKNOWN: Final = "ICON_UNKNOWN"
+PLACEHOLDER_EMPTIED: Final = "PLACEHOLDER_EMPTIED"
 STYLE_DECLARATION_REMOVED: Final = "STYLE_DECLARATION_REMOVED"
 STYLE_RULE_REMOVED: Final = "STYLE_RULE_REMOVED"
 STYLE_REST_REMOVED: Final = "STYLE_REST_REMOVED"
@@ -52,6 +67,8 @@ REPAIR_NOTE_CODES: Final = (
     LINK_REMOVED,
     REQUIREMENT_CODE_REMOVED,
     REQUIREMENT_INHERITED,
+    ICON_UNKNOWN,
+    PLACEHOLDER_EMPTIED,
     STYLE_DECLARATION_REMOVED,
     STYLE_RULE_REMOVED,
     STYLE_REST_REMOVED,
@@ -299,29 +316,63 @@ class _ScreenCleaner:
                 result.extend(self.nodes(child.children, svg))
             else:
                 node = _Node(child.name, self.attributes(child))
-                node.children = self.nodes(child.children, svg or child.name == "svg")
+                if not _placeholder(node.name, (key for key, _ in node.attributes)):
+                    node.children = self.nodes(child.children, svg or child.name == "svg")
+                elif any(
+                    isinstance(item, _Node) or item.strip(_ASCII_WHITESPACE)
+                    for item in child.children
+                ):
+                    self.note(PLACEHOLDER_EMPTIED, node.get(DATA_ICON) or node.get(DATA_PICTURE))
                 result.append(node)
         return result
 
     def attributes(self, node: _Node) -> list[tuple[str, str | None]]:
         kept: list[tuple[str, str | None]] = []
         seen: set[str] = set()
+        placeholder = _placeholder(node.name, (key for key, _ in node.attributes))
         for name, value in node.attributes:
             if name in seen:
                 continue
             seen.add(name)
-            if not _allowed_attribute(node.name, name):
+            if not _allowed_attribute(node.name, name) or (
+                placeholder and not _placeholder_attribute(name)
+            ):
                 if name in NOTED_ATTRIBUTES or name.startswith("on"):
                     self.note(ATTRIBUTE_REMOVED, name)
                 continue
             accepted, cleaned = self.value(node.name, name, value)
             if accepted:
                 kept.append((name, cleaned))
-        return kept
+        return self.settled(kept) if node.name == "svg" else kept
+
+    def settled(self, kept: list[tuple[str, str | None]]) -> list[tuple[str, str | None]]:
+        names = {name for name, _value in kept}
+        dropped: set[str] = set()
+        if DATA_ICON in names and DATA_PICTURE in names:
+            dropped.add(DATA_PICTURE)
+        if DATA_TONE in names and (DATA_PICTURE not in names or DATA_PICTURE in dropped):
+            dropped.add(DATA_TONE)
+        for name in sorted(dropped):
+            self.note(ATTRIBUTE_REMOVED, name)
+        return [(name, value) for name, value in kept if name not in dropped]
+
+    def placeholder(self, name: str, value: str | None) -> tuple[bool, str | None]:
+        written = (value or "").strip(_ASCII_WHITESPACE).lower()
+        if name == DATA_TONE:
+            if written in PICTURE_TONES:
+                return True, written
+            self.note(ATTRIBUTE_REMOVED, name)
+            return False, None
+        if is_bundled_icon(written):
+            return True, written
+        self.note(ICON_UNKNOWN, value)
+        return True, FALLBACK_ICON if name == DATA_ICON else FALLBACK_PICTURE
 
     def value(self, element: str, name: str, value: str | None) -> tuple[bool, str | None]:
         if name in BOOLEAN_ATTRIBUTES:
             return True, None
+        if element == "svg" and name in PLACEHOLDER_ATTRIBUTES:
+            return self.placeholder(name, value)
         if value is None or has_forbidden_character(value):
             return self.refused(name, value)
         if name == "id":
@@ -906,10 +957,12 @@ __all__ = [
     "ATTRIBUTE_REMOVED",
     "ELEMENT_REMOVED",
     "ELEMENT_UNWRAPPED",
+    "ICON_UNKNOWN",
     "LINK_REMOVED",
     "MAX_NOTE_NAME_LENGTH",
     "MAX_READ_DEPTH",
     "NOTED_ATTRIBUTES",
+    "PLACEHOLDER_EMPTIED",
     "REMOVED_ELEMENTS",
     "REPAIR_NOTE_CODES",
     "REQUIREMENT_CODE_REMOVED",

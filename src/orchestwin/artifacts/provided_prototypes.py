@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import MappingProxyType
+from typing import Final
 from uuid import UUID
 
 from orchestwin.artifacts.bound_mockups import (
@@ -13,7 +14,11 @@ from orchestwin.artifacts.bound_mockups import (
     create_bound_mockup,
     markup_requirement_codes,
 )
-from orchestwin.artifacts.generated_mockup_review import MockupReport, review_generated_mockup
+from orchestwin.artifacts.generated_mockup_review import (
+    MockupIssueSeverity,
+    MockupReport,
+    review_generated_mockup,
+)
 from orchestwin.artifacts.generated_mockups import (
     GeneratedMockupError,
     create_generated_mockup,
@@ -37,6 +42,8 @@ from orchestwin.workflow_inputs import (
     validate_workflow_reference,
     workflow_records,
 )
+
+STORED_CONTRAST_THRESHOLD: Final = 3.0
 
 
 def _reference(value: object) -> Mapping[str, object]:
@@ -72,15 +79,20 @@ def _text(value: object, *, label: str, optional: bool = False) -> str | None:
         raise WorkflowInputError("PROVIDED_PROTOTYPE_INPUT_INVALID", label) from error
 
 
-def _quality(mockup: BoundGeneratedMockup, choices: VisualChoices) -> MockupReport:
+def _quality(mockup: BoundGeneratedMockup, choices: VisualChoices, *, stored: bool) -> MockupReport:
     tokens = resolve_visual_tokens(choices)
+    mode = MODES[choices.color_mode]
     try:
         generated_mockup_from_snapshot(mockup.mockup.to_snapshot(), token_names=tokens)
         report = review_generated_mockup(
             mockup.mockup,
             tokens=tokens,
             requirement_codes=mockup.requirement_codes,
-            text_contrast_threshold=MODES[choices.color_mode].text_threshold,
+            text_contrast_threshold=STORED_CONTRAST_THRESHOLD if stored else mode.text_threshold,
+            large_text_threshold=STORED_CONTRAST_THRESHOLD if stored else mode.ui_threshold,
+            control_border_severity=(
+                MockupIssueSeverity.WARNING if stored else MockupIssueSeverity.ERROR
+            ),
         )
     except GeneratedMockupError as error:
         raise WorkflowInputError(error.code, error.detail) from error
@@ -152,7 +164,7 @@ class ProvidedPrototypeVersion:
                 raise WorkflowInputError("WORKFLOW_REFERENCE_INVALID")
             original = json.loads(canonical_workflow_json(self.original_reference))
             object.__setattr__(self, "original_reference", MappingProxyType(original))
-        _quality(self.mockup, choices)
+        _quality(self.mockup, choices, stored=True)
 
     def _payload(self) -> dict[str, object]:
         values: dict[str, object] = {
@@ -179,7 +191,7 @@ class ProvidedPrototypeVersion:
 
     @property
     def report(self) -> MockupReport:
-        return _quality(self.mockup, _choices(self.visual_choices))
+        return _quality(self.mockup, _choices(self.visual_choices), stored=True)
 
     def to_snapshot(self) -> dict[str, object]:
         return self._payload() | {"content_hash": self.content_hash}
@@ -215,7 +227,7 @@ def create_provided_prototype(
         actual = dict(mockup.requirement_ids_by_code)
         if any(requirement_ids_by_code.get(code) != value for code, value in actual.items()):
             raise WorkflowInputError("PROVIDED_PROTOTYPE_REQUIREMENT_REFERENCE_INVALID")
-    return ProvidedPrototypeVersion(
+    prototype = ProvidedPrototypeVersion(
         id=prototype_id,
         code=code,
         project_id=project_id,
@@ -229,6 +241,8 @@ def create_provided_prototype(
         created_at=created_at.astimezone(UTC),
         original_reference=original_reference,
     )
+    _quality(prototype.mockup, _choices(prototype.visual_choices), stored=False)
+    return prototype
 
 
 def provided_prototype_from_payload(
@@ -351,6 +365,7 @@ def provided_prototype_from_snapshot(payload: Mapping[str, object]) -> ProvidedP
 
 
 __all__ = [
+    "STORED_CONTRAST_THRESHOLD",
     "PrototypeVersion",
     "ProvidedPrototypeVersion",
     "create_provided_prototype",

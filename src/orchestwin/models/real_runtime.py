@@ -40,6 +40,7 @@ from orchestwin.models.claude_code_cli import (
     claude_code_readiness,
 )
 from orchestwin.models.design_runtime import DesignRuntime, DesignRuntimeMode
+from orchestwin.models.design_systems import DesignSystem
 from orchestwin.models.generation_budget import GenerationBudget
 from orchestwin.models.generation_routing import RoutingProposalGenerator
 from orchestwin.models.hosted_configuration import (
@@ -536,7 +537,15 @@ def _local_proposal_generator(provider, evaluator):
 
 
 def _build_hosted_runtime(
-    path, raw, config, *, env_file, anthropic_client_factory, openai_model_fetch, claude_code_run
+    path,
+    raw,
+    config,
+    *,
+    env_file,
+    anthropic_client_factory,
+    openai_model_fetch,
+    claude_code_run,
+    design_system=None,
 ):
     providers_raw = _read(config.providers_config_file)
     providers = parse_providers_configuration(providers_raw)
@@ -633,7 +642,10 @@ def _build_hosted_runtime(
         RequirementsRuntime(
             RequirementsRuntimeMode.MODEL_ADAPTER, ModelRequirementsAdapter(routing)
         ),
-        DesignRuntime(DesignRuntimeMode.MODEL_ADAPTER, ModelDesignAdapter(routing)),
+        DesignRuntime(
+            DesignRuntimeMode.MODEL_ADAPTER,
+            ModelDesignAdapter(routing, design_system=design_system),
+        ),
         _sealed_hashes(all_files),
         None,
         schema_version=2,
@@ -666,6 +678,7 @@ def build_real_model_runtime(
     anthropic_client_factory: Callable[[str], Any] = create_anthropic_client,
     openai_model_fetch: Callable[..., tuple[int, bytes]] | None = None,
     claude_code_run: ProcessRunner | None = None,
+    design_system: DesignSystem | None = None,
 ):
     try:
         if path is None:
@@ -683,6 +696,7 @@ def build_real_model_runtime(
                 anthropic_client_factory=anthropic_client_factory,
                 openai_model_fetch=openai_model_fetch,
                 claude_code_run=claude_code_run,
+                design_system=design_system,
             )
         config = RealModelConfiguration.model_validate(document)
         _Overrides().validate_against(config)
@@ -739,7 +753,10 @@ def build_real_model_runtime(
             RequirementsRuntime(
                 RequirementsRuntimeMode.MODEL_ADAPTER, ModelRequirementsAdapter(generator)
             ),
-            DesignRuntime(DesignRuntimeMode.MODEL_ADAPTER, ModelDesignAdapter(generator)),
+            DesignRuntime(
+                DesignRuntimeMode.MODEL_ADAPTER,
+                ModelDesignAdapter(generator, design_system=design_system),
+            ),
             sealed_hashes,
             token_raw.decode("ascii"),
         )

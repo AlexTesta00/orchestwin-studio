@@ -14,14 +14,22 @@ import pytest
 
 from orchestwin.agents.catalog import AgentIdentifier
 from orchestwin.agents.selection_rules import TeamRoleConstraintKind
+from orchestwin.artifacts.visual_catalog import resolve_palette
+from orchestwin.models.design_systems import APPLE_HIG, is_system_colour
 from orchestwin.models.model_proposals import (
+    HOSTED_DIRECTIONS_INSTRUCTION,
+    HOSTED_PALETTE_INSTRUCTION,
     HOSTED_PROFILE_NAME_INSTRUCTION,
+    HOSTED_SYSTEM_DIRECTIONS_INSTRUCTION,
     PERSONAS_INSTRUCTION,
     USER_TWINS_INSTRUCTION,
     ModelDesignAdapter,
     ModelRequirementsAdapter,
     ModelTeamProposalAdapter,
     ModelUserModelingAdapter,
+    _exploration_rule,
+    design_visual_instruction,
+    hosted_design_instruction,
 )
 from orchestwin.models.openai_compatible import (
     OpenAICompatibleHttpResponse,
@@ -848,6 +856,236 @@ def test_compact_planning_requests_remain_bound_to_project_and_exact_context(tmp
     context = json.loads(transport.calls[0]["payload"]["messages"][1]["content"])["context"]
     assert context["project_id"] == str(request.project_id)
     assert context["governed_request_hash"] == request.content_hash
+
+
+def test_the_local_design_route_asks_for_no_palette_and_binds_the_catalog_colours(tmp_path):
+    from .draft_fixtures import proposal_draft
+
+    request = design_fixtures.proposal_request()
+    expected = asyncio.run(design_fixtures.FakeDeterministicDesignAdapter().propose(request))
+    generator, transport = make_generator(
+        tmp_path, proposal_draft("design", expected.package, request)
+    )
+
+    result = asyncio.run(ModelDesignAdapter(generator).propose(request))
+
+    messages = transport.calls[0]["payload"]["messages"]
+    sent = json.loads(messages[1]["content"])
+    assert "fonts" not in sent["context"]
+    assert not {"PaletteDraft", "TypePairDraft"} & set(sent["output_schema"]["$defs"])
+    assert HOSTED_PALETTE_INSTRUCTION not in messages[0]["content"]
+    for item in result.package.alternatives:
+        choices = item.visual_language.choices
+        assert item.visual_language.palette_roles == resolve_palette(
+            choices.hue_family,
+            choices.color_scheme,
+            choices.color_mode,
+            choices.saturation,
+            choices.surface_tone,
+        )
+
+
+def test_with_a_design_system_the_local_route_keeps_the_plain_alternatives(tmp_path):
+    from .draft_fixtures import proposal_draft
+
+    request = design_fixtures.proposal_request()
+    expected = asyncio.run(design_fixtures.FakeDeterministicDesignAdapter().propose(request))
+    output = proposal_draft("design", expected.package, request)
+    generator, transport = make_generator(tmp_path, output)
+    plain_generator, plain_transport = make_generator(tmp_path, output)
+
+    result = asyncio.run(ModelDesignAdapter(generator, design_system=APPLE_HIG).propose(request))
+    plain = asyncio.run(ModelDesignAdapter(plain_generator).propose(request))
+
+    messages = transport.calls[0]["payload"]["messages"]
+    plain_messages = plain_transport.calls[0]["payload"]["messages"]
+    assert "design_system" not in json.loads(messages[1]["content"])["context"]
+    assert json.loads(messages[1]["content"]) == json.loads(plain_messages[1]["content"])
+    assert messages[0]["content"] == plain_messages[0]["content"]
+    assert APPLE_HIG.palette_text not in messages[0]["content"]
+    assert [item.visual_language for item in result.package.alternatives] == [
+        item.visual_language for item in plain.package.alternatives
+    ]
+    assert {item.visual_language.design_system for item in result.package.alternatives} == {None}
+
+
+def test_with_a_design_system_the_hosted_instruction_asks_for_three_alternatives():
+    from orchestwin.models.design_directions import directed_design_context
+    from orchestwin.models.design_drafts import font_design_context
+
+    from .test_design_directions import (
+        hosted_context,
+        selected_directions,
+        system_context,
+        system_directions,
+    )
+
+    request = design_fixtures.proposal_request()
+    plain_context = font_design_context(
+        directed_design_context(hosted_context(request), selected_directions(request))
+    )
+    context = font_design_context(
+        directed_design_context(system_context(request), system_directions(request))
+    )
+    third = _exploration_rule("DES-003", context["visual_exploration"])
+
+    plain = hosted_design_instruction(plain_context)
+    system = hosted_design_instruction(context)
+
+    expected = (
+        plain.replace("Propose exactly two distinct", "Propose exactly three distinct")
+        .replace(design_visual_instruction("two"), design_visual_instruction("three"))
+        .replace(
+            HOSTED_DIRECTIONS_INSTRUCTION.format(first="DES-001", second="DES-002"),
+            HOSTED_SYSTEM_DIRECTIONS_INSTRUCTION.format(
+                first="DES-001", second="DES-002", third="DES-003"
+            ),
+        )
+        .replace(
+            "alternatives has exactly 2 items, in this order: DES-001, DES-002.",
+            "alternatives has exactly 3 items, in this order: DES-001, DES-002, DES-003.",
+        )
+        .replace("critiques has exactly 4 items", "critiques has exactly 6 items")
+        .replace(
+            "CRQ-004 judges DES-002 as T2.",
+            "CRQ-004 judges DES-002 as T2; CRQ-005 judges DES-003 as T1; CRQ-006 judges DES-003 "
+            "as T2.",
+        )
+    )
+    if third is not None:
+        expected = expected.replace(
+            f" {HOSTED_PALETTE_INSTRUCTION}", f" {third} {HOSTED_PALETTE_INSTRUCTION}"
+        )
+    assert plain.endswith(f" {HOSTED_PALETTE_INSTRUCTION}")
+    assert APPLE_HIG.palette_text not in plain and "DES-003" not in plain
+    assert "The three alternatives must read as three different products" in system
+    assert system == f"{expected} {APPLE_HIG.palette_text}"
+
+
+def test_with_a_design_system_the_binding_governs_only_the_third_alternative():
+    from orchestwin.models.design_drafts import (
+        HostedDesignDraft,
+        HostedSystemDesignDraft,
+        bind_design,
+        design_context,
+    )
+
+    from .test_design_directions import (
+        SYSTEM_PALETTE,
+        alternatives_answer,
+        explored,
+        reference,
+        selected_directions,
+        system_alternatives,
+        system_directions,
+    )
+
+    request = design_fixtures.proposal_request()
+    _, twins = design_context(request)
+    chosen = system_directions(request)
+    directed = explored(request, chosen)
+
+    def bound(payload, design_system=APPLE_HIG):
+        return bind_design(
+            HostedSystemDesignDraft.model_validate(payload),
+            request,
+            twins,
+            reference,
+            directions=chosen,
+            exploration=directed,
+            design_system=design_system,
+        )
+
+    def answer(index=2, **visual):
+        payload = system_alternatives(request, chosen)
+        target = payload["alternatives"][index]["visual"]
+        target["palette"].update(visual.pop("palette", {}))
+        target.update(visual)
+        return payload
+
+    package = bound(answer())
+    free = answer(0, type_pair={"heading": "Lora", "body": "Source Sans 3"})
+
+    assert [item.visual_language.design_system for item in package.alternatives] == [
+        None,
+        None,
+        APPLE_HIG.identifier,
+    ]
+    first, second, third = (item.visual_language.token_values for item in package.alternatives)
+    assert {name: third[name] for name in APPLE_HIG.tokens} == dict(APPLE_HIG.tokens)
+    assert third["--vl-font-heading"].startswith('"Geist", ')
+    assert third["--vl-font-body"].startswith('"Geist", ')
+    for tokens in (first, second):
+        assert {name: tokens.get(name) for name in APPLE_HIG.tokens} != dict(APPLE_HIG.tokens)
+    heading = bound(free).alternatives[0].visual_language.token_values["--vl-font-heading"]
+    assert not is_system_colour(APPLE_HIG, free["alternatives"][0]["visual"]["palette"]["primary"])
+    assert heading.startswith('"Lora", ')
+    assert len(bound(answer(palette={"primary": "#38cc5f"})).alternatives) == 3
+    refused = (
+        (answer(palette={"primary": "#2bbd4f"}), "DES-003 must take its primary"),
+        (answer(palette={"accent": "#2f7d5b"}), "DES-003 must take its accent"),
+        (answer(palette={"accent": "#007aff"}), "DES-003 must take its accent"),
+    )
+    for payload, start in refused:
+        with pytest.raises(ValueError, match=f"^{start} from the colours of the design system$"):
+            bound(payload)
+        assert len(bound(payload, None).alternatives) == 3
+    other = answer(type_pair={"heading": "Lora", "body": "Geist"})
+    with pytest.raises(ValueError, match=r"^DES-003 must use the type pair of the design system$"):
+        bound(other)
+    with pytest.raises(ValueError, match="clearly different primary colours"):
+        bound(answer(1, palette={"primary": SYSTEM_PALETTE[0]}))
+    pair = selected_directions(request)
+    with pytest.raises(
+        ValueError, match=r"^the design needs DES-003, the alternative of the design system$"
+    ):
+        bind_design(
+            HostedDesignDraft.model_validate(alternatives_answer(request, pair)),
+            request,
+            twins,
+            reference,
+            directions=pair,
+            exploration=explored(request, pair),
+            design_system=APPLE_HIG,
+        )
+
+
+def test_with_a_design_system_a_third_palette_outside_it_leaves_its_reason_in_the_evidence():
+    from .test_design_directions import (
+        DIRECTIONS_ANSWER,
+        ScriptedPort,
+        hosted_generator,
+        system_alternatives,
+        system_directions,
+    )
+    from .test_proposal_evidence import Command, MemoryEvidence
+
+    request = design_fixtures.proposal_request()
+    payload = system_alternatives(request, system_directions(request))
+    payload["alternatives"][2]["visual"]["palette"]["primary"] = "#2f7d5b"
+    adapter = ModelDesignAdapter(
+        hosted_generator(ScriptedPort(DIRECTIONS_ANSWER, payload)), design_system=APPLE_HIG
+    )
+    store = MemoryEvidence()
+
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(
+            Command(store, lambda: adapter.propose(request)).run(
+                owner_user_id=uuid4(), project_id=request.project_id
+            )
+        )
+
+    _, design = store.requests
+    assert [(kind, value) for kind, value, _ in store.events[design]][1:] == [
+        (
+            "ADAPTER_REJECTED",
+            {
+                "code": "INVALID_PROVIDER_OUTPUT",
+                "reason": "DES-003 must take its primary from the colours of the design system",
+            },
+        ),
+        ("APPLICATION_RESULT", {"status": "FAILED", "code": "INVALID_PROVIDER_OUTPUT"}),
+    ]
 
 
 @pytest.mark.parametrize("change", ["source", "twin", "internal_link", "owner_claim", "duplicate"])

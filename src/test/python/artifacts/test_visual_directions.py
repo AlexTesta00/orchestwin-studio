@@ -62,6 +62,8 @@ from orchestwin.artifacts.visual_language import (
     _plain_css_value,
     create_visual_language,
 )
+from orchestwin.models import design_systems
+from orchestwin.models.design_systems import APPLE_HIG
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 
 from . import design_fixtures
@@ -283,10 +285,40 @@ EVERY_AXES = tuple(
     DirectionAxes(layout=layout, shape=shape, type=kind, colour=colour, density=density)
     for layout, shape, kind, colour, density in product(*DIRECTION_AXIS_VALUES.values())
 )
+SYSTEM_NAME = "Apple Human Interface Guidelines"
+SYSTEM_BOUND = {
+    "header": ("COMPACT_BAR", "MINIMAL"),
+    "corners": ("SOFT", "ROUND"),
+    "borders": ("NONE", "HAIRLINE"),
+    "elevation": ("FLAT",),
+    "type_scale": ("COMPACT", "REGULAR"),
+    "heading_weight": ("REGULAR", "SEMIBOLD"),
+    "emphasis": ("RESTRAINED", "BALANCED"),
+    "background": ("PLAIN", "GRADIENT"),
+    "density": ("COMFORTABLE",),
+}
 
 
 def axes(layout: str, shape: str, kind: str, colour: str, density: str) -> DirectionAxes:
     return DirectionAxes(layout=layout, shape=shape, type=kind, colour=colour, density=density)
+
+
+SYSTEM_AXES = axes("PANELS", "SOFT_FILL", "EVEN", "ACCENT_ONLY", "COMFORTABLE")
+
+
+def system_direction() -> VisualDirection:
+    return design_systems.system_direction(APPLE_HIG)
+
+
+def system_language(language: VisualLanguage) -> VisualLanguage:
+    return create_visual_language(
+        choices=language.choices,
+        product_name=language.product_name,
+        rationale=language.rationale,
+        twin_fit=language.twin_fit,
+        direction=system_direction(),
+        design_system=APPLE_HIG,
+    )
 
 
 def direction(**changes: object) -> VisualDirection:
@@ -704,8 +736,7 @@ def test_exploration_replaces_and_adds_the_dimensions_bound_by_the_direction() -
         code: {name: tuple(values) for name, values in dimensions.items()}
         for code, dimensions in base.items()
     }
-    expected = {
-        **unchanged["DES-001"],
+    bound = {
         "header": ("HERO_BAND",),
         "corners": ("PILL",),
         "borders": ("NONE", "HAIRLINE"),
@@ -718,8 +749,10 @@ def test_exploration_replaces_and_adds_the_dimensions_bound_by_the_direction() -
         "surface_tone": ("TINTED", "WARM", "COOL"),
         "density": ("SPACIOUS",),
     }
+    expected = {**unchanged["DES-001"], **bound}
 
     explored = direction_exploration(base, {"DES-001": chosen})
+    added = direction_exploration(base, {"DES-009": chosen})
 
     assert tuple(explored) == tuple(base)
     assert explored["DES-001"] == expected
@@ -732,8 +765,52 @@ def test_exploration_replaces_and_adds_the_dimensions_bound_by_the_direction() -
         for item in values
     )
     assert direction_exploration(base, {}) == unchanged
-    assert direction_exploration(base, {"DES-009": chosen}) == unchanged
+    assert tuple(added) == (*base, "DES-009")
+    assert added == {**unchanged, "DES-009": bound}
+    assert list(added["DES-009"]) == list(bound)
     assert base == visual_exploration(design_fixtures.PROJECT_ID)
+
+
+def test_the_direction_of_the_system_explores_a_third_alternative_after_the_two_free_ones() -> None:
+    base = visual_exploration(design_fixtures.PROJECT_ID)
+    candidates = selection_candidates()
+    free = select_directions(candidates, project_id=design_fixtures.PROJECT_ID)
+    directions = dict(zip(("DES-001", "DES-002"), free, strict=True))
+    system = system_direction()
+
+    two = direction_exploration(base, directions)
+    three = direction_exploration(base, {**directions, "DES-003": system})
+    grouped = direction_exploration(
+        {**base, "DES-003": {"hue_family": ["TEAL"]}}, {"DES-003": system}
+    )
+
+    assert len(free) == 2 and set(free) <= set(candidates)
+    assert system not in candidates
+    assert tuple(two) == ("DES-001", "DES-002")
+    assert tuple(three) == ("DES-001", "DES-002", "DES-003")
+    assert {code: three[code] for code in two} == two
+    assert three["DES-003"] == SYSTEM_BOUND
+    assert list(three["DES-003"]) == list(SYSTEM_BOUND)
+    assert {
+        dimension: tuple(item.value for item in values)
+        for axis in DIRECTION_AXES
+        for dimension, values in AXIS_BINDINGS[axis][getattr(SYSTEM_AXES, axis)].items()
+    } == SYSTEM_BOUND
+    assert direction_exploration(base, {**directions, "DES-003": None}) == two
+    assert tuple(grouped) == ("DES-001", "DES-002", "DES-003")
+    assert grouped["DES-003"] == {"hue_family": ("TEAL",), **SYSTEM_BOUND}
+    assert base == visual_exploration(design_fixtures.PROJECT_ID)
+
+
+def test_the_direction_of_the_system_is_a_valid_direction_of_the_vocabulary() -> None:
+    value = system_direction()
+    restored = visual_direction_from_snapshot(json.loads(json.dumps(value.to_snapshot())))
+
+    assert value.axes == SYSTEM_AXES
+    assert (value.name, value.typicality, value.candidates) == (SYSTEM_NAME, 50, 2)
+    assert restored == value
+    for mode in ColorMode:
+        assert admits_valid_choices(SYSTEM_BOUND, mode), mode
 
 
 @pytest.mark.parametrize("axis", DIRECTION_AXES)

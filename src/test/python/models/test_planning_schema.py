@@ -5,11 +5,17 @@ import re
 
 import pytest
 
-from orchestwin.models.design_drafts import DesignDraft, design_context
+from orchestwin.models.design_drafts import DesignDraft, HostedSystemDesignDraft, design_context
+from orchestwin.models.design_systems import APPLE_HIG, design_system_view
 from orchestwin.models.planning_schema import (
     CRITIQUE_LISTS,
+    DESIGN_ALTERNATIVE_CODES,
+    HOSTED_DESIGN_PURPOSE,
+    SYSTEM_DESIGN_ALTERNATIVE_CODES,
     constrain_planning_schema,
     critique_list_limit,
+    critique_pairs,
+    design_alternative_codes,
 )
 from orchestwin.models.requirements_drafts import RequirementsDraft, requirements_context
 
@@ -102,6 +108,38 @@ def test_critiques_get_shorter_lists_as_the_twins_grow():
         assert critique["concerns"]["minItems"] == 1
         fits = schema["$defs"]["VisualLanguageDraft"]["properties"]["twin_fit"]
         assert len(fits["prefixItems"]) == count
+
+
+def test_a_design_system_adds_its_alternative_to_the_codes_and_to_the_critiques():
+    context, _ = design_context(design_fixtures.proposal_request())
+    governed = {
+        **context,
+        "purpose": HOSTED_DESIGN_PURPOSE,
+        "design_system": design_system_view(APPLE_HIG),
+    }
+    schema = HostedSystemDesignDraft.model_json_schema()
+
+    constrain_planning_schema(schema, governed, "design")
+
+    assert design_alternative_codes(context) == DESIGN_ALTERNATIVE_CODES == ("DES-001", "DES-002")
+    assert design_alternative_codes({**context, "design_system": None}) == DESIGN_ALTERNATIVE_CODES
+    assert design_alternative_codes(governed) == SYSTEM_DESIGN_ALTERNATIVE_CODES
+    assert SYSTEM_DESIGN_ALTERNATIVE_CODES == ("DES-001", "DES-002", "DES-003")
+    assert critique_pairs(["T1"]) == [("CRQ-001", "DES-001", "T1"), ("CRQ-002", "DES-002", "T1")]
+    alternatives = schema["properties"]["alternatives"]
+    assert (alternatives["minItems"], alternatives["maxItems"]) == (3, 3)
+    assert [
+        item["allOf"][1]["properties"]["code"]["const"] for item in alternatives["prefixItems"]
+    ] == list(SYSTEM_DESIGN_ALTERNATIVE_CODES)
+    critiques = schema["properties"]["critiques"]["prefixItems"]
+    names = ("code", "alternative", "as_twin")
+    assert [
+        tuple(item["allOf"][1]["properties"][name]["const"] for name in names) for item in critiques
+    ] == critique_pairs(list(context["twins"]), SYSTEM_DESIGN_ALTERNATIVE_CODES)
+    assert len(critiques) == 3 * len(context["twins"])
+    assert schema["properties"]["recommendation"]["enum"] == list(SYSTEM_DESIGN_ALTERNATIVE_CODES)
+    critique = schema["$defs"]["HostedCritiqueDraft"]["properties"]
+    assert critique["alternative"]["enum"] == list(SYSTEM_DESIGN_ALTERNATIVE_CODES)
 
 
 @pytest.mark.parametrize("purpose", ["DESIGN_MOCKUP", "DESIGN_MOCKUP_HTML", "DESIGN_ITERATION"])

@@ -22,6 +22,7 @@ from orchestwin.artifacts.visual_directions import (
     create_visual_direction,
     direction_exploration,
 )
+from orchestwin.models.design_systems import SYSTEM_ALTERNATIVE_CODE, context_design_system
 from orchestwin.models.output_language import (
     MIN_JUDGED_WORDS,
     word_count,
@@ -53,6 +54,10 @@ _INSTRUCTION: Final = (
     "panel, a paper form, an index card, a field notebook, a signage system, a shop window. Name "
     "the tradition in the concept when one guided you; never name a brand, a company, a product "
     "or a designer.",
+    "Every direction is executed at the level of finish of the best product design of today: "
+    "large display type where the direction allows it, generous space, pictures or drawings, soft "
+    "or bold shapes according to the direction; none of the five looks like a template of the "
+    "past decade.",
     "Every direction must suit every user twin in context.twins ({twins}): their age, their "
     "context of use, their accessibility needs and their device. When a twin declares a visual "
     "or motor impairment, or uses the product in a hurry or with one hand, no direction is "
@@ -73,8 +78,9 @@ _INSTRUCTION: Final = (
     "question without this instruction would propose this direction; be honest: the safe "
     "direction described above is near 0.6, a direction that few would think of is below 0.1. At "
     "least three of the five candidates have a typicality below 0.15.",
-    "Limits that every direction must respect: no photograph, illustration or external image "
-    "exists, only flat inline drawings in the colours of the design; the typefaces come from a "
+    "Limits that every direction must respect: no photograph or external image exists: pictures "
+    "are flat tinted placeholders that the Studio draws in the colours of the design, and icons "
+    "come from a fixed set; the typefaces come from a "
     "fixed catalog and are chosen later, so never name a typeface; the colours come from one "
     "palette with a background, surfaces, a text colour, a primary colour and an accent colour, "
     "chosen later: describe how colour is used, never which colours. Use the selected team's "
@@ -84,6 +90,11 @@ _INSTRUCTION: Final = (
 _REJECTION_INSTRUCTION: Final = (
     "The context carries rejection, with the reason why the Studio rejected an earlier answer: "
     "propose five candidates again and correct that point."
+)
+_SYSTEM_INSTRUCTION: Final = (
+    "context.design_system names a design system that the Studio gives to a third alternative, "
+    f"{SYSTEM_ALTERNATIVE_CODE}, together with a direction of its own. The five candidates are "
+    "for the other two alternatives: they are free of that system, and none of them imitates it."
 )
 
 
@@ -128,6 +139,8 @@ def directions_instruction(context: Mapping[str, object]) -> str:
         language=_UNKNOWN_LANGUAGE if language is None else language["name"],
         twins=", ".join(context["twins"]),
     )
+    if context_design_system(context) is not None:
+        instruction = f"{instruction} {_SYSTEM_INSTRUCTION}"
     if "rejection" in context:
         return f"{instruction} {_REJECTION_INSTRUCTION}"
     return instruction

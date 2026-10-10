@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.artifacts.visual_catalog import SCRIPT_TONES, DesignTone
-from orchestwin.models import design_drafts
+from orchestwin.models import design_directions, design_drafts
 from orchestwin.models.anthropic_hosted import build_anthropic_adapter
 from orchestwin.models.design_directions import (
     DESIGN_DIRECTIONS_OUTPUT_TOKENS,
@@ -26,9 +26,12 @@ from orchestwin.models.design_drafts import (
     DesignDraft,
     HostedCritiqueDraft,
     HostedDesignDraft,
+    HostedSystemDesignDraft,
     design_context,
+    font_design_context,
     hosted_design_context,
 )
+from orchestwin.models.design_systems import APPLE_HIG, design_system_view
 from orchestwin.models.generation_routing import RoutingProposalGenerator
 from orchestwin.models.hosted_configuration import ModelRoutes
 from orchestwin.models.hosted_schema import hosted_output_schema
@@ -53,7 +56,7 @@ from . import test_fake_requirements as requirements_fixtures
 from . import test_fake_team_proposal_adapter as team_fixtures
 from .draft_fixtures import proposal_draft
 from .test_design_directions import DIRECTIONS_ANSWER, selected_directions
-from .test_design_drafts import NAMES, bind, draft
+from .test_design_drafts import NAMES, bind, draft, with_palettes
 from .test_fake_design import proposal_request
 from .test_hosted_schema import CapturePort
 from .test_hosted_support import TEST_KEY, FakeAnthropicClient, message, providers
@@ -103,9 +106,14 @@ EXPLORATION = {
 }
 
 
+def unbound_exploration(base, directions):
+    return {code: dict(dimensions) for code, dimensions in base.items()}
+
+
 @pytest.fixture
 def unrestricted(monkeypatch):
     monkeypatch.setattr(design_drafts, "visual_exploration", lambda project_id: {})
+    monkeypatch.setattr(design_directions, "direction_exploration", unbound_exploration)
 
 
 def digest(text: str) -> str:
@@ -117,7 +125,7 @@ def hosted_draft(design_draft, verdicts=VERDICTS) -> HostedDesignDraft:
         HostedCritiqueDraft(**item.model_dump(), verdict=verdict, quote=quote)
         for item, (verdict, quote) in zip(design_draft.critiques, verdicts, strict=True)
     )
-    return HostedDesignDraft(**{**design_draft.model_dump(), "critiques": critiques})
+    return HostedDesignDraft(**{**with_palettes(design_draft.model_dump()), "critiques": critiques})
 
 
 def three_twin_context():
@@ -200,7 +208,7 @@ def test_the_hosted_contract_has_its_own_version_and_purpose():
     context, _ = design_context(request)
     team = request.team.selected_agent_ids
     marked = hosted_design_context(context, team)
-    assert HOSTED_DESIGN_CONTRACT_VERSION == 107
+    assert HOSTED_DESIGN_CONTRACT_VERSION == 112
     assert HOSTED_DESIGN_PURPOSE == "DESIGN_ALTERNATIVES_HOSTED"
     assert marked == {
         **context,
@@ -258,6 +266,29 @@ def test_the_hosted_schema_keeps_the_positions_and_the_list_limits_of_two_twins(
         for name in CRITIQUE_LISTS
     }
     assert limits == {None if count <= 2 else (2 if count <= 4 else 1)}
+
+
+@pytest.mark.parametrize("count", [2, 3])
+def test_with_a_design_system_every_pair_of_three_alternatives_asks_for_a_verdict(count):
+    request = proposal_request()
+    context = hosted_design_context(design_context(request)[0], request.team.selected_agent_ids)
+    template = next(iter(context["twins"].values()))
+    context["twins"] = {f"T{index}": template for index in range(1, count + 1)}
+    context["design_system"] = design_system_view(APPLE_HIG)
+    schema = HostedSystemDesignDraft.model_json_schema()
+
+    constrain_planning_schema(schema, context, "design")
+    instruction = hosted_design_instruction(context)
+
+    branches = schema["properties"]["critiques"]["prefixItems"]
+    assert {item["allOf"][0]["$ref"] for item in branches} == {"#/$defs/HostedCritiqueDraft"}
+    assert [item["allOf"][1]["properties"]["alternative"]["const"] for item in branches] == [
+        code for code in ("DES-001", "DES-002", "DES-003") for _twin in range(count)
+    ]
+    assert {"verdict", "quote"} <= set(schema["$defs"]["HostedCritiqueDraft"]["required"])
+    assert f"critiques has exactly {3 * count} items" in instruction
+    assert f"CRQ-{3 * count:03d} judges DES-003 as T{count}." in instruction
+    assert instruction.count("Every critique also has verdict and quote.") == 1
 
 
 def test_a_hosted_provider_loses_the_positions_so_the_instruction_states_them():
@@ -379,7 +410,7 @@ def test_the_design_adapter_asks_the_design_route_for_the_hosted_draft(unrestric
     assert directions["instruction"] == directions_instruction(directions["context"])
     assert call["task"] == "design"
     assert call["output_type"] is HostedDesignDraft
-    assert call["context"] == directed_design_context(marked, chosen)
+    assert call["context"] == font_design_context(directed_design_context(marked, chosen))
     assert call["max_output_tokens"] == HOSTED_DESIGN_OUTPUT_TOKENS
     assert call["instruction"] == hosted_design_instruction(call["context"])
     assert result.provider_id == hosted.provider_id
