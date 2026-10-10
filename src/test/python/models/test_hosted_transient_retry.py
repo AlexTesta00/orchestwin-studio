@@ -46,7 +46,7 @@ from src.test.python.models.test_proposal_evidence import Command
 Code = StructuredGenerationFailureCode
 BUDGET = GenerationBudget(1_500_000, 10_000_000, 60_000_000)
 VALID = {"assessment": "Clear."}
-TOO_LONG = {"assessment": "x" * 41}
+INVALID = {"assessment": ["x" * 41]}
 TEAM_OUTPUT = {"rationale": "A compact team fits the brief.", "suggestions": []}
 OVERLOADED = {"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}}
 SLOW_DOWN = {"type": "error", "error": {"type": "rate_limit_error", "message": "slow down"}}
@@ -340,7 +340,7 @@ def test_the_budget_is_checked_again_before_the_second_request():
 
 def test_a_retried_generation_is_still_negotiated_and_answered_again_after_a_schema_error():
     generator, client, pauses = anthropic_generator(
-        overloaded(), grammar_rejected(), message(TOO_LONG), message(VALID)
+        overloaded(), grammar_rejected(), message(INVALID), message(VALID)
     )
     store = SpendingEvidence()
     output, scope = run(generator, store)
@@ -361,7 +361,7 @@ def test_a_retried_generation_is_still_negotiated_and_answered_again_after_a_sch
 
 def test_a_transient_failure_after_a_schema_retry_sends_the_same_request_again():
     generator, client, pauses = anthropic_generator(
-        message(TOO_LONG), rate_limited(), message(VALID)
+        message(INVALID), rate_limited(), message(VALID)
     )
     output, scope = run(generator, SpendingEvidence())
     assert output.assessment == "Clear."

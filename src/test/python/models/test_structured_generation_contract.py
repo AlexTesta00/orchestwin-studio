@@ -114,8 +114,8 @@ def test_request_hash_and_adapter_identity_reject_silent_changes() -> None:
         replace(_identity(), adapter_id="ut-evaluator-v1")
 
 
-def test_the_system_instruction_may_reach_twenty_thousand_characters() -> None:
-    longest = "x" * 20_000
+def test_the_system_instruction_may_reach_thirty_thousand_characters() -> None:
+    longest = "x" * 30_000
 
     assert _request(system_instruction=longest).system_instruction == longest
     with pytest.raises(ValueError, match="system instruction exceeds maximum length"):

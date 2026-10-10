@@ -16,6 +16,8 @@ from orchestwin.projects.requirements_primitives import canonical_json
 MAX_LISTED_VIOLATIONS: Final = 5
 MAX_PRUNED_PROPERTIES: Final = 20
 CLAUDE_CODE_SCHEMA_MAX_CHARACTERS: Final = 24_000
+SHORTENING_LIMIT: Final = 4000
+ELLIPSIS: Final = "…"
 VIOLATION_PREFIX: Final = "The hosted model answer violates the output schema at "
 HOSTED_TASK_REQUEST: Final = (
     "Carry out the task of the system instruction on this input and answer with one complete "
@@ -27,6 +29,10 @@ _FENCE: Final = re.compile(
     r"\A```[A-Za-z0-9_+-]*[ \t]*\r?\n(?P<body>.*?)\r?\n?[ \t]*```\Z", re.DOTALL
 )
 _MAX_PATH_LENGTH: Final = 200
+_SIMPLE_NAME: Final = re.compile(r"[a-zA-Z][a-zA-Z0-9_]*")
+_TRAILING_MARKS: Final = ".,;:"
+_NOT_PROSE: Final = frozenset({"pattern", "format", "enum", "const"})
+_ALTERNATIVES: Final = ("anyOf", "oneOf")
 _UNDEFINED_PROPERTY: Final = "additionalProperties"
 _COMBINATORS: Final = frozenset(
     {"allOf", "anyOf", "oneOf", "not", "if", "then", "else", "dependentSchemas"}
@@ -164,6 +170,15 @@ def prune_undefined_properties(payload: object, schema: Mapping[str, Any]) -> Pr
     return PrunedAnswer(payload=candidate, removed_paths=tuple(removed))
 
 
+def shorten_overlong_strings[Payload](
+    payload: Payload, schema: Mapping[str, Any], *, limit: int = SHORTENING_LIMIT
+) -> tuple[Payload, tuple[str, ...]]:
+    definitions = schema.get("$defs")
+    shortening = _Shortening(definitions if isinstance(definitions, Mapping) else {}, limit)
+    shortened, paths = shortening.walk(payload, schema, "$")
+    return shortened, tuple(dict.fromkeys(paths))
+
+
 def violation_message(violations: tuple[SchemaViolation, ...]) -> str:
     listed = "; ".join(
         f"{item.path} ({item.keyword})" for item in violations[:MAX_LISTED_VIOLATIONS]
@@ -214,6 +229,125 @@ class PromptedSchemas:
 def _bounded_path(path: str) -> str:
     compact = "".join(path.split())
     return compact if len(compact) <= _MAX_PATH_LENGTH else compact[:_MAX_PATH_LENGTH]
+
+
+@dataclass(frozen=True, slots=True)
+class _Shortening:
+    definitions: Mapping[str, Any]
+    limit: int
+
+    def walk(self, value: Any, node: object, path: str) -> tuple[Any, list[str]]:
+        if not isinstance(node, Mapping):
+            return value, []
+        paths: list[str] = []
+        for branch in self._applied(node):
+            value, found = self.walk(value, branch, path)
+            paths.extend(found)
+        for key in _ALTERNATIVES:
+            branches = node.get(key)
+            if isinstance(branches, list) and branches:
+                value, found = self._alternative(value, branches, path)
+                paths.extend(found)
+        if isinstance(value, str):
+            text = self._text(value, node)
+            if text is not None:
+                value = text
+                paths.append(_bounded_path(path))
+        elif isinstance(value, dict):
+            value, found = self._properties(value, node.get("properties"), path)
+            paths.extend(found)
+        elif isinstance(value, list):
+            value, found = self._items(value, node, path)
+            paths.extend(found)
+        return value, paths
+
+    def _applied(self, node: Mapping[str, Any]) -> list[object]:
+        reference = node.get("$ref")
+        target = (
+            self.definitions.get(reference.removeprefix(_DEFINITIONS_PREFIX))
+            if isinstance(reference, str) and reference.startswith(_DEFINITIONS_PREFIX)
+            else None
+        )
+        branches = node.get("allOf")
+        return [
+            *([] if target is None else [target]),
+            *(branches if isinstance(branches, list) else []),
+        ]
+
+    def _alternative(self, value: Any, branches: list[object], path: str) -> tuple[Any, list[str]]:
+        if any(self._fits(value, branch) for branch in branches):
+            return value, []
+        for branch in branches:
+            candidate, found = self.walk(value, branch, path)
+            if found and self._fits(candidate, branch):
+                return candidate, found
+        return value, []
+
+    def _fits(self, value: Any, branch: object) -> bool:
+        if isinstance(branch, bool):
+            return branch
+        if not isinstance(branch, Mapping):
+            return False
+        schema = {**branch, "$defs": self.definitions} if self.definitions else dict(branch)
+        return Draft202012Validator(schema).is_valid(value)
+
+    def _text(self, value: str, node: Mapping[str, Any]) -> str | None:
+        maximum = node.get("maxLength")
+        if (
+            type(maximum) is not int
+            or not 0 < maximum <= self.limit
+            or len(value) <= maximum
+            or not _NOT_PROSE.isdisjoint(node)
+        ):
+            return None
+        return _shortened_text(value, maximum)
+
+    def _properties(
+        self, value: dict[str, Any], properties: object, path: str
+    ) -> tuple[dict[str, Any], list[str]]:
+        if not isinstance(properties, Mapping):
+            return value, []
+        changed: dict[str, Any] = {}
+        paths: list[str] = []
+        for name, child in value.items():
+            if name in properties:
+                shortened, found = self.walk(child, properties[name], _member_path(path, name))
+                if found:
+                    changed[name] = shortened
+                    paths.extend(found)
+        return ({**value, **changed} if changed else value), paths
+
+    def _items(
+        self, value: list[Any], node: Mapping[str, Any], path: str
+    ) -> tuple[list[Any], list[str]]:
+        prefix = node.get("prefixItems")
+        leading = prefix if isinstance(prefix, list) else []
+        rest = node.get("items")
+        items = list(value)
+        paths: list[str] = []
+        for index, child in enumerate(value):
+            schema = leading[index] if index < len(leading) else rest
+            items[index], found = self.walk(child, schema, f"{path}[{index}]")
+            paths.extend(found)
+        return (items if paths else value), paths
+
+
+def _member_path(path: str, name: str) -> str:
+    if _SIMPLE_NAME.fullmatch(name):
+        return f"{path}.{name}"
+    escaped = name.replace("\\", "\\\\").replace("'", "\\'")
+    return f"{path}['{escaped}']"
+
+
+def _shortened_text(value: str, maximum: int) -> str:
+    cut = value[: maximum - 1]
+    space = next((index for index in range(len(cut) - 1, -1, -1) if cut[index].isspace()), -1)
+    if space * 5 >= maximum * 3:
+        cut = cut[:space]
+    end = len(cut)
+    while end and (cut[end - 1].isspace() or cut[end - 1] in _TRAILING_MARKS):
+        end -= 1
+    return f"{cut[:end]}{ELLIPSIS}"
 
 
 def _prunable(error: ValidationError) -> bool:
@@ -531,10 +665,12 @@ def _openai_node(node: Mapping[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "CLAUDE_CODE_SCHEMA_MAX_CHARACTERS",
+    "ELLIPSIS",
     "HOSTED_TASK_REQUEST",
     "MAX_LISTED_VIOLATIONS",
     "MAX_PRUNED_PROPERTIES",
     "OPENAI_STRING_FORMATS",
+    "SHORTENING_LIMIT",
     "VIOLATION_PREFIX",
     "HostedSchemaError",
     "PromptedSchemas",
@@ -545,6 +681,7 @@ __all__ = [
     "parse_prompted_answer",
     "prune_undefined_properties",
     "retry_sentence",
+    "shorten_overlong_strings",
     "validate_against_schema",
     "violation_message",
 ]

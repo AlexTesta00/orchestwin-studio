@@ -102,6 +102,15 @@ PLAN = {
     ],
     "summary": "Two steps for the loans that are late.",
 }
+PROSE_SCHEMA = {
+    **PLAN_SCHEMA,
+    "properties": {
+        **PLAN_SCHEMA["properties"],
+        "summary": {"maxLength": 40, "minLength": 3, "title": "Summary", "type": "string"},
+    },
+}
+LONG_SUMMARY = "Two steps for the loans that are late and for the readers who wait."
+SHORT_SUMMARY = "Two steps for the loans that are late…"
 CLOSED = {
     "additionalProperties": False,
     "properties": {"text": {"type": "string"}},
@@ -210,7 +219,7 @@ class Completion:
         return OpenAICompatibleHttpResponse(200, json.dumps(body).encode("utf-8"), 5)
 
 
-def generate(provider, answer, mode=PROMPTED):
+def generate(provider, answer, mode=PROMPTED, schema=PLAN_SCHEMA):
     text = json.dumps(answer)
     if provider == "anthropic":
         configuration = providers().hosted_model("design")
@@ -221,7 +230,7 @@ def generate(provider, answer, mode=PROMPTED):
         port = build_openai_hosted_adapter(
             configuration, api_key=GATEWAY_KEY, transport=Completion(text)
         )
-    request = structured_request(configuration, PLAN_SCHEMA)
+    request = structured_request(configuration, schema)
     return asyncio.run(port.generate(request, output_mode=mode))
 
 
@@ -330,7 +339,7 @@ def test_a_valid_answer_is_kept_byte_for_byte(provider, mode):
 
 
 @pytest.mark.parametrize("provider", PROVIDERS)
-def test_the_strict_mode_never_removes_anything(provider, monkeypatch):
+def test_the_strict_mode_never_removes_a_property_and_shortens_prose(provider, monkeypatch):
     calls = []
 
     def spy(payload, schema):
@@ -339,14 +348,20 @@ def test_the_strict_mode_never_removes_anything(provider, monkeypatch):
 
     monkeypatch.setattr(anthropic_hosted, "prune_undefined_properties", spy)
     monkeypatch.setattr(openai_hosted, "prune_undefined_properties", spy)
-    answer = _changed(_in_item)
-    strict = generate(provider, answer, STRICT)
+    answer = {**_changed(_in_item), "summary": LONG_SUMMARY}
+    shortened = {**answer, "summary": SHORT_SUMMARY}
+    strict = generate(provider, answer, STRICT, PROSE_SCHEMA)
     assert calls == []
     assert strict.failure.code is SCHEMA_ERROR
-    assert strict.failure.message == violation_message(validate_against_schema(answer, PLAN_SCHEMA))
-    prompted = generate(provider, answer, PROMPTED)
-    assert len(calls) == 1
-    assert prompted.success.payload_json == canonical_json(PLAN)
+    assert strict.failure.message == violation_message(
+        validate_against_schema(shortened, PROSE_SCHEMA)
+    )
+    assert strict.failure.message.endswith(" at $.steps[1] (additionalProperties).")
+    assert strict.to_snapshot()["shortened_paths"] == ["$.summary"]
+    prompted = generate(provider, answer, PROMPTED, PROSE_SCHEMA)
+    assert calls == [shortened]
+    assert prompted.success.payload_json == canonical_json({**PLAN, "summary": SHORT_SUMMARY})
+    assert prompted.to_snapshot()["shortened_paths"] == ["$.summary"]
 
 
 def test_the_local_route_is_unchanged(tmp_path, monkeypatch):
