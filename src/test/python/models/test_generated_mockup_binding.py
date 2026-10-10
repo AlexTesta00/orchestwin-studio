@@ -6,10 +6,15 @@ import pytest
 from pydantic import ValidationError
 
 from orchestwin.artifacts.bound_mockups import BoundGeneratedMockup
+from orchestwin.artifacts.generated_mockup_contrast import (
+    CONTROL_BORDER_REPLACED,
+    TEXT_COLOUR_REPLACED,
+)
 from orchestwin.artifacts.generated_mockup_repair import repair_generated_mockup
 from orchestwin.artifacts.generated_mockups import MAX_SCREENS
 from orchestwin.artifacts.prototypes import DeclarativePrototype
 from orchestwin.artifacts.visual_catalog import LayoutArchetype
+from orchestwin.artifacts.visual_color import contrast_ratio
 from orchestwin.models.generated_mockup_drafts import (
     GENERATED_MOCKUP_REQUIRES_VISUAL_LANGUAGE,
     MAX_REJECTION_REASONS,
@@ -242,15 +247,57 @@ def test_quality_errors_reject_the_answer_with_the_errors_first():
 
 def test_reasons_are_bounded_to_twenty():
     payload = draft_payload()
+    middle = "color-mix(in srgb, var(--vl-color-text) 39%, var(--vl-color-surface))"
     unreadable = "".join(
-        f".x{index}{{color:var(--vl-color-surface);background:var(--vl-color-surface)}}"
-        for index in range(25)
+        f".x{index}{{color:var(--vl-color-text);background:{middle}}}" for index in range(25)
     )
     failure = rejection({**payload, "css": payload["css"] + unreadable})
     assert failure.code == MOCKUP_QUALITY_REJECTED
     assert len(failure.reasons) == MAX_REJECTION_REASONS
     assert {reason.code for reason in failure.reasons} == {"LOW_CONTRAST"}
     assert len(GeneratedMockupRejection("X", [failure.reasons[0]] * 40).reasons) == 20
+
+
+FAINT = ".m-faint{color:var(--vl-color-border);background:var(--vl-color-surface)}"
+
+
+def test_a_colour_below_the_threshold_is_replaced_and_the_mockup_accepted_with_a_note():
+    payload = draft_payload()
+    weak_border = "textarea{border:1px solid var(--vl-color-border)}"
+    binding = bind({**payload, "css": payload["css"] + FAINT + weak_border})
+    assert binding.report.is_acceptable
+    assert binding.report.issues == ()
+    tokens = chosen(GUIDED_ID).visual_language.token_values
+    text = contrast_ratio(tokens["--vl-color-text-muted"], tokens["--vl-color-surface"])
+    border = max(
+        contrast_ratio(tokens["--vl-color-text-muted"], tokens[f"--vl-color-{role}"])
+        for role in ("background", "surface")
+    )
+    assert binding.warning_snapshots() == (
+        {
+            "code": CONTROL_BORDER_REPLACED,
+            "screen_code": None,
+            "detail": f"textarea var(--vl-color-border)→var(--vl-color-text-muted) {border:.2f}",
+        },
+        {
+            "code": TEXT_COLOUR_REPLACED,
+            "screen_code": None,
+            "detail": f".m-faint var(--vl-color-border)→var(--vl-color-text-muted) {text:.2f}",
+        },
+    )
+    assert binding.mockup.mockup.styles.endswith(
+        ".m-faint{color:var(--vl-color-text-muted);background:var(--vl-color-surface)}"
+        "textarea{border:1px solid var(--vl-color-text-muted)}"
+    )
+
+
+def test_a_rejected_answer_lists_the_replaced_colours_after_its_errors():
+    payload = with_markup(draft_payload(), "<h1>", "<h1>Lorem ipsum ")
+    failure = rejection({**payload, "css": payload["css"] + FAINT})
+    assert failure.code == MOCKUP_QUALITY_REJECTED
+    codes = [reason.code for reason in failure.reasons]
+    assert codes[:4] == ["PLACEHOLDER_TEXT"] * 4
+    assert codes[4:] == [TEXT_COLOUR_REPLACED]
 
 
 def test_a_mockup_in_another_language_is_rejected_screen_by_screen():

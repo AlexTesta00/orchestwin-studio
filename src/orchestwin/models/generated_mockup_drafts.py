@@ -13,6 +13,7 @@ from orchestwin.artifacts.bound_mockups import (
     create_bound_mockup,
     markup_requirement_codes,
 )
+from orchestwin.artifacts.generated_mockup_contrast import repair_contrast
 from orchestwin.artifacts.generated_mockup_repair import repair_generated_mockup
 from orchestwin.artifacts.generated_mockup_review import (
     MockupIssue,
@@ -204,6 +205,7 @@ def bind_generated_mockup(
     )
     visual = alternative.visual_language
     tokens = visual.token_values
+    mode = MODES[visual.choices.color_mode]
     known = requirement_codes(requirements)
     declared = declared_requirement_codes(alternative, requirements)
     repair = repair_generated_mockup(
@@ -213,11 +215,18 @@ def bind_generated_mockup(
         token_names=tokens,
         declared_codes=declared,
     )
+    styles, contrast_notes = repair_contrast(
+        repair.styles,
+        tokens,
+        text_threshold=mode.text_threshold,
+        large_text_threshold=mode.ui_threshold,
+        ui_threshold=mode.ui_threshold,
+    )
     try:
         mockup = create_generated_mockup(
             design_alternative_id=alternative.id,
             title=visual.product_name,
-            styles=repair.styles,
+            styles=styles,
             screens=[
                 {
                     "code": screen.code,
@@ -235,13 +244,14 @@ def bind_generated_mockup(
         mockup,
         tokens=tokens,
         requirement_codes=frozenset(known),
-        text_contrast_threshold=MODES[visual.choices.color_mode].text_threshold,
+        text_contrast_threshold=mode.text_threshold,
+        large_text_threshold=mode.ui_threshold,
     )
     errors = [issue for issue in report.issues if issue.severity is MockupIssueSeverity.ERROR]
     warnings = [
         *(
             MockupIssue(note.code, MockupIssueSeverity.WARNING, note.screen_code, note.detail)
-            for note in repair.notes
+            for note in (*repair.notes, *contrast_notes)
         ),
         *(issue for issue in report.issues if issue.severity is MockupIssueSeverity.WARNING),
     ]

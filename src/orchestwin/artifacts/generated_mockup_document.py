@@ -5,18 +5,31 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Final
 
-from orchestwin.artifacts.generated_mockup_structure import derive_elements, locate
+from orchestwin.artifacts.generated_mockup_structure import derive_elements, locate, walk_elements
 from orchestwin.artifacts.generated_mockup_styles import (
     GeneratedMockupError,
     has_forbidden_character,
 )
 from orchestwin.artifacts.generated_mockups import (
+    DATA_ICON,
+    DATA_PICTURE,
+    DATA_TONE,
     MAX_TITLE_LENGTH,
     GeneratedMockup,
+    MarkupElement,
+    is_placeholder,
     screen_trees,
     serialize_markup,
 )
 from orchestwin.artifacts.visual_fonts import font_faces
+from orchestwin.artifacts.visual_icons import (
+    DEFAULT_PICTURE_TONE,
+    ICON_ATTRIBUTES,
+    PICTURE_ASPECT,
+    PICTURE_VIEWBOX,
+    icon_body,
+    picture_body,
+)
 from orchestwin.artifacts.visual_language import _TOKEN_NAME, _plain_css_value
 
 CONTENT_SECURITY_POLICY: Final = (
@@ -65,6 +78,12 @@ BASE_RULES: Final = (
     "margin-inline:4px;padding:0;border:2px solid #ffffff;border-radius:50%;"
     f"background:{PIN_BACKGROUND};color:{PIN_FOREGROUND};font:700 11px/1 system-ui,sans-serif;"
     "vertical-align:middle}" + SCREEN_ITEM_RULE
+)
+ICON_CLASS: Final = "ot-icon"
+PICTURE_CLASS: Final = "ot-picture"
+PLACEHOLDER_RULES: Final = (
+    ".ot-icon{display:inline-block;width:1em;height:1em;vertical-align:-0.125em;flex:none}"
+    ".ot-picture{display:block;width:100%;height:auto}"
 )
 _ELEMENT_CODE: Final = re.compile(r"ELM-[0-9]{3,6}")
 _LANGUAGE: Final = re.compile(r"[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,7}")
@@ -126,6 +145,23 @@ def _root_rule(tokens: object) -> str:
     return ":root{" + ";".join(declarations) + "}"
 
 
+def _classes(node: MarkupElement, marker: str) -> str:
+    return " ".join(item for item in (node.attribute("class"), marker) if item)
+
+
+def _filling(node: MarkupElement, index: int) -> tuple[tuple[tuple[str, str], ...], str]:
+    icon = node.attribute(DATA_ICON)
+    if icon is not None:
+        return (*ICON_ATTRIBUTES, ("class", _classes(node, ICON_CLASS))), icon_body(icon)
+    attributes = (
+        ("viewbox", PICTURE_VIEWBOX),
+        ("preserveaspectratio", PICTURE_ASPECT),
+        ("class", _classes(node, PICTURE_CLASS)),
+    )
+    tone = node.attribute(DATA_TONE) or DEFAULT_PICTURE_TONE
+    return attributes, picture_body(str(node.attribute(DATA_PICTURE)), tone, index)
+
+
 def mockup_document(
     mockup: GeneratedMockup,
     *,
@@ -150,16 +186,31 @@ def mockup_document(
         if not isinstance(pin, MockupPin) or pin.element_code not in derived:
             raise _fail("DOCUMENT_PIN", "pin on an unknown element")
     trees = screen_trees(mockup)
+    placeholders = {
+        screen.code: [
+            (node, path)
+            for node, path, _ancestors in walk_elements(trees[screen.code])
+            if is_placeholder(node)
+        ]
+        for screen in mockup.screens
+    }
+    pictures = 0
     sections = []
     for screen in mockup.screens:
         nodes = trees[screen.code]
-        attributes = {
+        attributes: dict[tuple[int, ...], tuple[tuple[str, str], ...]] = {
             element.path: (("data-elm", element.code),)
             for element in derived.values()
             if element.screen_code == screen.code
         }
         after: dict[tuple[int, ...], str] = {}
         append: dict[tuple[int, ...], str] = {}
+        for node, path in placeholders[screen.code]:
+            if node.has(DATA_PICTURE):
+                pictures += 1
+            added, content = _filling(node, pictures)
+            attributes[path] = (*attributes.get(path, ()), *added)
+            append[path] = content
         for pin in chosen:
             element = derived[pin.element_code]
             if element.screen_code != screen.code:
@@ -178,7 +229,8 @@ def mockup_document(
             f'<section class="ot-screen" id="{screen.code}" data-state="{screen.state.value}" '
             f'aria-label="{_escape_attribute(screen.title)}"{marker}>{body}</section>'
         )
-    style = font_faces(tokens) + root + BASE_RULES + mockup.styles
+    rules = PLACEHOLDER_RULES if any(placeholders.values()) else ""
+    style = font_faces(tokens) + root + BASE_RULES + rules + mockup.styles
     if "<" in style:
         raise _fail("DOCUMENT_UNSAFE", "the style element would contain a tag")
     document = (
@@ -198,10 +250,13 @@ __all__ = [
     "BASE_RULES",
     "CONTENT_SECURITY_POLICY",
     "DEFAULT_ENTRY_SCREEN",
+    "ICON_CLASS",
+    "PICTURE_CLASS",
     "PIN_BACKGROUND",
     "PIN_FOREGROUND",
     "PIN_LAYER",
     "PIN_SIZE",
+    "PLACEHOLDER_RULES",
     "SCREEN_ITEM_RULE",
     "SHRINKING_ELEMENTS",
     "MockupPin",

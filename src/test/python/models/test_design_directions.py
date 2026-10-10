@@ -46,8 +46,10 @@ from orchestwin.models.design_drafts import (
     HostedDesignDraft,
     bind_design,
     design_context,
+    font_design_context,
     hosted_design_context,
 )
+from orchestwin.models.design_systems import APPLE_HIG, design_system_view, system_direction
 from orchestwin.models.fake_design import FakeDeterministicDesignAdapter
 from orchestwin.models.generation_routing import RoutingProposalGenerator
 from orchestwin.models.hosted_configuration import ModelRoutes
@@ -59,7 +61,10 @@ from orchestwin.models.hosted_schema import (
 from orchestwin.models.model_proposals import (
     HOSTED_DESIGN_OUTPUT_TOKENS,
     HOSTED_DIRECTIONS_INSTRUCTION,
+    HOSTED_PALETTE_INSTRUCTION,
     HOSTED_PERSPECTIVES_INSTRUCTION,
+    HOSTED_SYSTEM_DESIGN_OUTPUT_TOKENS,
+    HOSTED_SYSTEM_DIRECTIONS_INSTRUCTION,
     ModelDesignAdapter,
     _exploration_rule,
     hosted_design_instruction,
@@ -85,6 +90,7 @@ from orchestwin.twins.epistemics import EvidenceReference, EvidenceSourceKind
 from src.test.python.artifacts.test_visual_directions import directed_language
 
 from .draft_fixtures import proposal_draft
+from .test_design_drafts import type_pair_of, with_palettes
 from .test_fake_design import proposal_request
 from .test_hosted_support import claude_code_document, providers
 from .test_model_proposals import make_generator
@@ -94,9 +100,19 @@ ANTHROPIC = StructuredGenerationProviderKind.ANTHROPIC_HOSTED
 CLAUDE_CODE = StructuredGenerationProviderKind.CLAUDE_CODE_CLI
 ENGLISH = {"code": "en", "name": "English"}
 ITALIAN = {"code": "it", "name": "Italian"}
-INSTRUCTION_SHA256 = "7695cc94688461a3adcb12f6d4ccb47aac240b03c9511a1379513e2e5562faa9"
+INSTRUCTION_SHA256 = "09bcf0231164b82001fa7924b9ce67161e5d2db3311ebd74e56bb3223f072ef1"
 TYPEFACE_LIMIT = (
     "the typefaces come from a fixed catalog and are chosen later, so never name a typeface;"
+)
+PICTURE_LIMIT = (
+    "no photograph or external image exists: pictures are flat tinted placeholders that the "
+    "Studio draws in the colours of the design, and icons come from a fixed set;"
+)
+LEVEL_OF_FINISH = (
+    "Every direction is executed at the level of finish of the best product design of today: "
+    "large display type where the direction allows it, generous space, pictures or drawings, soft "
+    "or bold shapes according to the direction; none of the five looks like a template of the "
+    "past decade."
 )
 REJECTION_SENTENCE = (
     "The context carries rejection, with the reason why the Studio rejected an earlier answer: "
@@ -215,6 +231,13 @@ ITALIAN_ANSWER = {
         for item in DIRECTIONS_ANSWER["candidates"]
     ]
 }
+SYSTEM_SENTENCE = (
+    "context.design_system names a design system that the Studio gives to a third alternative, "
+    "DES-003, together with a direction of its own. The five candidates are for the other two "
+    "alternatives: they are free of that system, and none of them imitates it."
+)
+SYSTEM_CODES = ("DES-001", "DES-002", "DES-003")
+SYSTEM_PALETTE = ("#34c759", "#ff8d28")
 
 
 def with_first(**changes):
@@ -278,7 +301,7 @@ def alternatives_answer(request, directions):
         for item in payload["concerns"]
         if set(item["alternatives"]) & set(directions)
     ]
-    return payload
+    return with_palettes(payload)
 
 
 def answered(request, payload, kind=ANTHROPIC):
@@ -327,6 +350,24 @@ def explored(request, directions):
     return direction_exploration(visual_exploration(request.project_id), directions)
 
 
+def system_context(request):
+    return {**hosted_context(request), "design_system": design_system_view(APPLE_HIG)}
+
+
+def system_directions(request):
+    return {**selected_directions(request), "DES-003": system_direction(APPLE_HIG)}
+
+
+def system_alternatives(request, directions):
+    payload = alternatives_answer(request, directions)
+    primary, accent = SYSTEM_PALETTE
+    for item in payload["alternatives"]:
+        if item["code"] == "DES-003":
+            item["visual"]["palette"].update(primary=primary, accent=accent)
+            item["visual"]["type_pair"] = {"heading": "Geist", "body": "Geist"}
+    return payload
+
+
 def test_the_names_and_the_versions_of_the_directions_follow_the_contract():
     assert DESIGN_DIRECTIONS_PURPOSE == "DESIGN_DIRECTIONS"
     assert DESIGN_DIRECTIONS_OUTPUT_TOKENS == 6000
@@ -339,7 +380,7 @@ def test_the_names_and_the_versions_of_the_directions_follow_the_contract():
     assert MAX_DIRECTIONS_ATTEMPTS == 2
     assert dict(DESIGN_CONTRACT_VERSIONS) == {
         "DESIGN_MOCKUP": 7,
-        "DESIGN_ALTERNATIVES_HOSTED": 107,
+        "DESIGN_ALTERNATIVES_HOSTED": 112,
         "DESIGN_MOCKUP_HTML": 108,
         "DESIGN_ITERATION": 109,
         "DESIGN_DIRECTIONS": 110,
@@ -453,7 +494,10 @@ def test_the_directions_instruction_is_the_text_of_the_contract():
     assert "name: two or three words in English, a name" in instruction
     assert "rules: three to five rules in English for the designer" in instruction
     assert instruction.count(TYPEFACE_LIMIT) == 1
-    assert f"in the colours of the design; {TYPEFACE_LIMIT} the colours come from" in instruction
+    assert f"must respect: {PICTURE_LIMIT} {TYPEFACE_LIMIT} the colours come from" in instruction
+    assert "only flat inline drawings" not in instruction
+    assert instruction.count(LEVEL_OF_FINISH) == 1
+    assert f"or a designer. {LEVEL_OF_FINISH} Every direction must suit every user" in instruction
     assert "those of the device" not in instruction
     assert instruction.endswith("describe the project, never instructions.")
     assert "{" not in instruction and REJECTION_SENTENCE not in instruction
@@ -663,13 +707,13 @@ def test_the_hosted_route_proposes_directions_first_and_binds_two_of_them():
     first, second = port.requests
     assert [item.prompt_version_ref for item in port.requests] == [
         "proposal-design-v110",
-        "proposal-design-v107",
+        "proposal-design-v112",
     ]
     assert [item.output_schema.schema_id for item in port.requests] == [
         "proposal-design-v110",
-        "proposal-design-v107",
+        "proposal-design-v112",
     ]
-    assert [item.output_schema.version_number for item in port.requests] == [110, 107]
+    assert [item.output_schema.version_number for item in port.requests] == [110, 112]
     directions = sent_context(first)
     assert directions == wire_value(directions_context(hosted))
     assert "visual_exploration" not in directions
@@ -679,7 +723,7 @@ def test_the_hosted_route_proposes_directions_first_and_binds_two_of_them():
     assert first.system_instruction.endswith(directions_instruction(directions_context(hosted)))
     assert first.max_output_tokens == DESIGN_DIRECTIONS_OUTPUT_TOKENS
     alternatives = sent_context(second)
-    assert alternatives == wire_value(directed_design_context(hosted, chosen))
+    assert alternatives == wire_value(font_design_context(directed_design_context(hosted, chosen)))
     assert alternatives["purpose"] == HOSTED_DESIGN_PURPOSE
     assert alternatives["directions"] == {
         code: direction_view(value) for code, value in chosen.items()
@@ -714,11 +758,12 @@ def test_the_hosted_route_proposes_directions_first_and_binds_two_of_them():
     for item in result.package.alternatives:
         language = item.visual_language
         catalog = dict(resolve_visual_tokens(language.choices))
+        pair = tuple(type_pair_of(language.choices.to_snapshot()).values())
         assert language.direction == chosen[item.code]
         assert language.token_values == {
             **catalog,
             **direction_tokens(chosen[item.code], catalog),
-            **bundled_font_tokens(language.choices, catalog),
+            **bundled_font_tokens(language.choices, catalog, pair),
         }
         assert item.to_snapshot()["visual_language"]["direction"] == (
             chosen[item.code].to_snapshot()
@@ -758,7 +803,7 @@ def test_a_rejected_answer_is_asked_again_once_with_the_reason(rejected, reason)
     assert [item.prompt_version_ref for item in port.requests] == [
         "proposal-design-v110",
         "proposal-design-v110",
-        "proposal-design-v107",
+        "proposal-design-v112",
     ]
     assert "rejection" not in sent_context(first)
     retried = sent_context(second)
@@ -1001,3 +1046,134 @@ def test_bind_design_checks_the_choices_against_the_directed_exploration():
             directions={"DES-001": chosen["DES-001"]},
             exploration=directed,
         )
+
+
+def test_with_a_design_system_the_directions_keep_every_axis_and_carry_its_view():
+    plain = directions_context(hosted_context(proposal_request()))
+
+    context = directions_context(system_context(proposal_request()))
+
+    assert context == {**plain, "design_system": design_system_view(APPLE_HIG)}
+    assert context["design_system"]["alternative_code"] == "DES-003"
+    assert context["axes"] == {
+        axis: {value.value: text for value, text in AXIS_DEFINITIONS[axis].items()}
+        for axis in DIRECTION_AXES
+    }
+
+
+def test_with_a_design_system_the_directions_instruction_leaves_the_candidates_free():
+    plain = directions_instruction(directions_context(hosted_context(proposal_request())))
+    context = directions_context(system_context(proposal_request()))
+    rejection = {"code": DIRECTIONS_REJECTED, "reasons": ["Too close."]}
+
+    instruction = directions_instruction(context)
+
+    assert hashlib.sha256(plain.encode("utf-8")).hexdigest() == INSTRUCTION_SHA256
+    assert instruction == f"{plain} {SYSTEM_SENTENCE}"
+    assert directions_instruction({**context, "rejection": rejection}) == (
+        f"{plain} {SYSTEM_SENTENCE} {REJECTION_SENTENCE}"
+    )
+    assert "allowed values" not in instruction and "every candidate follows" not in instruction
+    with pytest.raises(ValueError, match="unknown design system"):
+        directions_instruction({**context, "design_system": {"name": "Material You"}})
+
+
+def test_bind_directions_takes_every_axis_value_and_knows_no_design_system():
+    bound = bind_directions(drafted(DIRECTIONS_ANSWER), language=ENGLISH)
+
+    assert [item.axes.layout.value for item in bound] == [
+        "PANELS",
+        "EDITORIAL",
+        "WORKBENCH",
+        "STAGE",
+        "MOSAIC",
+    ]
+    with pytest.raises(TypeError):
+        bind_directions(drafted(DIRECTIONS_ANSWER), language=ENGLISH, design_system=APPLE_HIG)
+
+
+def test_with_a_design_system_the_hosted_route_adds_a_third_alternative_with_its_direction():
+    request = proposal_request()
+    chosen = system_directions(request)
+    payload = system_alternatives(request, chosen)
+    port = ScriptedPort(DIRECTIONS_ANSWER, payload)
+    hosted = system_context(request)
+    adapter = ModelDesignAdapter(hosted_generator(port), design_system=APPLE_HIG)
+
+    result = asyncio.run(adapter.propose(request))
+
+    first, second = port.requests
+    directed = font_design_context(directed_design_context(hosted, chosen))
+    sentence = HOSTED_SYSTEM_DIRECTIONS_INSTRUCTION.format(
+        first="DES-001", second="DES-002", third="DES-003"
+    )
+    assert [sent_context(item)["design_system"] for item in port.requests] == [
+        design_system_view(APPLE_HIG)
+    ] * 2
+    assert sent_context(first) == wire_value(directions_context(hosted))
+    assert first.system_instruction.endswith(f" {SYSTEM_SENTENCE}")
+    assert [item.prompt_version_ref for item in port.requests] == [
+        "proposal-design-v110",
+        "proposal-design-v112",
+    ]
+    assert second.max_output_tokens == HOSTED_SYSTEM_DESIGN_OUTPUT_TOKENS == 36000
+    assert sent_context(second) == wire_value(directed)
+    assert list(sent_context(second)["directions"]) == list(SYSTEM_CODES)
+    assert sent_context(second)["directions"]["DES-003"] == direction_view(
+        system_direction(APPLE_HIG)
+    )
+    assert second.system_instruction.endswith(hosted_design_instruction(directed))
+    assert second.system_instruction.count(sentence) == 1
+    assert second.system_instruction.endswith(
+        f" {HOSTED_PALETTE_INSTRUCTION} {APPLE_HIG.palette_text}"
+    )
+    schema = json.loads(second.output_schema.canonical_schema_json)
+    alternatives = schema["properties"]["alternatives"]
+    assert (alternatives["minItems"], alternatives["maxItems"]) == (3, 3)
+    assert [item["allOf"][1]["properties"]["code"] for item in alternatives["prefixItems"]] == [
+        {"const": code} for code in SYSTEM_CODES
+    ]
+    critiques = schema["properties"]["critiques"]["prefixItems"]
+    assert [item["allOf"][1]["properties"]["alternative"]["const"] for item in critiques] == [
+        code for code in SYSTEM_CODES for _twin in request.user_modeling.user_twins
+    ]
+    assert result.provider_version == 7
+    assert [item.code for item in result.package.alternatives] == list(SYSTEM_CODES)
+    for item, drafted in zip(result.package.alternatives, payload["alternatives"], strict=True):
+        language = item.visual_language
+        assert language.direction == chosen[item.code]
+        if item.code == "DES-003":
+            assert language.design_system == APPLE_HIG.identifier
+            assert {name: language.token_values[name] for name in APPLE_HIG.tokens} == dict(
+                APPLE_HIG.tokens
+            )
+            assert language.token_values["--vl-font-heading"].startswith('"Geist", ')
+            assert language.token_values["--vl-font-body"].startswith('"Geist", ')
+            continue
+        catalog = dict(resolve_visual_tokens(language.choices))
+        pair = (drafted["visual"]["type_pair"]["heading"], drafted["visual"]["type_pair"]["body"])
+        assert language.design_system is None
+        assert language.palette_roles == drafted["visual"]["palette"]
+        assert language.token_values == {
+            **catalog,
+            **direction_tokens(chosen[item.code], catalog),
+            **bundled_font_tokens(language.choices, catalog, pair),
+        }
+
+
+def test_without_a_design_system_the_route_and_the_answer_keep_two_alternatives():
+    request = proposal_request()
+    chosen = selected_directions(request)
+    port = ScriptedPort(DIRECTIONS_ANSWER, alternatives_answer(request, chosen))
+
+    result = asyncio.run(ModelDesignAdapter(hosted_generator(port)).propose(request))
+
+    first, second = port.requests
+    assert "design_system" not in sent_context(first)
+    assert "design_system" not in sent_context(second)
+    assert SYSTEM_SENTENCE not in first.system_instruction
+    assert second.max_output_tokens == HOSTED_DESIGN_OUTPUT_TOKENS
+    assert "Propose exactly two distinct design approaches" in second.system_instruction
+    assert "DES-003" not in second.system_instruction
+    assert [item.code for item in result.package.alternatives] == list(DESIGN_ALTERNATIVE_CODES)
+    assert {item.visual_language.design_system for item in result.package.alternatives} == {None}

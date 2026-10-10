@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import replace
 from html import escape
@@ -11,6 +12,7 @@ import pytest
 from orchestwin.artifacts.generated_mockup_document import (
     BASE_RULES,
     CONTENT_SECURITY_POLICY,
+    PLACEHOLDER_RULES,
     SCREEN_ITEM_RULE,
     SHRINKING_ELEMENTS,
     MockupPin,
@@ -22,9 +24,10 @@ from orchestwin.artifacts.generated_mockups import (
     GeneratedMockupError,
     create_generated_mockup,
 )
-from orchestwin.artifacts.prototypes import PrototypeScreenState
+from orchestwin.artifacts.prototypes import PrototypeElementKind, PrototypeScreenState
 from orchestwin.artifacts.visual_catalog import FontFamily
 from orchestwin.artifacts.visual_fonts import font_faces
+from orchestwin.artifacts.visual_icons import icon_body, picture_body
 from orchestwin.artifacts.visual_language import create_visual_language
 
 from .test_generated_mockup_support import (
@@ -55,6 +58,21 @@ POLICY = (
 )
 SECTION = re.compile(r'<section class="ot-screen" id="(SCR-\d{3})"[^>]*>')
 DATA_FONT = re.compile(r"url\(data:font/woff2;base64,[A-Za-z0-9+/]+={0,2}\)")
+FLAT_PICTURE = '<rect width="400" height="300" style="fill:color-mix(in srgb, '
+ICON = '<svg aria-hidden="true" class="glyph" data-icon="search"></svg>'
+FROZEN_TOKENS = {
+    "--vl-color-background": "#fafafa",
+    "--vl-color-primary": "#69737d",
+    "--vl-color-text": "#292929",
+    "--vl-font-body": "system-ui, sans-serif",
+    "--vl-line-height": "1.55",
+    "--vl-size-body": "16px",
+}
+DOCUMENTS_OF_TODAY = {
+    "build": "222ca59de84b0fe8642a4b507bc5ef663993cf3098683266e7a6966aa809935b",
+    "library-loans": "e51f6f693c82ccae9f5d3d1afd250a5faa7d50720dbda356bb774630daf89136",
+    "library-registration": "d1da577f1c8d62f28300d23ee4fe3973046db4776b0c9f084bcd17cd48cde805",
+}
 
 
 class Collector(HTMLParser):
@@ -574,3 +592,139 @@ def test_a_sheet_cannot_bring_its_own_fonts_into_a_design_with_bundled_fonts(sty
     with pytest.raises(GeneratedMockupError) as error:
         build(styles=styles, token_names=frozenset(directed_tokens()))
     assert error.value.code == "STYLES_FORBIDDEN"
+
+
+def test_a_document_without_placeholders_is_the_document_of_today() -> None:
+    documents = {"build": mockup_document(build(), tokens=FROZEN_TOKENS, language="it")}
+    for name in FIXTURES:
+        documents[name] = mockup_document(fixture_mockup(name), tokens=FROZEN_TOKENS, language="it")
+
+    for name, document in documents.items():
+        assert hashlib.sha256(document.encode("utf-8")).hexdigest() == DOCUMENTS_OF_TODAY[name]
+        assert PLACEHOLDER_RULES not in document
+        assert "ot-icon" not in document and "ot-picture" not in document
+
+
+def test_an_icon_placeholder_is_filled_with_the_icon_and_its_frame() -> None:
+    mockup = with_first(f'<button type="button">{ICON} Cerca</button>')
+    document = mockup_document(mockup, tokens=LIGHT_TOKENS, language="it")
+    filled = (
+        '<svg aria-hidden="true" class="glyph ot-icon" data-icon="search" fill="none" '
+        'stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" '
+        f'viewBox="0 0 24 24">{icon_body("search")}</svg>'
+    )
+
+    assert ICON in mockup.screens[0].markup
+    assert f'<button data-elm="ELM-009" type="button">{filled} Cerca</button>' in document
+    assert document.count("<svg ") == 1
+
+
+def test_pictures_are_filled_with_a_flat_tint_and_carry_no_identifier() -> None:
+    first = BASE_FIRST.replace(
+        "</main>",
+        '<figure><svg data-picture="package" data-tone="accent" role="img" aria-label="Pacco">'
+        "</svg><figcaption>Pacco in arrivo</figcaption></figure>"
+        '<svg data-icon="truck" aria-hidden="true"></svg>'
+        '<svg data-picture="book-open" class="cover" role="img" aria-label="Copertina"></svg>'
+        "</main>",
+    )
+    second = BASE_SECOND.replace(
+        "</main>",
+        '<svg data-picture="image" data-tone="neutral" role="img" aria-label="Foto"></svg></main>',
+    )
+    document = mockup_document(build(first, second), tokens=LIGHT_TOKENS, language="it")
+    found = sections(document)
+
+    assert (
+        '<svg aria-label="Pacco" class="ot-picture" data-picture="package" data-tone="accent" '
+        'preserveAspectRatio="xMidYMid slice" role="img" viewBox="0 0 400 300">'
+        f"{picture_body('package', 'accent', 1)}</svg>"
+    ) in found["SCR-001"]
+    assert (
+        '<svg aria-label="Copertina" class="cover ot-picture" data-picture="book-open" '
+        'preserveAspectRatio="xMidYMid slice" role="img" viewBox="0 0 400 300">'
+        f"{picture_body('book-open', 'primary', 2)}</svg>"
+    ) in found["SCR-001"]
+    assert f'viewBox="0 0 400 300">{picture_body("image", "neutral", 3)}</svg>' in found["SCR-002"]
+    assert document.count(FLAT_PICTURE) == 3
+    assert re.findall(r' id="(ot-[^"]+)"', document) == []
+    assert "gradient" not in document.lower()
+    assert "url(" not in document
+
+
+def test_the_placeholder_rules_enter_the_style_once_after_the_base_rules() -> None:
+    assert PLACEHOLDER_RULES == (
+        ".ot-icon{display:inline-block;width:1em;height:1em;vertical-align:-0.125em;flex:none}"
+        ".ot-picture{display:block;width:100%;height:auto}"
+    )
+    mockup = with_first(ICON + ICON.replace("search", "x"))
+    style = style_of(mockup_document(mockup, tokens=LIGHT_TOKENS, language="it"))
+    tokens = directed_tokens()
+    directed = with_first(ICON, token_names=frozenset(tokens))
+
+    assert style == root_of(LIGHT_TOKENS) + BASE_RULES + PLACEHOLDER_RULES + mockup.styles
+    assert style.count(".ot-icon{") == 1
+    assert style_of(mockup_document(directed, tokens=tokens, language="it")) == (
+        font_faces(tokens) + root_of(tokens) + BASE_RULES + PLACEHOLDER_RULES + directed.styles
+    )
+
+
+def test_a_filled_document_keeps_the_policy_and_makes_no_external_reference() -> None:
+    tokens = directed_tokens()
+    mockup = build(
+        BASE_FIRST.replace(
+            "</main>", ICON + '<svg data-picture="map" role="img" aria-label="Mappa"></svg></main>'
+        ),
+        BASE_SECOND.replace(
+            "</main>",
+            '<svg data-picture="store" data-tone="success" role="img" aria-label="Negozio"></svg>'
+            "</main>",
+        ),
+        token_names=frozenset(tokens),
+    )
+    document = mockup_document(mockup, tokens=tokens, language="it")
+    bare = DATA_FONT.sub("", document).lower()
+
+    assert f'<meta http-equiv="Content-Security-Policy" content="{POLICY}">' in document
+    assert document.count(FLAT_PICTURE) == 2
+    assert document.count("url(") == len(DATA_FONT.findall(document))
+    for reference in ("http:", "https:", "//", "url(", "@import", "<link", " src=", "xlink"):
+        assert reference not in bare, reference
+    assert "gradient" not in bare
+    assert_safe(document)
+    assert mockup_document(mockup, tokens=tokens, language="it") == document
+
+
+def test_the_prefix_of_the_studio_stays_reserved_with_placeholders() -> None:
+    for snippet, code in (
+        ('<svg data-icon="search" class="ot-icon"></svg>', "CLASS_INVALID"),
+        ('<svg data-picture="image" id="ot-pic-1"></svg>', "ID_INVALID"),
+    ):
+        with pytest.raises(GeneratedMockupError) as error:
+            with_first(snippet)
+        assert error.value.code == code
+    with pytest.raises(GeneratedMockupError) as error:
+        build(styles=".ot-picture{height:10px}")
+    assert error.value.code == "STYLES_SELECTOR"
+    picture = '<svg data-picture="image" id="foto" role="img" aria-label="Foto"></svg>'
+    document = mockup_document(with_first(picture), tokens=LIGHT_TOKENS, language="it")
+    identifiers = re.findall(r' id="([^"]+)"', document)
+
+    assert len(identifiers) == len(set(identifiers))
+    assert "foto" in identifiers
+    assert [item for item in identifiers if item.startswith("ot-")] == []
+
+
+def test_a_placeholder_that_is_a_derived_element_keeps_its_code_and_its_pins() -> None:
+    mockup = with_first('<svg data-icon="check" role="status" aria-label="Prestiti salvati"></svg>')
+    status = next(element for element in derive_elements(mockup) if element.node_name == "svg")
+    pin = MockupPin(status.code, 1, "Stato poco visibile")
+    document = mockup_document(mockup, tokens=LIGHT_TOKENS, language="it", pins=[pin])
+
+    assert status.kind is PrototypeElementKind.STATUS
+    assert (
+        f'<svg aria-label="Prestiti salvati" class="ot-icon" data-elm="{status.code}" '
+        'data-icon="check" fill="none" role="status" stroke="currentColor" '
+        'stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">'
+        f"{icon_body('check')}</svg>{pin.html}"
+    ) in document

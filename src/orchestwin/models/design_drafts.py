@@ -1,10 +1,11 @@
 """Model-authored design content with application-bound references and review state."""
 
 import re
+from types import MappingProxyType
 from typing import Annotated, Final
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.artifacts import design as domain
@@ -15,6 +16,7 @@ from orchestwin.artifacts.design_packages import (
 )
 from orchestwin.artifacts.visual_catalog import (
     ARCHETYPES,
+    PALETTE_ROLES,
     VISUAL_DIMENSION_NAMES,
     VISUAL_DIMENSIONS,
     BackgroundTreatment,
@@ -39,12 +41,14 @@ from orchestwin.artifacts.visual_catalog import (
     SurfaceTone,
     TypeScale,
     VisualChoices,
+    require_distinct_primaries,
     require_distinct_visual_choices,
 )
 from orchestwin.artifacts.visual_exploration import (
     require_explored_choices,
     visual_exploration,
 )
+from orchestwin.artifacts.visual_fonts import BundledFamily
 from orchestwin.artifacts.visual_language import (
     MAX_PRODUCT_NAME_LENGTH,
     MAX_TWIN_FIT_LENGTH,
@@ -52,6 +56,7 @@ from orchestwin.artifacts.visual_language import (
     create_twin_fit,
     create_visual_language,
 )
+from orchestwin.models.design_systems import SYSTEM_ALTERNATIVE_CODE, is_system_colour
 from orchestwin.models.output_language import (
     LANGUAGE_NAMES,
     MIN_JUDGED_WORDS,
@@ -66,7 +71,39 @@ from orchestwin.twins.epistemics import ConfidenceScore, ObservationProvenance
 
 TITLE_LENGTH: Final = 200
 TEXT_LENGTH: Final = 2000
-HOSTED_DESIGN_CONTRACT_VERSION: Final = 107
+HOSTED_DESIGN_CONTRACT_VERSION: Final = 112
+FONT_CHARACTERS: Final = MappingProxyType(
+    {
+        BundledFamily.SOURCE_SANS_3: (
+            "humanist sans, friendly and legible, for long interfaces and public services."
+        ),
+        BundledFamily.GEIST: "geometric sans, neutral and technical, for tools and dashboards.",
+        BundledFamily.LIBRE_FRANKLIN: (
+            "grotesque sans, American newspaper voice, sturdy at every size."
+        ),
+        BundledFamily.NUNITO: (
+            "soft rounded sans, warm and playful, for everyday and family products."
+        ),
+        BundledFamily.ARCHIVO_NARROW: (
+            "condensed sans, compact and urgent, for timetables and signage."
+        ),
+        BundledFamily.LEXEND_ZETTA: "very wide sans, for short headings only, loud and modern.",
+        BundledFamily.SOURCE_SERIF_4: (
+            "transitional serif, calm and bookish, pairs with Source Sans 3."
+        ),
+        BundledFamily.LORA: "contemporary serif with calligraphic roots, elegant on screen.",
+        BundledFamily.PLAYFAIR_DISPLAY: (
+            "high contrast display serif, fashion and editorial, headings only."
+        ),
+        BundledFamily.ZILLA_SLAB: "slab serif, solid and friendly, for titles and figures.",
+        BundledFamily.BRICOLAGE_GROTESQUE: (
+            "expressive heavy grotesque, for display headings with personality."
+        ),
+        BundledFamily.CAVEAT: "handwritten script, for the product name and one title at most.",
+        BundledFamily.GEIST_MONO: "monospace, for figures and codes; never for the body.",
+        BundledFamily.IBM_PLEX_MONO: "monospace, for figures and codes; never for the body.",
+    }
+)
 LANGUAGE_GROUPS: Final = ("requirements", "stories", "criteria", "scenarios")
 LANGUAGE_MIN_WORDS: Final = 4
 ALTERNATIVE_TEXT_LISTS: Final = (
@@ -166,6 +203,45 @@ class AlternativeDraft(Draft):
     visual: VisualLanguageDraft
 
 
+HexColour = Annotated[str, Field(pattern=r"^#[0-9a-f]{6}$")]
+
+
+class PaletteDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    background: HexColour
+    surface: HexColour
+    surface_alt: HexColour
+    border: HexColour
+    text: HexColour
+    text_muted: HexColour
+    primary: HexColour
+    on_primary: HexColour
+    primary_soft: HexColour
+    accent: HexColour
+    on_accent: HexColour
+    success: HexColour
+    success_soft: HexColour
+    danger: HexColour
+    danger_soft: HexColour
+
+
+class TypePairDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    heading: BundledFamily
+    body: BundledFamily
+
+
+HostedVisualLanguageDraft = create_model(
+    "VisualLanguageDraft",
+    __base__=VisualLanguageDraft,
+    palette=(PaletteDraft, ...),
+    type_pair=(TypePairDraft, ...),
+)
+HostedAlternativeDraft = create_model(
+    "AlternativeDraft", __base__=AlternativeDraft, visual=(HostedVisualLanguageDraft, ...)
+)
+
+
 class CritiqueDraft(Draft):
     code: str = Field(pattern=r"^CRQ-[0-9]{3,}$")
     alternative: str
@@ -205,7 +281,12 @@ class HostedCritiqueDraft(CritiqueDraft):
 
 
 class HostedDesignDraft(DesignDraft):
+    alternatives: Annotated[tuple[HostedAlternativeDraft, ...], Field(min_length=2, max_length=4)]
     critiques: Annotated[tuple[HostedCritiqueDraft, ...], Field(min_length=2)]
+
+
+class HostedSystemDesignDraft(HostedDesignDraft):
+    alternatives: Annotated[tuple[HostedAlternativeDraft, ...], Field(min_length=3, max_length=3)]
 
 
 def hosted_design_context(context, selected_agent_ids):
@@ -214,6 +295,10 @@ def hosted_design_context(context, selected_agent_ids):
         "purpose": HOSTED_DESIGN_PURPOSE,
         "perspectives": perspective_guidance(selected_agent_ids, GuidanceStage.DESIGN),
     }
+
+
+def font_design_context(context):
+    return {**context, "fonts": {family.value: text for family, text in FONT_CHARACTERS.items()}}
 
 
 def requirement_code_map(spec):
@@ -331,6 +416,45 @@ def _twin_fit(alternative, twins):
         create_twin_fit(reference=twins[item.twin].reference, statement=item.statement)
         for item in alternative.visual.twin_fit
     )
+
+
+def _palette_arguments(visual):
+    if not isinstance(visual, HostedVisualLanguageDraft):
+        return {}
+    return {
+        "palette": visual.palette.model_dump(),
+        "type_pair": (visual.type_pair.heading, visual.type_pair.body),
+    }
+
+
+def _alternative_system(code, design_system):
+    return design_system if code == SYSTEM_ALTERNATIVE_CODE else None
+
+
+def _require_system_palette(alternative, design_system):
+    visual = alternative.visual
+    if not isinstance(visual, HostedVisualLanguageDraft):
+        return
+    for role in ("primary", "accent"):
+        if not is_system_colour(design_system, getattr(visual.palette, role)):
+            raise ValueError(
+                f"{alternative.code} must take its {role} from the colours of the design system"
+            )
+    if (visual.type_pair.heading, visual.type_pair.body) != tuple(design_system.font_pair):
+        raise ValueError(f"{alternative.code} must use the type pair of the design system")
+
+
+def palette_adjustments(draft, package):
+    final = {item.code: item.visual_language.palette_roles for item in package.alternatives}
+    adjusted = {}
+    for x in draft.alternatives:
+        if not isinstance(x.visual, HostedVisualLanguageDraft):
+            continue
+        proposed = x.visual.palette.model_dump()
+        roles = tuple(role for role in PALETTE_ROLES if proposed[role] != final[x.code][role])
+        if roles:
+            adjusted[x.code] = roles
+    return adjusted
 
 
 def _require_archetype_fit(alternative, choices):
@@ -537,7 +661,16 @@ def require_draft_language(draft, language):
         raise ValueError("the design is not written in the language of the requirements")
 
 
-def bind_design(draft, request, twins, model_reference, *, directions=None, exploration=None):
+def bind_design(
+    draft,
+    request,
+    twins,
+    model_reference,
+    *,
+    directions=None,
+    exploration=None,
+    design_system=None,
+):
     ids = requirement_code_map(request.requirements.version.specification)
     records = [*draft.alternatives, *draft.critiques, *draft.concerns]
     codes = [item.code for item in records]
@@ -545,12 +678,20 @@ def bind_design(draft, request, twins, model_reference, *, directions=None, expl
         raise ValueError("duplicate design codes")
     if directions is not None and {x.code for x in draft.alternatives} - set(directions):
         raise ValueError("unknown design reference")
+    if design_system is not None and SYSTEM_ALTERNATIVE_CODE not in codes:
+        raise ValueError(
+            f"the design needs {SYSTEM_ALTERNATIVE_CODE}, the alternative of the design system"
+        )
     ids.update({code: uuid4() for code in codes})
     draft = named_draft(draft, {key: twin.reference.name for key, twin in twins.items()})
     require_draft_language(
         draft, requirements_language(requirements_view(request.requirements.version))
     )
     draft = consistent_draft(draft)
+    systems = {x.code: _alternative_system(x.code, design_system) for x in draft.alternatives}
+    for x in draft.alternatives:
+        if systems[x.code] is not None:
+            _require_system_palette(x, systems[x.code])
     languages = {
         x.code: create_visual_language(
             choices=x.visual.choices(),
@@ -558,10 +699,16 @@ def bind_design(draft, request, twins, model_reference, *, directions=None, expl
             rationale=x.visual.visual_rationale,
             twin_fit=_twin_fit(x, twins),
             direction=None if directions is None else directions[x.code],
+            **_palette_arguments(x.visual),
+            design_system=systems[x.code],
         )
         for x in draft.alternatives
     }
     require_distinct_visual_choices([languages[x.code].choices for x in draft.alternatives])
+    if all(isinstance(x.visual, HostedVisualLanguageDraft) for x in draft.alternatives):
+        require_distinct_primaries(
+            [languages[x.code].palette_roles["primary"] for x in draft.alternatives]
+        )
     if exploration is None:
         exploration = visual_exploration(request.project_id)
     for x in draft.alternatives:

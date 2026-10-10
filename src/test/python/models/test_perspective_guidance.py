@@ -14,7 +14,9 @@ from orchestwin.models.design_drafts import (
     design_context,
     hosted_design_context,
 )
+from orchestwin.models.design_systems import APPLE_HIG, design_system_view
 from orchestwin.models.model_proposals import (
+    HOSTED_PALETTE_INSTRUCTION,
     HOSTED_PERSPECTIVES_INSTRUCTION,
     HOSTED_SCHEMA_INSTRUCTION,
     ModelDesignAdapter,
@@ -260,7 +262,7 @@ def test_the_model_receives_the_perspectives_in_contract_seven_with_the_same_sch
     assert every.system_instruction.count(DEFINITION_SENTENCES) == 1
 
 
-def test_the_hosted_design_receives_the_design_guidance_in_contract_one_hundred_seven():
+def test_the_hosted_design_receives_the_design_guidance_in_contract_one_hundred_twelve():
     port = HostedCapturePort()
     generator = ProposalGenerator(providers().hosted_model("design"), port)
     with pytest.raises(ProposalGenerationError, match="PROVIDER_ERROR"):
@@ -275,13 +277,34 @@ def test_the_hosted_design_receives_the_design_guidance_in_contract_one_hundred_
     assert context["perspectives"] == perspective_guidance(EVERY_AGENT, GuidanceStage.DESIGN)
     assert counted(context["perspectives"]) == FIVE_PERSPECTIVES
     assert context["perspectives"][0]["considerations"] == UX_DESIGN
-    assert DESIGN_CONTRACT_VERSIONS["DESIGN_ALTERNATIVES_HOSTED"] == 107
-    assert HOSTED_DESIGN_CONTRACT_VERSION == 107
-    assert sent.output_schema.schema_id == "proposal-design-v107"
-    assert sent.output_schema.version_number == 107
-    assert sent.prompt_version_ref == "proposal-design-v107"
+    assert DESIGN_CONTRACT_VERSIONS["DESIGN_ALTERNATIVES_HOSTED"] == 112
+    assert HOSTED_DESIGN_CONTRACT_VERSION == 112
+    assert sent.output_schema.schema_id == "proposal-design-v112"
+    assert sent.output_schema.version_number == 112
+    assert sent.prompt_version_ref == "proposal-design-v112"
     assert sent.task_id == "proposal-design-v1"
     assert sent.system_instruction.count(DESIGN_SENTENCE) == 1
+
+
+def test_the_hosted_design_with_a_design_system_keeps_the_guidance_for_three_alternatives():
+    port = HostedCapturePort()
+    generator = ProposalGenerator(providers().hosted_model("design"), port)
+    adapter = ModelDesignAdapter(generator, design_system=APPLE_HIG)
+    with pytest.raises(ProposalGenerationError, match="PROVIDER_ERROR"):
+        asyncio.run(adapter.propose(design_request(EVERY_AGENT)))
+    directions, sent = port.requests
+    guidance = perspective_guidance(EVERY_AGENT, GuidanceStage.DESIGN)
+    context = json.loads(sent.input_payload_json)["context"]
+
+    assert json.loads(directions.input_payload_json)["context"]["perspectives"] == guidance
+    assert context["perspectives"] == guidance
+    assert context["design_system"] == design_system_view(APPLE_HIG)
+    assert list(context["directions"]) == ["DES-001", "DES-002", "DES-003"]
+    assert sent.prompt_version_ref == "proposal-design-v112"
+    assert sent.system_instruction.count(DESIGN_SENTENCE) == 1
+    assert "alternatives has exactly 3 items, in this order: DES-001, DES-002, DES-003." in (
+        sent.system_instruction
+    )
 
 
 def test_the_local_design_keeps_its_context_its_instruction_and_its_contract(tmp_path):
@@ -305,7 +328,6 @@ def test_only_the_hosted_design_instruction_names_the_perspectives():
     assert HOSTED_PERSPECTIVES_INSTRUCTION == DESIGN_SENTENCE
     assert hosted.count(DESIGN_SENTENCE) == 1
     assert f"without quotation marks. {DESIGN_SENTENCE} {HOSTED_SCHEMA_INSTRUCTION}" in hosted
-    assert sha256(hosted.replace(f" {DESIGN_SENTENCE}", "")) == (
-        HOSTED_INSTRUCTION_BEFORE_PERSPECTIVES_SHA256
-    )
+    before = hosted.replace(f" {DESIGN_SENTENCE}", "").replace(f" {HOSTED_PALETTE_INSTRUCTION}", "")
+    assert sha256(before) == HOSTED_INSTRUCTION_BEFORE_PERSPECTIVES_SHA256
     assert "context.perspectives" not in local

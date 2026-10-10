@@ -20,6 +20,7 @@ from orchestwin.models.generated_mockup_instructions import (
     DESIGN_ITERATION,
     ITERATION_SENTENCE,
     REDRAW_SENTENCE,
+    REFERENCE_SENTENCE,
     mockup_context,
     target_sentence,
 )
@@ -50,6 +51,7 @@ from src.test.python.models.test_generated_mockup_instructions import (
     instruction,
     longest_axes,
 )
+from src.test.python.models.test_generated_mockup_instructions45 import REFERENCE
 from src.test.python.models.test_generated_mockup_support import (
     GUIDED_ID,
     OWNER_ID,
@@ -491,6 +493,8 @@ def test_the_longest_redraw_keeps_the_bound_of_the_system_instruction():
                 rejection=retry,
                 target=target,
                 redraw=view,
+                reference=REFERENCE,
             )
             assert text.count(REDRAW_SENTENCE) == 1
+            assert text.count(REFERENCE_SENTENCE) == 1
             assert len(text) + GENERATOR_PREFIX_LENGTH < MAXIMUM_SYSTEM_INSTRUCTION, len(text)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from contextlib import suppress
 from dataclasses import replace
 
@@ -10,6 +11,7 @@ from orchestwin.api.design import DesignPackagePayload
 from orchestwin.artifacts.design_serialization import design_package_from_snapshot
 from orchestwin.artifacts.visual_catalog import (
     FONTS,
+    MODES,
     NEUTRAL_VISUAL_CHOICES,
     PALETTE_ROLES,
     VISUAL_CATALOG_CONTENT_HASH,
@@ -17,27 +19,46 @@ from orchestwin.artifacts.visual_catalog import (
     VISUAL_DIMENSION_NAMES,
     VISUAL_DIMENSIONS,
     ColorMode,
+    ColorScheme,
     DesignTone,
     FontFamily,
     HueFamily,
     LayoutArchetype,
     NavigationPattern,
+    Saturation,
+    SurfaceTone,
     VisualChoices,
+    enforce_palette_contrast,
+    palette_contrast_pairs,
     resolve_palette,
     resolve_visual_tokens,
 )
-from orchestwin.artifacts.visual_directions import DirectionLayout, direction_tokens
+from orchestwin.artifacts.visual_color import contrast_ratio, hex_to_oklab, hue_difference
+from orchestwin.artifacts.visual_directions import (
+    DirectionLayout,
+    DirectionShape,
+    direction_tokens,
+)
 from orchestwin.artifacts.visual_fonts import bundled_families, bundled_font_tokens
 from orchestwin.artifacts.visual_language import (
+    MAX_DESIGN_SYSTEM_LENGTH,
     MAX_PRODUCT_NAME_LENGTH,
     MAX_TOKEN_VALUE_LENGTH,
     VisualLanguage,
     create_visual_language,
     visual_language_from_snapshot,
 )
+from orchestwin.models.design_systems import APPLE_HIG
 
 from . import design_fixtures
-from .test_visual_directions import directed_language, directed_package, direction
+from .test_visual_directions import (
+    EDITORIAL_AXES,
+    directed_language,
+    directed_package,
+    direction,
+    system_direction,
+    system_language,
+)
 
 STORED_LANGUAGE_HASH = "026e86df07466c1186c4a46bd2c95d133d928a381ef5dd53927a722cf82dc219"
 STORED_NEUTRAL_LANGUAGE_HASH = "56267ebe50ae8713d8253ec3e6f7ca3145ae4fa333b37641711a1dc586c3699a"
@@ -54,6 +75,13 @@ CATALOG_BASES = (
     replace(NEUTRAL_VISUAL_CHOICES, tone=DesignTone.TECHNICAL),
 )
 UNREADABLE_BODY_FAMILIES = (FontFamily.MODERN_SERIF, FontFamily.DISPLAY_HEAVY, FontFamily.SCRIPT)
+SYSTEM_MODES = (
+    ColorMode.LIGHT,
+    ColorMode.DARK,
+    ColorMode.HIGH_CONTRAST_LIGHT,
+    ColorMode.HIGH_CONTRAST_DARK,
+)
+NEUTRAL_ROLES = ("background", "surface", "surface_alt", "border")
 
 
 def catalog_variants() -> list[VisualChoices]:
@@ -68,6 +96,29 @@ def catalog_variants() -> list[VisualChoices]:
 
 def with_token(name: str, value: str) -> VisualLanguage:
     return replace(design_fixtures.visual_language(), tokens=((name, value),))
+
+
+def written(plain: VisualLanguage, **options: object) -> VisualLanguage:
+    return create_visual_language(
+        choices=plain.choices,
+        product_name=plain.product_name,
+        rationale=plain.rationale,
+        twin_fit=plain.twin_fit,
+        **options,
+    )
+
+
+def colour_tokens(palette: dict[str, str]) -> dict[str, str]:
+    return {f"--vl-color-{role.replace('_', '-')}": palette[role] for role in PALETTE_ROLES}
+
+
+def hue(colour: str) -> float:
+    _lightness, a, b = hex_to_oklab(colour)
+    return math.degrees(math.atan2(b, a)) % 360
+
+
+def system_fonts(choices: VisualChoices) -> dict[str, str]:
+    return bundled_font_tokens(choices, resolve_visual_tokens(choices), APPLE_HIG.font_pair)
 
 
 def test_visual_language_resolves_palette_and_tokens_from_the_catalog():
@@ -403,3 +454,314 @@ def test_only_a_language_with_a_direction_names_the_bundled_fonts() -> None:
     assert bundled_families(language.token_values) == ("Geist", "Geist Mono", "Libre Franklin")
     assert restored == language
     assert restored.content_hash == language.content_hash
+
+
+def test_without_a_palette_and_a_type_pair_the_language_is_the_one_of_today() -> None:
+    plain = design_fixtures.visual_language()
+    neutral = create_visual_language(
+        choices=NEUTRAL_VISUAL_CHOICES,
+        product_name="Catalog",
+        rationale="Every catalog value",
+        palette=None,
+        type_pair=None,
+    )
+
+    assert written(plain, palette=None, type_pair=None) == plain
+    assert written(plain, palette=None, type_pair=None).content_hash == STORED_LANGUAGE_HASH
+    assert neutral.content_hash == STORED_NEUTRAL_LANGUAGE_HASH
+    assert written(plain, direction=direction(), palette=None, type_pair=None) == (
+        directed_language(plain, direction())
+    )
+
+
+def test_a_written_palette_gives_the_palette_and_the_colour_tokens_of_the_language() -> None:
+    plain = design_fixtures.visual_language()
+    palette = resolve_palette(
+        HueFamily.PLUM,
+        ColorScheme.TRIADIC,
+        ColorMode.LIGHT,
+        Saturation.VIVID,
+        SurfaceTone.WARM,
+    )
+    language = written(plain, palette=palette)
+    restored = visual_language_from_snapshot(json.loads(language.canonical_json()))
+
+    assert language.palette_roles == palette != plain.palette_roles
+    assert language.token_values == {**plain.token_values, **colour_tokens(palette)}
+    assert language.choices == plain.choices
+    assert set(language.to_snapshot()) == set(plain.to_snapshot())
+    assert restored == language
+    assert restored.content_hash == language.content_hash != plain.content_hash
+
+
+def test_a_written_colour_that_fails_is_moved_in_the_palette_and_in_the_tokens() -> None:
+    plain = design_fixtures.visual_language()
+    palette = {**plain.palette_roles, "text_muted": "#c0c4c8"}
+    expected, changed = enforce_palette_contrast(palette, plain.choices.color_mode)
+
+    language = written(plain, palette=palette)
+
+    assert changed == ("text_muted",)
+    assert language.palette_roles == expected
+    assert language.token_values["--vl-color-text-muted"] == expected["text_muted"] != "#c0c4c8"
+    with pytest.raises(ValueError, match="palette does not match the colour mode"):
+        written(plain, palette={**plain.palette_roles, "background": "#14161a"})
+
+
+def test_a_type_pair_names_its_bundled_fonts_even_without_a_direction() -> None:
+    plain = design_fixtures.visual_language()
+    pair = ("Playfair Display", "Source Sans 3")
+    catalog = resolve_visual_tokens(plain.choices)
+
+    language = written(plain, type_pair=pair)
+
+    assert language.palette_roles == plain.palette_roles
+    assert language.token_values == {**catalog, **bundled_font_tokens(plain.choices, catalog, pair)}
+    assert language.token_values["--vl-font-heading"] == (
+        f'"Playfair Display", {FONTS[FontFamily.SLAB_SERIF].stack}'
+    )
+    assert bundled_families(language.token_values) == (
+        "IBM Plex Mono",
+        "Source Sans 3",
+        "Playfair Display",
+    )
+    with pytest.raises(ValueError):
+        written(plain, type_pair=("Comic Sans", "Source Sans 3"))
+
+
+def test_a_direction_reads_the_text_colour_of_the_written_palette() -> None:
+    plain = design_fixtures.visual_language()
+    framed = direction(axes=replace(EDITORIAL_AXES, shape=DirectionShape.HEAVY_FRAME))
+    palette = {**plain.palette_roles, "text": "#1b2a4a"}
+
+    language = written(plain, direction=framed, palette=palette, type_pair=("Lora", "Lora"))
+
+    assert language.palette_roles["text"] == "#1b2a4a"
+    assert language.token_values["--vl-shadow"] == "6px 6px 0 #1b2a4a"
+    assert language.token_values["--vl-font-body"] == (
+        f'"Lora", {FONTS[FontFamily.HUMANIST_SANS].stack}'
+    )
+    assert language.direction == framed
+
+
+def test_a_design_system_writes_its_tokens_after_the_direction_and_the_fonts() -> None:
+    plain = design_fixtures.visual_language()
+    value = direction()
+    catalog = resolve_visual_tokens(plain.choices)
+
+    language = written(plain, direction=value, design_system=APPLE_HIG)
+    restored = visual_language_from_snapshot(json.loads(language.canonical_json()))
+    kept = {
+        name: item
+        for name, item in direction_tokens(value, catalog).items()
+        if name not in APPLE_HIG.tokens
+    }
+
+    assert language.token_values == {
+        **catalog,
+        **colour_tokens(language.palette_roles),
+        **direction_tokens(value, catalog),
+        **system_fonts(plain.choices),
+        **APPLE_HIG.tokens,
+    }
+    assert {name: language.token_values[name] for name in APPLE_HIG.tokens} == dict(
+        APPLE_HIG.tokens
+    )
+    assert kept
+    assert all(language.token_values[name] == item for name, item in kept.items())
+    assert bundled_families(language.token_values) == bundled_families(system_fonts(plain.choices))
+    assert set(language.to_snapshot()) == {
+        *directed_language(plain, value).to_snapshot(),
+        "design_system",
+    }
+    assert language.direction == value
+    assert language.design_system == APPLE_HIG.identifier
+    assert restored == language
+    assert restored.content_hash == language.content_hash
+
+
+def test_a_design_system_gives_its_type_pair_over_the_written_one() -> None:
+    plain = design_fixtures.visual_language()
+    heading, body = APPLE_HIG.font_pair
+    catalog = resolve_visual_tokens(plain.choices)
+
+    language = written(plain, type_pair=("Lora", "Playfair Display"), design_system=APPLE_HIG)
+
+    assert {name: language.token_values[name] for name in system_fonts(plain.choices)} == (
+        system_fonts(plain.choices)
+    )
+    assert language.token_values["--vl-font-heading"] == (
+        f'"{heading}", {catalog["--vl-font-heading"]}'
+    )
+    assert language.token_values["--vl-font-body"] == f'"{body}", {catalog["--vl-font-body"]}'
+    assert bundled_families(language.token_values) == bundled_families(system_fonts(plain.choices))
+
+
+@pytest.mark.parametrize("mode", SYSTEM_MODES)
+def test_without_a_written_palette_a_design_system_gives_its_neutral_palette(
+    mode: ColorMode,
+) -> None:
+    choices = replace(design_fixtures.visual_language().choices, color_mode=mode)
+    neutral = APPLE_HIG.neutral_dark if MODES[mode].dark else APPLE_HIG.neutral_light
+    first = next(iter(APPLE_HIG.system_colours.values()))
+    proposed = {
+        **resolve_palette(
+            choices.hue_family,
+            choices.color_scheme,
+            mode,
+            choices.saturation,
+            choices.surface_tone,
+        ),
+        **neutral,
+        "primary": first,
+    }
+
+    language = create_visual_language(
+        choices=choices, product_name="Catalog", rationale="Apple", design_system=APPLE_HIG
+    )
+    palette = language.palette_roles
+
+    assert palette == enforce_palette_contrast(proposed, mode)[0]
+    assert {role: palette[role] for role in NEUTRAL_ROLES} == {
+        role: neutral[role] for role in NEUTRAL_ROLES
+    }
+    assert hue_difference(hue(palette["primary"]), hue(first)) <= 3
+    assert all(
+        contrast_ratio(palette[first_role], palette[second_role]) >= threshold
+        for first_role, second_role, threshold in palette_contrast_pairs(mode)
+    )
+    assert language.token_values == {
+        **resolve_visual_tokens(choices),
+        **colour_tokens(palette),
+        **system_fonts(choices),
+        **APPLE_HIG.tokens,
+    }
+
+
+def test_a_written_palette_stays_the_palette_under_a_design_system() -> None:
+    plain = design_fixtures.visual_language()
+    palette = resolve_palette(
+        HueFamily.PLUM,
+        ColorScheme.TRIADIC,
+        ColorMode.LIGHT,
+        Saturation.VIVID,
+        SurfaceTone.WARM,
+    )
+
+    language = written(plain, palette=palette, design_system=APPLE_HIG)
+
+    assert language.palette_roles == palette
+    assert language.token_values == {
+        **resolve_visual_tokens(plain.choices),
+        **colour_tokens(palette),
+        **system_fonts(plain.choices),
+        **APPLE_HIG.tokens,
+    }
+
+
+def test_without_a_design_system_the_language_is_the_one_of_today() -> None:
+    plain = design_fixtures.visual_language()
+
+    assert written(plain, design_system=None) == plain
+    assert written(plain, design_system=None).content_hash == STORED_LANGUAGE_HASH
+    assert written(plain, direction=direction(), design_system=None) == (
+        directed_language(plain, direction())
+    )
+
+
+def test_a_language_of_a_design_system_names_the_system_last_in_its_snapshot() -> None:
+    plain = design_fixtures.visual_language()
+    named = written(plain, design_system=APPLE_HIG)
+    directed = written(plain, direction=system_direction(), design_system=APPLE_HIG)
+
+    for language in (named, directed):
+        snapshot = language.to_snapshot()
+        unnamed = replace(language, design_system=None)
+        restored = visual_language_from_snapshot(json.loads(language.canonical_json()))
+        assert language.design_system == APPLE_HIG.identifier == "apple-hig"
+        assert list(snapshot)[-1] == "design_system"
+        assert snapshot["design_system"] == "apple-hig"
+        assert {key: item for key, item in snapshot.items() if key != "design_system"} == (
+            unnamed.to_snapshot()
+        )
+        assert restored == language
+        assert restored.content_hash == language.content_hash != unnamed.content_hash
+    assert list(directed.to_snapshot())[-2:] == ["direction", "design_system"]
+    assert directed == system_language(plain)
+
+
+def test_a_language_without_a_design_system_keeps_the_snapshot_of_today() -> None:
+    plain = design_fixtures.visual_language()
+
+    for language in (plain, directed_language(plain), written(plain, design_system=None)):
+        snapshot = language.to_snapshot()
+        restored = visual_language_from_snapshot(json.loads(language.canonical_json()))
+        assert language.design_system is None
+        assert "design_system" not in snapshot
+        assert restored == language
+        assert restored.design_system is None
+        with pytest.raises(ValueError, match="not canonical"):
+            visual_language_from_snapshot({**snapshot, "design_system": None})
+    assert plain.content_hash == STORED_LANGUAGE_HASH
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Apple",
+        "apple_hig",
+        "apple hig",
+        "-apple",
+        "apple-",
+        "apple--hig",
+        "1apple",
+        "",
+        "a" * (MAX_DESIGN_SYSTEM_LENGTH + 1),
+        1,
+        ["apple-hig"],
+        APPLE_HIG,
+    ],
+)
+def test_the_design_system_of_a_language_is_a_lowercase_identifier(value: object) -> None:
+    language = written(design_fixtures.visual_language(), design_system=APPLE_HIG)
+    snapshot = language.to_snapshot()
+
+    with pytest.raises(ValueError, match="visual design system must be a lowercase identifier"):
+        replace(language, design_system=value)
+    with pytest.raises(ValueError, match="visual design system must be a lowercase identifier"):
+        visual_language_from_snapshot({**snapshot, "design_system": value})
+
+
+def test_the_design_system_of_a_language_accepts_every_lowercase_identifier() -> None:
+    language = written(design_fixtures.visual_language(), design_system=APPLE_HIG)
+
+    for value in ("apple-hig", "a", "material-3", "a" * MAX_DESIGN_SYSTEM_LENGTH):
+        renamed = replace(language, design_system=value)
+        assert renamed.design_system == value
+        assert visual_language_from_snapshot(renamed.to_snapshot()) == renamed
+
+
+def test_a_package_keeps_the_design_system_of_the_alternative_that_follows_it() -> None:
+    package = design_fixtures.design_package()
+    named = replace(
+        package,
+        alternatives=tuple(
+            item
+            if item.visual_language is None
+            else replace(item, visual_language=system_language(item.visual_language))
+            for item in package.alternatives
+        ),
+    )
+    snapshot = named.to_snapshot()
+    restored = design_package_from_snapshot(json.loads(named.canonical_json()))
+
+    assert [item["code"] for item in snapshot["alternatives"]] == ["DES-001", "DES-002"]
+    assert [
+        item.get("visual_language", {}).get("design_system") for item in snapshot["alternatives"]
+    ] == [None, "apple-hig"]
+    assert restored == named
+    assert restored.content_hash == named.content_hash != package.content_hash
+    assert [item.visual_language for item in restored.alternatives] == [
+        None,
+        system_language(design_fixtures.visual_language()),
+    ]

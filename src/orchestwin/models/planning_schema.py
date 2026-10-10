@@ -1,6 +1,7 @@
 """Constrain planning references to evidence keys and typed artifact codes."""
 
 from orchestwin.artifacts.visual_exploration import exploration_bindings
+from orchestwin.models.design_systems import SYSTEM_ALTERNATIVE_CODE
 
 CRITIQUE_LISTS = (
     "strengths",
@@ -14,6 +15,7 @@ CRITIQUE_LISTS = (
 UNBOUNDED_CRITIQUE_TWINS = 2
 SHORT_CRITIQUE_TWINS = 4
 DESIGN_ALTERNATIVE_CODES = ("DES-001", "DES-002")
+SYSTEM_DESIGN_ALTERNATIVE_CODES = (*DESIGN_ALTERNATIVE_CODES, SYSTEM_ALTERNATIVE_CODE)
 HOSTED_DESIGN_PURPOSE = "DESIGN_ALTERNATIVES_HOSTED"
 HOSTED_CRITIQUE_DEFINITION = "HostedCritiqueDraft"
 
@@ -24,8 +26,14 @@ def critique_list_limit(twin_count):
     return 2 if twin_count <= SHORT_CRITIQUE_TWINS else 1
 
 
-def critique_pairs(twin_keys):
-    pairs = [(alternative, key) for alternative in DESIGN_ALTERNATIVE_CODES for key in twin_keys]
+def design_alternative_codes(context):
+    if context.get("design_system") is None:
+        return DESIGN_ALTERNATIVE_CODES
+    return SYSTEM_DESIGN_ALTERNATIVE_CODES
+
+
+def critique_pairs(twin_keys, codes=DESIGN_ALTERNATIVE_CODES):
+    pairs = [(alternative, key) for alternative in codes for key in twin_keys]
     return [
         (f"CRQ-{index:03d}", alternative, key) for index, (alternative, key) in enumerate(pairs, 1)
     ]
@@ -50,7 +58,7 @@ def constrain_planning_schema(schema, context, task):
         }
 
     if task == "design":
-        known["DES"] = list(DESIGN_ALTERNATIVE_CODES)
+        known["DES"] = list(design_alternative_codes(context))
     if task == "architecture" and "structure" in context:
         known["CMP"] = [x["code"] for x in context["structure"]["components"]]
         known["ENV"] = [x["code"] for x in context["structure"]["environments"]]
@@ -128,7 +136,7 @@ def constrain_planning_schema(schema, context, task):
             for name in CRITIQUE_LISTS:
                 definitions[critique]["properties"][name]["maxItems"] = limit
         # Coverage is a governance obligation, not something the model can omit.
-        pairs = critique_pairs(list(context["twins"]))
+        pairs = critique_pairs(list(context["twins"]), known["DES"])
         schema["properties"]["critiques"] = _fixed_array(
             definitions,
             critique,

@@ -34,14 +34,23 @@ from orchestwin.models.design_directions import (
     directions_context,
     directions_instruction,
 )
+from orchestwin.models.design_systems import (
+    SYSTEM_ALTERNATIVE_CODE,
+    DesignSystem,
+    context_design_system,
+    design_system_view,
+    system_direction,
+)
 from orchestwin.models.hosted_configuration import HOSTED_PROVIDER_KINDS
 from orchestwin.models.planning_schema import (
     DESIGN_ALTERNATIVE_CODES,
     critique_list_limit,
     critique_pairs,
+    design_alternative_codes,
 )
 from orchestwin.models.profile_drafts import PersonaModelOutput, UserTwinModelOutput
 from orchestwin.models.proposal_evidence import (
+    current_proposal_evidence,
     generation_output_reference,
     retain_adapter_result,
     retire_model_generation,
@@ -114,7 +123,7 @@ CRITIQUE_LIST_INSTRUCTIONS = {
         "sentences; "
     ),
 }
-DESIGN_VISUAL_INSTRUCTION = (
+_VISUAL_CATALOG_INSTRUCTION = (
     "Each alternative also declares its visual language in 'visual', using only ids from this "
     "catalog. "
     + visual_catalog_summary()
@@ -132,18 +141,31 @@ DESIGN_VISUAL_INSTRUCTION = (
     "(archetype, palette and mode, typography, density, controls) from the twin's perspective, "
     "and on_accessibility must address it whenever the twin has accessibility needs. Every "
     "critique judges only the alternative named in its alternative field, from the point of "
-    "view of the twin named in as_twin. The two alternatives must read as two different "
-    "products, never two skins of the "
-    "same layout. visual_exploration gives each alternative the part of the catalog that "
-    "this project explores: for the dimensions it lists choose only among the values of "
-    "that alternative, so that different projects do not look alike; every other "
-    "dimension is free and follows the twins and the domain."
+    "view of the twin named in as_twin."
 )
+_VISUAL_EXPLORATION_INSTRUCTION = (
+    "visual_exploration gives each alternative the part of the catalog that this project "
+    "explores: for the dimensions it lists choose only among the values of that alternative, so "
+    "that different projects do not look alike; every other dimension is free and follows the "
+    "twins and the domain."
+)
+_ALTERNATIVE_COUNTS = {2: "two", 3: "three"}
+
+
+def design_visual_instruction(count="two"):
+    return (
+        f"{_VISUAL_CATALOG_INSTRUCTION} The {count} alternatives must read as {count} different "
+        f"products, never {count} skins of the same layout. {_VISUAL_EXPLORATION_INSTRUCTION}"
+    )
+
+
+DESIGN_VISUAL_INSTRUCTION = design_visual_instruction()
 DESIGN_NAMES_INSTRUCTION = (
     "In every text call the twins by their names in twins, never by their keys: keys appear "
     "only in the twin, as_twin and twins fields."
 )
 HOSTED_DESIGN_OUTPUT_TOKENS = 24000
+HOSTED_SYSTEM_DESIGN_OUTPUT_TOKENS = 36000
 HOSTED_VERDICT_INSTRUCTION = (
     "Every critique also has verdict and quote. verdict is the judgement of the twin on this "
     "alternative in at most five words and at most 60 characters, written in {language}, "
@@ -162,10 +184,8 @@ HOSTED_PERSPECTIVES_INSTRUCTION = (
     "considerations: take them into account in every alternative and in the critiques, without "
     "adding screens or functions that no requirement asks for."
 )
-HOSTED_DIRECTIONS_INSTRUCTION = (
-    "context.directions gives each alternative its art direction, already chosen for this "
-    "project and different from the other: {first} follows the first and {second} the second. A "
-    "direction has a name, a concept, rules and a position on five axes (layout, shape, type, "
+_DIRECTION_INSTRUCTION = (
+    "A direction has a name, a concept, rules and a position on five axes (layout, shape, type, "
     "colour, density). It decides how the alternative looks; the approach, the flows, the content "
     "and the archetype of the alternative remain yours to choose, and must suit the direction. In "
     "visual, the dimensions listed in visual_exploration are restricted to the values that fit "
@@ -174,6 +194,37 @@ HOSTED_DIRECTIONS_INSTRUCTION = (
     "twin_fit judges the direction from the point of view of each twin. The critiques judge the "
     "direction too."
 )
+HOSTED_DIRECTIONS_INSTRUCTION = (
+    "context.directions gives each alternative its art direction, already chosen for this "
+    "project and different from the other: {first} follows the first and {second} the second. "
+    + _DIRECTION_INSTRUCTION
+)
+HOSTED_SYSTEM_DIRECTIONS_INSTRUCTION = (
+    "context.directions gives each alternative its art direction, different from the others: "
+    "{first} follows the first and {second} the second, both chosen for this project, and "
+    "{third} follows the third, the direction of the design system named in "
+    "context.design_system. " + _DIRECTION_INSTRUCTION
+)
+HOSTED_PALETTE_INSTRUCTION = (
+    "Each alternative writes palette and type_pair in its visual, for this product and for its "
+    "direction. palette gives the fifteen roles background, surface, surface_alt, "
+    "border, text, text_muted, primary, on_primary, primary_soft, accent, on_accent, success, "
+    "success_soft, danger and danger_soft, each as a lowercase hex colour of the form #rrggbb, "
+    "and hue_family, color_scheme, saturation and surface_tone name the character of that "
+    "palette. The palette follows color_mode: background, surface and surface_alt are light in a "
+    "light mode and dark in a dark mode, and the Studio refuses a palette whose background does "
+    "not match color_mode. text and text_muted are read on the three surfaces, on_primary on "
+    "primary, on_accent on accent, text on primary_soft, success and danger on background, "
+    "surface and their soft tints, and primary and accent stand out from background and surface. "
+    "The primary is never the usual blue of a template, and the primaries of the two "
+    "alternatives differ clearly, by at least 30 degrees of hue or in saturation. When a colour "
+    "does not reach the contrast that color_mode requires, the Studio moves only its lightness "
+    "and keeps its hue; a palette whose surfaces leave no such lightness is refused. type_pair "
+    "gives the heading and the body typeface, both among the names in context.fonts, which "
+    "describes the character of each; heading and body contrast where the direction asks for it."
+)
+PALETTE_ROLE = "DESIGN_PALETTE"
+PALETTE_ADJUSTED = "PALETTE_ADJUSTED"
 PERSONAS_INSTRUCTION = (
     "Propose one persona content draft per candidate, in input order. "
     "Use the approved project_brief.brief business content, including its goals and "
@@ -271,15 +322,23 @@ def _exploration_rule(code, exploration):
     return rule
 
 
+def _hosted_directions_sentence(codes):
+    if len(codes) == len(DESIGN_ALTERNATIVE_CODES):
+        first, second = codes
+        return HOSTED_DIRECTIONS_INSTRUCTION.format(first=first, second=second)
+    first, second, third = codes
+    return HOSTED_SYSTEM_DIRECTIONS_INSTRUCTION.format(first=first, second=second, third=third)
+
+
 def hosted_design_instruction(context):
     keys = list(context["twins"])
     language = context["language"]
     exploration = context.get("visual_exploration") or {}
-    pairs = critique_pairs(keys)
+    codes = design_alternative_codes(context)
+    pairs = critique_pairs(keys, codes)
     rules = [
         HOSTED_SCHEMA_INSTRUCTION,
-        f"alternatives has exactly {len(DESIGN_ALTERNATIVE_CODES)} items, in this order: "
-        f"{_listed(DESIGN_ALTERNATIVE_CODES)}.",
+        f"alternatives has exactly {len(codes)} items, in this order: {_listed(codes)}.",
         f"critiques has exactly {len(pairs)} items, one for each pair of alternative and twin, "
         "in the order of the alternatives and, inside one alternative, in the order of the "
         f"twins {_listed(keys)}: "
@@ -294,36 +353,40 @@ def hosted_design_instruction(context):
         f"the order {_listed(keys)}.",
     ]
     rules.extend(
-        rule
-        for code in DESIGN_ALTERNATIVE_CODES
-        if (rule := _exploration_rule(code, exploration)) is not None
+        rule for code in codes if (rule := _exploration_rule(code, exploration)) is not None
     )
     written = "the language of the requirements" if language is None else language["name"]
-    first, second = DESIGN_ALTERNATIVE_CODES
-    directions = (
-        (HOSTED_DIRECTIONS_INSTRUCTION.format(first=first, second=second),)
-        if context.get("directions")
-        else ()
-    )
+    directions = (_hosted_directions_sentence(codes),) if context.get("directions") else ()
+    system = context_design_system(context)
+    palette = () if system is None else (system.palette_text,)
     return " ".join(
         (
-            _design_instruction("/".join(keys), language, CRITIQUE_LIST_INSTRUCTIONS[None]),
+            _design_instruction(
+                "/".join(keys),
+                language,
+                CRITIQUE_LIST_INSTRUCTIONS[None],
+                _ALTERNATIVE_COUNTS[len(codes)],
+            ),
             HOSTED_VERDICT_INSTRUCTION.format(language=written),
             HOSTED_PERSPECTIVES_INSTRUCTION,
             *directions,
             *rules,
+            HOSTED_PALETTE_INSTRUCTION,
+            *palette,
         )
     )
 
 
-def _design_instruction(twin_keys, language, lists):
+def _design_instruction(twin_keys, language, lists, count="two"):
     if language is None:
-        opening = "Propose exactly two distinct design approaches in the requirements' language. "
+        opening = (
+            f"Propose exactly {count} distinct design approaches in the requirements' language. "
+        )
         closing = DESIGN_NAMES_INSTRUCTION
     else:
         name = language["name"]
         opening = (
-            f"Propose exactly two distinct design approaches. Write every text in {name}, the "
+            f"Propose exactly {count} distinct design approaches. Write every text in {name}, the "
             "language of the requirements: titles, summaries, rationales, workflow titles and "
             "steps, considerations, advantages, trade-offs, assumptions, questions, critiques, "
             "concerns, visual_rationale and twin_fit statements; only codes and catalog ids "
@@ -340,7 +403,7 @@ def _design_instruction(twin_keys, language, lists):
         "items that the archetype and the task need. Prefer a small design appropriate to "
         "scope. "
         "Do not invent empirical evidence, owner selection, approval or a prototype. "
-        + DESIGN_VISUAL_INSTRUCTION
+        + design_visual_instruction(count)
         + " "
         + closing
     )
@@ -367,6 +430,21 @@ def _model_boundary(function):
         return result
 
     return guarded
+
+
+def _record_palette_adjustments(adjusted):
+    scope = current_proposal_evidence()
+    if not adjusted or scope is None or scope.request is None:
+        return
+    scope.related_generations.append(
+        {
+            "role": PALETTE_ROLE,
+            "generation_id": str(scope.request.request_id),
+            "request_hash": scope.request.content_hash,
+            "code": PALETTE_ADJUSTED,
+            "palette_roles": {code: list(roles) for code, roles in adjusted.items()},
+        }
+    )
 
 
 def _model_reference(generator, locator):
@@ -544,8 +622,9 @@ class ModelRequirementsAdapter:
 
 
 class ModelDesignAdapter:
-    def __init__(self, generator: ProposalGenerator):
+    def __init__(self, generator: ProposalGenerator, *, design_system: DesignSystem | None = None):
         self.generator = generator
+        self.design_system = design_system
 
     @_model_boundary
     async def propose(self, request):
@@ -553,21 +632,33 @@ class ModelDesignAdapter:
         from orchestwin.models.design_drafts import (
             DesignDraft,
             HostedDesignDraft,
+            HostedSystemDesignDraft,
             bind_design,
             design_context,
+            font_design_context,
             hosted_design_context,
+            palette_adjustments,
         )
 
         context, twins = design_context(request)
         route = self.generator.route("design")
-        directions = exploration = None
+        directions = exploration = system = None
         if hosted_route(route):
+            system = self.design_system
+            if system is not None:
+                context["design_system"] = design_system_view(system)
             context = hosted_design_context(context, request.team.selected_agent_ids)
             directions = await self._directions(request, context)
-            context = directed_design_context(context, directions)
+            if system is not None:
+                directions[SYSTEM_ALTERNATIVE_CODE] = system_direction(system)
+            context = font_design_context(directed_design_context(context, directions))
             exploration = context["visual_exploration"]
             route = self.generator.route("design", context["purpose"])
-            output_type, budget = HostedDesignDraft, HOSTED_DESIGN_OUTPUT_TOKENS
+            output_type, budget = (
+                (HostedDesignDraft, HOSTED_DESIGN_OUTPUT_TOKENS)
+                if system is None
+                else (HostedSystemDesignDraft, HOSTED_SYSTEM_DESIGN_OUTPUT_TOKENS)
+            )
             instruction = hosted_design_instruction(context)
         else:
             output_type, budget = DesignDraft, design_output_tokens(len(twins))
@@ -586,7 +677,9 @@ class ModelDesignAdapter:
             lambda code: _model_reference(route, code),
             directions=directions,
             exploration=exploration,
+            design_system=system,
         )
+        _record_palette_adjustments(palette_adjustments(draft, output))
         return DesignProposalResult(
             status=DesignProposalStatus.PROPOSED,
             provider_kind=DesignProposalProviderKind.MODEL_ADAPTER,

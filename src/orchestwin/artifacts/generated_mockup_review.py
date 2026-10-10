@@ -36,6 +36,7 @@ from orchestwin.artifacts.generated_mockups import (
     MarkupElement,
     MarkupNode,
     MarkupText,
+    is_placeholder,
     screen_trees,
 )
 from orchestwin.artifacts.prototypes import PrototypeScreenState
@@ -48,9 +49,9 @@ RECOMMENDED_TABLE_ROWS: Final = 6
 MIN_SELECT_OPTIONS: Final = 2
 MIN_LIST_ITEMS: Final = 2
 CONTROL_BORDER_THRESHOLD: Final = 3.0
-CONTRAST_FLOOR: Final = 3.0
-STRICT_CONTRAST_FLOOR: Final = 4.5
-STRICT_CONTRAST_THRESHOLD: Final = 7.0
+LARGE_TEXT_SIZE: Final = 24.0
+LARGE_BOLD_TEXT_SIZE: Final = 18.66
+BOLD_TEXT_WEIGHT: Final = 700.0
 _ENTRY: Final = "SCR-001"
 _ACTIONS: Final = frozenset({"a", "button"})
 _TRACED: Final = frozenset({"a", "button", "input", "select", "textarea"})
@@ -116,6 +117,12 @@ _BORDER_SHORTHANDS: Final = frozenset(
 )
 _CANDIDATE_TOKENS: Final = ("background", "surface", "surface-alt")
 _BACKGROUNDS: Final = frozenset({"background", "background-color"})
+_TEXT: Final = frozenset({"color"})
+_FONT_SIZE: Final = frozenset({"font-size"})
+_FONT_WEIGHT: Final = frozenset({"font-weight"})
+_SIZE_TOKENS: Final = frozenset({"--vl-size-display", "--vl-size-display-narrow"})
+_WEIGHT_TOKENS: Final = frozenset({"--vl-heading-weight"})
+_LENGTH_UNITS: Final = {"px": 1.0, "rem": 16.0, "em": 16.0}
 _PRINTABLE: Final = re.compile(r"[^\x20-\x7e]")
 MAX_SELECTOR_DETAIL: Final = 80
 
@@ -317,6 +324,7 @@ def _review_screen(
             issues.warning("LIST_TOO_SHORT", screen_code, place)
         if (
             name not in _FILLERS
+            and not is_placeholder(node)
             and not node.elements
             and not any(
                 isinstance(child, MarkupText) and child.text.strip() for child in node.children
@@ -589,6 +597,130 @@ def _candidates(
     return candidates
 
 
+Resolver = _Resolver
+last_declaration = _last
+background_candidates = _candidates
+targets_controls = _targets_controls
+selector_detail = _selector
+
+
+def _resolved(node: CssNode, names: frozenset[str], tokens: Mapping[str, str]) -> CssNode | None:
+    reference = variable_reference(node)
+    if reference is None or not isinstance(node, CssBlock):
+        return node
+    if reference not in names or len(split_commas(node.children)) != 1:
+        return None
+    items = significant(tokenize_styles(tokens.get(reference, "")))
+    return items[0] if len(items) == 1 else None
+
+
+def _declared(
+    rule: StyleRule, names: frozenset[str], resolvable: frozenset[str], tokens: Mapping[str, str]
+) -> CssNode | None:
+    declaration = _last(rule, names)
+    if declaration is None:
+        return None
+    items = significant(declaration.nodes)
+    return _resolved(items[0], resolvable, tokens) if len(items) == 1 else None
+
+
+def _font_size(rule: StyleRule, tokens: Mapping[str, str]) -> float | None:
+    node = _declared(rule, _FONT_SIZE, _SIZE_TOKENS, tokens)
+    if not isinstance(node, CssToken) or node.kind != "dimension":
+        return None
+    scale = _LENGTH_UNITS.get(node.text[len(node.value) :].lower())
+    return None if scale is None else float(node.value) * scale
+
+
+def _font_weight(rule: StyleRule, tokens: Mapping[str, str]) -> float | None:
+    node = _declared(rule, _FONT_WEIGHT, _WEIGHT_TOKENS, tokens)
+    if not isinstance(node, CssToken):
+        return None
+    if node.kind == "number":
+        return float(node.value)
+    if node.kind == "ident" and node.value.lower() == "bold":
+        return BOLD_TEXT_WEIGHT
+    return None
+
+
+def is_large_text(rule: StyleRule, tokens: Mapping[str, str]) -> bool:
+    size = _font_size(rule, tokens)
+    if size is None:
+        return False
+    if size >= LARGE_TEXT_SIZE:
+        return True
+    weight = _font_weight(rule, tokens)
+    return size >= LARGE_BOLD_TEXT_SIZE and weight is not None and weight >= BOLD_TEXT_WEIGHT
+
+
+@dataclass(frozen=True, slots=True)
+class TextContrast:
+    code: str
+    index: int
+    colour: str
+    backgrounds: tuple[str, ...]
+
+    @property
+    def ratio(self) -> float:
+        return max(contrast_ratio(self.colour, background) for background in self.backgrounds)
+
+
+def text_contrast(
+    rule: StyleRule, resolver: _Resolver, candidates: Sequence[str]
+) -> TextContrast | None:
+    text = _last(rule, _TEXT)
+    colour = None if text is None else resolver.value(text)
+    if colour is None or not colour.opaque:
+        return None
+    background = _last(rule, _BACKGROUNDS)
+    state, fill = ("absent", None) if background is None else resolver.background(background)
+    if state == "opaque" and fill is not None:
+        code, backgrounds = "LOW_CONTRAST", (fill.hex,)
+    elif state in {"absent", "transparent"} and candidates:
+        code, backgrounds = "UNREADABLE_TEXT_COLOUR", tuple(candidates)
+    else:
+        return None
+    index = next(position for position, item in enumerate(rule.declarations) if item is text)
+    return TextContrast(code, index, colour.hex, backgrounds)
+
+
+@dataclass(frozen=True, slots=True)
+class WeakBorder:
+    index: int
+    node: int
+    ratio: float
+
+
+def weak_control_borders(
+    rule: StyleRule, resolver: _Resolver, tokens: Mapping[str, str]
+) -> tuple[WeakBorder, ...]:
+    background = tokens.get("--vl-color-background")
+    surface = tokens.get("--vl-color-surface")
+    if not (
+        background is not None
+        and surface is not None
+        and is_hex_colour(background)
+        and is_hex_colour(surface)
+        and _targets_controls(rule.selector)
+    ):
+        return ()
+    found: list[WeakBorder] = []
+    for index, declaration in enumerate(rule.declarations):
+        name = declaration.name
+        if not (
+            name in _BORDER_SHORTHANDS or (name.startswith("border") and name.endswith("-color"))
+        ):
+            continue
+        for node, item in enumerate(significant(declaration.nodes)):
+            colour = resolver.colour(item)
+            if colour is None or not colour.opaque:
+                continue
+            best = max(contrast_ratio(colour.hex, background), contrast_ratio(colour.hex, surface))
+            if best < CONTROL_BORDER_THRESHOLD:
+                found.append(WeakBorder(index, node, best))
+    return tuple(found)
+
+
 def is_dated_background(declaration: StyleDeclaration) -> bool:
     return declaration.name.startswith(("background", "--m-")) and bool(
         set(_functions(declaration.nodes)) & DATED_BACKGROUND_FUNCTIONS
@@ -596,41 +728,33 @@ def is_dated_background(declaration: StyleDeclaration) -> bool:
 
 
 def contrast_floor(threshold: float) -> float:
-    floor = STRICT_CONTRAST_FLOOR if threshold >= STRICT_CONTRAST_THRESHOLD else CONTRAST_FLOOR
-    return min(floor, threshold)
+    return threshold
 
 
 def _review_styles(
     sheet: StyleSheet,
     tokens: Mapping[str, str],
     threshold: float,
+    large_threshold: float,
+    border_severity: MockupIssueSeverity,
     issues: _Issues,
 ) -> None:
     resolver = _Resolver(sheet, tokens)
     rules = [rule for rule in sheet.rules if not rule.in_keyframes]
     candidates = _candidates(rules, resolver, tokens)
-    floor = contrast_floor(threshold)
     for rule in sheet.rules:
         if any(is_dated_background(declaration) for declaration in rule.declarations):
             issues.error("DATED_BACKGROUND", None, _selector(rule))
     for rule in rules:
         selector = _selector(rule)
-        text = _last(rule, frozenset({"color"}))
+        measured = text_contrast(rule, resolver, candidates)
+        if measured is not None:
+            ratio = measured.ratio
+            required = large_threshold if is_large_text(rule, tokens) else threshold
+            if ratio < required:
+                issues.error(measured.code, None, f"{selector} {ratio:.2f}")
         background = _last(rule, _BACKGROUNDS)
-        state, fill = ("absent", None) if background is None else resolver.background(background)
-        colour = None if text is None else resolver.value(text)
-        if colour is not None and colour.opaque:
-            if state == "opaque" and fill is not None:
-                ratio = contrast_ratio(colour.hex, fill.hex)
-                if ratio < threshold:
-                    record = issues.error if ratio < floor else issues.warning
-                    record("LOW_CONTRAST", None, f"{selector} {ratio:.2f}")
-            elif state in {"absent", "transparent"} and candidates:
-                best = max(contrast_ratio(colour.hex, candidate) for candidate in candidates)
-                if best < threshold:
-                    record = issues.error if best < floor else issues.warning
-                    record("UNREADABLE_TEXT_COLOUR", None, f"{selector} {best:.2f}")
-        if background is not None and text is None:
+        if background is not None and _last(rule, _TEXT) is None:
             items = significant(background.nodes)
             strong = next(
                 (
@@ -642,7 +766,7 @@ def _review_styles(
             )
             if strong is not None:
                 issues.warning("BACKGROUND_WITHOUT_TEXT_COLOUR", None, f"{selector} {strong}")
-        _review_border(rule, resolver, tokens, issues)
+        _review_border(rule, resolver, tokens, border_severity, issues)
     if not any(
         token.kind == "ident" and token.value.lower() in _WIDTH_FEATURES
         for condition in sheet.media_conditions
@@ -652,34 +776,17 @@ def _review_styles(
 
 
 def _review_border(
-    rule: StyleRule, resolver: _Resolver, tokens: Mapping[str, str], issues: _Issues
+    rule: StyleRule,
+    resolver: _Resolver,
+    tokens: Mapping[str, str],
+    severity: MockupIssueSeverity,
+    issues: _Issues,
 ) -> None:
-    background = tokens.get("--vl-color-background")
-    surface = tokens.get("--vl-color-surface")
-    if not (
-        background is not None
-        and surface is not None
-        and is_hex_colour(background)
-        and is_hex_colour(surface)
-        and _targets_controls(rule.selector)
-    ):
-        return
-    weakest: float | None = None
-    for declaration in rule.declarations:
-        name = declaration.name
-        if not (
-            name in _BORDER_SHORTHANDS or (name.startswith("border") and name.endswith("-color"))
-        ):
-            continue
-        for item in significant(declaration.nodes):
-            colour = resolver.colour(item)
-            if colour is None or not colour.opaque:
-                continue
-            best = max(contrast_ratio(colour.hex, background), contrast_ratio(colour.hex, surface))
-            if best < CONTROL_BORDER_THRESHOLD and (weakest is None or best < weakest):
-                weakest = best
-    if weakest is not None:
-        issues.warning("WEAK_CONTROL_BORDER", None, f"{_selector(rule)} {weakest:.2f}")
+    weak = weak_control_borders(rule, resolver, tokens)
+    if weak:
+        weakest = min(border.ratio for border in weak)
+        record = issues.error if severity is MockupIssueSeverity.ERROR else issues.warning
+        record("WEAK_CONTROL_BORDER", None, f"{_selector(rule)} {weakest:.2f}")
 
 
 def review_generated_mockup(
@@ -688,6 +795,8 @@ def review_generated_mockup(
     tokens: Mapping[str, str],
     requirement_codes: Iterable[str],
     text_contrast_threshold: float = 4.5,
+    large_text_threshold: float = 3.0,
+    control_border_severity: MockupIssueSeverity = MockupIssueSeverity.ERROR,
 ) -> MockupReport:
     known = frozenset(requirement_codes)
     trees = screen_trees(mockup)
@@ -723,7 +832,14 @@ def review_generated_mockup(
             )
     for phrase in sorted(_placeholders((mockup.title,))):
         issues.error("PLACEHOLDER_TEXT", None, phrase)
-    _review_styles(parse_style_sheet(mockup.styles), tokens, text_contrast_threshold, issues)
+    _review_styles(
+        parse_style_sheet(mockup.styles),
+        tokens,
+        text_contrast_threshold,
+        large_text_threshold,
+        control_border_severity,
+        issues,
+    )
     if all(screen.state is PrototypeScreenState.DEFAULT for screen in mockup.screens):
         issues.warning("SINGLE_STATE", None, "every screen shows the default state")
     ordered = issues.ordered()
@@ -738,22 +854,33 @@ def review_generated_mockup(
 
 
 __all__ = [
-    "CONTRAST_FLOOR",
+    "BOLD_TEXT_WEIGHT",
     "CONTROL_BORDER_THRESHOLD",
     "DATED_BACKGROUND_FUNCTIONS",
+    "LARGE_BOLD_TEXT_SIZE",
+    "LARGE_TEXT_SIZE",
+    "MAX_SELECTOR_DETAIL",
     "MIN_DERIVED_ELEMENTS",
     "MIN_LIST_ITEMS",
     "MIN_SELECT_OPTIONS",
     "MIN_TABLE_ROWS",
     "MIN_VISIBLE_TEXT",
     "RECOMMENDED_TABLE_ROWS",
-    "STRICT_CONTRAST_FLOOR",
-    "STRICT_CONTRAST_THRESHOLD",
     "MockupIssue",
     "MockupIssueSeverity",
     "MockupReport",
     "MockupScreenSummary",
+    "Resolver",
+    "TextContrast",
+    "WeakBorder",
+    "background_candidates",
     "contrast_floor",
     "is_dated_background",
+    "is_large_text",
+    "last_declaration",
     "review_generated_mockup",
+    "selector_detail",
+    "targets_controls",
+    "text_contrast",
+    "weak_control_borders",
 ]

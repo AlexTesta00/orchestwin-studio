@@ -19,6 +19,7 @@ from orchestwin.artifacts.generated_mockup_styles import (
     parse_style_sheet,
 )
 from orchestwin.artifacts.prototypes import PrototypeScreenState
+from orchestwin.artifacts.visual_icons import PICTURE_TONES, is_bundled_icon
 from orchestwin.artifacts.visual_language import _TOKEN_NAME
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 
@@ -180,6 +181,10 @@ GLOBAL_ATTRIBUTES: Final = frozenset(
     {"class", "id", "lang", "dir", "role", "hidden", "tabindex", "title", "data-req"}
 )
 SVG_NAMESPACE: Final = "http://www.w3.org/2000/svg"
+DATA_ICON: Final = "data-icon"
+DATA_PICTURE: Final = "data-picture"
+DATA_TONE: Final = "data-tone"
+PLACEHOLDER_ATTRIBUTES: Final = frozenset({DATA_ICON, DATA_PICTURE, DATA_TONE})
 BUTTON_TYPES: Final = frozenset({"button", "submit", "reset"})
 _OPTION_ATTRIBUTES: Final = frozenset({"value", "selected", "disabled", "label"})
 _CELL_ATTRIBUTES: Final = frozenset({"colspan", "rowspan", "scope", "headers"})
@@ -221,6 +226,7 @@ ELEMENT_ATTRIBUTES: Final = MappingProxyType(
         "progress": _GAUGE_ATTRIBUTES,
         "details": frozenset({"open"}),
         "ol": frozenset({"start", "reversed"}),
+        "svg": PLACEHOLDER_ATTRIBUTES,
     }
 )
 SVG_ATTRIBUTES: Final = frozenset(
@@ -229,11 +235,15 @@ SVG_ATTRIBUTES: Final = frozenset(
         "width",
         "height",
         "fill",
+        "fill-opacity",
         "stroke",
         "stroke-width",
         "stroke-linecap",
         "stroke-linejoin",
         "stroke-dasharray",
+        "stroke-dashoffset",
+        "stroke-opacity",
+        "pathlength",
         "d",
         "cx",
         "cy",
@@ -291,8 +301,12 @@ _SVG_NUMBER_ATTRIBUTES: Final = frozenset(
         "viewbox",
         "width",
         "height",
+        "fill-opacity",
         "stroke-width",
         "stroke-dasharray",
+        "stroke-dashoffset",
+        "stroke-opacity",
+        "pathlength",
         "cx",
         "cy",
         "r",
@@ -348,7 +362,14 @@ _WHITESPACE_ONLY: Final = (
     frozenset({"table", "thead", "tbody", "tfoot", "tr", "colgroup", "select", "optgroup"})
     | SVG_ELEMENTS
 )
-_ATTRIBUTE_SPELLING: Final = MappingProxyType({"viewbox": "viewBox"})
+_PLACEHOLDER_SVG_ATTRIBUTES: Final = frozenset({"width", "height", "focusable", "xmlns"})
+_ATTRIBUTE_SPELLING: Final = MappingProxyType(
+    {
+        "viewbox": "viewBox",
+        "pathlength": "pathLength",
+        "preserveaspectratio": "preserveAspectRatio",
+    }
+)
 _ASCII_WHITESPACE: Final = " \t\n\f\r"
 _SPLIT: Final = re.compile(r"[ \t\n\f\r]+")
 _LINE: Final = re.compile(r"\n")
@@ -415,6 +436,14 @@ class MarkupElement:
 
 
 MarkupNode = MarkupText | MarkupElement
+
+
+def _placeholder(name: str, keys: Iterable[str]) -> bool:
+    return name == "svg" and any(key in (DATA_ICON, DATA_PICTURE) for key in keys)
+
+
+def is_placeholder(element: MarkupElement) -> bool:
+    return _placeholder(element.name, (key for key, _ in element.attributes))
 
 
 @dataclass(frozen=True, slots=True)
@@ -597,6 +626,10 @@ def _value_rule(element: str, name: str) -> Callable[[str, _Context], bool] | No
         return _matches(_INTEGER)
     if element in {"meter", "progress"} and name in _GAUGE_ATTRIBUTES:
         return _matches(_DECIMAL)
+    if element == "svg" and name in {DATA_ICON, DATA_PICTURE}:
+        return lambda value, _context: is_bundled_icon(value)
+    if element == "svg" and name == DATA_TONE:
+        return _among(frozenset(PICTURE_TONES))
     if element in SVG_ELEMENTS:
         if name in {"fill", "stroke"}:
             return _paint
@@ -619,6 +652,15 @@ def _allowed_attribute(element: str, name: str) -> bool:
     )
 
 
+def _placeholder_attribute(name: str) -> bool:
+    return (
+        name in GLOBAL_ATTRIBUTES
+        or name in PLACEHOLDER_ATTRIBUTES
+        or name in _PLACEHOLDER_SVG_ATTRIBUTES
+        or _ARIA.fullmatch(name) is not None
+    )
+
+
 class _TreeBuilder:
     def __init__(self, text: str, context: _Context) -> None:
         self.text = text
@@ -634,6 +676,11 @@ class _TreeBuilder:
 
     def container(self) -> _Builder:
         return self.stack[-1] if self.stack else self.root
+
+    def inside_placeholder(self) -> bool:
+        return bool(self.stack) and _placeholder(
+            self.stack[-1].name, (key for key, _ in self.stack[-1].attributes)
+        )
 
     def apply(self, event: _Event) -> None:
         if event.kind == "start":
@@ -672,8 +719,11 @@ class _TreeBuilder:
         for index, key in enumerate(names):
             if key in names[:index]:
                 raise self.fail("ATTRIBUTE_DUPLICATED", f"attribute {detail_name(key)} on {name}")
+        placeholder = _placeholder(name, names)
         for key in names:
-            if not _allowed_attribute(name, key):
+            if not _allowed_attribute(name, key) or (
+                placeholder and not _placeholder_attribute(key)
+            ):
                 raise self.fail("ATTRIBUTE_FORBIDDEN", f"attribute {detail_name(key)} on {name}")
         match = _START_TAG.fullmatch(event.raw)
         if (
@@ -685,6 +735,8 @@ class _TreeBuilder:
             raise self.fail("MARKUP_SYNTAX", f"start tag of {name}")
         values = {key: self.value(name, key, value) for key, value in event.attributes}
         values.pop("xmlns", None)
+        if name == "svg":
+            self.check_placeholder(values)
         if name == "button":
             values["type"] = "button"
         attributes = tuple(sorted(values.items(), key=lambda item: item[0]))
@@ -745,7 +797,15 @@ class _TreeBuilder:
             raise self.fail("ATTRIBUTE_VALUE", f"{name} on {element}")
         return value
 
+    def check_placeholder(self, values: Mapping[str, str | None]) -> None:
+        if DATA_ICON in values and DATA_PICTURE in values:
+            raise self.fail("ATTRIBUTE_VALUE", "an svg is either an icon or a picture")
+        if DATA_TONE in values and DATA_PICTURE not in values:
+            raise self.fail("ATTRIBUTE_VALUE", "data-tone on svg without data-picture")
+
     def structure(self, name: str) -> None:
+        if self.inside_placeholder():
+            raise self.fail("CONTENT_RULE", "a placeholder svg is empty")
         parent = self.stack[-1].name if self.stack else None
         ancestors = [builder.name for builder in self.stack]
         if name in SVG_ELEMENTS:
@@ -802,6 +862,8 @@ class _TreeBuilder:
             raise self.fail("MARKUP_CONTROL_CHARACTER", "text")
         container = self.container()
         if self.stack:
+            if text and self.inside_placeholder():
+                raise self.fail("CONTENT_RULE", "a placeholder svg is empty")
             if container.name in _WHITESPACE_ONLY and text.strip(_ASCII_WHITESPACE):
                 raise self.fail("CONTENT_RULE", f"text cannot be inside {container.name}")
             if container.name == "textarea" and not container.children and text.startswith("\n"):
@@ -1210,6 +1272,9 @@ __all__ = [
     "BLOCK_ELEMENTS",
     "BOOLEAN_ATTRIBUTES",
     "BUTTON_TYPES",
+    "DATA_ICON",
+    "DATA_PICTURE",
+    "DATA_TONE",
     "ELEMENT_ATTRIBUTES",
     "GLOBAL_ATTRIBUTES",
     "HTML_ELEMENTS",
@@ -1225,6 +1290,7 @@ __all__ = [
     "MIN_SCREENS",
     "MOCKUP_CONTRACT_VERSION",
     "PHRASING_ELEMENTS",
+    "PLACEHOLDER_ATTRIBUTES",
     "SVG_ATTRIBUTES",
     "SVG_ELEMENTS",
     "SVG_NAMESPACE",
@@ -1238,6 +1304,7 @@ __all__ = [
     "MarkupText",
     "create_generated_mockup",
     "generated_mockup_from_snapshot",
+    "is_placeholder",
     "parse_markup",
     "screen_trees",
     "serialize_markup",

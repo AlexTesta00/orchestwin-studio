@@ -9,13 +9,18 @@ from uuid import UUID
 import pytest
 
 from orchestwin.artifacts.bound_mockups import create_bound_mockup
-from orchestwin.artifacts.generated_mockup_review import review_generated_mockup
+from orchestwin.artifacts.generated_mockup_review import (
+    MockupIssueSeverity,
+    review_generated_mockup,
+)
 from orchestwin.artifacts.provided_prototypes import (
+    STORED_CONTRAST_THRESHOLD,
     ProvidedPrototypeVersion,
     create_provided_prototype,
     provided_prototype_from_payload,
     provided_prototype_from_snapshot,
 )
+from orchestwin.artifacts.visual_color import contrast_ratio
 from orchestwin.workflow_inputs import (
     PROVIDED_PROTOTYPE_LIMITS,
     WorkflowInputError,
@@ -29,6 +34,8 @@ from .test_generated_mockup_support import (
     BASE_CODES,
     BASE_FIRST,
     BASE_SECOND,
+    HIGH_CONTRAST_CHOICES,
+    HIGH_CONTRAST_TOKENS,
     LIGHT_CHOICES,
     LIGHT_TOKENS,
     build,
@@ -236,6 +243,50 @@ def test_stored_payload_revalidates_static_quality_even_with_a_recomputed_hash()
         provided_prototype_from_snapshot(payload)
     assert caught.value.code == "MOCKUP_QUALITY_REJECTED"
     assert "SCREEN_TOO_EMPTY" in caught.value.detail
+
+
+MIDDLE_CONTRAST = ".tag{color:var(--vl-color-border);background:var(--vl-color-primary)}"
+WEAK_BORDER = "input{border:1px solid var(--vl-color-border)}"
+
+
+def ratio(tokens, first, second):
+    return contrast_ratio(tokens[f"--vl-color-{first}"], tokens[f"--vl-color-{second}"])
+
+
+def test_a_stored_prototype_still_loads_with_the_contrast_accepted_when_it_was_saved():
+    assert STORED_CONTRAST_THRESHOLD <= ratio(LIGHT_TOKENS, "border", "primary") < 4.5
+    payload = prototype().to_snapshot()
+    payload["mockup"]["mockup"]["styles"] += MIDDLE_CONTRAST + WEAK_BORDER
+    payload["content_hash"] = decision_content_hash(payload)
+    loaded = provided_prototype_from_snapshot(payload)
+    assert loaded.to_snapshot() == payload
+    assert [
+        (issue.code, issue.severity) for issue in loaded.report.issues if issue.screen_code is None
+    ] == [("WEAK_CONTROL_BORDER", MockupIssueSeverity.WARNING)]
+
+
+@pytest.mark.parametrize(
+    ("styles", "code"),
+    [(MIDDLE_CONTRAST, "LOW_CONTRAST"), (WEAK_BORDER, "WEAK_CONTROL_BORDER")],
+)
+def test_a_new_prototype_is_held_to_wcag_aa(styles, code):
+    payload = input_payload()
+    payload["mockup"]["styles"] += styles
+    with pytest.raises(WorkflowInputError) as caught:
+        provided_prototype_from_payload(payload, **parameters())
+    assert caught.value.code == "MOCKUP_QUALITY_REJECTED"
+    assert caught.value.detail == code
+
+
+def test_a_new_prototype_in_high_contrast_holds_large_text_to_the_ui_threshold():
+    rule = ".t{color:var(--vl-color-text);background:var(--vl-color-border);font-size:2rem}"
+    assert STORED_CONTRAST_THRESHOLD <= ratio(HIGH_CONTRAST_TOKENS, "text", "border") < 4.5
+    payload = input_payload() | {"visual_choices": HIGH_CONTRAST_CHOICES.to_snapshot()}
+    payload["mockup"]["styles"] += rule
+    with pytest.raises(WorkflowInputError) as caught:
+        provided_prototype_from_payload(payload, **parameters())
+    assert caught.value.code == "MOCKUP_QUALITY_REJECTED"
+    assert caught.value.detail == "LOW_CONTRAST"
 
 
 def test_stored_payload_rejects_modified_hash_and_definition_reference():
