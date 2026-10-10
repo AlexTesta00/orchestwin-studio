@@ -56,6 +56,9 @@ export const whyMessages = {
     visualDirection: "Direzione visiva",
     directionOrigin:
       "Proposta dal modello fra {count} candidate; scelta dallo Studio perché lontana dall'altra.",
+    directionSystems: {
+      "apple-hig": "Direzione del sistema di design Apple Human Interface Guidelines.",
+    },
     gaps: {
       DECLARED_MISSING: "Lacuna dichiarata dal proprietario",
       MISSING_REQUIREMENT_ANCHOR: "Il prototipo non contiene l'ancoraggio a questo requisito",
@@ -141,6 +144,9 @@ export const whyMessages = {
     visualDirection: "Visual direction",
     directionOrigin:
       "Proposed by the model among {count} candidates; chosen by the Studio because it is far from the other.",
+    directionSystems: {
+      "apple-hig": "Direction of the Apple Human Interface Guidelines design system.",
+    },
     gaps: {
       DECLARED_MISSING: "Gap declared by the owner",
       MISSING_REQUIREMENT_ANCHOR: "The prototype has no anchor for this requirement",
