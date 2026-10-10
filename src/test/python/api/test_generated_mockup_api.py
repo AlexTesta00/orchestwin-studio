@@ -20,11 +20,17 @@ from orchestwin.api.app import create_app
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.design import DesignPackagePayload
 from orchestwin.api.design_iterations import create_design_iteration_router
-from orchestwin.api.design_mockups import create_design_mockup_router
+from orchestwin.api.design_mockups import (
+    GENERATED_OUTPUT_TOKENS,
+    ModelMockupApplication,
+    create_design_mockup_router,
+)
 from orchestwin.api.generation_jobs import GenerationJobKind, GenerationJobRegistry
 from orchestwin.api.services import ApplicationRuntime
 from orchestwin.config import ApplicationSettings
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
+from orchestwin.models.design_systems import APPLE_HIG
+from orchestwin.models.generated_mockup_instructions import DESIGN_SYSTEM_HEADING
 from orchestwin.models.generation_budget import GenerationBudget
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.structured_generation import StructuredGenerationProviderKind
@@ -51,7 +57,11 @@ from src.test.python.models.test_generated_mockup_support import (
     runtime,
     with_markup,
 )
-from src.test.python.models.test_hosted_support import claude_code_document, providers
+from src.test.python.models.test_hosted_support import (
+    claude_code_document,
+    providers,
+    providers_document,
+)
 
 NOW = datetime(2026, 9, 29, 9, 0, tzinfo=UTC)
 BASE = f"/api/v1/projects/{PROJECT_ID}/design"
@@ -300,6 +310,15 @@ def subscription_generator(*outcomes, budget=None):
     return generator
 
 
+def general_generator(ceiling):
+    generator = ScriptedMockupGenerator(entry="general")
+    document = providers_document()
+    [entry] = [item for item in document["models"] if item["id"] == "general"]
+    entry["max_output_tokens"] = ceiling
+    generator.configuration = providers(document).hosted_model("general")
+    return generator
+
+
 def test_capabilities_follow_the_route_of_each_purpose():
     hosted = ScriptedMockupGenerator()
     local = SimpleNamespace(
@@ -355,12 +374,23 @@ def test_capabilities_follow_the_route_of_each_purpose():
             },
         ),
         (
-            ScriptedMockupGenerator(entry="general"),
+            general_generator(GENERATED_OUTPUT_TOKENS),
             True,
             {
                 "generated_mockups": True,
                 "iterations": True,
                 "model": "claude-sonnet-5",
+                "static_check": False,
+                "paid": True,
+            },
+        ),
+        (
+            general_generator(GENERATED_OUTPUT_TOKENS - 1),
+            True,
+            {
+                "generated_mockups": False,
+                "iterations": False,
+                "model": None,
                 "static_check": False,
                 "paid": True,
             },
@@ -510,6 +540,54 @@ def test_a_mockup_job_runs_in_the_background_and_answers_the_result():
     assert proposed.owner_selected_alternative_id == GUIDED_ID
     assert proposed.generated_mockup.design_alternative_id == GUIDED_ID
     assert generator.calls[0]["retry_schema_errors"] is False
+
+
+def without_command(context):
+    return {key: value for key, value in context.items() if key != "command_id"}
+
+
+def test_the_design_system_of_the_studio_reaches_only_the_alternative_that_follows_it():
+    plain = package().alternatives[0]
+    following = replace(
+        plain,
+        visual_language=replace(plain.visual_language, design_system=APPLE_HIG.identifier),
+    )
+    other = replace(APPLE_HIG, identifier="other-system")
+    cases = [
+        (APPLE_HIG, following, APPLE_HIG),
+        (APPLE_HIG, plain, None),
+        (APPLE_HIG, replace(plain, visual_language=None), None),
+        (None, following, None),
+        (None, plain, None),
+        (other, following, None),
+    ]
+    for system, alternative, expected in cases:
+        value = runtime(ScriptedMockupGenerator())
+        value.design_system = system
+        assert ModelMockupApplication(value).alternative_design_system(alternative) is expected
+    bare = runtime(ScriptedMockupGenerator())
+    assert not hasattr(bare, "design_system")
+    assert ModelMockupApplication(bare).alternative_design_system(following) is None
+
+
+def test_an_alternative_outside_the_design_system_is_drawn_as_when_the_system_is_off():
+    calls = []
+    for system in (None, APPLE_HIG):
+        versions = DesignVersions(package())
+        generator = ScriptedMockupGenerator(answer(draft_payload()))
+        value = runtime(generator, versions=versions)
+        value.design_system = system
+        client, registry = client_for(value)
+        with client:
+            done = generated(client, registry, versions)
+        assert done["status"] == "SUCCEEDED", done["failure"]
+        calls.extend(generator.calls)
+    off, on = calls
+    assert "design_system" not in on["context"]
+    assert APPLE_HIG.instruction not in on["instruction"]
+    assert DESIGN_SYSTEM_HEADING not in on["instruction"]
+    assert on["instruction"] == off["instruction"]
+    assert without_command(on["context"]) == without_command(off["context"])
 
 
 def test_a_second_request_for_the_same_design_and_alternative_joins_the_running_job():

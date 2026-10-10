@@ -15,8 +15,13 @@ from orchestwin.api.design_iterations import (
     merged_assertions,
     normalized_iteration,
 )
+from orchestwin.models.design_systems import APPLE_HIG
 from orchestwin.models.generated_mockup_drafts import GeneratedIterationDraft
-from orchestwin.models.generated_mockup_instructions import DESIGN_ITERATION, ITERATION_SENTENCE
+from orchestwin.models.generated_mockup_instructions import (
+    DESIGN_ITERATION,
+    DESIGN_SYSTEM_HEADING,
+    ITERATION_SENTENCE,
+)
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.projects.progress import ProjectStage
 from orchestwin.projects.sections import SectionState
@@ -26,6 +31,7 @@ from src.test.python.api.test_generated_mockup_api import (
     client_for,
     generated,
     wired_runtime,
+    without_command,
 )
 from src.test.python.models.test_generated_mockup_support import (
     GUIDED_ID,
@@ -138,6 +144,27 @@ def test_an_iteration_changes_the_applied_mockup_and_keeps_the_assertions():
     assert context["alternative"]["id"] == str(GUIDED_ID)
     assert ITERATION_SENTENCE in call["instruction"]
     assert call["retry_schema_errors"] is False
+
+
+def test_an_iteration_outside_the_design_system_is_asked_as_when_the_system_is_off():
+    calls = []
+    for system in (None, APPLE_HIG):
+        versions = applied_versions()
+        generator = ScriptedMockupGenerator(answer(iteration_payload()))
+        value = runtime(generator, versions=versions)
+        value.design_system = system
+        client, registry = client_for(value)
+        with client:
+            _started, done = iterate(client, registry, versions)
+        assert done["status"] == "SUCCEEDED", done["failure"]
+        calls.extend(generator.calls)
+    off, on = calls
+    assert "design_system" not in on["context"]
+    assert APPLE_HIG.instruction not in on["instruction"]
+    assert DESIGN_SYSTEM_HEADING not in on["instruction"]
+    assert ITERATION_SENTENCE in on["instruction"]
+    assert on["instruction"] == off["instruction"]
+    assert without_command(on["context"]) == without_command(off["context"])
 
 
 def test_an_iteration_requires_an_applied_generated_mockup():

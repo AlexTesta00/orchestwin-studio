@@ -28,10 +28,12 @@ from orchestwin.artifacts.design_finding_validation_persistence import (
     SqlAlchemyFindingValidationRepository,
 )
 from orchestwin.artifacts.design_packages import MAX_OWNER_ASSERTIONS, DesignExplorationPackage
+from orchestwin.artifacts.design_references import load_design_references
 from orchestwin.artifacts.generated_mockup_document import mockup_document
 from orchestwin.artifacts.generated_mockup_structure import nodes_text
 from orchestwin.artifacts.generated_mockups import screen_trees
 from orchestwin.artifacts.visual_catalog import ARCHETYPES
+from orchestwin.artifacts.visual_icons import mockup_resources
 from orchestwin.identity.domain import UserAccount
 from orchestwin.models.design_drafts import requirements_language, requirements_view
 from orchestwin.models.design_mockups import MockupDraft, bind_mockup
@@ -65,7 +67,10 @@ from orchestwin.models.proposal_evidence import (
 )
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.real_runtime import RealModelRuntimeError
-from orchestwin.models.structured_generation import StructuredGenerationProviderKind
+from orchestwin.models.structured_generation import (
+    MAX_ATTACHMENTS,
+    StructuredGenerationProviderKind,
+)
 
 MOCKUP_RULES = (
     "Act as the UX/UI designer. Produce an actual visual mockup of the selected design in the "
@@ -91,7 +96,7 @@ DEFAULT_MOCKUP_RECIPE = (
 )
 DESIGN_MOCKUP: Final = "DESIGN_MOCKUP"
 MOCKUP_PURPOSES: Final = (DESIGN_MOCKUP, *GENERATED_MOCKUP_PURPOSES)
-GENERATED_OUTPUT_TOKENS: Final = 32_000
+GENERATED_OUTPUT_TOKENS: Final = 48_000
 DECLARATIVE_OUTPUT_TOKENS: Final = 4096
 MAX_GENERATIONS: Final = 2
 MOCKUP_ATTEMPT: Final = "MOCKUP_ATTEMPT"
@@ -494,6 +499,13 @@ class ModelMockupApplication:
             raise MockupCommandError(409, GENERATED_MOCKUP_PATH_INACTIVE)
         return route
 
+    def design_references(self, route, taken: int = 0):
+        if _route_kind(route) is not StructuredGenerationProviderKind.CLAUDE_CODE_CLI:
+            return None
+        return load_design_references(
+            getattr(self.runtime, "design_references_dir", None), limit=MAX_ATTACHMENTS - taken
+        )
+
     async def require_budget(self, route, project_id):
         budget = getattr(route, "budget", None)
         if budget is None or _unpriced(route):
@@ -516,6 +528,13 @@ class ModelMockupApplication:
         if alternative.visual_language is None:
             raise MockupCommandError(422, GENERATED_MOCKUP_REQUIRES_VISUAL_LANGUAGE)
         return alternative
+
+    def alternative_design_system(self, alternative):
+        system = getattr(self.runtime, "design_system", None)
+        visual = alternative.visual_language
+        if system is None or visual is None or visual.design_system != system.identifier:
+            return None
+        return system
 
     async def observations(self, owner_user_id, project_id, version, alternative):
         database = getattr(self.runtime, "database_runtime", None)
@@ -654,11 +673,15 @@ class ModelMockupApplication:
             owner_user_id, project_id, body.design_version_id, body.design_content_hash
         )
         alternative = self.drawable_alternative(current.package, body.alternative_id)
-        self.hosted_route(DESIGN_MOCKUP_HTML)
+        route = self.hosted_route(DESIGN_MOCKUP_HTML)
         requirements = await self.grounded_requirements(owner_user_id, project_id, current)
         language = requirements_language(requirements_view(requirements))
         observations = await self.observations(owner_user_id, project_id, current, alternative)
         selected_agent_ids = await self.selected_agent_ids(owner_user_id, project_id, current)
+        references = self.design_references(route)
+        reference = None if references is None else references.view()
+        resources = mockup_resources()
+        system = self.alternative_design_system(alternative)
         command_id = uuid4()
 
         def context_for(previous_answer, rejection):
@@ -673,6 +696,9 @@ class ModelMockupApplication:
                 observations=observations,
                 previous_answer=previous_answer,
                 rejection=rejection,
+                reference=reference,
+                resources=resources,
+                design_system=system,
             )
 
         def propose(_draft, binding):
@@ -691,6 +717,7 @@ class ModelMockupApplication:
             context_for=context_for,
             propose=propose,
             progress=progress,
+            attachments=() if references is None else references.attachments,
         )
         return await self.accept(
             owner_user_id=owner_user_id,
