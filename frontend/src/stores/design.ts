@@ -12,17 +12,14 @@ import type {
   HumanGateEventPayload,
   HumanGatePayload,
 } from "../types/design";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type DesignOperation =
   "load" | "generate" | "propose-revision" | "decide-revision" | "submit-gate" | "decide-gate";
 
-export interface DesignStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type DesignStoreError = StoreError;
 
 interface DesignState {
   projectId: string | null;
@@ -46,30 +43,6 @@ function emptyPending(): Record<DesignOperation, boolean> {
     "decide-revision": false,
     "submit-gate": false,
     "decide-gate": false,
-  };
-}
-
-function storeError(error: unknown): DesignStoreError {
-  if (error instanceof DesignApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected Design error occurred",
-    code: null,
-    status: null,
   };
 }
 
@@ -204,7 +177,7 @@ export const useDesignStore = defineStore("design", {
 
     capture(error: unknown, projectId: string, epoch: number): void {
       if (this.isCurrent(projectId, epoch)) {
-        this.error = storeError(error);
+        this.error = storeErrorOf(error, DesignApiError, "An unexpected Design error occurred");
       }
     },
 

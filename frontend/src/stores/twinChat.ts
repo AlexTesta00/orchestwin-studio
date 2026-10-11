@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 
 import { twinChatApi, TwinChatApiError, type TwinChatApi } from "../api/twinChat";
 import type { TwinConversationPayload } from "../types/twinChat";
+import { errorMessageOf } from "./storeErrors";
 
 export type AuthorizedTwinChatRequest = <T>(
   operation: (accessToken: string) => Promise<T>,
@@ -11,13 +12,6 @@ interface TwinChatStoreState {
   conversations: Record<string, TwinConversationPayload | null>;
   busyTwins: string[];
   error: string | null;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof TwinChatApiError) {
-    return error.code ?? error.message;
-  }
-  return error instanceof Error ? error.message : "TWIN_CHAT_REQUEST_FAILED";
 }
 
 export const useTwinChatStore = defineStore("twinChat", {
@@ -45,7 +39,7 @@ export const useTwinChatStore = defineStore("twinChat", {
     },
 
     fail(error: unknown): never {
-      this.error = errorMessage(error);
+      this.error = errorMessageOf(error, TwinChatApiError, "TWIN_CHAT_REQUEST_FAILED");
       throw error;
     },
 

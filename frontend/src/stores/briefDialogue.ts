@@ -14,6 +14,7 @@ import type {
   BriefDialogueResponse,
   DialogueAnswerInput,
 } from "../types/briefDialogue";
+import { errorMessageOf } from "./storeErrors";
 
 export type AuthorizedBriefDialogueRequest = <T>(
   operation: (accessToken: string) => Promise<T>,
@@ -32,13 +33,6 @@ interface BriefDialogueStoreState {
   loaded: boolean;
   modelUnavailable: boolean;
   error: string | null;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof BriefDialogueApiError) {
-    return error.code ?? error.message;
-  }
-  return error instanceof Error ? error.message : "BRIEF_DIALOGUE_REQUEST_FAILED";
 }
 
 export const useBriefDialogueStore = defineStore("briefDialogue", {
@@ -110,7 +104,11 @@ export const useBriefDialogueStore = defineStore("briefDialogue", {
         this.apply(response);
         return response;
       } catch (error) {
-        const message = errorMessage(error);
+        const message = errorMessageOf(
+          error,
+          BriefDialogueApiError,
+          "BRIEF_DIALOGUE_REQUEST_FAILED",
+        );
         if (message === MODEL_NOT_CONFIGURED) {
           this.modelUnavailable = true;
         }

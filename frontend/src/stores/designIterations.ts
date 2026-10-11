@@ -9,6 +9,7 @@ import {
   type IterationJobBody,
 } from "../api/designIterations";
 import { designMockupsApi, type DesignMockupsApi } from "../api/designMockups";
+import { isRecord } from "../api/http";
 import type { DesignPackageVersionPayload } from "../types/design";
 import type {
   GenerationJobPayload,
@@ -116,10 +117,6 @@ interface IterationAccess {
 
 const MEMORY_KEY = "orchestwin.designIterations";
 const MEMORY_LIMIT = 200;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isStringList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");

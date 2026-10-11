@@ -12,16 +12,13 @@ import type {
   TestCritiquePayload,
   TestRunPayload,
 } from "../types/acceptanceTests";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type AcceptanceTestsOperation = "load";
 
-export interface AcceptanceTestsStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type AcceptanceTestsStoreError = StoreError;
 
 interface AcceptanceTestsState {
   projectId: string | null;
@@ -35,30 +32,6 @@ interface AcceptanceTestsState {
 function emptyPending(): Record<AcceptanceTestsOperation, boolean> {
   return {
     load: false,
-  };
-}
-
-function storeError(error: unknown): AcceptanceTestsStoreError {
-  if (error instanceof AcceptanceTestsApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected acceptance tests error occurred",
-    code: null,
-    status: null,
   };
 }
 
@@ -155,7 +128,11 @@ export const useAcceptanceTestsStore = defineStore("acceptanceTests", {
         return overview;
       } catch (error) {
         if (latest()) {
-          this.failure = storeError(error);
+          this.failure = storeErrorOf(
+            error,
+            AcceptanceTestsApiError,
+            "An unexpected acceptance tests error occurred",
+          );
         }
         throw error;
       } finally {

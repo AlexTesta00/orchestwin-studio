@@ -2,16 +2,13 @@ import { defineStore } from "pinia";
 
 import { ArtifactGraphApiError, artifactGraphApi, type ArtifactGraphApi } from "../api/artifacts";
 import type { CrossStageArtifactGraphPayload } from "../types/artifacts";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type ArtifactGraphOperation = "load" | "export";
 
-export interface ArtifactGraphStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type ArtifactGraphStoreError = StoreError;
 
 interface ArtifactGraphState {
   projectId: string | null;
@@ -25,30 +22,6 @@ function emptyPending(): Record<ArtifactGraphOperation, boolean> {
   return {
     load: false,
     export: false,
-  };
-}
-
-function storeError(error: unknown): ArtifactGraphStoreError {
-  if (error instanceof ArtifactGraphApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected Artifact Graph error occurred",
-    code: null,
-    status: null,
   };
 }
 
@@ -109,7 +82,11 @@ export const useArtifactGraphStore = defineStore("artifactGraph", {
 
     capture(error: unknown, projectId: string, epoch: number): void {
       if (this.isCurrent(projectId, epoch)) {
-        this.error = storeError(error);
+        this.error = storeErrorOf(
+          error,
+          ArtifactGraphApiError,
+          "An unexpected Artifact Graph error occurred",
+        );
       }
     },
 
