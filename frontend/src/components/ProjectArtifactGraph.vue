@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
-import { apiClient } from "@/api/client";
 import { artifactGraphApi, type ArtifactGraphApi } from "../api/artifacts";
+import { useAuthorizedRequest } from "../composables/useAuthorizedRequest";
 import { type AuthorizedRequest, useArtifactGraphStore } from "../stores/artifacts";
-import { useAuthStore } from "../stores/auth";
 import type {
   ArtifactGraphNodePayload,
   ArtifactGraphReferencePayload,
@@ -34,7 +33,7 @@ const props = withDefaults(
   },
 );
 
-const auth = useAuthStore();
+const authorizedRequest = useAuthorizedRequest(() => props.authorize);
 const store = useArtifactGraphStore();
 const localError = ref<"loadError" | "downloadError" | null>(null);
 const stageFilter = ref<StageFilter>("ALL");
@@ -271,14 +270,6 @@ function incomingCount(reference: ArtifactGraphReferencePayload): number {
     graph.value?.links.filter((link) => referenceKey(link.target) === referenceKey(reference))
       .length ?? 0
   );
-}
-
-function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
-  if (props.authorize !== undefined) {
-    return props.authorize(operation);
-  }
-
-  return auth.withAccessToken(apiClient, operation);
 }
 
 async function load(): Promise<void> {

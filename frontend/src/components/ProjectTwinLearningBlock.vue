@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, provide, watch } from "vue";
 
+import { commandParts, fill, plural } from "./textFormat";
 import UiClaimFrame from "./UiClaimFrame.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 
 import type { TwinLearningApi } from "../api/twinLearning";
+import { useIntlFormats } from "../composables/useIntlFormats";
 import { useTwinLearningStore, type AuthorizedRequest } from "../stores/twinLearning";
 import type {
   LearnedObservationPayload,
@@ -109,17 +111,7 @@ const twins = computed<LearningTwinPayload[]>(() => (current.value ? store.twins
 const updateAvailable = computed(() => current.value && store.updateAvailable);
 const failure = computed(() => (current.value ? store.failure : null));
 
-const dateFormat = computed(
-  () =>
-    new Intl.DateTimeFormat(intlLocale.value, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }),
-);
-
-const listFormat = computed(
-  () => new Intl.ListFormat(intlLocale.value, { style: "long", type: "conjunction" }),
-);
+const { dateFormat, listFormat } = useIntlFormats(intlLocale);
 
 const failureText = computed(() => {
   const value = failure.value;
@@ -148,21 +140,6 @@ const twinViews = computed(() =>
 );
 
 const visible = computed(() => twinViews.value.length > 0 || failureText.value !== null);
-
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
-
-function plural(count: number, forms: readonly [string, string]): string {
-  return fill(count === 1 ? forms[0] : forms[1], { count });
-}
-
-function commandParts(text: string): { key: number; text: string; command: boolean }[] {
-  return text
-    .split("`")
-    .map((part, index) => ({ key: index, text: part, command: index % 2 === 1 }))
-    .filter((part) => part.text.length > 0);
-}
 
 function formatDate(value: string): string {
   const time = Date.parse(value);

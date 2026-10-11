@@ -2,7 +2,6 @@
 import { computed, nextTick, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { apiClient } from "@/api/client";
 import { twinChatApi, type TwinChatApi } from "@/api/twinChat";
 import UiButton from "@/components/UiButton.vue";
 import InsightApplyMenu from "@/components/InsightApplyMenu.vue";
@@ -11,7 +10,8 @@ import UiClaimFrame from "@/components/UiClaimFrame.vue";
 import UiClaimLabel from "@/components/UiClaimLabel.vue";
 import { useSurface } from "@/components/UiSurface.vue";
 import { observationLabel } from "@/components/observationLabels";
-import { useAuthStore } from "@/stores/auth";
+import { confidence } from "@/components/textFormat";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
 import { type AuthorizedTwinChatRequest, useTwinChatStore } from "@/stores/twinChat";
 import type { TwinInsightPayload } from "@/types/twinChat";
 import type { UserTwinVersionPayload } from "@/types/userModeling";
@@ -27,7 +27,7 @@ const props = withDefaults(
 );
 
 const { t, locale } = useI18n({ useScope: "global" });
-const auth = useAuthStore();
+const authorize = useAuthorizedRequest(() => props.authorize);
 const store = useTwinChatStore();
 const context = useSurface(() => undefined);
 
@@ -94,9 +94,6 @@ const loaded = ref(false);
 const log = ref<HTMLElement | null>(null);
 const questionId = useId();
 
-const authorize: AuthorizedTwinChatRequest = (operation) =>
-  props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
-
 const twinId = computed(() => props.twin.twin_id);
 const conversation = computed(() => store.conversationOf(twinId.value));
 const turns = computed(() => conversation.value?.turns ?? []);
@@ -150,12 +147,6 @@ const palettes = {
 };
 
 const palette = computed(() => palettes[context.value]);
-
-function confidenceText(insight: TwinInsightPayload): string {
-  return new Intl.NumberFormat(locale.value, { style: "percent", maximumFractionDigits: 0 }).format(
-    insight.confidence,
-  );
-}
 
 function groundingText(insight: TwinInsightPayload): string {
   const labels = insight.grounded_on.map((key) =>
@@ -298,7 +289,7 @@ onMounted(load);
                   {{ t(`twinChat.kinds.${insight.kind}`) }}
                 </span>
                 <span :class="['font-mono text-xs', palette.muted]">
-                  {{ t("twinChat.confidence", { value: confidenceText(insight) }) }}
+                  {{ t("twinChat.confidence", { value: confidence(insight.confidence, locale) }) }}
                 </span>
               </div>
               <p class="m-0 leading-6">{{ insight.text }}</p>

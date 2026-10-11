@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, useId, watch } from "vue";
 
+import { designEvaluationCopy } from "./designEvaluationCopy";
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import ArtifactWhy from "./ArtifactWhy.vue";
 import InsightApplyMenu from "./InsightApplyMenu.vue";
@@ -14,10 +15,10 @@ import {
   type ScreenNaming,
   type WorkflowName,
 } from "./screenNames";
-import { apiClient } from "@/api/client";
+import { confidence, fill, formatDateTime } from "./textFormat";
 import { designLoopApi, type DesignLoopApi } from "@/api/designLoop";
 import { isGenerationInterrupted } from "@/api/generationJobs";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
 import { useGuidanceStore } from "@/stores/guidance";
 import {
   type AuthorizedDesignLoopRequest,
@@ -83,174 +84,12 @@ const emit = defineEmits<{
   applied: [application: InsightApplicationPayload];
 }>();
 
-const messages = {
-  en: {
-    title: "Synthetic pre-validation",
-    intro:
-      "Each twin reads the mockup and reports simulated findings: they are design hypotheses to weigh, not evidence from real users. Bring a finding into the brief, the requirements or the design, bring the design up to date and evaluate again.",
-    history: "All the reviews ({n})",
-    evaluate: "Ask the twins to evaluate the design",
-    autoEvaluate: "The review starts on its own when you apply a design.",
-    staticCheck: "Static accessibility check",
-    staticHelp:
-      "The static check looks at the fields and buttons of the mockup without the language model.",
-    evaluating: "The twins are evaluating the design…",
-    checking: "Checking the fields and buttons of the mockup…",
-    empty: "No evaluation yet.",
-    reviewerUnavailable:
-      "The language model that plays the twins is not connected, so the twin review cannot start. You can still run the static accessibility check.",
-    reviewerUnavailableAlone:
-      "The language model that plays the twins is not connected, so the twin review cannot start.",
-    evaluatorUnavailable:
-      "The static accessibility check is not available in this installation of the Studio. The review of the twins is still available.",
-    staticNotApplicable:
-      "The static check needs at least one screen with both a field and a button. This design has none, so there is nothing to check.",
-    run: "Evaluation of {date}",
-    kind: {
-      TWIN_REVIEW: "Twin review",
-      STATIC_CHECK: "Static accessibility check",
-    },
-    version: "design version {n}, {code}",
-    findings: "{n} findings",
-    noFindings: "No findings: the twin had nothing to object to.",
-    summary: "Summary",
-    gaps: "Evidence gaps",
-    recommended: "Suggested action",
-    location: "Where",
-    confidence: "confidence {value}",
-    comparison: "Compared with the previous evaluation",
-    comparisonOf: {
-      TWIN_REVIEW: "Compared with the previous twin review",
-      STATIC_CHECK: "Compared with the previous static check",
-    },
-    resolved: "resolved",
-    persisting: "still open",
-    introduced: "new",
-    dismissed: "marked not relevant by you",
-    resolvedList: "Findings resolved by the last change",
-    decisionGroup: "Your decision on this finding",
-    confirm: "I confirm",
-    dismiss: "Not relevant",
-    noteLabel: "Short note for your decision (optional)",
-    notePlaceholder: "Short note (optional)",
-    decision: {
-      OWNER_CONFIRMED: "Confirmed by you",
-      OWNER_DISMISSED: "Marked not relevant",
-    },
-    dismissedHint:
-      "Set aside: it is not brought into the project and does not count in the comparison.",
-    yourNote: "Your note: {note}",
-    saving: "Saving your decision…",
-    decisionError: "Your decision could not be saved. Try again.",
-    findingNotFound: "This finding is no longer available. Reload the page.",
-    details: "Details",
-    severity: {
-      critical: "Critical",
-      major: "Major",
-      moderate: "Moderate",
-      minor: "Minor",
-      observation: "Observation",
-    },
-    criterion: {
-      usefulness: "Usefulness",
-      comprehensibility: "Comprehensibility",
-      actionability: "Actionability",
-      cognitive_load: "Cognitive load",
-      trust: "Trust",
-      accessibility: "Accessibility",
-      task_alignment: "Task alignment",
-    },
-    error: "The evaluation could not be completed.",
-    loadError: "The evaluations could not be loaded.",
-  },
-  it: {
-    title: "Pre-validazione sintetica",
-    intro:
-      "Ogni twin legge il mockup e riporta osservazioni simulate: sono ipotesi di design da pesare, non evidenze di utenti reali. Porta un'osservazione nel brief, nei requisiti o nel design, aggiorna il design e valuta di nuovo.",
-    history: "Tutte le revisioni ({n})",
-    evaluate: "Chiedi ai twin di valutare il design",
-    autoEvaluate: "La valutazione parte da sola quando applichi un design.",
-    staticCheck: "Controllo statico di accessibilità",
-    staticHelp:
-      "Il controllo statico esamina i campi e i pulsanti del mockup senza usare il modello linguistico.",
-    evaluating: "I twin stanno valutando il design…",
-    checking: "Controllo dei campi e dei pulsanti del mockup in corso…",
-    empty: "Nessuna valutazione ancora.",
-    reviewerUnavailable:
-      "Il modello linguistico che interpreta i twin non è collegato, quindi la revisione dei twin non può partire. Puoi comunque eseguire il controllo statico di accessibilità.",
-    reviewerUnavailableAlone:
-      "Il modello linguistico che interpreta i twin non è collegato, quindi la revisione dei twin non può partire.",
-    evaluatorUnavailable:
-      "Il controllo statico di accessibilità non è disponibile in questa installazione dello Studio. La revisione dei twin resta disponibile.",
-    staticNotApplicable:
-      "Il controllo statico richiede almeno una schermata con un campo e un pulsante. Questo design non ne ha, quindi non c'è nulla da controllare.",
-    run: "Valutazione del {date}",
-    kind: {
-      TWIN_REVIEW: "Revisione dei twin",
-      STATIC_CHECK: "Controllo statico di accessibilità",
-    },
-    version: "design versione {n}, {code}",
-    findings: "{n} osservazioni",
-    noFindings: "Nessuna osservazione: il twin non ha nulla da obiettare.",
-    summary: "Sintesi",
-    gaps: "Evidenze mancanti",
-    recommended: "Azione suggerita",
-    location: "Dove",
-    confidence: "confidenza {value}",
-    comparison: "Confronto con la valutazione precedente",
-    comparisonOf: {
-      TWIN_REVIEW: "Confronto con la revisione dei twin precedente",
-      STATIC_CHECK: "Confronto con il controllo statico precedente",
-    },
-    resolved: "risolte",
-    persisting: "ancora aperte",
-    introduced: "nuove",
-    dismissed: "segnate da te come non pertinenti",
-    resolvedList: "Osservazioni risolte dall'ultima modifica",
-    decisionGroup: "La tua decisione su questa osservazione",
-    confirm: "Confermo",
-    dismiss: "Non pertinente",
-    noteLabel: "Nota breve per la tua decisione (facoltativa)",
-    notePlaceholder: "Nota breve (facoltativa)",
-    decision: {
-      OWNER_CONFIRMED: "Confermata da te",
-      OWNER_DISMISSED: "Segnata come non pertinente",
-    },
-    dismissedHint: "Messa da parte: non viene portata nel progetto e non conta nel confronto.",
-    yourNote: "La tua nota: {note}",
-    saving: "Salvo la tua decisione…",
-    decisionError: "Non è stato possibile salvare la tua decisione. Riprova.",
-    findingNotFound: "Questa osservazione non è più disponibile. Ricarica la pagina.",
-    details: "Dettagli",
-    severity: {
-      critical: "Critica",
-      major: "Importante",
-      moderate: "Moderata",
-      minor: "Minore",
-      observation: "Nota",
-    },
-    criterion: {
-      usefulness: "Utilità",
-      comprehensibility: "Comprensibilità",
-      actionability: "Azionabilità",
-      cognitive_load: "Carico cognitivo",
-      trust: "Fiducia",
-      accessibility: "Accessibilità",
-      task_alignment: "Aderenza al compito",
-    },
-    error: "La valutazione non è stata completata.",
-    loadError: "Non è stato possibile caricare le valutazioni.",
-  },
-} as const;
-
-const auth = useAuthStore();
+const authorize = useAuthorizedRequest(() => props.authorize);
 const store = useDesignLoopStore();
 const idPrefix = `finding-note-${useId()}`;
 const titleId = `design-evaluation-${useId()}`;
-const copy = computed(() => messages[props.locale]);
+const copy = computed(() => designEvaluationCopy[props.locale]);
 const api = computed(() => props.api ?? designLoopApi);
-const authorize: AuthorizedDesignLoopRequest = (operation) =>
-  props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
 const active = computed(() => store.projectId === props.projectId);
 const runs = computed(() => (active.value ? store.runs : []));
 const comparison = computed(() => (active.value ? store.comparison : null));
@@ -369,24 +208,8 @@ const resolvedViews = computed(() => {
   }));
 });
 
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
-
 function twinName(id: string): string {
   return props.twinNames[id] ?? id.slice(0, 8);
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(props.locale, { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(value),
-  );
-}
-
-function confidence(value: number): string {
-  return new Intl.NumberFormat(props.locale, { style: "percent", maximumFractionDigits: 0 }).format(
-    value,
-  );
 }
 
 function frameClass(decision: FindingDecision | null): string {
@@ -697,7 +520,7 @@ watch(autoReviewDue, (due) => {
           <header class="flex flex-wrap items-baseline justify-between gap-2">
             <div class="flex flex-wrap items-center gap-2">
               <h4 class="m-0 text-[15px] font-semibold">
-                {{ fill(copy.run, { date: formatDate(view.run.completed_at) }) }}
+                {{ fill(copy.run, { date: formatDateTime(view.run.completed_at, locale) }) }}
               </h4>
               <span
                 class="inline-flex min-h-6 items-center rounded-pill border px-2.5 text-xs font-semibold"
@@ -752,7 +575,7 @@ watch(autoReviewDue, (due) => {
                   <span class="text-on-night-3">{{ copy.criterion[entry.finding.criterion] }}</span>
                   <span class="font-mono text-on-night-3">{{ entry.finding.finding_id }}</span>
                   <span class="text-on-night-3">{{
-                    fill(copy.confidence, { value: confidence(entry.finding.confidence) })
+                    fill(copy.confidence, { value: confidence(entry.finding.confidence, locale) })
                   }}</span>
                   <span
                     v-if="entry.validation"

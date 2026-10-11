@@ -6,9 +6,8 @@ import UiButton from "./UiButton.vue";
 import { useSurface } from "./UiSurface.vue";
 import type { DiagramLink, DiagramRenderer } from "./mermaidRenderer";
 
-import { apiClient } from "../api/client";
 import type { DiagramsApi } from "../api/diagrams";
-import { useAuthStore } from "../stores/auth";
+import { useAuthorizedRequest } from "../composables/useAuthorizedRequest";
 import { useDiagramsStore, type AuthorizedRequest } from "../stores/diagrams";
 import type { DiagramPayload, DiagramStage } from "../types/diagrams";
 
@@ -83,7 +82,7 @@ const palettes = {
   },
 };
 
-const auth = useAuthStore();
+const authorize = useAuthorizedRequest(() => props.authorize);
 const store = useDiagramsStore();
 const surface = useSurface(() => undefined);
 const palette = computed(() => palettes[surface.value]);
@@ -91,9 +90,6 @@ const copy = computed(() => messages[props.locale]);
 const selectedKey = ref<string | null>(null);
 const failed = ref(false);
 let sequence = 0;
-
-const authorize: AuthorizedRequest = (operation) =>
-  props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
 
 const current = computed(
   () => store.projectId === props.projectId && store.locale === props.locale,

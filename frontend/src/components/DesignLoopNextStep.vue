@@ -2,21 +2,18 @@
 import { computed, ref, useId, watch } from "vue";
 
 import UiButton from "./UiButton.vue";
-import { apiClient } from "@/api/client";
+import { gateTargets } from "./gateTargets";
+import { fill } from "./textFormat";
 import {
   designAlignmentApi,
   type DesignAlignmentApi,
   type DesignAlignmentPayload,
 } from "@/api/designAlignment";
 import { RequirementsApiError, requirementsApi, type RequirementsApi } from "@/api/requirements";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
 import { useDesignLoopStore } from "@/stores/designLoop";
 import type { AuthorizedRequest } from "@/stores/requirements";
-import type {
-  HumanGatePayload,
-  RequirementsReadinessPayload,
-  RequirementsSpecificationVersionPayload,
-} from "@/types/requirements";
+import type { RequirementsReadinessPayload } from "@/types/requirements";
 
 type Locale = "en" | "it";
 type Mode = "brief" | "steps" | "approve" | "reanchor" | "blocked" | "uncovered" | "idle";
@@ -143,7 +140,7 @@ class StepFailure extends Error {
   }
 }
 
-const auth = useAuthStore();
+const authorize = useAuthorizedRequest(() => props.authorize);
 const loopStore = useDesignLoopStore();
 const titleId = `design-next-step-${useId()}`;
 const copy = computed(() => messages[props.locale]);
@@ -155,9 +152,6 @@ const reapproved = ref(false);
 const approving = ref(false);
 const failure = ref<{ code: string; manual: boolean } | null>(null);
 let sequence = 0;
-
-const authorize: AuthorizedRequest = (operation) =>
-  props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
 
 const lastApplication = computed(() =>
   loopStore.projectId === props.projectId ? loopStore.lastApplication : null,
@@ -223,23 +217,8 @@ const uncoveredSentence = computed(() =>
   fill(copy.value.uncovered, { codes: listOf(alignment.value?.uncovered_codes ?? []) }),
 );
 
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
-
 function listOf(codes: readonly string[]): string {
   return new Intl.ListFormat(props.locale, { type: "conjunction" }).format(codes);
-}
-
-function targetsVersion(
-  gate: HumanGatePayload,
-  version: RequirementsSpecificationVersionPayload,
-): boolean {
-  return (
-    gate.artifact.artifact_id === version.id &&
-    gate.artifact.version === version.version_number &&
-    gate.artifact.content_hash === version.content_hash
-  );
 }
 
 async function readReadiness(projectId: string): Promise<RequirementsReadinessPayload | null> {
@@ -283,7 +262,7 @@ async function approveRequirements(projectId: string): Promise<void> {
   const version = current.version;
   if (version === null) throw new StepFailure(current.status, true);
   const gate = current.gate;
-  const status = gate !== null && targetsVersion(gate, version) ? gate.status : null;
+  const status = gate !== null && gateTargets(gate, version) ? gate.status : null;
   if (status === "APPROVED") return;
   if (status === null || status === "DRAFT" || status === "STALE") {
     const submission = await authorize((token) => api.value.submitGate(projectId, token));

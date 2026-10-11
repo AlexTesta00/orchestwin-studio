@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { commandParts, fill } from "./textFormat";
 import { apiClient } from "@/api/client";
 import {
   modelRuntimeReadiness,
@@ -107,17 +108,6 @@ function claudeCodeFailure(code: string | undefined): string | null {
     default:
       return null;
   }
-}
-
-function fill(template: string, values: Record<string, string>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => values[key] ?? "");
-}
-
-function commandParts(text: string): { key: number; text: string; command: boolean }[] {
-  return text
-    .split("`")
-    .map((part, index) => ({ key: index, text: part, command: index % 2 === 1 }))
-    .filter((part) => part.text.length > 0);
 }
 
 async function refresh() {
