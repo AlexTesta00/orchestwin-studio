@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from typing import Final
 from uuid import UUID
@@ -19,12 +19,18 @@ from orchestwin.knowledge.state import (
     MAX_UPDATE_TESTS,
     OBSERVATION_CODE_PREFIX,
 )
-from orchestwin.projects.code_changes import (
-    LOCALE_PATTERN,
-    MAX_LOCALE_LENGTH,
-    MAX_TWIN_NAME_LENGTH,
-    normalized_line,
-)
+from orchestwin.projects.checks import aware as _aware
+from orchestwin.projects.checks import count as _count
+from orchestwin.projects.checks import normalized as _normalized
+from orchestwin.projects.checks import normalized_line
+from orchestwin.projects.checks import optional_code as _optional_code
+from orchestwin.projects.checks import optional_normalized as _optional_normalized
+from orchestwin.projects.checks import optional_text as _optional_text
+from orchestwin.projects.checks import timestamp as _timestamp
+from orchestwin.projects.checks import tuple_of as _tuple_of
+from orchestwin.projects.checks import uuid_value as _uuid
+from orchestwin.projects.checks import uuids as _uuids
+from orchestwin.projects.code_changes import LOCALE_PATTERN, MAX_LOCALE_LENGTH, MAX_TWIN_NAME_LENGTH
 from orchestwin.projects.research_evidence import EvidenceChange, EvidenceUpdateSource
 
 OBSERVATION_CODE_PATTERN: Final = rf"^{OBSERVATION_CODE_PREFIX}-[0-9]{{3,6}}$"
@@ -55,48 +61,12 @@ class UpdateDecisionKind(StrEnum):
     REJECT = "REJECT"
 
 
-def _aware(value: object, label: str) -> None:
-    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError(f"{label} must be a timezone-aware timestamp")
-
-
-def _timestamp(value: datetime) -> str:
-    return value.astimezone(UTC).isoformat()
-
-
 def _moment(value: object, label: str) -> datetime:
     if not isinstance(value, str):
         raise ValueError(f"{label} must be an ISO timestamp")
     moment = datetime.fromisoformat(value)
     _aware(moment, label)
     return moment
-
-
-def _uuid(value: object, label: str) -> None:
-    if not isinstance(value, UUID):
-        raise ValueError(f"{label} must be a UUID")
-
-
-def _count(value: object, label: str, *, minimum: int = 0, maximum: int | None = None) -> None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
-        raise ValueError(f"{label} must be an integer of at least {minimum}")
-    if maximum is not None and value > maximum:
-        raise ValueError(f"{label} must be at most {maximum}")
-
-
-def _normalized(value: object, *, label: str, maximum: int) -> None:
-    if normalized_line(value, label=label, maximum=maximum) != value:
-        raise ValueError(f"{label} must be normalized")
-
-
-def _optional_normalized(value: object, *, label: str, maximum: int) -> None:
-    if value is not None:
-        _normalized(value, label=label, maximum=maximum)
-
-
-def _optional_code(value: object, pattern: re.Pattern[str], label: str) -> None:
-    if value is not None and (not isinstance(value, str) or pattern.fullmatch(value) is None):
-        raise ValueError(f"{label} holds an invalid code")
 
 
 def _about(about: object) -> Mapping[str, object]:
@@ -131,13 +101,9 @@ def normalize_statement(value: object) -> str:
 
 
 def normalize_learning_reason(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError("reason must be a text")
-    if not value.strip():
-        return None
-    return normalized_line(value, label="reason", maximum=MAX_LEARNING_REASON_LENGTH)
+    return _optional_text(
+        value, normalized_line, label="reason", maximum=MAX_LEARNING_REASON_LENGTH
+    )
 
 
 def statement_key(value: str) -> str:
@@ -353,10 +319,7 @@ class TwinLearning:
         numbers = [item.number for item in self.observations]
         if numbers != sorted(set(numbers)):
             raise ValueError("learned observations are listed oldest first, each once")
-        if not isinstance(self.retired, tuple) or not all(
-            isinstance(item, RetiredObservation) for item in self.retired
-        ):
-            raise ValueError("retired observations must be a tuple of RetiredObservation")
+        _tuple_of(self.retired, RetiredObservation, "retired observations")
         order = [(item.retired_in_version, item.number) for item in self.retired]
         if order != sorted(order):
             raise ValueError("retired observations are listed in the order they were retired")
@@ -523,10 +486,7 @@ class TwinUpdate:
         _count(self.base_profile_version, "base profile version", minimum=1)
         _count(self.base_development_version, "base development version")
         _normalized(self.comment, label="update comment", maximum=MAX_UPDATE_COMMENT_LENGTH)
-        if not isinstance(self.observations, tuple) or not all(
-            isinstance(item, ProposedObservation) for item in self.observations
-        ):
-            raise ValueError("proposed observations must be a tuple of ProposedObservation")
+        _tuple_of(self.observations, ProposedObservation, "proposed observations")
         if len(self.observations) > MAX_UPDATE_OBSERVATIONS:
             raise ValueError(f"an update proposes at most {MAX_UPDATE_OBSERVATIONS} observations")
         if [item.index for item in self.observations] != list(range(len(self.observations))):
@@ -550,12 +510,7 @@ class TwinUpdate:
                 raise ValueError("an approved update keeps some observations, a rejected one none")
             if any(index >= len(self.observations) for index in self.decision.kept):
                 raise ValueError("a decision keeps only observations of the proposal")
-        if not isinstance(self.generation_ids, tuple) or not all(
-            isinstance(item, UUID) for item in self.generation_ids
-        ):
-            raise ValueError("generation IDs must be a tuple of UUID")
-        if len(set(self.generation_ids)) != len(self.generation_ids):
-            raise ValueError("generation IDs must not repeat")
+        _uuids(self.generation_ids, "generation IDs")
         _count(self.cost_microusd, "update cost")
         if self.evidence is not None:
             if not isinstance(self.evidence, EvidenceUpdateSource):

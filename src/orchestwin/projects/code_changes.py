@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from typing import Final
 from uuid import UUID, uuid4
@@ -28,6 +28,21 @@ from orchestwin.knowledge.state import (
     MIN_COMMIT_LENGTH,
     review_is_stale,
 )
+from orchestwin.projects.checks import aware as _aware
+from orchestwin.projects.checks import codes as _codes
+from orchestwin.projects.checks import control_free as _control_free
+from orchestwin.projects.checks import count as _count
+from orchestwin.projects.checks import normalized as _normalized
+from orchestwin.projects.checks import normalized_block, normalized_line
+from orchestwin.projects.checks import optional_code as _optional_code
+from orchestwin.projects.checks import optional_normalized as _optional_normalized
+from orchestwin.projects.checks import optional_text as _optional_text
+from orchestwin.projects.checks import optional_time as _optional_time
+from orchestwin.projects.checks import optional_uuid as _optional_uuid
+from orchestwin.projects.checks import timestamp as _timestamp
+from orchestwin.projects.checks import tuple_of as _tuple_of
+from orchestwin.projects.checks import uuid_value as _uuid
+from orchestwin.projects.checks import uuids as _uuids
 from orchestwin.twins.limits import MAX_USER_TWINS
 
 COMMIT_PATTERN: Final = rf"^[0-9a-f]{{{MIN_COMMIT_LENGTH},{MAX_COMMIT_LENGTH}}}$"
@@ -100,55 +115,6 @@ class CodeChangeAmbiguous(LookupError):
         self.prefix = prefix
 
 
-def _aware(value: object, label: str) -> None:
-    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError(f"{label} must be a timezone-aware timestamp")
-
-
-def _timestamp(value: datetime) -> str:
-    return value.astimezone(UTC).isoformat()
-
-
-def _uuid(value: object, label: str) -> None:
-    if not isinstance(value, UUID):
-        raise ValueError(f"{label} must be a UUID")
-
-
-def _count(value: object, label: str, *, minimum: int = 0) -> None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
-        raise ValueError(f"{label} must be an integer of at least {minimum}")
-
-
-def _control_free(value: str) -> bool:
-    return all(ord(character) >= 32 and ord(character) != 127 for character in value)
-
-
-def normalized_line(value: object, *, label: str, maximum: int) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{label} is required")
-    normalized = " ".join(value.split())
-    if not normalized:
-        raise ValueError(f"{label} must not be empty")
-    if len(normalized) > maximum:
-        raise ValueError(f"{label} exceeds {maximum} characters")
-    if not _control_free(normalized):
-        raise ValueError(f"{label} must not contain control characters")
-    return normalized
-
-
-def normalized_block(value: object, *, label: str, maximum: int) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{label} is required")
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError(f"{label} must not be empty")
-    if len(normalized) > maximum:
-        raise ValueError(f"{label} exceeds {maximum} characters")
-    if "\x00" in normalized:
-        raise ValueError(f"{label} must not contain a null character")
-    return normalized
-
-
 def normalize_commit(value: object, *, label: str = "commit") -> str:
     if not isinstance(value, str) or _COMMIT.fullmatch(value.lower()) is None:
         raise ValueError(
@@ -165,13 +131,7 @@ def commit_prefix(value: str) -> str | None:
 
 
 def normalize_author(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError("commit author must be a text")
-    if not value.strip():
-        return None
-    return normalized_line(value, label="commit author", maximum=MAX_AUTHOR_LENGTH)
+    return _optional_text(value, normalized_line, label="commit author", maximum=MAX_AUTHOR_LENGTH)
 
 
 def normalize_message(value: object) -> str:
@@ -199,13 +159,7 @@ def normalize_diff(value: object) -> str:
 
 
 def normalize_note(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError("decision note must be a text")
-    if not value.strip():
-        return None
-    return normalized_block(value, label="decision note", maximum=MAX_NOTE_LENGTH)
+    return _optional_text(value, normalized_block, label="decision note", maximum=MAX_NOTE_LENGTH)
 
 
 def normalize_task_text(value: object) -> str:
@@ -213,13 +167,7 @@ def normalize_task_text(value: object) -> str:
 
 
 def normalize_task_note(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError("task note must be a text")
-    if not value.strip():
-        return None
-    return normalized_line(value, label="task note", maximum=MAX_TASK_NOTE_LENGTH)
+    return _optional_text(value, normalized_line, label="task note", maximum=MAX_TASK_NOTE_LENGTH)
 
 
 def finding_task_text(text: str, action: str | None = None) -> str:
@@ -243,26 +191,6 @@ def task_number(code: object) -> int | None:
     if number < 1 or code_task_code(number) != code.upper():
         return None
     return number
-
-
-def _codes(values: object, pattern: re.Pattern[str], label: str) -> None:
-    if not isinstance(values, tuple):
-        raise ValueError(f"{label} must be a tuple")
-    for value in values:
-        if not isinstance(value, str) or pattern.fullmatch(value) is None:
-            raise ValueError(f"{label} holds an invalid code")
-    if len(set(values)) != len(values):
-        raise ValueError(f"{label} must not repeat a code")
-
-
-def _normalized(value: object, *, label: str, maximum: int) -> None:
-    if normalized_line(value, label=label, maximum=maximum) != value:
-        raise ValueError(f"{label} must be normalized")
-
-
-def _optional_normalized(value: object, *, label: str, maximum: int) -> None:
-    if value is not None:
-        _normalized(value, label=label, maximum=maximum)
 
 
 @dataclass(frozen=True, slots=True)
@@ -433,10 +361,7 @@ class CodeChange:
             raise ValueError("commit author must be normalized")
         if normalize_message(self.message) != self.message:
             raise ValueError("commit message must be normalized")
-        if not isinstance(self.files, tuple) or not all(
-            isinstance(item, ChangedFile) for item in self.files
-        ):
-            raise ValueError("changed files must be a tuple of ChangedFile")
+        _tuple_of(self.files, ChangedFile, "changed files")
         if len(self.files) > MAX_FILES:
             raise ValueError(f"a code change holds at most {MAX_FILES} files")
         if self.diff is not None:
@@ -568,10 +493,8 @@ class CritiqueFinding:
         if not isinstance(self.severity, FindingSeverity):
             raise ValueError("finding severity must be a FindingSeverity")
         _normalized(self.text, label="finding text", maximum=MAX_FINDING_LENGTH)
-        if self.requirement is not None:
-            _codes((self.requirement,), _REQUIREMENT_CODE, "finding requirement")
-        if self.screen is not None:
-            _codes((self.screen,), _SCREEN_CODE, "finding screen")
+        _optional_code(self.requirement, _REQUIREMENT_CODE, "finding requirement")
+        _optional_code(self.screen, _SCREEN_CODE, "finding screen")
         if self.file is not None and normalize_path(self.file) != self.file:
             raise ValueError("finding file must be normalized")
         _optional_normalized(self.action, label="finding action", maximum=MAX_ACTION_LENGTH)
@@ -613,10 +536,7 @@ class TwinCritique:
         if not isinstance(self.verdict, CritiqueVerdict):
             raise ValueError("critique verdict must be a CritiqueVerdict")
         _normalized(self.summary, label="critique summary", maximum=MAX_SUMMARY_LENGTH)
-        if not isinstance(self.findings, tuple) or not all(
-            isinstance(item, CritiqueFinding) for item in self.findings
-        ):
-            raise ValueError("critique findings must be a tuple of CritiqueFinding")
+        _tuple_of(self.findings, CritiqueFinding, "critique findings")
         if len(self.findings) > MAX_FINDINGS:
             raise ValueError(f"a critique holds at most {MAX_FINDINGS} findings")
 
@@ -749,10 +669,7 @@ class ChangeReviewRun:
         _reference(
             self.requirements_version_number, self.design_version_number, self.alternative_code
         )
-        if not isinstance(self.critiques, tuple) or not all(
-            isinstance(item, TwinCritique) for item in self.critiques
-        ):
-            raise ValueError("critiques must be a tuple of TwinCritique")
+        _tuple_of(self.critiques, TwinCritique, "critiques")
         if not 1 <= len(self.critiques) <= MAX_USER_TWINS:
             raise ValueError(f"a review holds between 1 and {MAX_USER_TWINS} critiques")
         twins = [item.twin_id for item in self.critiques]
@@ -760,12 +677,7 @@ class ChangeReviewRun:
             raise ValueError("a review holds one critique per twin")
         if not isinstance(self.alignment, AlignmentVerdict):
             raise ValueError("alignment must be an AlignmentVerdict")
-        if not isinstance(self.generation_ids, tuple) or not all(
-            isinstance(item, UUID) for item in self.generation_ids
-        ):
-            raise ValueError("generation IDs must be a tuple of UUID")
-        if len(set(self.generation_ids)) != len(self.generation_ids):
-            raise ValueError("generation IDs must not repeat")
+        _uuids(self.generation_ids, "generation IDs")
         _count(self.cost_microusd, "review cost")
 
     def reference_snapshot(self) -> dict[str, object]:
@@ -1024,14 +936,6 @@ class CodeTask:
             "closed_at": None if self.closed_at is None else _timestamp(self.closed_at),
             "note": self.note,
         }
-
-
-def _optional_uuid(value: object) -> UUID | None:
-    return None if value is None else UUID(str(value))
-
-
-def _optional_time(value: object) -> datetime | None:
-    return None if value is None else datetime.fromisoformat(str(value))
 
 
 def code_task_from_snapshot(
