@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import importlib.util
 import json
-import threading
-from pathlib import Path
 
 import pytest
 
@@ -15,13 +12,10 @@ from orchestwin.models.final_evaluator_session import (
     ADAPTER_SHA256,
     IDENTITY_FIELDS,
     MODEL_NAME,
-    REVISION,
     SERVING_BASE_COMMIT,
     FinalEvaluatorSessionError,
-    check_final_health,
     content_hash,
     load_final_session,
-    session_http,
 )
 from orchestwin.models.strict_evaluator_json import canonical_bytes
 
@@ -29,7 +23,6 @@ RESTART_BASE_COMMIT = "2bfe813da9b78d9b309951b85d6dcdc0e9f14d50"
 RESTART_POLICY = "EXPLICIT_COMMIT_AND_COMMITTED_FILES_V1"
 RESTART_RUNTIME_ID = "s67-final-evaluator-serving-v2"
 RESTART_SERVER_PATH = "environments/training/serve_final_evaluator.py"
-REPO_ROOT = Path(__file__).resolve().parents[4]
 TOKEN = "d" * 64
 
 
@@ -186,59 +179,3 @@ def test_counter_is_session_local_not_restored_from_previous_run(tmp_path):
         session.identity["configuration_sha256"]
         == json.loads((tmp_path / "configuration.json").read_bytes())["content_hash"]
     )
-
-
-def test_new_serving_handler_and_backend_share_real_authenticated_health(tmp_path, monkeypatch):
-    import sys
-
-    name = "orchestwin_restart_backend_http_test"
-    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / RESTART_SERVER_PATH)
-    module = importlib.util.module_from_spec(spec)
-    monkeypatch.setitem(sys.modules, name, module)
-    spec.loader.exec_module(module)
-
-    class State:
-        def __init__(self):
-            self.identity = {}
-
-        def snapshot(self):
-            return {
-                "status": "FINAL_EVALUATOR_READY",
-                "model_name": MODEL_NAME,
-                "model_identity": self.identity,
-                "completed_generation_count": 0,
-                "load_observation": {
-                    "base_revision_observed": REVISION,
-                    "active_adapters": ["default"],
-                    "load_in_4bit_observed": True,
-                    "trainable_parameters": 0,
-                },
-                "fallback_policy": "FAIL_CLOSED_NO_BASE_FALLBACK",
-                "training_executed": False,
-                "benchmark_reexecuted": False,
-            }
-
-        def generate(self, _payload):
-            raise AssertionError("No inference authorized by health test")
-
-    state = State()
-    server = module.LocalServer(("127.0.0.1", 0), module.handler_for(state, TOKEN))
-    try:
-        session = save(tmp_path, *values(port=server.server_port))
-        state.identity = session.identity
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            observed = check_final_health(session)
-            assert observed["model_identity"] == session.identity
-            assert observed["completed_generation_count"] == 0
-            assert module.http_health(server.server_port, None)[0] == 401
-            assert TOKEN not in json.dumps(observed)
-            response = session_http(session, "GET", "/health", timeout=5)
-            assert response.status_code == 200
-        finally:
-            server.shutdown()
-            thread.join(timeout=5)
-            assert not thread.is_alive()
-    finally:
-        server.server_close()

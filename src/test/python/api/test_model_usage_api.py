@@ -13,7 +13,7 @@ from orchestwin.api.services import ApplicationRuntime
 from orchestwin.config import ApplicationSettings
 from orchestwin.models.generation_budget import GenerationBudget
 from orchestwin.models.proposal_generation import ProposalGenerationError
-from src.test.python.api.test_training_api import OWNER_ID, _user
+from src.test.python.api.owner_support import OWNER_ID, _user
 
 PROJECT = uuid4()
 USAGE_PATH = f"/api/v1/projects/{PROJECT}/model-usage"

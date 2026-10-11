@@ -27,7 +27,7 @@ from orchestwin.artifacts.design_finding_validations import (
     finding_validation_from_snapshot,
 )
 from orchestwin.config import ApplicationSettings
-from src.test.python.api.test_training_api import _user
+from src.test.python.api.owner_support import _user
 from src.test.python.artifacts import design_fixtures
 from src.test.python.artifacts.test_design_evaluation import (
     NOW,

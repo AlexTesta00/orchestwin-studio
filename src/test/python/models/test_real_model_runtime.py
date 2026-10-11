@@ -18,7 +18,7 @@ from orchestwin.models import real_runtime
 from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.models.real_runtime import RealModelRuntimeError, build_real_model_runtime
 from orchestwin.models.serialized_generation import SerializedGenerationPort
-from src.test.python.api.test_training_api import _user
+from src.test.python.api.owner_support import _user
 from src.test.python.models.final_session_support import health, make_session
 from src.test.python.models.test_model_proposals import make_generator
 

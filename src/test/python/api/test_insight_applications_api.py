@@ -33,7 +33,7 @@ from orchestwin.projects.insight_applications import InsightSourceKind, InsightT
 from orchestwin.projects.requirements import RequirementKind
 from orchestwin.projects.requirements_primitives import RequirementSourceKind
 from orchestwin.projects.requirements_revision_application import RequirementsRevisionStatus
-from src.test.python.api.test_training_api import _user
+from src.test.python.api.owner_support import _user
 from src.test.python.artifacts import design_fixtures
 
 
