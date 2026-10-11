@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import ClassVar
 from uuid import UUID
+
+from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 
 
 class BriefField(StrEnum):
@@ -110,7 +110,7 @@ class ProjectBrief:
     @property
     def content_hash(self) -> str:
         """Return the deterministic SHA-256 snapshot hash."""
-        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+        return snapshot_content_hash(self.to_snapshot())
 
     def value_for(
         self,
@@ -139,12 +139,7 @@ class ProjectBrief:
 
     def canonical_json(self) -> str:
         """Serialize the snapshot with deterministic ordering."""
-        return json.dumps(
-            self.to_snapshot(),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
+        return canonical_json(self.to_snapshot())
 
     @classmethod
     def from_snapshot(

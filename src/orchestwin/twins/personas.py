@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -11,16 +9,21 @@ from enum import StrEnum
 from typing import Final
 from uuid import UUID
 
+from orchestwin.projects.requirements_primitives import (
+    canonical_json,
+    normalize_required_text,
+    snapshot_content_hash,
+)
 from orchestwin.twins.epistemics import (
     ObservationValueKind,
     ProfileObservation,
 )
+from orchestwin.twins.profile_checks import is_sha256_digest
 
 PERSONA_PROFILE_SCHEMA_VERSION: Final = 1
 
 _MAX_PERSONA_NAME_LENGTH: Final = 200
 _MAX_PERSONA_REJECTION_REASON_LENGTH: Final = 2000
-_SHA256_HEX_LENGTH: Final = 64
 
 
 class PersonaSource(StrEnum):
@@ -123,24 +126,6 @@ _ALLOWED_VALUE_KINDS: Final = {
 }
 
 
-def _normalized_text(
-    value: str,
-    *,
-    label: str,
-    maximum_length: int,
-) -> str:
-    """Return normalized non-empty text or raise a domain error."""
-    normalized = " ".join(value.split())
-
-    if not normalized:
-        raise ValueError(f"{label} must not be empty")
-
-    if len(normalized) > maximum_length:
-        raise ValueError(f"{label} exceeds maximum length")
-
-    return normalized
-
-
 def _persona_field(
     observation: ProfileObservation,
 ) -> PersonaField:
@@ -180,15 +165,6 @@ def _ordered_observations(
     )
 
 
-def _is_sha256_digest(
-    value: str,
-) -> bool:
-    """Return whether a value is a lowercase SHA-256 digest."""
-    return len(value) == _SHA256_HEX_LENGTH and all(
-        character in "0123456789abcdef" for character in value
-    )
-
-
 @dataclass(
     frozen=True,
     slots=True,
@@ -212,7 +188,7 @@ class PersonaProfile:
         if not isinstance(self.archived, bool):
             raise TypeError("persona archived flag must be a boolean")
 
-        normalized_name = _normalized_text(
+        normalized_name = normalize_required_text(
             self.name,
             label="persona name",
             maximum_length=(_MAX_PERSONA_NAME_LENGTH),
@@ -275,7 +251,7 @@ class PersonaProfile:
             if self.rejection_reason is None:
                 raise ValueError("a rejected proto-persona requires a rejection reason")
 
-            normalized_reason = _normalized_text(
+            normalized_reason = normalize_required_text(
                 self.rejection_reason,
                 label=("persona rejection reason"),
                 maximum_length=(_MAX_PERSONA_REJECTION_REASON_LENGTH),
@@ -334,22 +310,14 @@ class PersonaProfile:
         self,
     ) -> str:
         """Serialize the profile with deterministic ordering."""
-        return json.dumps(
-            self.to_snapshot(),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(
-                ",",
-                ":",
-            ),
-        )
+        return canonical_json(self.to_snapshot())
 
     @property
     def content_hash(
         self,
     ) -> str:
         """Return the SHA-256 hash of the complete profile content."""
-        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+        return snapshot_content_hash(self.to_snapshot())
 
 
 @dataclass(
@@ -406,7 +374,7 @@ class PersonaProfileVersion:
         if self.created_at.utcoffset() is None:
             raise ValueError("persona version timestamp must be timezone-aware")
 
-        if not _is_sha256_digest(self.content_hash):
+        if not is_sha256_digest(self.content_hash):
             raise ValueError("persona version content hash must be a lowercase SHA-256 digest")
 
         if self.content_hash != self.profile.content_hash:

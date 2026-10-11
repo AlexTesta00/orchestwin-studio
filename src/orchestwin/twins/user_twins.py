@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
@@ -11,6 +9,12 @@ from enum import StrEnum
 from typing import Final
 from uuid import UUID
 
+from orchestwin.projects.requirements_primitives import (
+    canonical_json,
+    normalize_required_text,
+    snapshot_content_hash,
+    validate_positive_integer,
+)
 from orchestwin.twins.epistemics import (
     ObservationValueKind,
     ProfileObservation,
@@ -22,6 +26,7 @@ from orchestwin.twins.personas import (
     PersonaProfileVersion,
     PersonaSource,
 )
+from orchestwin.twins.profile_checks import is_sha256_digest
 
 USER_TWIN_PROFILE_SCHEMA_VERSION: Final = 1
 USER_MODELING_SNAPSHOT_SCHEMA_VERSION: Final = 1
@@ -30,7 +35,6 @@ MIN_PROJECT_USER_TWINS: Final = MIN_USER_TWINS
 MAX_PROJECT_USER_TWINS: Final = MAX_USER_TWINS
 
 _MAX_USER_TWIN_NAME_LENGTH: Final = 200
-_SHA256_HEX_LENGTH: Final = 64
 
 
 class UserTwinLifecycleStatus(StrEnum):
@@ -136,53 +140,6 @@ _ALLOWED_VALUE_KINDS: Final = {
 }
 
 
-def _normalized_text(
-    value: str,
-    *,
-    label: str,
-    maximum_length: int,
-) -> str:
-    """Return normalized non-empty text or raise a domain error."""
-    normalized = " ".join(value.split())
-
-    if not normalized:
-        raise ValueError(f"{label} must not be empty")
-
-    if len(normalized) > maximum_length:
-        raise ValueError(f"{label} exceeds maximum length")
-
-    return normalized
-
-
-def _is_sha256_digest(
-    value: str,
-) -> bool:
-    """Return whether a value is a lowercase SHA-256 digest."""
-    return len(value) == _SHA256_HEX_LENGTH and all(
-        character in "0123456789abcdef" for character in value
-    )
-
-
-def _validate_positive_integer(
-    value: int,
-    *,
-    label: str,
-) -> None:
-    """Validate one non-boolean positive integer."""
-    if (
-        isinstance(
-            value,
-            bool,
-        )
-        or not isinstance(
-            value,
-            int,
-        )
-        or value < 1
-    ):
-        raise ValueError(f"{label} must be positive")
-
-
 def _user_twin_field(
     observation: ProfileObservation,
 ) -> UserTwinField:
@@ -235,12 +192,12 @@ class VersionedArtifactReference:
 
     def __post_init__(self) -> None:
         """Protect artifact version and hash metadata."""
-        _validate_positive_integer(
+        validate_positive_integer(
             self.version_number,
             label="artifact version number",
         )
 
-        if not _is_sha256_digest(self.content_hash):
+        if not is_sha256_digest(self.content_hash):
             raise ValueError("artifact content hash must be a lowercase SHA-256 digest")
 
     def to_snapshot(
@@ -270,12 +227,12 @@ class ConfirmedPersonaReference:
 
     def __post_init__(self) -> None:
         """Protect confirmation and persona-origin invariants."""
-        _validate_positive_integer(
+        validate_positive_integer(
             self.version_number,
             label="persona version number",
         )
 
-        if not _is_sha256_digest(self.content_hash):
+        if not is_sha256_digest(self.content_hash):
             raise ValueError("persona content hash must be a lowercase SHA-256 digest")
 
         if self.confirmation_status is not PersonaConfirmationStatus.CONFIRMED:
@@ -344,7 +301,7 @@ class UserTwinProfile:
 
     def __post_init__(self) -> None:
         """Protect profile completeness, ordering, and value shapes."""
-        normalized_name = _normalized_text(
+        normalized_name = normalize_required_text(
             self.name,
             label="User Twin name",
             maximum_length=(_MAX_USER_TWIN_NAME_LENGTH),
@@ -355,12 +312,12 @@ class UserTwinProfile:
             normalized_name,
         )
 
-        _validate_positive_integer(
+        validate_positive_integer(
             self.catalog_version,
             label="catalog version",
         )
 
-        if not _is_sha256_digest(self.catalog_content_hash):
+        if not is_sha256_digest(self.catalog_content_hash):
             raise ValueError("catalog content hash must be a lowercase SHA-256 digest")
 
         fields = tuple(_user_twin_field(observation) for observation in self.observations)
@@ -465,22 +422,14 @@ class UserTwinProfile:
         self,
     ) -> str:
         """Serialize the profile with deterministic ordering."""
-        return json.dumps(
-            self.to_snapshot(),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(
-                ",",
-                ":",
-            ),
-        )
+        return canonical_json(self.to_snapshot())
 
     @property
     def content_hash(
         self,
     ) -> str:
         """Return the SHA-256 hash of the complete User Twin profile."""
-        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+        return snapshot_content_hash(self.to_snapshot())
 
 
 @dataclass(
@@ -502,7 +451,7 @@ class UserTwinProfileVersion:
 
     def __post_init__(self) -> None:
         """Protect numbering, hash, timestamp, and linear lineage."""
-        _validate_positive_integer(
+        validate_positive_integer(
             self.version_number,
             label="User Twin version number",
         )
@@ -510,7 +459,7 @@ class UserTwinProfileVersion:
         if self.created_at.utcoffset() is None:
             raise ValueError("User Twin version timestamp must be timezone-aware")
 
-        if not _is_sha256_digest(self.content_hash):
+        if not is_sha256_digest(self.content_hash):
             raise ValueError("User Twin version content hash must be a lowercase SHA-256 digest")
 
         if self.content_hash != self.profile.content_hash:
@@ -563,12 +512,12 @@ class UserModelingSnapshot:
 
     def __post_init__(self) -> None:
         """Protect cardinality, ownership, ordering, and grounding."""
-        _validate_positive_integer(
+        validate_positive_integer(
             self.catalog_version,
             label="snapshot catalog version",
         )
 
-        if not _is_sha256_digest(self.catalog_content_hash):
+        if not is_sha256_digest(self.catalog_content_hash):
             raise ValueError("snapshot catalog hash must be a lowercase SHA-256 digest")
 
         twin_count = len(self.twin_versions)
@@ -691,22 +640,14 @@ class UserModelingSnapshot:
         self,
     ) -> str:
         """Serialize the snapshot with deterministic ordering."""
-        return json.dumps(
-            self.to_snapshot(),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(
-                ",",
-                ":",
-            ),
-        )
+        return canonical_json(self.to_snapshot())
 
     @property
     def content_hash(
         self,
     ) -> str:
         """Return the SHA-256 hash of the complete modeling snapshot."""
-        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+        return snapshot_content_hash(self.to_snapshot())
 
 
 @dataclass(
@@ -727,7 +668,7 @@ class UserModelingSnapshotVersion:
 
     def __post_init__(self) -> None:
         """Protect project scope, hash, timestamp, and lineage."""
-        _validate_positive_integer(
+        validate_positive_integer(
             self.version_number,
             label=("User Modeling snapshot version number"),
         )
@@ -738,7 +679,7 @@ class UserModelingSnapshotVersion:
         if self.created_at.utcoffset() is None:
             raise ValueError("User Modeling snapshot timestamp must be timezone-aware")
 
-        if not _is_sha256_digest(self.content_hash):
+        if not is_sha256_digest(self.content_hash):
             raise ValueError("User Modeling snapshot hash must be a lowercase SHA-256 digest")
 
         if self.content_hash != self.snapshot.content_hash:

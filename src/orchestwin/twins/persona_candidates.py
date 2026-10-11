@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -15,6 +13,12 @@ from orchestwin.projects.brief_gate import (
 from orchestwin.projects.briefs import (
     BriefField,
     ProjectBriefVersion,
+)
+from orchestwin.projects.requirements_primitives import (
+    canonical_json,
+    normalize_required_text,
+    snapshot_content_hash,
+    validate_positive_integer,
 )
 from orchestwin.twins.epistemics import (
     ConfidenceScore,
@@ -32,6 +36,7 @@ from orchestwin.twins.personas import (
     PersonaKind,
     PersonaSource,
 )
+from orchestwin.twins.profile_checks import is_sha256_digest
 from orchestwin.twins.user_twins import (
     MAX_PROJECT_USER_TWINS,
 )
@@ -42,7 +47,6 @@ from orchestwin.workflow.gates import (
 PERSONA_CANDIDATE_SCHEMA_VERSION: Final = 1
 PERSONA_CANDIDATE_SET_SCHEMA_VERSION: Final = 1
 
-_SHA256_HEX_LENGTH: Final = 64
 _MAX_TARGET_USER_LENGTH: Final = 500
 
 
@@ -63,53 +67,6 @@ class PersonaCandidateIssueCode(StrEnum):
     DUPLICATE_TARGET_USER = "DUPLICATE_TARGET_USER"
 
 
-def _normalized_text(
-    value: str,
-    *,
-    label: str,
-    maximum_length: int,
-) -> str:
-    """Return normalized non-empty text."""
-    normalized = " ".join(value.split())
-
-    if not normalized:
-        raise ValueError(f"{label} must not be empty")
-
-    if len(normalized) > maximum_length:
-        raise ValueError(f"{label} exceeds maximum length")
-
-    return normalized
-
-
-def _is_sha256_digest(
-    value: str,
-) -> bool:
-    """Return whether a value is a lowercase SHA-256 digest."""
-    return len(value) == _SHA256_HEX_LENGTH and all(
-        character in "0123456789abcdef" for character in value
-    )
-
-
-def _validate_positive_integer(
-    value: int,
-    *,
-    label: str,
-) -> None:
-    """Validate one non-boolean positive integer."""
-    if (
-        isinstance(
-            value,
-            bool,
-        )
-        or not isinstance(
-            value,
-            int,
-        )
-        or value < 1
-    ):
-        raise ValueError(f"{label} must be positive")
-
-
 @dataclass(
     frozen=True,
     slots=True,
@@ -127,16 +84,16 @@ class ProjectPersonaCandidate:
 
     def __post_init__(self) -> None:
         """Protect provenance and prevent candidate-level fabrication."""
-        _validate_positive_integer(
+        validate_positive_integer(
             self.ordinal,
             label="persona candidate ordinal",
         )
-        _validate_positive_integer(
+        validate_positive_integer(
             self.source_brief_version_number,
             label=("persona candidate source brief version number"),
         )
 
-        normalized_target_user = _normalized_text(
+        normalized_target_user = normalize_required_text(
             self.target_user,
             label="target user",
             maximum_length=(_MAX_TARGET_USER_LENGTH),
@@ -147,7 +104,7 @@ class ProjectPersonaCandidate:
             normalized_target_user,
         )
 
-        if not _is_sha256_digest(self.source_brief_content_hash):
+        if not is_sha256_digest(self.source_brief_content_hash):
             raise ValueError(
                 "persona candidate source brief hash must be a lowercase SHA-256 digest"
             )
@@ -245,22 +202,14 @@ class ProjectPersonaCandidate:
         self,
     ) -> str:
         """Serialize the candidate deterministically."""
-        return json.dumps(
-            self.to_snapshot(),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(
-                ",",
-                ":",
-            ),
-        )
+        return canonical_json(self.to_snapshot())
 
     @property
     def content_hash(
         self,
     ) -> str:
         """Return the SHA-256 hash of the candidate."""
-        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+        return snapshot_content_hash(self.to_snapshot())
 
 
 @dataclass(
@@ -283,12 +232,12 @@ class PersonaCandidateDerivationResult:
 
     def __post_init__(self) -> None:
         """Protect successful and rejected result shapes."""
-        _validate_positive_integer(
+        validate_positive_integer(
             self.brief_version_number,
             label=("candidate result brief version number"),
         )
 
-        if not _is_sha256_digest(self.brief_content_hash):
+        if not is_sha256_digest(self.brief_content_hash):
             raise ValueError("candidate result brief hash must be a lowercase SHA-256 digest")
 
         derived = self.status is PersonaCandidateDerivationStatus.DERIVED
@@ -343,22 +292,14 @@ class PersonaCandidateDerivationResult:
         self,
     ) -> str:
         """Serialize the complete derivation deterministically."""
-        return json.dumps(
-            self.to_snapshot(),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(
-                ",",
-                ":",
-            ),
-        )
+        return canonical_json(self.to_snapshot())
 
     @property
     def content_hash(
         self,
     ) -> str:
         """Return a stable hash of the complete derivation."""
-        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+        return snapshot_content_hash(self.to_snapshot())
 
 
 def derive_project_persona_candidates(
@@ -401,7 +342,7 @@ def derive_project_persona_candidates(
         )
 
     normalized_target_users = tuple(
-        _normalized_text(
+        normalize_required_text(
             target_user,
             label="target user",
             maximum_length=(_MAX_TARGET_USER_LENGTH),
