@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final
 
+from orchestwin.cli.shapes import mapping_or_empty as _mapping
+from orchestwin.cli.shapes import mappings as _mappings
+from orchestwin.cli.shapes import sequence as _sequence
+
 ADD: Final = "ADD"
 REMOVE: Final = "REMOVE"
 CHANGE: Final = "CHANGE"
@@ -449,20 +453,6 @@ def _title(value: object) -> str | None:
     if text is None or len(text) <= TITLE_LIMIT:
         return text
     return text[: TITLE_LIMIT - 1].rstrip() + ELLIPSIS
-
-
-def _mappings(value: object) -> list[Mapping[str, object]]:
-    if not isinstance(value, list | tuple):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _sequence(value: object) -> list[object]:
-    return list(value) if isinstance(value, list | tuple) else []
 
 
 def _text(value: object) -> str | None:

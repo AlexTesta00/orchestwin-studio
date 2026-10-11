@@ -6,7 +6,9 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api import projects as project_api
+from orchestwin.cli.api.replies import MISSING_ROUTE
 from orchestwin.cli.errors import ApiFailure
+from orchestwin.cli.shapes import whole as _integer
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -69,7 +71,6 @@ BLOCKED: Final = "BLOCKED"
 SKIPPED: Final = "SKIPPED"
 OUTCOMES: Final = (ALIGNED, BLOCKED, SKIPPED)
 PROJECT_CODES: Final = frozenset({"PROJECT_NOT_FOUND", "project_not_found"})
-MISSING_ROUTE: Final = frozenset({404, 405})
 STAGE_OF: Final[Mapping[str, str]] = MappingProxyType(
     {code: stage for stage, code in project_api.STAGE_CODES.items()}
 )
@@ -271,7 +272,3 @@ def _texts(value: object) -> tuple[str, ...]:
     if not isinstance(value, list | tuple):
         return ()
     return tuple(item for item in value if isinstance(item, str) and item)
-
-
-def _integer(value: object) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) else None

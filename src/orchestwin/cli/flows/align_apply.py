@@ -8,7 +8,7 @@ from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import alignment as alignment_api
 from orchestwin.cli.api import design as design_api
 from orchestwin.cli.api import requirements as requirements_api
-from orchestwin.cli.console import Choice, selected_choice
+from orchestwin.cli.console import Choice
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows import (
     align_knowledge,
@@ -19,6 +19,7 @@ from orchestwin.cli.flows import (
     verify_decision,
     verify_review,
 )
+from orchestwin.cli.flows.journey import Journey
 from orchestwin.cli.flows.verify_decision import (
     ENDING_CODES,
     ENDING_STATUSES,
@@ -28,7 +29,6 @@ from orchestwin.cli.flows.verify_decision import (
 )
 
 if TYPE_CHECKING:
-    from orchestwin.cli.commands.init import Journey
     from orchestwin.cli.context import CommandContext
     from orchestwin.cli.flows.verify_review import Titles, Workspace
 
@@ -43,7 +43,6 @@ LABELS: Final[Mapping[str, str]] = {
     SKIP: "align.choice_skip",
     LATER: "align.choice_later",
 }
-ATTEMPTS: Final = 5
 REQUIREMENTS_STAGE: Final = "requirements"
 SPENDING_REFUSED: Final = "SPENDING_REFUSED"
 
@@ -119,17 +118,8 @@ def decide_one(
 
 
 def menu(context: CommandContext, options: Sequence[Choice]) -> Choice:
-    console = context.console
-    console.say("align.decision_question")
-    for number, option in enumerate(options, start=1):
-        console.write(f"  {number}. {option.label}")
     default = str(len(options))
-    for _ in range(ATTEMPTS):
-        selected = selected_choice(console.ask("common.choose_prompt", default=default), options)
-        if selected is not None:
-            return selected
-        console.say("common.choice_invalid")
-    raise CliError("ANSWER_NOT_VALID")
+    return context.console.choose("align.decision_question", options, default=default)
 
 
 def skip(
@@ -249,7 +239,7 @@ def apply_tests(
         decided, "request"
     )
     test_plan.mark_redo(
-        workspace.project, [{"code": code, "request": request}], written_at=now_text(context)
+        workspace.project, [{"code": code, "request": request}], written_at=context.now_text()
     )
     outcome.applied += 1
     console.say("align.applied", code=code)
@@ -262,8 +252,6 @@ def requirements_follow_up(
     revision: object,
     outcome: Outcome,
 ) -> None:
-    from orchestwin.cli.commands.init import Journey
-
     console = context.console
     client, project, project_id = workspace.client, workspace.project, workspace.project_id
     diff = revision.get("diff") if isinstance(revision, Mapping) else None
@@ -375,7 +363,3 @@ def diff_id_of(decided: Mapping[str, object], payload: Mapping[str, object]) -> 
     diff = inner.get("diff") if isinstance(inner, Mapping) else None
     identifier = diff.get("id") if isinstance(diff, Mapping) else None
     return identifier if isinstance(identifier, str) and identifier else None
-
-
-def now_text(context: CommandContext) -> str:
-    return context.environment.now().isoformat(timespec="seconds")

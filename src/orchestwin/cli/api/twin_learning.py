@@ -5,8 +5,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from orchestwin.cli.api.replies import code_of, route_missing_or_down
 from orchestwin.cli.errors import ApiFailure
 from orchestwin.cli.jobs import reply_body
+from orchestwin.cli.shapes import is_whole as _integer
+from orchestwin.cli.shapes import mappings
+from orchestwin.cli.shapes import required_mapping as _mapping_of
+from orchestwin.cli.shapes import squeezed as _text
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -51,8 +56,6 @@ ALREADY_DECIDED: Final = "TWIN_UPDATE_ALREADY_DECIDED"
 CONTEXT_CHANGED: Final = "TWIN_UPDATE_CONTEXT_CHANGED"
 OBSERVATIONS_LIMIT: Final = "TWIN_OBSERVATIONS_LIMIT"
 OBSERVATION_NOT_FOUND: Final = "TWIN_OBSERVATION_NOT_FOUND"
-MISSING_ROUTE: Final = frozenset({404, 405})
-SERVER_ERROR: Final = 500
 OBSERVATION_CODE: Final = re.compile(rf"{OBSERVATION_CODE_PREFIX}-([0-9]{{3,6}})", re.IGNORECASE)
 
 
@@ -131,9 +134,7 @@ def overview(client: StudioClient, project_id: str) -> Mapping[str, object] | No
     try:
         document = client.get(learning_path(project_id))
     except ApiFailure as failure:
-        if failure.code != PROJECT_NOT_FOUND and (
-            failure.http_status in MISSING_ROUTE or failure.http_status >= SERVER_ERROR
-        ):
+        if failure.code != PROJECT_NOT_FOUND and route_missing_or_down(failure):
             return None
         raise
     return _mapping_of(document, 200)
@@ -318,19 +319,6 @@ def code_number(value: object) -> int | None:
     return None if found is None else int(found.group(1))
 
 
-def code_of(document: object) -> str | None:
-    if not isinstance(document, Mapping):
-        return None
-    detail = document.get("detail")
-    if isinstance(detail, Mapping) and isinstance(detail.get("code"), str) and detail["code"]:
-        return str(detail["code"])
-    if isinstance(detail, str) and detail:
-        return detail
-    job_failure = document.get("failure")
-    found = job_failure.get("code") if isinstance(job_failure, Mapping) else None
-    return found if isinstance(found, str) and found else None
-
-
 def failure(status: int, document: object) -> ApiFailure:
     detail = document.get("detail") if isinstance(document, Mapping) else document
     values: dict[str, object] = {}
@@ -340,12 +328,6 @@ def failure(status: int, document: object) -> ApiFailure:
     return ApiFailure(
         code_of(document) or "API_FAILURE", http_status=status, detail=detail, values=values
     )
-
-
-def mappings(value: object) -> list[Mapping[str, object]]:
-    if not isinstance(value, list | tuple):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
 
 
 def _answer(reply: Reply) -> Mapping[str, object]:
@@ -362,12 +344,6 @@ def _twin_answer(reply: Reply) -> Mapping[str, object]:
     return twin
 
 
-def _mapping_of(document: object, status: int) -> Mapping[str, object]:
-    if not isinstance(document, Mapping):
-        raise ApiFailure("API_FAILURE", http_status=status)
-    return document
-
-
 def _counts(value: object) -> tuple[int, int]:
     found = value if isinstance(value, Mapping) else {}
     changes = found.get("changes")
@@ -376,11 +352,3 @@ def _counts(value: object) -> tuple[int, int]:
         changes if _integer(changes) and changes > 0 else 0,
         tests if _integer(tests) and tests > 0 else 0,
     )
-
-
-def _text(value: object) -> str:
-    return " ".join(value.split()) if isinstance(value, str) else ""
-
-
-def _integer(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)

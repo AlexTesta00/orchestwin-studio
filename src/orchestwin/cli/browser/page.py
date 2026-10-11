@@ -25,6 +25,8 @@ from orchestwin.cli.browser.snapshot import (
     expression,
 )
 from orchestwin.cli.errors import CliError
+from orchestwin.cli.shapes import collapsed, shortened
+from orchestwin.cli.shapes import is_number as _is_number
 
 if TYPE_CHECKING:
     from orchestwin.cli.browser.discovery import BrowserProgram
@@ -465,18 +467,6 @@ def _text(document: Mapping[str, object], key: str) -> str:
 
 def _hidden_text(document: Mapping[str, object]) -> str:
     return _text(document, "hidden_text") if "hidden_text" in document else ""
-
-
-def _is_number(value: object) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool)
-
-
-def collapsed(text: str) -> str:
-    return " ".join(text.split())
-
-
-def shortened(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[:limit].rstrip()
 
 
 def describe(element: Element) -> str:

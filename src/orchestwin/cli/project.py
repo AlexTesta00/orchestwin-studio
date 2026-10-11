@@ -6,24 +6,28 @@ import os
 import tempfile
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
 from orchestwin.cli.errors import CliError
+from orchestwin.cli.folder import FOLDER_STAGES
 
 LOCAL_FOLDER: Final = ".orchestwin"
 LINK_FILE: Final = "project.json"
 STEPS_FOLDER: Final = "steps"
 PREVIEWS_FOLDER: Final = "previews"
 ACTIVITY_FILE: Final = "activity-session.json"
+LATEST_NAME: Final = "latest.json"
+IGNORE_NAME: Final = ".gitignore"
+IGNORE_CONTENT: Final = b"*\n"
 LOCAL_IGNORE: Final = "previews/\n"
+FOLDER_FORMAT: Final = "%Y%m%d-%H%M%S"
 LINK_SCHEMA_VERSION: Final = 1
 STEP_SCHEMA_VERSION: Final = 1
 ACTIVITY_SCHEMA_VERSION: Final = 1
 _ACTIVITY_TEXTS: Final = ("session_code", "started_at")
 KNOWLEDGE_FOLDER: Final = "orchestwin"
-STEP_STAGES: Final = ("brief", "team", "twins", "requirements", "design")
 MODES: Final = ("DESIGN_ONLY", "DESIGN_AND_CODE")
 _LINK_TEXTS: Final = ("studio", "api_prefix", "project_id", "project_name", "mode", "created_at")
 
@@ -62,8 +66,8 @@ class ProjectFolder:
             raise ValueError("the link of a project needs every field and a known mode")
         folder = cls(absolute)
         folder.local.mkdir(parents=True, exist_ok=True)
-        write_atomically(folder.local / ".gitignore", LOCAL_IGNORE.encode("utf-8"))
-        write_atomically(folder.local / LINK_FILE, json_bytes(link_document(link)))
+        write_atomically(folder.local / IGNORE_NAME, LOCAL_IGNORE.encode("utf-8"))
+        write_json(folder.local / LINK_FILE, link_document(link))
         return folder
 
     @property
@@ -90,7 +94,7 @@ class ProjectFolder:
         link = replace(self.link(), **changes)
         if not valid_link(link):
             raise ValueError("the link of a project needs every field and a known mode")
-        write_atomically(self.local / LINK_FILE, json_bytes(link_document(link)))
+        write_json(self.local / LINK_FILE, link_document(link))
         return link
 
     def save_step(
@@ -108,8 +112,7 @@ class ProjectFolder:
             "version": version,
             "gate": gate,
         }
-        write_atomically(path, json_bytes(document))
-        return path
+        return write_json(path, document)
 
     def step(self, stage: str) -> Mapping[str, object] | None:
         document = read_json(self._step_path(stage))
@@ -123,7 +126,7 @@ class ProjectFolder:
 
     def steps(self) -> dict[str, Mapping[str, object]]:
         found: dict[str, Mapping[str, object]] = {}
-        for stage in STEP_STAGES:
+        for stage in FOLDER_STAGES:
             document = self.step(stage)
             if document is not None:
                 found[stage] = document
@@ -142,20 +145,18 @@ class ProjectFolder:
         return document
 
     def save_activity_session(self, session_code: str, started_at: str) -> Path:
-        path = self.local / ACTIVITY_FILE
         document = {
             "schema_version": ACTIVITY_SCHEMA_VERSION,
             "session_code": session_code,
             "started_at": started_at,
         }
-        write_atomically(path, json_bytes(document))
-        return path
+        return write_json(self.local / ACTIVITY_FILE, document)
 
     def forget_activity_session(self) -> None:
         (self.local / ACTIVITY_FILE).unlink(missing_ok=True)
 
     def _step_path(self, stage: str) -> Path:
-        if stage not in STEP_STAGES:
+        if stage not in FOLDER_STAGES:
             raise ValueError(f"unknown stage: {stage}")
         return self.local / STEPS_FOLDER / f"{stage}.json"
 
@@ -241,3 +242,31 @@ def write_atomically(path: Path, content: bytes, *, permissions: int | None = No
         with contextlib.suppress(OSError):
             os.unlink(temporary)
         raise
+
+
+def write_json(path: Path, document: object) -> Path:
+    write_atomically(path, json_bytes(document))
+    return path
+
+
+def ignored_folder(folder: Path) -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    ignore = folder / IGNORE_NAME
+    if not ignore.exists():
+        write_atomically(ignore, IGNORE_CONTENT)
+    return folder
+
+
+def stamped_folder(parent: Path, moment: datetime) -> Path:
+    ignored_folder(parent)
+    stem = moment.astimezone(UTC).strftime(FOLDER_FORMAT)
+    candidate = parent / stem
+    number = 1
+    while True:
+        try:
+            candidate.mkdir()
+        except FileExistsError:
+            number += 1
+            candidate = parent / f"{stem}-{number}"
+            continue
+        return candidate

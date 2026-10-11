@@ -10,7 +10,7 @@ from orchestwin.cli.api import requirements as requirements_api
 from orchestwin.cli.api import sections as sections_api
 from orchestwin.cli.api import tasks as tasks_api
 from orchestwin.cli.commands import sections as sections_command
-from orchestwin.cli.console import Choice, selected_choice
+from orchestwin.cli.console import ATTEMPTS, Choice
 from orchestwin.cli.errors import (
     INTERRUPTED_STATUS,
     SIGN_IN_STATUS,
@@ -27,15 +27,17 @@ from orchestwin.cli.flows import (
     task_selection,
 )
 from orchestwin.cli.flows.design_state import bullets, wrapped
+from orchestwin.cli.flows.journey import Journey
 from orchestwin.cli.flows.publish import publish_and_pull
 from orchestwin.cli.flows.verify_review import project_text
+from orchestwin.cli.shapes import sequence as _list
+from orchestwin.cli.shapes import squeezed as _text
 
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
     from orchestwin.cli.flows.task_selection import Candidate
     from orchestwin.cli.flows.verify_review import Workspace
 
-ATTEMPTS: Final = 5
 DROP: Final = "-"
 REQUIREMENTS_STAGE: Final = "requirements"
 REQUIREMENTS_OPERATION: Final = "REQUIREMENTS_CHANGE"
@@ -139,7 +141,8 @@ def decide_one(
         context.text("verify.decision_heading", commit=git.short(item.commit), line=item.line)
     )
     keys = MENUS.get(item.verdict or "", MENUS[changes_api.ALIGNED])
-    choice = menu(context, [Choice(key, context.text(_label(key, item.verdict))) for key in keys])
+    options = [Choice(key, context.text(_label(key, item.verdict))) for key in keys]
+    choice = console.choose("verify.decision_question", options, default="1")
     if choice.key == LATER:
         console.say("verify.decided_later")
         return None, 0
@@ -298,8 +301,6 @@ def design_branch(
 def requirements_branch(
     context: CommandContext, workspace: Workspace, item: Reviewed
 ) -> tuple[str | None, int]:
-    from orchestwin.cli.commands.init import Journey
-
     console = context.console
     request = edit_request(
         context,
@@ -403,19 +404,6 @@ def realign_design(context: CommandContext, workspace: Workspace) -> None:
         console.say("sections.folder_waits")
         return
     refresh_folder(context, workspace)
-
-
-def menu(context: CommandContext, options: Sequence[Choice]) -> Choice:
-    console = context.console
-    console.say("verify.decision_question")
-    for number, option in enumerate(options, start=1):
-        console.write(f"  {number}. {option.label}")
-    for _ in range(ATTEMPTS):
-        selected = selected_choice(console.ask("common.choose_prompt", default="1"), options)
-        if selected is not None:
-            return selected
-        console.say("common.choice_invalid")
-    raise CliError("ANSWER_NOT_VALID")
 
 
 def edit_request(context: CommandContext, proposal: str, *, heading: str, limit: int) -> str | None:
@@ -546,11 +534,3 @@ def _label(key: str, verdict: str | None) -> str:
             else "verify.choice_aligned_anyway"
         )
     return OWN_LABELS.get((key, verdict or ""), LABELS[key])
-
-
-def _list(value: object) -> list[object]:
-    return list(value) if isinstance(value, list | tuple) else []
-
-
-def _text(value: object) -> str:
-    return " ".join(value.split()) if isinstance(value, str) else ""

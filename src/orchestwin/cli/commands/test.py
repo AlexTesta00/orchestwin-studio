@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import re
 from dataclasses import replace
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api import tests as tests_api
+from orchestwin.cli.arguments import codes
 from orchestwin.cli.console import Console
 from orchestwin.cli.context import CommandContext
 from orchestwin.cli.errors import USAGE_STATUS, CliError
@@ -23,7 +23,6 @@ DEFAULT_MAX_USD: Final = 2.0
 LATEST_PLAN: Final = "latest"
 NEW_PLAN: Final = "new"
 PLAN_CHOICES: Final = (LATEST_PLAN, NEW_PLAN)
-CODE_SEPARATORS: Final = re.compile(r"[\s,;]+")
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -80,12 +79,6 @@ def application(arguments: argparse.Namespace) -> dict[str, str] | None:
     if arguments.static is not None:
         return {"kind": tests_api.STATIC, "address": str(arguments.static)}
     return None
-
-
-def codes(value: str | None) -> tuple[str, ...]:
-    if value is None:
-        return ()
-    return tuple(part for part in CODE_SEPARATORS.split(value) if part)
 
 
 def diagnostic_context(context: CommandContext) -> CommandContext:

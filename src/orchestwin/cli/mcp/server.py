@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final, TextIO
 
 from orchestwin import __version__
-from orchestwin.cli.console import Console
+from orchestwin.cli.console import Console, safe_text
 from orchestwin.cli.context import CommandContext
 from orchestwin.cli.environment import is_terminal
 from orchestwin.cli.errors import CliError
@@ -167,7 +167,7 @@ class Server:
             "mcp.internal_error",
             method=method,
             kind=type(failure).__name__,
-            detail=_safe_text(failure),
+            detail=safe_text(failure),
         )
         if self._context.debug:
             console.write("".join(traceback.format_exception(failure)).rstrip())
@@ -246,10 +246,3 @@ def _params(request: Request) -> Mapping[str, object]:
     if isinstance(request.params, dict):
         return request.params
     raise protocol.params_not_object(request.method)
-
-
-def _safe_text(value: object) -> str:
-    try:
-        return str(value)
-    except Exception:
-        return type(value).__name__

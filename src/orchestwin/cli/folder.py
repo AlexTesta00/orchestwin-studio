@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.errors import CliError
+from orchestwin.cli.shapes import is_whole as _integer
 
 if TYPE_CHECKING:
     from orchestwin.knowledge.archive import VerifiedFolder
@@ -24,6 +25,12 @@ GITATTRIBUTES_CONTENT: Final = b"* -text\n"
 MANIFEST_NAME: Final = "orchestwin.json"
 INDEX_NAME: Final = "ORCHESTWIN.md"
 FOLDER_STAGES: Final = ("brief", "team", "twins", "requirements", "design")
+STATE_DOCUMENT: Final = "state/state.json"
+REQUIREMENTS_DOCUMENT: Final = "requirements/requirements.json"
+DESIGN_DOCUMENT: Final = "design/design.json"
+TESTS_DOCUMENT: Final = "twins/feedback/tests.json"
+UNSAFE_CHARACTERS: Final = ("\\", ":", "\0")
+UNSAFE_PARTS: Final = frozenset({"", ".", ".."})
 PARTIAL_SCHEMA_VERSION: Final = 3
 COMPLETE_SCHEMA_VERSION: Final = 2
 ENTRY_DATE_TIME: Final = (1980, 1, 1, 0, 0, 0)
@@ -331,7 +338,3 @@ def _swap_failed(target: Path, error: OSError) -> CliError:
 
 def _digest(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
-def _integer(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)

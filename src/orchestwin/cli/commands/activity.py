@@ -43,9 +43,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         or (arguments.json and arguments.csv is not None)
     ):
         raise CliError("ACTIVITY_OPTIONS_INVALID", status=USAGE_STATUS)
-    project = context.project()
-    if project is None:
-        raise CliError("PROJECT_NOT_LINKED")
+    project = context.linked_project()
     client = context.client()
     project_id = project.link().project_id
     if action == START:

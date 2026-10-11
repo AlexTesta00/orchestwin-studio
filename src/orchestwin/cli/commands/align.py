@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     from orchestwin.cli.flows.verify_review import Workspace
 
 NAME = "align"
-BUDGET_OPERATION: Final = alignment_api.OPERATION
 FROM_DESIGN: Final = "FROM_DESIGN"
 
 
@@ -146,10 +145,7 @@ def finish(
         if run_document is not None:
             align_knowledge.write_run(workspace.project, run_document)
             align_knowledge.write_latest(
-                workspace.project,
-                run_document,
-                waiting=waiting,
-                finished_at=align_apply.now_text(context),
+                workspace.project, run_document, waiting=waiting, finished_at=context.now_text()
             )
     if latest is not None:
         context.console.write()

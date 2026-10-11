@@ -5,15 +5,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from orchestwin.cli import jobs
+from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import tests as tests_api
+from orchestwin.cli.api.usage import MICRO_USD
 from orchestwin.cli.browser.snapshot import (
     MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH,
     MAX_SNAPSHOT_TEXT_LENGTH,
 )
 from orchestwin.cli.browser.targets import matches_text
-from orchestwin.cli.errors import BUDGET_CODES, ApiFailure, CliError
-from orchestwin.cli.project import json_bytes, read_json, write_atomically
+from orchestwin.cli.errors import ApiFailure, CliError
+from orchestwin.cli.project import read_json, write_json
+from orchestwin.cli.shapes import whole as _number
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -27,10 +29,6 @@ SCHEMA_VERSION: Final = 1
 REDO_SCHEMA_VERSION: Final = 1
 REDO_KEY: Final = "test.plan_redo"
 LIMIT_SECONDS: Final = 900.0
-PAYMENT_REQUIRED: Final = 402
-MICRO_USD: Final = 1_000_000
-REQUIREMENTS_STAGE: Final = "requirements"
-DESIGN_STAGE: Final = "design"
 STALE_KEY: Final = "test.plan_stale"
 UNCOVERED_KEY: Final = "test.plan_uncovered"
 VISIBLE_AT_OPENING: Final = "VISIBLE_AT_OPENING"
@@ -153,9 +151,7 @@ def read_plan(project: ProjectFolder) -> SavedPlan | None:
 
 
 def save_plan(project: ProjectFolder, saved: SavedPlan) -> Path:
-    path = plan_file(project)
-    write_atomically(path, json_bytes(saved.document()))
-    return path
+    return write_json(plan_file(project), saved.document())
 
 
 def redo_file(project: ProjectFolder) -> Path:
@@ -189,14 +185,12 @@ def mark_redo(
         code = item.get("code")
         if isinstance(code, str) and code:
             entries[code] = {"code": code, "request": str(item.get("request") or "")}
-    path = redo_file(project)
     document = {
         "schema_version": REDO_SCHEMA_VERSION,
         "written_at": written_at,
         "proposals": list(entries.values()),
     }
-    write_atomically(path, json_bytes(document))
-    return path
+    return write_json(redo_file(project), document)
 
 
 def clear_redo(project: ProjectFolder) -> None:
@@ -399,7 +393,7 @@ def request_plan(
     if result.status_code < 400:
         return planned(result.body, result.status_code)
     raise refusal(
-        context, client, project, result.status_code, result.body, tests_api.PLAN_OPERATION
+        context, client, project_id, result.status_code, result.body, tests_api.PLAN_OPERATION
     )
 
 
@@ -413,28 +407,13 @@ def planned(body: object, status: int) -> Mapping[str, object]:
 def refusal(
     context: CommandContext,
     client: StudioClient,
-    project: ProjectFolder,
+    project_id: str,
     status: int,
     body: object,
     operation: str,
 ) -> CliError:
     failure = tests_api.failure(status, body)
-    if status == PAYMENT_REQUIRED or failure.code in BUDGET_CODES:
-        return budget_error(context, client, project, failure.code, operation)
-    return failure
-
-
-def budget_error(
-    context: CommandContext,
-    client: StudioClient,
-    project: ProjectFolder,
-    code: str,
-    operation: str,
-) -> CliError:
-    from orchestwin.cli.commands.init import Journey
-
-    journey = Journey(context, client, project, script=None, until=None, idea=None)
-    return journey.budget_error(code, operation)
+    return costs.budget_or_failure(context, client, project_id, failure, operation)
 
 
 def plan_cost_usd(plan: Mapping[str, object], fallback: float) -> float:
@@ -478,10 +457,6 @@ def _page_text(value: object) -> str:
 
 def _whole(text: str, limit: int) -> bool:
     return len(text) < limit - 1
-
-
-def _number(value: object) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def _shown(value: int | None) -> object:

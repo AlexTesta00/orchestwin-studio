@@ -7,14 +7,22 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import twin_learning as learning_api
-from orchestwin.cli.errors import BUDGET_CODES, SPENDING_STATUS, ApiFailure, CliError
+from orchestwin.cli.api.usage import MICRO_USD
+from orchestwin.cli.console import ATTEMPTS
+from orchestwin.cli.errors import (
+    BUDGET_CODES,
+    PAYMENT_REQUIRED,
+    SPENDING_STATUS,
+    ApiFailure,
+    CliError,
+)
 from orchestwin.cli.flows import publish
 from orchestwin.cli.flows.code_order import project_language
 from orchestwin.cli.flows.design_state import wrapped
 from orchestwin.cli.flows.review import review_locale
-from orchestwin.cli.flows.test_plan import budget_error
 from orchestwin.cli.flows.verify_review import titles
 from orchestwin.cli.messages import known
+from orchestwin.cli.shapes import squeezed as _text
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -24,9 +32,6 @@ if TYPE_CHECKING:
     from orchestwin.cli.project import ProjectFolder
 
 LIMIT_SECONDS: Final = 900.0
-MICRO_USD: Final = 1_000_000
-PAYMENT_REQUIRED: Final = 402
-ATTEMPTS: Final = 5
 KEEP: Final = "KEEP"
 EDIT: Final = "EDIT"
 DROP: Final = "DROP"
@@ -93,16 +98,14 @@ def run_update(
 
 
 def publish_folder(context: CommandContext, client: StudioClient, project: ProjectFolder) -> None:
-    console = context.console
-    console.write()
-    try:
-        found = publish.publish_and_pull(context, client, project)
-    except CliError as error:
-        inner = error.values.get("code")
-        shown = inner if isinstance(inner, str) and inner else error.code
-        console.say("twins.folder_not_updated", code=shown)
-        return
-    console.say("twins.folder_updated", version=found.version_number)
+    publish.publish_and_report(
+        context,
+        client,
+        project,
+        updated_key="twins.folder_updated",
+        failed_key="twins.folder_not_updated",
+        blank_line=True,
+    )
 
 
 class TwinUpdates:
@@ -248,8 +251,8 @@ class TwinUpdates:
             self.console.say("twins.update_nothing_new", name=subject.name)
             return None
         if failure.http_status == PAYMENT_REQUIRED or code in BUDGET_CODES:
-            error = budget_error(
-                self.context, self.client, self.project, code, learning_api.UPDATE_OPERATION
+            error = costs.budget_error(
+                self.context, self.client, self.project_id, code, learning_api.UPDATE_OPERATION
             )
             self.report(subject, error.code, **error.values)
             self.refused = True
@@ -475,7 +478,3 @@ class TwinUpdates:
             "number": subject.number,
             "limit": learning_api.MAX_LEARNED_OBSERVATIONS,
         }
-
-
-def _text(value: object) -> str:
-    return " ".join(value.split()) if isinstance(value, str) else ""
