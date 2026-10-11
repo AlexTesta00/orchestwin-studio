@@ -54,8 +54,6 @@ def factory_context(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNa
     monkeypatch.setattr(services, "JwtAccessTokenService", build_tokens)
     monkeypatch.setattr(services, "build_requirements_services", lambda _factory: stage)
     monkeypatch.setattr(services, "build_design_services", lambda _factory: stage)
-    monkeypatch.setattr(services, "ContentAddressedAdapterRegistry", lambda _root: object())
-    monkeypatch.setattr(services, "SqlAlchemyTrainingApiService", lambda **_kwargs: object())
     return SimpleNamespace(
         database=database,
         database_settings=database_settings,

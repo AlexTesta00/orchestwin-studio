@@ -54,7 +54,6 @@ from orchestwin.api.sections import create_sections_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.api.team_realignment import create_team_realignment_router
 from orchestwin.api.teams import create_team_router
-from orchestwin.api.training import create_training_router
 from orchestwin.api.twin_chat import create_twin_chat_router
 from orchestwin.api.twin_imports import create_twin_import_router
 from orchestwin.api.twin_learning import create_twin_learning_router
@@ -203,7 +202,6 @@ def create_app(
     application.state.sections_service = resolved_runtime.sections_service
     application.state.team_realignment_service = resolved_runtime.team_realignment_service
     application.state.project_import_service = resolved_runtime.project_import_service
-    application.state.training_api_service = resolved_runtime.training_api_service
     application.state.generation_jobs = jobs
 
     application.add_middleware(
@@ -271,7 +269,6 @@ def create_app(
         create_sections_router(),
         create_team_realignment_router(),
         create_project_import_router(),
-        create_training_router(),
         create_proposal_evidence_router(),
         create_model_runtime_router(),
         create_model_usage_router(),

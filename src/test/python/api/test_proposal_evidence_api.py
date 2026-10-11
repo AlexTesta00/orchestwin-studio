@@ -11,7 +11,7 @@ from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.services import ApplicationRuntime
 from orchestwin.config import ApplicationSettings
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
-from src.test.python.api.test_training_api import OWNER_ID, _user
+from src.test.python.api.owner_support import OWNER_ID, _user
 
 PROJECT, GENERATION = uuid4(), uuid4()
 PATH = f"/api/v1/projects/{PROJECT}/model-generations"
