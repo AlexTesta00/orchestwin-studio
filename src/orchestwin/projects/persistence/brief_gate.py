@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from types import TracebackType
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-)
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from orchestwin.persistence.unit_of_work import SqlAlchemyUnitOfWork, SqlAlchemyUnitOfWorkFactory
 from orchestwin.projects.briefs import (
     ProjectBriefVersion,
 )
@@ -82,17 +79,8 @@ class SqlAlchemyCurrentProjectBriefRepository:
         return brief_record_to_domain(record)
 
 
-class SqlAlchemyProjectBriefGateUnitOfWork:
+class SqlAlchemyProjectBriefGateUnitOfWork(SqlAlchemyUnitOfWork):
     """One SQLAlchemy transaction for a Gate 1 use case."""
-
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        self._session_factory = session_factory
-        self._session: AsyncSession | None = None
-        self._current_briefs: SqlAlchemyCurrentProjectBriefRepository | None = None
-        self._gates: SqlAlchemyHumanGateRepository | None = None
 
     @property
     def current_briefs(
@@ -114,51 +102,16 @@ class SqlAlchemyProjectBriefGateUnitOfWork:
 
         return self._gates
 
-    async def __aenter__(
-        self,
-    ) -> SqlAlchemyProjectBriefGateUnitOfWork:
-        """Open a SQLAlchemy session and transaction."""
-        self._session = self._session_factory()
-        await self._session.begin()
+    def _bind(self, session: AsyncSession) -> None:
+        self._current_briefs = SqlAlchemyCurrentProjectBriefRepository(session)
+        self._gates = SqlAlchemyHumanGateRepository(session)
 
-        self._current_briefs = SqlAlchemyCurrentProjectBriefRepository(self._session)
-        self._gates = SqlAlchemyHumanGateRepository(self._session)
-
-        return self
-
-    async def __aexit__(
-        self,
-        exception_type: type[BaseException] | None,
-        exception: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Commit successful work or roll back failures."""
-        if self._session is None:
-            return
-
-        try:
-            if exception_type is None:
-                await self._session.commit()
-            else:
-                await self._session.rollback()
-        finally:
-            await self._session.close()
-            self._session = None
-            self._current_briefs = None
-            self._gates = None
+    def _release(self) -> None:
+        self._current_briefs = None
+        self._gates = None
 
 
-class SqlAlchemyProjectBriefGateUnitOfWorkFactory:
+class SqlAlchemyProjectBriefGateUnitOfWorkFactory(SqlAlchemyUnitOfWorkFactory):
     """Create a fresh Gate 1 unit of work per use case."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        self._session_factory = session_factory
-
-    def __call__(
-        self,
-    ) -> SqlAlchemyProjectBriefGateUnitOfWork:
-        """Return one unopened Gate 1 unit of work."""
-        return SqlAlchemyProjectBriefGateUnitOfWork(self._session_factory)
+    unit_of_work = SqlAlchemyProjectBriefGateUnitOfWork
