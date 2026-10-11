@@ -90,17 +90,11 @@ class PrototypeElement:
 
     def __post_init__(self) -> None:
         """Protect accessibility, input shape, and traceability."""
-        validate_display_code(
-            self.code,
-            prefix="ELM",
-            label="prototype element code",
-        )
+        validate_display_code(self.code, prefix="ELM", label="prototype element code")
 
         if (
             normalize_required_text(
-                self.content,
-                label="prototype element content",
-                maximum_length=_MAX_CONTENT_LENGTH,
+                self.content, label="prototype element content", maximum_length=_MAX_CONTENT_LENGTH
             )
             != self.content
         ):
@@ -116,9 +110,7 @@ class PrototypeElement:
             raise ValueError("prototype element accessible name must be normalized")
 
         normalized_field_name = normalize_optional_text(
-            self.field_name,
-            label="prototype field name",
-            maximum_length=_MAX_FIELD_NAME_LENGTH,
+            self.field_name, label="prototype field name", maximum_length=_MAX_FIELD_NAME_LENGTH
         )
 
         if normalized_field_name != self.field_name:
@@ -127,16 +119,9 @@ class PrototypeElement:
         for values, label in (
             (self.requirement_ids, "prototype element requirement IDs"),
             (self.user_story_ids, "prototype element user-story IDs"),
-            (
-                self.acceptance_criterion_ids,
-                "prototype element acceptance-criterion IDs",
-            ),
+            (self.acceptance_criterion_ids, "prototype element acceptance-criterion IDs"),
         ):
-            if values != canonical_uuid_tuple(
-                values,
-                label=label,
-                require_items=False,
-            ):
+            if values != canonical_uuid_tuple(values, label=label, require_items=False):
                 raise ValueError(f"{label} must use canonical order")
 
         if self.options != normalize_text_items(
@@ -157,10 +142,7 @@ class PrototypeElement:
         ):
             raise ValueError("interactive prototype elements require traceability")
 
-        is_field = self.kind in {
-            PrototypeElementKind.TEXT_INPUT,
-            PrototypeElementKind.SELECT,
-        }
+        is_field = self.kind in {PrototypeElementKind.TEXT_INPUT, PrototypeElementKind.SELECT}
 
         if is_field and self.field_name is None:
             raise ValueError("prototype input elements require a field name")
@@ -211,17 +193,11 @@ class PrototypeScreen:
 
     def __post_init__(self) -> None:
         """Protect screen identity, element order, and traceability."""
-        validate_display_code(
-            self.code,
-            prefix="SCR",
-            label="prototype screen code",
-        )
+        validate_display_code(self.code, prefix="SCR", label="prototype screen code")
 
         if (
             normalize_required_text(
-                self.title,
-                label="prototype screen title",
-                maximum_length=_MAX_TITLE_LENGTH,
+                self.title, label="prototype screen title", maximum_length=_MAX_TITLE_LENGTH
             )
             != self.title
         ):
@@ -233,16 +209,9 @@ class PrototypeScreen:
         for values, label in (
             (self.requirement_ids, "prototype screen requirement IDs"),
             (self.user_story_ids, "prototype screen user-story IDs"),
-            (
-                self.acceptance_criterion_ids,
-                "prototype screen acceptance-criterion IDs",
-            ),
+            (self.acceptance_criterion_ids, "prototype screen acceptance-criterion IDs"),
         ):
-            if values != canonical_uuid_tuple(
-                values,
-                label=label,
-                require_items=False,
-            ):
+            if values != canonical_uuid_tuple(values, label=label, require_items=False):
                 raise ValueError(f"{label} must use canonical order")
 
         if not (self.requirement_ids or self.user_story_ids or self.acceptance_criterion_ids):
@@ -275,11 +244,7 @@ class PrototypeTransition:
 
     def __post_init__(self) -> None:
         """Protect identity and normalized expected outcome."""
-        validate_display_code(
-            self.code,
-            prefix="TRN",
-            label="prototype transition code",
-        )
+        validate_display_code(self.code, prefix="TRN", label="prototype transition code")
 
         if (
             normalize_required_text(
@@ -328,17 +293,11 @@ class DeclarativePrototype:
 
     def __post_init__(self) -> None:
         """Protect graph integrity and deterministic prototype state."""
-        validate_display_code(
-            self.code,
-            prefix="PRT",
-            label="prototype code",
-        )
+        validate_display_code(self.code, prefix="PRT", label="prototype code")
 
         if (
             normalize_required_text(
-                self.title,
-                label="prototype title",
-                maximum_length=_MAX_TITLE_LENGTH,
+                self.title, label="prototype title", maximum_length=_MAX_TITLE_LENGTH
             )
             != self.title
         ):
@@ -355,10 +314,7 @@ class DeclarativePrototype:
             raise ValueError("prototype transitions must use canonical code order")
 
         expected_viewports = tuple(
-            sorted(
-                set(self.supported_viewports),
-                key=lambda viewport: viewport.value,
-            )
+            sorted(set(self.supported_viewports), key=lambda viewport: viewport.value)
         )
 
         if not expected_viewports:
@@ -368,10 +324,7 @@ class DeclarativePrototype:
             raise ValueError("prototype viewports must be unique and canonically ordered")
 
         all_elements = tuple(element for screen in self.screens for element in screen.elements)
-        _require_unique_artifacts(
-            all_elements,
-            label="prototype elements across screens",
-        )
+        _require_unique_artifacts(all_elements, label="prototype elements across screens")
 
         screens_by_id = {screen.id: screen for screen in self.screens}
 
@@ -422,9 +375,7 @@ class DeclarativePrototype:
         return snapshot_content_hash(self.to_snapshot())
 
 
-def _canonical_elements(
-    values: Iterable[PrototypeElement],
-) -> tuple[PrototypeElement, ...]:
+def _canonical_elements(values: Iterable[PrototypeElement]) -> tuple[PrototypeElement, ...]:
     """Return unique elements in stable code order."""
     elements = tuple(values)
 
@@ -435,9 +386,7 @@ def _canonical_elements(
     return tuple(sorted(elements, key=lambda element: element.code))
 
 
-def _canonical_screens(
-    values: Iterable[PrototypeScreen],
-) -> tuple[PrototypeScreen, ...]:
+def _canonical_screens(values: Iterable[PrototypeScreen]) -> tuple[PrototypeScreen, ...]:
     """Return unique screens in stable code order."""
     screens = tuple(values)
 
@@ -457,11 +406,7 @@ def _canonical_transitions(
     return tuple(sorted(transitions, key=lambda transition: transition.sort_key))
 
 
-def _require_unique_artifacts(
-    values: Sequence[_CodedArtifact],
-    *,
-    label: str,
-) -> None:
+def _require_unique_artifacts(values: Sequence[_CodedArtifact], *, label: str) -> None:
     """Require prototype artifacts to expose unique id and code values."""
     ids = tuple(value.id for value in values)
     codes = tuple(value.code for value in values)
@@ -493,9 +438,7 @@ def create_prototype_element(
         code=code,
         kind=kind,
         content=normalize_required_text(
-            content,
-            label="prototype element content",
-            maximum_length=_MAX_CONTENT_LENGTH,
+            content, label="prototype element content", maximum_length=_MAX_CONTENT_LENGTH
         ),
         accessible_name=normalize_optional_text(
             accessible_name,
@@ -503,14 +446,10 @@ def create_prototype_element(
             maximum_length=_MAX_CONTENT_LENGTH,
         ),
         requirement_ids=canonical_uuid_tuple(
-            requirement_ids,
-            label="prototype element requirement IDs",
-            require_items=False,
+            requirement_ids, label="prototype element requirement IDs", require_items=False
         ),
         user_story_ids=canonical_uuid_tuple(
-            user_story_ids,
-            label="prototype element user-story IDs",
-            require_items=False,
+            user_story_ids, label="prototype element user-story IDs", require_items=False
         ),
         acceptance_criterion_ids=canonical_uuid_tuple(
             acceptance_criterion_ids,
@@ -518,9 +457,7 @@ def create_prototype_element(
             require_items=False,
         ),
         field_name=normalize_optional_text(
-            field_name,
-            label="prototype field name",
-            maximum_length=_MAX_FIELD_NAME_LENGTH,
+            field_name, label="prototype field name", maximum_length=_MAX_FIELD_NAME_LENGTH
         ),
         required=required,
         options=normalize_text_items(
@@ -548,21 +485,15 @@ def create_prototype_screen(
         id=screen_id,
         code=code,
         title=normalize_required_text(
-            title,
-            label="prototype screen title",
-            maximum_length=_MAX_TITLE_LENGTH,
+            title, label="prototype screen title", maximum_length=_MAX_TITLE_LENGTH
         ),
         state=state,
         elements=_canonical_elements(elements),
         requirement_ids=canonical_uuid_tuple(
-            requirement_ids,
-            label="prototype screen requirement IDs",
-            require_items=False,
+            requirement_ids, label="prototype screen requirement IDs", require_items=False
         ),
         user_story_ids=canonical_uuid_tuple(
-            user_story_ids,
-            label="prototype screen user-story IDs",
-            require_items=False,
+            user_story_ids, label="prototype screen user-story IDs", require_items=False
         ),
         acceptance_criterion_ids=canonical_uuid_tuple(
             acceptance_criterion_ids,
@@ -589,9 +520,7 @@ def create_prototype_transition(
         trigger_element_id=trigger_element_id,
         target_screen_id=target_screen_id,
         outcome=normalize_required_text(
-            outcome,
-            label="prototype transition outcome",
-            maximum_length=_MAX_OUTCOME_LENGTH,
+            outcome, label="prototype transition outcome", maximum_length=_MAX_OUTCOME_LENGTH
         ),
     )
 
@@ -612,19 +541,14 @@ def create_declarative_prototype(
         id=prototype_id,
         code=code,
         title=normalize_required_text(
-            title,
-            label="prototype title",
-            maximum_length=_MAX_TITLE_LENGTH,
+            title, label="prototype title", maximum_length=_MAX_TITLE_LENGTH
         ),
         design_alternative_id=design_alternative_id,
         entry_screen_id=entry_screen_id,
         screens=_canonical_screens(screens),
         transitions=_canonical_transitions(transitions),
         supported_viewports=tuple(
-            sorted(
-                set(supported_viewports),
-                key=lambda viewport: viewport.value,
-            )
+            sorted(set(supported_viewports), key=lambda viewport: viewport.value)
         ),
     )
 

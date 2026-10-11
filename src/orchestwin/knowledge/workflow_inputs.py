@@ -6,11 +6,7 @@ from copy import deepcopy
 from uuid import uuid5
 
 from orchestwin.artifacts.provided_prototypes import provided_prototype_from_snapshot
-from orchestwin.workflow_inputs import (
-    WorkflowInputError,
-    decision_content_hash,
-    workflow_records,
-)
+from orchestwin.workflow_inputs import WorkflowInputError, decision_content_hash, workflow_records
 
 DECISIONS_DOCUMENT = "workflow/decisions.json"
 PROTOTYPES_DOCUMENT = "design/provided-prototypes.json"

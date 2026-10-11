@@ -95,12 +95,10 @@ class GovernedRequirementsContext:
             return
 
         validate_positive_integer(
-            self.catalog_version,
-            label="governed requirements catalog version",
+            self.catalog_version, label="governed requirements catalog version"
         )
         validate_sha256(
-            self.catalog_content_hash,
-            label="governed requirements catalog content hash",
+            self.catalog_content_hash, label="governed requirements catalog content hash"
         )
 
     @property
@@ -150,10 +148,7 @@ class RequirementsGovernancePort(Protocol):
     """Owner-scoped boundary exposing current approved project inputs."""
 
     async def load_current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> GovernedRequirementsContext | None:
         """Load current Brief, Team, User Modeling, and their gates."""
 
@@ -161,16 +156,11 @@ class RequirementsGovernancePort(Protocol):
 class RequirementsSpecificationRepository(Protocol):
     """Persistence boundary for immutable requirements versions."""
 
-    async def current(
-        self,
-        *,
-        project_id: UUID,
-    ) -> RequirementsSpecificationVersion | None:
+    async def current(self, *, project_id: UUID) -> RequirementsSpecificationVersion | None:
         """Return the latest owner-scoped specification version."""
 
     async def append(
-        self,
-        version: RequirementsSpecificationVersion,
+        self, version: RequirementsSpecificationVersion
     ) -> RequirementsVersionAppendStatus:
         """Append one immutable specification version."""
 
@@ -201,11 +191,7 @@ class RequirementsGenerationUnitOfWork(Protocol):
 class RequirementsGenerationUnitOfWorkFactory(Protocol):
     """Create one owner-scoped requirements Unit of Work."""
 
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> RequirementsGenerationUnitOfWork:
+    def __call__(self, *, owner_user_id: UUID) -> RequirementsGenerationUnitOfWork:
         """Create one transactional boundary."""
 
 
@@ -243,32 +229,24 @@ class LocalRequirementsGenerationService:
 
     @evidence_application
     async def generate(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> RequirementsGenerationResult:
         """Generate the initial specification from exact approved inputs."""
         context = await self._governance.load_current(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
+            owner_user_id=owner_user_id, project_id=project_id
         )
         issue = requirements_governance_issue(context)
 
         if issue is not None:
             return RequirementsGenerationResult(
-                status=RequirementsGenerationStatus.REJECTED,
-                issue=issue,
+                status=RequirementsGenerationStatus.REJECTED, issue=issue
             )
 
         if context is None:
             raise RuntimeError("ready requirements context cannot be None")
 
         if (
-            await self._current_version(
-                owner_user_id=owner_user_id,
-                project_id=project_id,
-            )
+            await self._current_version(owner_user_id=owner_user_id, project_id=project_id)
             is not None
         ):
             return RequirementsGenerationResult(
@@ -286,8 +264,7 @@ class LocalRequirementsGenerationService:
             )
 
         if proposal.specification is None or not specification_matches_context(
-            proposal.specification,
-            context,
+            proposal.specification, context
         ):
             return RequirementsGenerationResult(
                 status=RequirementsGenerationStatus.REJECTED,
@@ -295,9 +272,7 @@ class LocalRequirementsGenerationService:
             )
 
         if not await self._context_is_unchanged(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
-            previous=context,
+            owner_user_id=owner_user_id, project_id=project_id, previous=context
         ):
             return RequirementsGenerationResult(
                 status=RequirementsGenerationStatus.REJECTED,
@@ -334,31 +309,22 @@ class LocalRequirementsGenerationService:
             await unit.commit()
 
         return RequirementsGenerationResult(
-            status=RequirementsGenerationStatus.CREATED,
-            version=version,
+            status=RequirementsGenerationStatus.CREATED, version=version
         )
 
     async def _current_version(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> RequirementsSpecificationVersion | None:
         """Read current state without holding a provider-call transaction."""
         async with self._uow_factory(owner_user_id=owner_user_id) as unit:
             return await unit.specifications.current(project_id=project_id)
 
     async def _context_is_unchanged(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        previous: GovernedRequirementsContext,
+        self, *, owner_user_id: UUID, project_id: UUID, previous: GovernedRequirementsContext
     ) -> bool:
         """Reject provider output when governed inputs changed in flight."""
         current = await self._governance.load_current(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
+            owner_user_id=owner_user_id, project_id=project_id
         )
 
         return (
@@ -430,8 +396,7 @@ def _gate_approves(
 
 
 def specification_matches_context(
-    specification: RequirementsSpecification,
-    context: GovernedRequirementsContext,
+    specification: RequirementsSpecification, context: GovernedRequirementsContext
 ) -> bool:
     """Validate exact provider output grounding before persistence."""
     if (

@@ -6,17 +6,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic_settings import (
-    BaseSettings,
-    SettingsConfigDict,
-)
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from orchestwin.models.fake_user_modeling import (
-    FakeDeterministicUserModelingAdapter,
-)
-from orchestwin.models.user_modeling import (
-    UserModelingProposalPort,
-)
+from orchestwin.models.fake_user_modeling import FakeDeterministicUserModelingAdapter
+from orchestwin.models.user_modeling import UserModelingProposalPort
 
 
 class UserModelingRuntimeMode(StrEnum):
@@ -30,19 +23,14 @@ class UserModelingRuntimeSettings(BaseSettings):
     """Environment-backed User Modeling runtime configuration."""
 
     model_config = SettingsConfigDict(
-        env_prefix="ORCHESTWIN_USER_MODELING_",
-        case_sensitive=False,
-        extra="forbid",
+        env_prefix="ORCHESTWIN_USER_MODELING_", case_sensitive=False, extra="forbid"
     )
 
     mode: UserModelingRuntimeMode = UserModelingRuntimeMode.FAKE_DETERMINISTIC
     model_config_file: Path | None = None
 
 
-@dataclass(
-    frozen=True,
-    slots=True,
-)
+@dataclass(frozen=True, slots=True)
 class UserModelingRuntime:
     """Resolved User Modeling runtime dependencies."""
 

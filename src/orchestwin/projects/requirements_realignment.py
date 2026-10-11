@@ -96,8 +96,7 @@ def referenced_twin_ids(specification: RequirementsSpecification) -> frozenset[U
 
 
 def requirements_are_aligned(
-    specification: RequirementsSpecification,
-    snapshot: UserModelingSnapshotVersion,
+    specification: RequirementsSpecification, snapshot: UserModelingSnapshotVersion
 ) -> bool:
     modeling = snapshot.snapshot
     return (
@@ -111,8 +110,7 @@ def requirements_are_aligned(
 
 
 def realignment_issue(
-    specification: RequirementsSpecification,
-    snapshot: UserModelingSnapshotVersion,
+    specification: RequirementsSpecification, snapshot: UserModelingSnapshotVersion
 ) -> RequirementsRealignmentIssue | None:
     if specification.project_id != snapshot.project_id:
         return RequirementsRealignmentIssue.PROJECT_MISMATCH
@@ -125,8 +123,7 @@ def realignment_issue(
 
 
 def realign_requirements(
-    specification: RequirementsSpecification,
-    snapshot: UserModelingSnapshotVersion,
+    specification: RequirementsSpecification, snapshot: UserModelingSnapshotVersion
 ) -> RequirementsSpecification:
     issue = realignment_issue(specification, snapshot)
     if issue is not None:

@@ -49,8 +49,7 @@ def parse_port(value: str) -> int:
 def build_argument_parser() -> argparse.ArgumentParser:
     """Create the command-line parser for the backend server."""
     parser = argparse.ArgumentParser(
-        prog="orchestwin-api",
-        description="Run the OrchesTwin Studio FastAPI backend.",
+        prog="orchestwin-api", description="Run the OrchesTwin Studio FastAPI backend."
     )
     parser.add_argument(
         "--host",
@@ -67,15 +66,10 @@ def build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_server_options(
-    arguments: Sequence[str] | None = None,
-) -> ServerOptions:
+def parse_server_options(arguments: Sequence[str] | None = None) -> ServerOptions:
     """Parse command-line arguments into immutable server options."""
     namespace = build_argument_parser().parse_args(arguments)
-    return ServerOptions(
-        host=namespace.host,
-        port=namespace.port,
-    )
+    return ServerOptions(host=namespace.host, port=namespace.port)
 
 
 def run_server(options: ServerOptions) -> None:

@@ -41,10 +41,7 @@ ARCHIVE_ACCEPT: Final = "application/zip, application/json;q=0.5"
 
 class StudioClient:
     def __init__(
-        self,
-        studio: StudioAddress,
-        environment: Environment,
-        sessions: SessionStore,
+        self, studio: StudioAddress, environment: Environment, sessions: SessionStore
     ) -> None:
         self.studio = studio
         self._environment = environment
@@ -62,11 +59,7 @@ class StudioClient:
         return is_loopback(host) and self.access_mode() == LOCAL_OWNER
 
     def sign_in(
-        self,
-        email: str,
-        password: str,
-        *,
-        make_default: bool = True,
+        self, email: str, password: str, *, make_default: bool = True
     ) -> Mapping[str, object]:
         body = json.dumps({"email": email, "password": password}).encode("utf-8")
         headers = {"Accept": JSON_TYPE, "Content-Type": JSON_TYPE}
@@ -226,10 +219,7 @@ class StudioClient:
             return self._refresh(current)
 
     def _refresh(self, current: StudioSession) -> StudioSession:
-        headers = {
-            "Accept": JSON_TYPE,
-            "Cookie": f"{current.cookie_name}={current.refresh_token}",
-        }
+        headers = {"Accept": JSON_TYPE, "Cookie": f"{current.cookie_name}={current.refresh_token}"}
         try:
             reply = self._send("POST", "/auth/refresh", headers, None, AUTH_TIMEOUT)
         except CliError as error:
@@ -243,9 +233,7 @@ class StudioClient:
             raise api_failure(reply)
         cookie = refresh_cookie(reply.headers.get(SET_COOKIE, ""), current.cookie_name)
         rotated = replace(
-            current,
-            refresh_token=cookie[1] if cookie else None,
-            saved_at=self._environment.now(),
+            current, refresh_token=cookie[1] if cookie else None, saved_at=self._environment.now()
         )
         try:
             access, expires, _ = _authentication(reply)

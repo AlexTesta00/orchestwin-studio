@@ -204,11 +204,7 @@ class HumanGateEvent:
             raise ValueError("only system events may omit an actor")
 
         if (
-            self.kind
-            in {
-                HumanGateEventKind.REJECT,
-                HumanGateEventKind.REQUEST_REVISION,
-            }
+            self.kind in {HumanGateEventKind.REJECT, HumanGateEventKind.REQUEST_REVISION}
             and self.reason is None
         ):
             raise ValueError("reject and revision events require a reason")
@@ -281,57 +277,28 @@ def transition_human_gate(
     """Apply one owner action through the explicit state machine."""
     timestamp = occurred_at or datetime.now(UTC)
 
-    issue = _operation_issue(
-        gate,
-        actor_user_id=actor_user_id,
-        occurred_at=timestamp,
-    )
+    issue = _operation_issue(gate, actor_user_id=actor_user_id, occurred_at=timestamp)
 
     if issue is not None:
-        return _rejected(
-            gate,
-            issue,
-        )
+        return _rejected(gate, issue)
 
-    (
-        normalized_reason,
-        reason_issue,
-    ) = _normalize_reason(reason)
+    (normalized_reason, reason_issue) = _normalize_reason(reason)
 
     if reason_issue is not None:
-        return _rejected(
-            gate,
-            reason_issue,
-        )
+        return _rejected(gate, reason_issue)
 
     if (
-        action
-        in {
-            HumanGateAction.REJECT,
-            HumanGateAction.REQUEST_REVISION,
-        }
+        action in {HumanGateAction.REJECT, HumanGateAction.REQUEST_REVISION}
         and normalized_reason is None
     ):
-        return _rejected(
-            gate,
-            HumanGateIssueCode.REASON_REQUIRED,
-        )
+        return _rejected(gate, HumanGateIssueCode.REASON_REQUIRED)
 
-    target = _target_status(
-        gate,
-        action,
-    )
+    target = _target_status(gate, action)
 
     if target is None:
-        return _rejected(
-            gate,
-            HumanGateIssueCode.INVALID_TRANSITION,
-        )
+        return _rejected(gate, HumanGateIssueCode.INVALID_TRANSITION)
 
-    (
-        target_status,
-        resume_status,
-    ) = target
+    (target_status, resume_status) = target
 
     sequence_number = gate.event_sequence + 1
 
@@ -357,9 +324,7 @@ def transition_human_gate(
     )
 
     return HumanGateTransitionResult(
-        status=HumanGateTransitionStatus.APPLIED,
-        gate=updated_gate,
-        event=event,
+        status=HumanGateTransitionStatus.APPLIED, gate=updated_gate, event=event
     )
 
 
@@ -374,37 +339,22 @@ def mark_human_gate_stale(
     timestamp = occurred_at or datetime.now(UTC)
 
     if timestamp.tzinfo is None:
-        return _rejected(
-            gate,
-            HumanGateIssueCode.TIMESTAMP_NOT_AWARE,
-        )
+        return _rejected(gate, HumanGateIssueCode.TIMESTAMP_NOT_AWARE)
 
     if timestamp < gate.updated_at:
-        return _rejected(
-            gate,
-            HumanGateIssueCode.TIMESTAMP_OUT_OF_ORDER,
-        )
+        return _rejected(gate, HumanGateIssueCode.TIMESTAMP_OUT_OF_ORDER)
 
     if (
         current_artifact.project_id != gate.project_id
         or current_artifact.gate_type is not gate.gate_type
     ):
-        return _rejected(
-            gate,
-            HumanGateIssueCode.ARTIFACT_SCOPE_MISMATCH,
-        )
+        return _rejected(gate, HumanGateIssueCode.ARTIFACT_SCOPE_MISMATCH)
 
     if current_artifact == gate.artifact or gate.status is HumanGateStatus.STALE:
-        return HumanGateTransitionResult(
-            status=HumanGateTransitionStatus.NO_CHANGE,
-            gate=gate,
-        )
+        return HumanGateTransitionResult(status=HumanGateTransitionStatus.NO_CHANGE, gate=gate)
 
     if gate.status is HumanGateStatus.CANCELLED:
-        return _rejected(
-            gate,
-            HumanGateIssueCode.INVALID_TRANSITION,
-        )
+        return _rejected(gate, HumanGateIssueCode.INVALID_TRANSITION)
 
     sequence_number = gate.event_sequence + 1
 
@@ -428,15 +378,12 @@ def mark_human_gate_stale(
     )
 
     return HumanGateTransitionResult(
-        status=HumanGateTransitionStatus.APPLIED,
-        gate=updated_gate,
-        event=event,
+        status=HumanGateTransitionStatus.APPLIED, gate=updated_gate, event=event
     )
 
 
 def next_human_gate_iteration(
-    latest: HumanGate,
-    events: Iterable[HumanGateEvent] = (),
+    latest: HumanGate, events: Iterable[HumanGateEvent] = ()
 ) -> tuple[int, int] | None:
     iteration = latest.iteration + 1
     approved = latest.status is HumanGateStatus.APPROVED or any(
@@ -447,23 +394,16 @@ def next_human_gate_iteration(
     )
 
     if approved:
-        return (
-            iteration,
-            iteration + DEFAULT_GATE_ITERATION_LIMIT - 1,
-        )
+        return (iteration, iteration + DEFAULT_GATE_ITERATION_LIMIT - 1)
 
     if iteration > latest.max_iterations:
         return None
 
-    return (
-        iteration,
-        latest.max_iterations,
-    )
+    return (iteration, latest.max_iterations)
 
 
 def _target_status(
-    gate: HumanGate,
-    action: HumanGateAction,
+    gate: HumanGate, action: HumanGateAction
 ) -> tuple[HumanGateStatus, HumanGateStatus | None] | None:
     """Return the target and optional resume state."""
     if gate.status is HumanGateStatus.DRAFT:
@@ -480,10 +420,7 @@ def _target_status(
 
         resume_status = HumanGateStatus.DRAFT if action is HumanGateAction.PAUSE else None
 
-        return (
-            target,
-            resume_status,
-        )
+        return (target, resume_status)
 
     if gate.status is HumanGateStatus.PENDING_APPROVAL:
         if action is HumanGateAction.REQUEST_REVISION:
@@ -493,10 +430,7 @@ def _target_status(
                 else HumanGateStatus.REVISION_REQUESTED
             )
 
-            return (
-                target,
-                None,
-            )
+            return (target, None)
 
         targets = {
             HumanGateAction.APPROVE: HumanGateStatus.APPROVED,
@@ -514,45 +448,26 @@ def _target_status(
             HumanGateStatus.PENDING_APPROVAL if action is HumanGateAction.PAUSE else None
         )
 
-        return (
-            target,
-            resume_status,
-        )
+        return (target, resume_status)
 
     if gate.status is HumanGateStatus.PAUSED:
         if action is HumanGateAction.RESUME and gate.resume_status is not None:
-            return (
-                gate.resume_status,
-                None,
-            )
+            return (gate.resume_status, None)
 
         if action is HumanGateAction.CANCEL:
-            return (
-                HumanGateStatus.CANCELLED,
-                None,
-            )
+            return (HumanGateStatus.CANCELLED, None)
 
     if (
-        gate.status
-        in {
-            HumanGateStatus.REVISION_REQUESTED,
-            HumanGateStatus.PAUSED_NEEDS_HUMAN,
-        }
+        gate.status in {HumanGateStatus.REVISION_REQUESTED, HumanGateStatus.PAUSED_NEEDS_HUMAN}
         and action is HumanGateAction.CANCEL
     ):
-        return (
-            HumanGateStatus.CANCELLED,
-            None,
-        )
+        return (HumanGateStatus.CANCELLED, None)
 
     return None
 
 
 def _operation_issue(
-    gate: HumanGate,
-    *,
-    actor_user_id: UUID,
-    occurred_at: datetime,
+    gate: HumanGate, *, actor_user_id: UUID, occurred_at: datetime
 ) -> HumanGateIssueCode | None:
     """Validate owner authority and monotonic event time."""
     if actor_user_id != gate.owner_user_id:
@@ -567,43 +482,24 @@ def _operation_issue(
     return None
 
 
-def _normalize_reason(
-    reason: str | None,
-) -> tuple[str | None, HumanGateIssueCode | None]:
+def _normalize_reason(reason: str | None) -> tuple[str | None, HumanGateIssueCode | None]:
     """Normalize an optional owner rationale."""
     if reason is None:
-        return (
-            None,
-            None,
-        )
+        return (None, None)
 
     normalized = " ".join(reason.split())
 
     if not normalized:
-        return (
-            None,
-            None,
-        )
+        return (None, None)
 
     if len(normalized) > MAX_GATE_REASON_LENGTH:
-        return (
-            None,
-            HumanGateIssueCode.REASON_TOO_LONG,
-        )
+        return (None, HumanGateIssueCode.REASON_TOO_LONG)
 
-    return (
-        normalized,
-        None,
-    )
+    return (normalized, None)
 
 
-def _rejected(
-    gate: HumanGate,
-    issue: HumanGateIssueCode,
-) -> HumanGateTransitionResult:
+def _rejected(gate: HumanGate, issue: HumanGateIssueCode) -> HumanGateTransitionResult:
     """Return a typed rejection without mutating the gate."""
     return HumanGateTransitionResult(
-        status=HumanGateTransitionStatus.REJECTED,
-        gate=gate,
-        issue=issue,
+        status=HumanGateTransitionStatus.REJECTED, gate=gate, issue=issue
     )

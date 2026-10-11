@@ -74,12 +74,7 @@ class OpenAICompatibleHttpTransport(Protocol):
     """Injectable asynchronous JSON transport used by the local model adapter."""
 
     async def post_json(
-        self,
-        *,
-        url: str,
-        payload: dict[str, object],
-        headers: dict[str, str],
-        timeout_seconds: int,
+        self, *, url: str, payload: dict[str, object], headers: dict[str, str], timeout_seconds: int
     ) -> OpenAICompatibleHttpResponse: ...
 
 
@@ -111,9 +106,7 @@ class OpenAICompatibleLocalConfig:
             raise ValueError("local model completion path cannot contain a fragment")
         if (
             normalize_required_text(
-                self.model_name,
-                label="local model name",
-                maximum_length=_MAX_IDENTIFIER_LENGTH,
+                self.model_name, label="local model name", maximum_length=_MAX_IDENTIFIER_LENGTH
             )
             != self.model_name
         ):
@@ -133,12 +126,7 @@ class UrllibOpenAICompatibleTransport:
     """Small standard-library transport; tests should inject a deterministic fake."""
 
     async def post_json(
-        self,
-        *,
-        url: str,
-        payload: dict[str, object],
-        headers: dict[str, str],
-        timeout_seconds: int,
+        self, *, url: str, payload: dict[str, object], headers: dict[str, str], timeout_seconds: int
     ) -> OpenAICompatibleHttpResponse:
         validate_positive_integer(timeout_seconds, label="local model HTTP timeout")
         return await asyncio.to_thread(
@@ -151,18 +139,11 @@ class UrllibOpenAICompatibleTransport:
 
     @staticmethod
     def _post_json_sync(
-        *,
-        url: str,
-        payload: dict[str, object],
-        headers: dict[str, str],
-        timeout_seconds: int,
+        *, url: str, payload: dict[str, object], headers: dict[str, str], timeout_seconds: int
     ) -> OpenAICompatibleHttpResponse:
         body = canonical_json(payload).encode("utf-8")
         request = Request(
-            url,
-            data=body,
-            headers={"Content-Type": "application/json", **headers},
-            method="POST",
+            url, data=body, headers={"Content-Type": "application/json", **headers}, method="POST"
         )
         started = time.perf_counter()
         try:
@@ -190,9 +171,7 @@ class UrllibOpenAICompatibleTransport:
             raise OpenAICompatibleTransportError("local model response exceeded the size limit")
         elapsed = max(0, round((time.perf_counter() - started) * 1_000))
         return OpenAICompatibleHttpResponse(
-            status_code=status_code,
-            body=response_body,
-            elapsed_milliseconds=elapsed,
+            status_code=status_code, body=response_body, elapsed_milliseconds=elapsed
         )
 
 
@@ -207,9 +186,7 @@ class OpenAICompatibleLocalStructuredAdapter(StructuredGenerationPort):
         bearer_token: str | None = None,
     ) -> None:
         normalized_token = normalize_optional_text(
-            bearer_token,
-            label="local model bearer token",
-            maximum_length=4_096,
+            bearer_token, label="local model bearer token", maximum_length=4_096
         )
         if normalized_token != bearer_token:
             raise ValueError("local model bearer token must be normalized")
@@ -221,10 +198,7 @@ class OpenAICompatibleLocalStructuredAdapter(StructuredGenerationPort):
     def identity(self) -> ModelRuntimeIdentity:
         return self._config.expected_identity
 
-    async def generate(
-        self,
-        request: StructuredGenerationRequest,
-    ) -> StructuredGenerationResult:
+    async def generate(self, request: StructuredGenerationRequest) -> StructuredGenerationResult:
         if request.expected_identity != self._config.expected_identity:
             return self._failure(
                 StructuredGenerationFailureCode.IDENTITY_MISMATCH,
@@ -278,8 +252,7 @@ class OpenAICompatibleLocalStructuredAdapter(StructuredGenerationPort):
             )
         try:
             output_payload, finish_reason, provider_request_id, usage = _parse_success(
-                payload,
-                elapsed_milliseconds=response.elapsed_milliseconds,
+                payload, elapsed_milliseconds=response.elapsed_milliseconds
             )
             success = create_structured_generation_success(
                 payload=output_payload,
@@ -301,16 +274,12 @@ class OpenAICompatibleLocalStructuredAdapter(StructuredGenerationPort):
                 retryable=False,
             )
         return successful_structured_generation_result(
-            provider_kind=StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL,
-            success=success,
+            provider_kind=StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL, success=success
         )
 
     @staticmethod
     def _failure(
-        code: StructuredGenerationFailureCode,
-        message: str,
-        *,
-        retryable: bool,
+        code: StructuredGenerationFailureCode, message: str, *, retryable: bool
     ) -> StructuredGenerationResult:
         return failed_structured_generation_result(
             provider_kind=StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL,
@@ -321,8 +290,7 @@ class OpenAICompatibleLocalStructuredAdapter(StructuredGenerationPort):
 
 
 def _request_payload(
-    config: OpenAICompatibleLocalConfig,
-    request: StructuredGenerationRequest,
+    config: OpenAICompatibleLocalConfig, request: StructuredGenerationRequest
 ) -> dict[str, object]:
     return {
         "model": config.model_name,
@@ -378,14 +346,9 @@ class _IncompleteCompletion(ValueError):
 
 
 def _parse_success(
-    payload: dict[str, object],
-    *,
-    elapsed_milliseconds: int,
+    payload: dict[str, object], *, elapsed_milliseconds: int
 ) -> tuple[
-    dict[str, object],
-    StructuredGenerationFinishReason,
-    str | None,
-    StructuredGenerationUsage,
+    dict[str, object], StructuredGenerationFinishReason, str | None, StructuredGenerationUsage
 ]:
     choices = payload.get("choices")
     if not isinstance(choices, list) or len(choices) != 1:

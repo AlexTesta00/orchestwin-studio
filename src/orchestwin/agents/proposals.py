@@ -10,10 +10,7 @@ from types import TracebackType
 from typing import Protocol, Self
 from uuid import UUID
 
-from orchestwin.agents.selection_rules import (
-    TeamSelectionIssue,
-    determine_team_constraints,
-)
+from orchestwin.agents.selection_rules import TeamSelectionIssue, determine_team_constraints
 from orchestwin.models.proposal_evidence import bind_model_artifacts, evidence_application
 from orchestwin.models.team_proposals import (
     AgentTeamProposal,
@@ -21,19 +18,10 @@ from orchestwin.models.team_proposals import (
     TeamProposalPort,
     TeamProposalRequest,
 )
-from orchestwin.projects.brief_gate import (
-    project_brief_gate_is_currently_approved,
-)
-from orchestwin.projects.briefs import (
-    ProjectBriefVersion,
-)
-from orchestwin.projects.domain import (
-    ProjectMode,
-)
-from orchestwin.workflow.gates import (
-    HumanGate,
-    HumanGateType,
-)
+from orchestwin.projects.brief_gate import project_brief_gate_is_currently_approved
+from orchestwin.projects.briefs import ProjectBriefVersion
+from orchestwin.projects.domain import ProjectMode
+from orchestwin.workflow.gates import HumanGate, HumanGateType
 
 
 class TeamProposalRevisionKind(StrEnum):
@@ -148,23 +136,12 @@ class TeamSelectionContext:
     @property
     def brief_is_approved(self) -> bool:
         """Return whether Gate 1 approves the exact current brief."""
-        return project_brief_gate_is_currently_approved(
-            self.brief_gate,
-            self.brief_version,
-        )
+        return project_brief_gate_is_currently_approved(self.brief_gate, self.brief_version)
 
     @property
-    def selection_basis(
-        self,
-    ) -> tuple[object, ...]:
+    def selection_basis(self) -> tuple[object, ...]:
         """Return the immutable basis used to detect context changes."""
-        brief_reference: (
-            tuple[
-                object,
-                ...,
-            ]
-            | None
-        ) = None
+        brief_reference: tuple[object, ...] | None = None
 
         if self.brief_version is not None:
             brief_reference = (
@@ -173,13 +150,7 @@ class TeamSelectionContext:
                 self.brief_version.content_hash,
             )
 
-        gate_reference: (
-            tuple[
-                object,
-                ...,
-            ]
-            | None
-        ) = None
+        gate_reference: tuple[object, ...] | None = None
 
         if self.brief_gate is not None:
             gate_reference = (
@@ -189,29 +160,19 @@ class TeamSelectionContext:
                 self.brief_gate.event_sequence,
             )
 
-        return (
-            self.project_mode,
-            brief_reference,
-            gate_reference,
-        )
+        return (self.project_mode, brief_reference, gate_reference)
 
 
 class TeamSelectionContextRepository(Protocol):
     """Owner-scoped access to the current proposal-generation context."""
 
     async def get_current_owned(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID
     ) -> TeamSelectionContext | None:
         """Return current project, brief, and Gate 1 state."""
 
     async def get_current_owned_for_update(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID
     ) -> TeamSelectionContext | None:
         """Lock the project and return its current selection context."""
 
@@ -220,48 +181,27 @@ class TeamProposalVersionRepository(Protocol):
     """Owner-scoped persistence operations for team proposals."""
 
     async def create_generated_owned(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        proposal: AgentTeamProposal,
+        self, *, project_id: UUID, owner_user_id: UUID, proposal: AgentTeamProposal
     ) -> TeamProposalVersionCreationResult:
         """Create or reuse an immutable generated proposal version."""
 
     async def create_owner_provided_owned(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        proposal: AgentTeamProposal,
+        self, *, project_id: UUID, owner_user_id: UUID, proposal: AgentTeamProposal
     ) -> TeamProposalVersionCreationResult: ...
 
     async def get_current_owned(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID
     ) -> TeamProposalVersion | None:
         """Return the latest proposal version for an owned project."""
 
     async def get_owned_version(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        version_number: int,
+        self, *, project_id: UUID, owner_user_id: UUID, version_number: int
     ) -> TeamProposalVersion | None:
         """Return one proposal version for an owned project."""
 
     async def list_owned_versions(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ) -> tuple[
-        TeamProposalVersion,
-        ...,
-    ]:
+        self, *, project_id: UUID, owner_user_id: UUID
+    ) -> tuple[TeamProposalVersion, ...]:
         """Return immutable proposal history in version order."""
 
 
@@ -269,20 +209,14 @@ class TeamProposalUnitOfWork(Protocol):
     """Transactional boundary for team-proposal persistence."""
 
     @property
-    def contexts(
-        self,
-    ) -> TeamSelectionContextRepository:
+    def contexts(self) -> TeamSelectionContextRepository:
         """Return the current selection-context repository."""
 
     @property
-    def proposals(
-        self,
-    ) -> TeamProposalVersionRepository:
+    def proposals(self) -> TeamProposalVersionRepository:
         """Return the versioned proposal repository."""
 
-    async def __aenter__(
-        self,
-    ) -> Self:
+    async def __aenter__(self) -> Self:
         """Open the transaction."""
 
     async def __aexit__(
@@ -294,10 +228,7 @@ class TeamProposalUnitOfWork(Protocol):
         """Commit or roll back the transaction."""
 
 
-TeamProposalUnitOfWorkFactory = Callable[
-    [],
-    TeamProposalUnitOfWork,
-]
+TeamProposalUnitOfWorkFactory = Callable[[], TeamProposalUnitOfWork]
 
 
 class TeamProposalApplicationStatus(StrEnum):
@@ -319,10 +250,7 @@ class TeamProposalApplicationResult:
 
     status: TeamProposalApplicationStatus
     version: TeamProposalVersion | None = None
-    issues: tuple[
-        TeamSelectionIssue,
-        ...,
-    ] = ()
+    issues: tuple[TeamSelectionIssue, ...] = ()
 
     def __post_init__(self) -> None:
         """Protect success, blocked, and failure result shapes."""
@@ -356,30 +284,16 @@ class TeamProposalApplicationService(Protocol):
     """Use cases exposed to future team-selection API adapters."""
 
     async def generate(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID
     ) -> TeamProposalApplicationResult:
         """Generate and persist a proposal for an approved brief."""
 
-    async def current(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ) -> TeamProposalVersion | None:
+    async def current(self, *, project_id: UUID, owner_user_id: UUID) -> TeamProposalVersion | None:
         """Return the latest owner-scoped proposal version."""
 
     async def history(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ) -> tuple[
-        TeamProposalVersion,
-        ...,
-    ]:
+        self, *, project_id: UUID, owner_user_id: UUID
+    ) -> tuple[TeamProposalVersion, ...]:
         """Return the immutable proposal history."""
 
 
@@ -399,16 +313,12 @@ class LocalTeamProposalApplicationService:
 
     @evidence_application
     async def generate(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID
     ) -> TeamProposalApplicationResult:
         """Generate a proposal and persist it if context remains current."""
         async with self._unit_of_work_factory() as unit:
             initial_context = await unit.contexts.get_current_owned(
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
+                project_id=project_id, owner_user_id=(owner_user_id)
             )
 
         precondition = self._precondition_result(initial_context)
@@ -420,8 +330,7 @@ class LocalTeamProposalApplicationService:
             raise RuntimeError("validated proposal context did not contain a brief")
 
         constraints = determine_team_constraints(
-            project_mode=(initial_context.project_mode),
-            brief=(initial_context.brief_version.brief),
+            project_mode=(initial_context.project_mode), brief=(initial_context.brief_version.brief)
         )
         request = TeamProposalRequest(
             project_mode=(initial_context.project_mode),
@@ -440,8 +349,7 @@ class LocalTeamProposalApplicationService:
         proposal = generation.proposal
 
         if proposal is None or not self._proposal_matches_request(
-            proposal=proposal,
-            request=request,
+            proposal=proposal, request=request
         ):
             return TeamProposalApplicationResult(
                 status=(TeamProposalApplicationStatus.INVALID_PROPOSAL)
@@ -449,8 +357,7 @@ class LocalTeamProposalApplicationService:
 
         async with self._unit_of_work_factory() as unit:
             current_context = await unit.contexts.get_current_owned_for_update(
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
+                project_id=project_id, owner_user_id=(owner_user_id)
             )
 
             if (
@@ -463,9 +370,7 @@ class LocalTeamProposalApplicationService:
                 )
 
             persisted = await unit.proposals.create_generated_owned(
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
-                proposal=proposal,
+                project_id=project_id, owner_user_id=(owner_user_id), proposal=proposal
             )
             if persisted.version is not None:
                 await bind_model_artifacts(
@@ -499,33 +404,20 @@ class LocalTeamProposalApplicationService:
             issues=persisted.version.proposal.constraints.issues,
         )
 
-    async def current(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ) -> TeamProposalVersion | None:
+    async def current(self, *, project_id: UUID, owner_user_id: UUID) -> TeamProposalVersion | None:
         """Return the latest owner-scoped proposal."""
         async with self._unit_of_work_factory() as unit:
             return await unit.proposals.get_current_owned(
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
+                project_id=project_id, owner_user_id=(owner_user_id)
             )
 
     async def history(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ) -> tuple[
-        TeamProposalVersion,
-        ...,
-    ]:
+        self, *, project_id: UUID, owner_user_id: UUID
+    ) -> tuple[TeamProposalVersion, ...]:
         """Return immutable proposal history."""
         async with self._unit_of_work_factory() as unit:
             return await unit.proposals.list_owned_versions(
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
+                project_id=project_id, owner_user_id=(owner_user_id)
             )
 
     @staticmethod
@@ -552,9 +444,7 @@ class LocalTeamProposalApplicationService:
 
     @staticmethod
     def _proposal_matches_request(
-        *,
-        proposal: AgentTeamProposal,
-        request: TeamProposalRequest,
+        *, proposal: AgentTeamProposal, request: TeamProposalRequest
     ) -> bool:
         """Validate provider output against the exact request context."""
         brief = request.brief_version

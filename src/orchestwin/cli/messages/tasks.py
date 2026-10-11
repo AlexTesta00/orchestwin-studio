@@ -23,10 +23,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "scrive un compito tuo per il codice",
         "en": "write a task of your own for the code",
     },
-    "tasks.help_done": {
-        "it": "segna dei compiti come fatti",
-        "en": "mark tasks as done",
-    },
+    "tasks.help_done": {"it": "segna dei compiti come fatti", "en": "mark tasks as done"},
     "tasks.help_drop": {
         "it": "abbandona dei compiti che non servono più",
         "en": "drop tasks that are no longer wanted",
@@ -43,10 +40,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "sceglie quali rilievi dei twin sull'esame di un commit diventano compiti",
         "en": "choose which findings of the twins on the review of a commit become tasks",
     },
-    "tasks.option_text": {
-        "it": "il testo del compito",
-        "en": "the text of the task",
-    },
+    "tasks.option_text": {"it": "il testo del compito", "en": "the text of the task"},
     "tasks.option_codes": {
         "it": "i codici dei compiti, per esempio TSK-004",
         "en": "the codes of the tasks, for example TSK-004",
@@ -140,10 +134,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Tasks read from the knowledge folder {path}: the Studio {studio} does not give the "
         "tasks of this project.",
     },
-    "tasks.added": {
-        "it": "Compito scritto: {task}: {text}",
-        "en": "Task written: {task}: {text}",
-    },
+    "tasks.added": {"it": "Compito scritto: {task}: {text}", "en": "Task written: {task}: {text}"},
     "tasks.changed_done": {
         "it": "Compiti segnati come fatti: {count}.",
         "en": "Tasks marked as done: {count}.",
@@ -220,14 +211,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Which become tasks? Type their numbers separated by commas or spaces, a for all; "
         "Enter for none:",
     },
-    "tasks.created": {
-        "it": "Compiti creati: {count}.",
-        "en": "Tasks created: {count}.",
-    },
-    "tasks.created_none": {
-        "it": "Nessun compito creato.",
-        "en": "No task created.",
-    },
+    "tasks.created": {"it": "Compiti creati: {count}.", "en": "Tasks created: {count}."},
+    "tasks.created_none": {"it": "Nessun compito creato.", "en": "No task created."},
     "tasks.created_next": {
         "it": "`ut code` affida i compiti aperti all'agente di programmazione; `ut tasks` li "
         "mostra tutti.",

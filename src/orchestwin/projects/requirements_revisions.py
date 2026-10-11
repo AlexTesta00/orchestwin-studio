@@ -197,17 +197,10 @@ class RequirementsSpecificationDiff:
     def __post_init__(self) -> None:
         """Protect immutable proposal context and decision metadata."""
         validate_positive_integer(
-            self.base_version_number,
-            label="base requirements version number",
+            self.base_version_number, label="base requirements version number"
         )
-        validate_sha256(
-            self.base_content_hash,
-            label="base requirements content hash",
-        )
-        _require_aware(
-            self.created_at,
-            label="requirements diff creation timestamp",
-        )
+        validate_sha256(self.base_content_hash, label="base requirements content hash")
+        _require_aware(self.created_at, label="requirements diff creation timestamp")
 
         if self.proposed_specification.project_id != self.project_id:
             raise ValueError("proposed requirements must belong to the diff project")
@@ -242,10 +235,7 @@ class RequirementsSpecificationDiff:
         if self.decided_by_user_id is None or self.decided_at is None:
             raise ValueError("a decided requirements diff requires actor and timestamp")
 
-        _require_aware(
-            self.decided_at,
-            label="requirements diff decision timestamp",
-        )
+        _require_aware(self.decided_at, label="requirements diff decision timestamp")
 
         if self.decided_at < self.created_at:
             raise ValueError("requirements diff decision cannot precede creation")
@@ -384,10 +374,7 @@ def propose_requirements_diff(
             proposed_specification=proposed_specification,
             operations=operations,
             created_by_user_id=created_by_user_id,
-            created_at=_require_aware(
-                created_at,
-                label="requirements diff creation timestamp",
-            ),
+            created_at=_require_aware(created_at, label="requirements diff creation timestamp"),
         ),
     )
 
@@ -403,8 +390,7 @@ def approve_requirements_diff(
     """Approve one pending diff without mutating the base version."""
     if diff.status is RequirementsDiffStatus.APPROVED:
         return RequirementsDiffDecisionResult(
-            status=RequirementsDiffDecisionStatus.NO_CHANGE,
-            diff=diff,
+            status=RequirementsDiffDecisionStatus.NO_CHANGE, diff=diff
         )
 
     if diff.status is RequirementsDiffStatus.REJECTED:
@@ -430,10 +416,7 @@ def approve_requirements_diff(
             diff,
             status=RequirementsDiffStatus.APPROVED,
             decided_by_user_id=actor_user_id,
-            decided_at=_require_aware(
-                occurred_at,
-                label="requirements diff approval timestamp",
-            ),
+            decided_at=_require_aware(occurred_at, label="requirements diff approval timestamp"),
             decision_reason=normalized_reason,
             applied_specification_version_id=applied_specification_version_id,
         ),
@@ -441,17 +424,12 @@ def approve_requirements_diff(
 
 
 def reject_requirements_diff(
-    diff: RequirementsSpecificationDiff,
-    *,
-    actor_user_id: UUID,
-    occurred_at: datetime,
-    reason: str,
+    diff: RequirementsSpecificationDiff, *, actor_user_id: UUID, occurred_at: datetime, reason: str
 ) -> RequirementsDiffDecisionResult:
     """Reject one pending diff with an explicit reason."""
     if diff.status is RequirementsDiffStatus.REJECTED:
         return RequirementsDiffDecisionResult(
-            status=RequirementsDiffDecisionStatus.NO_CHANGE,
-            diff=diff,
+            status=RequirementsDiffDecisionStatus.NO_CHANGE, diff=diff
         )
 
     if diff.status is RequirementsDiffStatus.APPROVED:
@@ -483,10 +461,7 @@ def reject_requirements_diff(
             diff,
             status=RequirementsDiffStatus.REJECTED,
             decided_by_user_id=actor_user_id,
-            decided_at=_require_aware(
-                occurred_at,
-                label="requirements diff rejection timestamp",
-            ),
+            decided_at=_require_aware(occurred_at, label="requirements diff rejection timestamp"),
             decision_reason=normalized_reason,
         ),
     )
@@ -523,10 +498,7 @@ def materialize_approved_requirements_diff(
         specification=approved_diff.proposed_specification,
         content_hash=approved_diff.proposed_specification.content_hash,
         created_by_user_id=created_by_user_id,
-        created_at=_require_aware(
-            created_at,
-            label="requirements version creation timestamp",
-        ),
+        created_at=_require_aware(created_at, label="requirements version creation timestamp"),
     )
 
 
@@ -570,10 +542,7 @@ def _collections(
     )
 
 
-def _same_context(
-    base: RequirementsSpecification,
-    proposed: RequirementsSpecification,
-) -> bool:
+def _same_context(base: RequirementsSpecification, proposed: RequirementsSpecification) -> bool:
     """Keep owner revisions inside the exact governed input context."""
     return (
         proposed.project_id == base.project_id
@@ -587,14 +556,11 @@ def _same_context(
 
 
 def _identities_are_stable(
-    base: RequirementsSpecification,
-    proposed: RequirementsSpecification,
+    base: RequirementsSpecification, proposed: RequirementsSpecification
 ) -> bool:
     """Prevent display codes from moving between stable identities."""
     for (base_kind, base_values), (proposed_kind, proposed_values) in zip(
-        _collections(base),
-        _collections(proposed),
-        strict=True,
+        _collections(base), _collections(proposed), strict=True
     ):
         if base_kind is not proposed_kind:
             return False
@@ -616,16 +582,13 @@ def _identities_are_stable(
 
 
 def _diff_operations(
-    base: RequirementsSpecification,
-    proposed: RequirementsSpecification,
+    base: RequirementsSpecification, proposed: RequirementsSpecification
 ) -> tuple[RequirementsDiffOperation, ...]:
     """Compute explicit operations across every specification collection."""
     operations: list[RequirementsDiffOperation] = []
 
     for (artifact_kind, base_values), (_, proposed_values) in zip(
-        _collections(base),
-        _collections(proposed),
-        strict=True,
+        _collections(base), _collections(proposed), strict=True
     ):
         base_by_id = {value.id: value for value in base_values}
         proposed_by_id = {value.id: value for value in proposed_values}
@@ -656,13 +619,10 @@ def _diff_operations(
     return tuple(sorted(operations, key=lambda value: value.sort_key))
 
 
-def _proposal_rejection(
-    issue: RequirementsDiffProposalIssueCode,
-) -> RequirementsDiffProposalResult:
+def _proposal_rejection(issue: RequirementsDiffProposalIssueCode) -> RequirementsDiffProposalResult:
     """Return one typed proposal rejection."""
     return RequirementsDiffProposalResult(
-        status=RequirementsDiffProposalStatus.REJECTED,
-        issue=issue,
+        status=RequirementsDiffProposalStatus.REJECTED, issue=issue
     )
 
 

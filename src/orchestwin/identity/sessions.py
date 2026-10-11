@@ -116,42 +116,22 @@ class RefreshRotationResult:
 class RefreshSessionRepository(Protocol):
     """Persistence operations required by refresh-token use cases."""
 
-    async def add(
-        self,
-        session: RefreshSession,
-    ) -> RefreshSession:
+    async def add(self, session: RefreshSession) -> RefreshSession:
         """Persist a refresh session."""
 
-    async def get_by_digest_for_update(
-        self,
-        digest: str,
-    ) -> RefreshSession | None:
+    async def get_by_digest_for_update(self, digest: str) -> RefreshSession | None:
         """Lock and return a session by digest."""
 
     async def mark_rotated(
-        self,
-        *,
-        session_id: UUID,
-        replacement_session_id: UUID,
-        rotated_at: datetime,
+        self, *, session_id: UUID, replacement_session_id: UUID, rotated_at: datetime
     ) -> None:
         """Mark one active session as rotated."""
 
-    async def revoke_session(
-        self,
-        *,
-        session_id: UUID,
-        revoked_at: datetime,
-        reason: str,
-    ) -> None:
+    async def revoke_session(self, *, session_id: UUID, revoked_at: datetime, reason: str) -> None:
         """Revoke one active session."""
 
     async def revoke_family(
-        self,
-        *,
-        token_family_id: UUID,
-        revoked_at: datetime,
-        reason: str,
+        self, *, token_family_id: UUID, revoked_at: datetime, reason: str
     ) -> None:
         """Revoke all active sessions in a token family."""
 
@@ -200,24 +180,15 @@ class RefreshSessionService:
         self._token_factory = token_factory
         self._uuid_factory = uuid_factory
 
-    async def issue(
-        self,
-        *,
-        user_id: UUID,
-    ) -> IssuedRefreshToken:
+    async def issue(self, *, user_id: UUID) -> IssuedRefreshToken:
         """Create the first refresh token in a new family."""
         issued_at = self._current_time()
 
         return await self._create_and_persist(
-            user_id=user_id,
-            token_family_id=self._uuid_factory(),
-            issued_at=issued_at,
+            user_id=user_id, token_family_id=self._uuid_factory(), issued_at=issued_at
         )
 
-    async def rotate(
-        self,
-        token: str,
-    ) -> RefreshRotationResult:
+    async def rotate(self, token: str) -> RefreshRotationResult:
         """Rotate an active token and detect replay."""
         if not token:
             return RefreshRotationResult(status=RefreshRotationStatus.INVALID)
@@ -239,36 +210,22 @@ class RefreshSessionService:
 
         if current.expires_at <= now:
             await self._repository.revoke_session(
-                session_id=current.id,
-                revoked_at=now,
-                reason="refresh_token_expired",
+                session_id=current.id, revoked_at=now, reason="refresh_token_expired"
             )
 
             return RefreshRotationResult(status=RefreshRotationStatus.EXPIRED)
 
         replacement = await self._create_and_persist(
-            user_id=current.user_id,
-            token_family_id=current.token_family_id,
-            issued_at=now,
+            user_id=current.user_id, token_family_id=current.token_family_id, issued_at=now
         )
 
         await self._repository.mark_rotated(
-            session_id=current.id,
-            replacement_session_id=(replacement.session.id),
-            rotated_at=now,
+            session_id=current.id, replacement_session_id=(replacement.session.id), rotated_at=now
         )
 
-        return RefreshRotationResult(
-            status=RefreshRotationStatus.ROTATED,
-            issued_token=replacement,
-        )
+        return RefreshRotationResult(status=RefreshRotationStatus.ROTATED, issued_token=replacement)
 
-    async def revoke(
-        self,
-        token: str,
-        *,
-        reason: str = "logout",
-    ) -> bool:
+    async def revoke(self, token: str, *, reason: str = "logout") -> bool:
         """Revoke one currently active refresh session."""
         if not token:
             return False
@@ -279,11 +236,7 @@ class RefreshSessionService:
         if current is None or current.rotated_at is not None or current.revoked_at is not None:
             return False
 
-        await self._repository.revoke_session(
-            session_id=current.id,
-            revoked_at=now,
-            reason=reason,
-        )
+        await self._repository.revoke_session(session_id=current.id, revoked_at=now, reason=reason)
 
         return True
 
@@ -297,11 +250,7 @@ class RefreshSessionService:
         return current
 
     async def _create_and_persist(
-        self,
-        *,
-        user_id: UUID,
-        token_family_id: UUID,
-        issued_at: datetime,
+        self, *, user_id: UUID, token_family_id: UUID, issued_at: datetime
     ) -> IssuedRefreshToken:
         """Generate and persist one refresh token."""
         raw_token = self._token_factory()
@@ -321,7 +270,4 @@ class RefreshSessionService:
 
         persisted = await self._repository.add(session)
 
-        return IssuedRefreshToken(
-            token=raw_token,
-            session=persisted,
-        )
+        return IssuedRefreshToken(token=raw_token, session=persisted)

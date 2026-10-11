@@ -80,18 +80,9 @@ class EvaluationArtifactReference:
     location: str
 
     def __post_init__(self) -> None:
-        validate_positive_integer(
-            self.version_number,
-            label="evaluation artifact version",
-        )
-        validate_positive_integer(
-            self.size_bytes,
-            label="evaluation artifact size",
-        )
-        validate_sha256(
-            self.sha256_digest,
-            label="evaluation artifact digest",
-        )
+        validate_positive_integer(self.version_number, label="evaluation artifact version")
+        validate_positive_integer(self.size_bytes, label="evaluation artifact size")
+        validate_sha256(self.sha256_digest, label="evaluation artifact digest")
         media_type = normalize_required_text(
             self.media_type,
             label="evaluation artifact media type",
@@ -100,9 +91,7 @@ class EvaluationArtifactReference:
         if media_type != self.media_type or "/" not in media_type:
             raise ValueError("evaluation artifact media type must be normalized")
         location = normalize_required_text(
-            self.location,
-            label="evaluation artifact location",
-            maximum_length=_MAX_LOCATION_LENGTH,
+            self.location, label="evaluation artifact location", maximum_length=_MAX_LOCATION_LENGTH
         )
         if location != self.location:
             raise ValueError("evaluation artifact location must be normalized")
@@ -116,12 +105,7 @@ class EvaluationArtifactReference:
 
     @property
     def sort_key(self) -> tuple[str, str, int, str]:
-        return (
-            self.kind.value,
-            self.artifact_id.hex,
-            self.version_number,
-            self.location,
-        )
+        return (self.kind.value, self.artifact_id.hex, self.version_number, self.location)
 
     def to_snapshot(self) -> dict[str, object]:
         return {
@@ -149,19 +133,13 @@ class EvaluationScenario:
 
     def __post_init__(self) -> None:
         name = normalize_required_text(
-            self.name,
-            label="evaluation scenario name",
-            maximum_length=_MAX_SCENARIO_NAME_LENGTH,
+            self.name, label="evaluation scenario name", maximum_length=_MAX_SCENARIO_NAME_LENGTH
         )
         task = normalize_required_text(
-            self.task,
-            label="evaluation scenario task",
-            maximum_length=_MAX_SCENARIO_TASK_LENGTH,
+            self.task, label="evaluation scenario task", maximum_length=_MAX_SCENARIO_TASK_LENGTH
         )
         locale = normalize_required_text(
-            self.locale,
-            label="evaluation scenario locale",
-            maximum_length=20,
+            self.locale, label="evaluation scenario locale", maximum_length=20
         )
         outcomes = normalize_text_items(
             self.expected_outcomes,
@@ -210,10 +188,7 @@ class EvaluationArtifactBundle:
         }
         if len(identities) != len(self.artifacts):
             raise ValueError("evaluation artifact references must be unique")
-        validate_sha256(
-            self.content_hash,
-            label="evaluation artifact bundle content hash",
-        )
+        validate_sha256(self.content_hash, label="evaluation artifact bundle content hash")
         if self.content_hash != evaluation_artifact_bundle_hash(
             project_id=self.project_id,
             workflow_run_id=self.workflow_run_id,

@@ -109,12 +109,7 @@ _TEAM: Final = (
     "catalog_version",
     "catalog_content_hash",
 )
-_TWINS: Final = (
-    *_TEAM,
-    "team_proposal_id",
-    "team_version_number",
-    "team_content_hash",
-)
+_TWINS: Final = (*_TEAM, "team_proposal_id", "team_version_number", "team_content_hash")
 _LABELS: Final = {
     "id": "id",
     "version_number": "version",
@@ -325,8 +320,7 @@ def _gate(row: Mapping[str, Any], prefix: str) -> GateState | None:
 
 def _catalog(row: Mapping[str, Any], prefix: str) -> CatalogVersion:
     return CatalogVersion(
-        version=row[f"{prefix}_catalog_version"],
-        content_hash=row[f"{prefix}_catalog_hash"],
+        version=row[f"{prefix}_catalog_version"], content_hash=row[f"{prefix}_catalog_hash"]
     )
 
 
@@ -520,8 +514,7 @@ def project_overview(row: Mapping[str, Any]) -> ProjectOverview:
     return ProjectOverview(
         project=_project(row),
         progress=project_progress(
-            progress_facts(row),
-            sections=None if sections is None else project_sections(sections),
+            progress_facts(row), sections=None if sections is None else project_sections(sections)
         ),
     )
 

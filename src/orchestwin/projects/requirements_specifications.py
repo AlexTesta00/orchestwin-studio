@@ -8,10 +8,7 @@ from datetime import datetime
 from typing import Final, Protocol
 from uuid import UUID
 
-from orchestwin.projects.requirements import (
-    Requirement,
-    UserStory,
-)
+from orchestwin.projects.requirements import Requirement, UserStory
 from orchestwin.projects.requirements_journeys import UserJourney
 from orchestwin.projects.requirements_needs import UserNeed
 from orchestwin.projects.requirements_primitives import (
@@ -47,10 +44,7 @@ class _ArtifactWithIdentity(Protocol):
 
 
 def _canonical_artifacts[Artifact: _ArtifactWithIdentity](
-    values: Iterable[Artifact],
-    *,
-    label: str,
-    require_items: bool,
+    values: Iterable[Artifact], *, label: str, require_items: bool
 ) -> tuple[Artifact, ...]:
     """Return artifacts with unique identity/code in stable code order."""
     artifacts = tuple(values)
@@ -67,27 +61,15 @@ def _canonical_artifacts[Artifact: _ArtifactWithIdentity](
     if len(codes) != len(set(codes)):
         raise ValueError(f"{label} codes must be unique")
 
-    return tuple(
-        sorted(
-            artifacts,
-            key=lambda artifact: artifact.code,
-        )
-    )
+    return tuple(sorted(artifacts, key=lambda artifact: artifact.code))
 
 
-def _ids(
-    values: Sequence[_ArtifactWithIdentity],
-) -> frozenset[UUID]:
+def _ids(values: Sequence[_ArtifactWithIdentity]) -> frozenset[UUID]:
     """Return the immutable identity set of typed artifacts."""
     return frozenset(value.id for value in values)
 
 
-def _require_subset(
-    references: Iterable[UUID],
-    available: frozenset[UUID],
-    *,
-    label: str,
-) -> None:
+def _require_subset(references: Iterable[UUID], available: frozenset[UUID], *, label: str) -> None:
     """Reject references that do not resolve inside a specification."""
     missing = frozenset(references) - available
 
@@ -105,22 +87,13 @@ class RequirementsSpecification:
     user_modeling_reference: RequirementsContextReference
     catalog_version: int
     catalog_content_hash: str
-    user_twin_references: tuple[
-        UserTwinVersionReference,
-        ...,
-    ]
+    user_twin_references: tuple[UserTwinVersionReference, ...]
     requirements: tuple[Requirement, ...]
     user_stories: tuple[UserStory, ...]
-    acceptance_criteria: tuple[
-        AcceptanceCriterion,
-        ...,
-    ]
+    acceptance_criteria: tuple[AcceptanceCriterion, ...]
     scenarios: tuple[UsageScenario, ...]
     risks: tuple[ProjectRisk, ...]
-    definition_of_done: tuple[
-        DefinitionOfDoneItem,
-        ...,
-    ]
+    definition_of_done: tuple[DefinitionOfDoneItem, ...]
     needs: tuple[UserNeed, ...] = ()
     schema_version: int = 1
     journeys: tuple[UserJourney, ...] = ()
@@ -147,43 +120,20 @@ class RequirementsSpecification:
         ):
             raise ValueError("schema 1 cannot contain needs, enriched scenarios, or journeys")
         expected_context_kinds = (
-            (
-                self.project_brief_reference,
-                RequirementsContextKind.PROJECT_BRIEF,
-                "Project Brief",
-            ),
-            (
-                self.agent_team_reference,
-                RequirementsContextKind.AGENT_TEAM,
-                "Agent Team",
-            ),
-            (
-                self.user_modeling_reference,
-                RequirementsContextKind.USER_MODELING,
-                "User Modeling",
-            ),
+            (self.project_brief_reference, RequirementsContextKind.PROJECT_BRIEF, "Project Brief"),
+            (self.agent_team_reference, RequirementsContextKind.AGENT_TEAM, "Agent Team"),
+            (self.user_modeling_reference, RequirementsContextKind.USER_MODELING, "User Modeling"),
         )
 
-        for (
-            reference,
-            expected_kind,
-            label,
-        ) in expected_context_kinds:
+        for reference, expected_kind, label in expected_context_kinds:
             if reference.kind is not expected_kind:
                 raise ValueError(f"requirements {label} reference uses the wrong context kind")
 
-        validate_positive_integer(
-            self.catalog_version,
-            label="requirements catalog version",
-        )
-        validate_sha256(
-            self.catalog_content_hash,
-            label="requirements catalog content hash",
-        )
+        validate_positive_integer(self.catalog_version, label="requirements catalog version")
+        validate_sha256(self.catalog_content_hash, label="requirements catalog content hash")
 
         if self.user_twin_references != canonical_user_twin_references(
-            self.user_twin_references,
-            require_items=True,
+            self.user_twin_references, require_items=True
         ):
             raise ValueError("requirements User Twin references must use canonical order")
 
@@ -198,48 +148,16 @@ class RequirementsSpecification:
         collection_rules = (
             (self.journeys, "journeys", False),
             (self.needs, "needs", self.schema_version == 2),
-            (
-                self.requirements,
-                "requirements",
-                True,
-            ),
-            (
-                self.user_stories,
-                "user stories",
-                True,
-            ),
-            (
-                self.acceptance_criteria,
-                "acceptance criteria",
-                True,
-            ),
-            (
-                self.scenarios,
-                "scenarios",
-                True,
-            ),
-            (
-                self.risks,
-                "risks",
-                False,
-            ),
-            (
-                self.definition_of_done,
-                "Definition of Done items",
-                True,
-            ),
+            (self.requirements, "requirements", True),
+            (self.user_stories, "user stories", True),
+            (self.acceptance_criteria, "acceptance criteria", True),
+            (self.scenarios, "scenarios", True),
+            (self.risks, "risks", False),
+            (self.definition_of_done, "Definition of Done items", True),
         )
 
-        for (
-            values,
-            label,
-            require_items,
-        ) in collection_rules:
-            if values != _canonical_artifacts(
-                values,
-                label=label,
-                require_items=require_items,
-            ):
+        for values, label, require_items in collection_rules:
+            if values != _canonical_artifacts(values, label=label, require_items=require_items):
                 raise ValueError(f"{label} must use canonical code order")
 
         requirement_ids = _ids(self.requirements)
@@ -260,9 +178,7 @@ class RequirementsSpecification:
                 raise ValueError("user stories must reference a User Twin in the specification")
 
             _require_subset(
-                story.requirement_ids,
-                requirement_ids,
-                label="user-story requirement IDs",
+                story.requirement_ids, requirement_ids, label="user-story requirement IDs"
             )
 
         for criterion in self.acceptance_criteria:
@@ -282,9 +198,7 @@ class RequirementsSpecification:
                 raise ValueError("scenarios must reference a User Twin in the specification")
 
             _require_subset(
-                scenario.requirement_ids,
-                requirement_ids,
-                label="scenario requirement IDs",
+                scenario.requirement_ids, requirement_ids, label="scenario requirement IDs"
             )
             _require_subset(
                 scenario.acceptance_criterion_ids,
@@ -293,17 +207,11 @@ class RequirementsSpecification:
             )
 
         for risk in self.risks:
-            _require_subset(
-                risk.requirement_ids,
-                requirement_ids,
-                label="risk requirement IDs",
-            )
+            _require_subset(risk.requirement_ids, requirement_ids, label="risk requirement IDs")
 
         for item in self.definition_of_done:
             _require_subset(
-                item.requirement_ids,
-                requirement_ids,
-                label=("Definition of Done requirement IDs"),
+                item.requirement_ids, requirement_ids, label=("Definition of Done requirement IDs")
             )
 
         if self.schema_version == 2:
@@ -433,8 +341,7 @@ class RequirementsSpecificationVersion:
     def __post_init__(self) -> None:
         """Protect project scope, content hash, timestamp, and lineage."""
         validate_positive_integer(
-            self.version_number,
-            label=("requirements specification version number"),
+            self.version_number, label=("requirements specification version number")
         )
 
         if self.specification.project_id != self.project_id:
@@ -443,10 +350,7 @@ class RequirementsSpecificationVersion:
         if self.created_at.utcoffset() is None:
             raise ValueError("requirements specification timestamp must be timezone-aware")
 
-        validate_sha256(
-            self.content_hash,
-            label=("requirements specification content hash"),
-        )
+        validate_sha256(self.content_hash, label=("requirements specification content hash"))
 
         if self.content_hash != self.specification.content_hash:
             raise ValueError("requirements specification hash must match its content")
@@ -504,40 +408,17 @@ def create_requirements_specification(
         catalog_version=catalog_version,
         catalog_content_hash=catalog_content_hash,
         user_twin_references=(
-            canonical_user_twin_references(
-                user_twin_references,
-                require_items=True,
-            )
+            canonical_user_twin_references(user_twin_references, require_items=True)
         ),
-        requirements=_canonical_artifacts(
-            requirements,
-            label="requirements",
-            require_items=True,
-        ),
-        user_stories=_canonical_artifacts(
-            user_stories,
-            label="user stories",
-            require_items=True,
-        ),
+        requirements=_canonical_artifacts(requirements, label="requirements", require_items=True),
+        user_stories=_canonical_artifacts(user_stories, label="user stories", require_items=True),
         acceptance_criteria=_canonical_artifacts(
-            acceptance_criteria,
-            label="acceptance criteria",
-            require_items=True,
+            acceptance_criteria, label="acceptance criteria", require_items=True
         ),
-        scenarios=_canonical_artifacts(
-            scenarios,
-            label="scenarios",
-            require_items=True,
-        ),
-        risks=_canonical_artifacts(
-            risks,
-            label="risks",
-            require_items=False,
-        ),
+        scenarios=_canonical_artifacts(scenarios, label="scenarios", require_items=True),
+        risks=_canonical_artifacts(risks, label="risks", require_items=False),
         definition_of_done=_canonical_artifacts(
-            definition_of_done,
-            label="Definition of Done items",
-            require_items=True,
+            definition_of_done, label="Definition of Done items", require_items=True
         ),
     )
 

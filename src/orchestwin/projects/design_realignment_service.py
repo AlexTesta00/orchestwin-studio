@@ -128,10 +128,7 @@ def _issue(
 
 
 async def _revision_pending(
-    uow: DesignRealignmentUnitOfWork,
-    *,
-    project_id: UUID,
-    current: DesignPackageVersion | None,
+    uow: DesignRealignmentUnitOfWork, *, project_id: UUID, current: DesignPackageVersion | None
 ) -> bool:
     if current is None:
         return False

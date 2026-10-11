@@ -84,10 +84,7 @@ def _owned_generation(owner_user_id, project_id, generation_id=None):
     query = (
         sa.select(GENERATIONS)
         .join(ProjectRecord, ProjectRecord.id == GENERATIONS.c.project_id)
-        .where(
-            *_owned(owner_user_id, project_id),
-            GENERATIONS.c.owner_user_id == owner_user_id,
-        )
+        .where(*_owned(owner_user_id, project_id), GENERATIONS.c.owner_user_id == owner_user_id)
     )
     return query if generation_id is None else query.where(GENERATIONS.c.id == generation_id)
 
@@ -617,9 +614,7 @@ class SqlAlchemyProposalEvidenceBindings:
                 (
                     await self._session.execute(
                         _owned_generation(
-                            scope.owner_user_id,
-                            scope.project_id,
-                            scope.request.request_id,
+                            scope.owner_user_id, scope.project_id, scope.request.request_id
                         )
                     )
                 )
@@ -631,10 +626,7 @@ class SqlAlchemyProposalEvidenceBindings:
             _verify(row)
             for reference in references:
                 snapshot, digest = evidence_snapshot(
-                    {
-                        "generation_id": str(scope.request.request_id),
-                        "artifact": reference,
-                    }
+                    {"generation_id": str(scope.request.request_id), "artifact": reference}
                 )
                 await self._session.execute(
                     sa.insert(LINKS).values(

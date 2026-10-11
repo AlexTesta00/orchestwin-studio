@@ -135,106 +135,49 @@ class AgentCatalogEntry:
         return self.selection_policy is AgentSelectionPolicy.ALWAYS_PRESENT
 
 
-type AgentDefinition = tuple[
-    AgentIdentifier,
-    tuple[AgentCapability, ...],
-]
+type AgentDefinition = tuple[AgentIdentifier, tuple[AgentCapability, ...]]
 
 
 _PLATFORM_COMPONENT_DEFINITIONS: Final[tuple[AgentDefinition, ...]] = (
     (
         AgentIdentifier.WORKFLOW_ORCHESTRATOR,
-        (
-            AgentCapability.WORKFLOW_ORCHESTRATION,
-            AgentCapability.GOVERNED_ROUTING,
-        ),
+        (AgentCapability.WORKFLOW_ORCHESTRATION, AgentCapability.GOVERNED_ROUTING),
     ),
     (
         AgentIdentifier.INTAKE_CLARIFICATION_AGENT,
-        (
-            AgentCapability.PROJECT_INTAKE,
-            AgentCapability.BRIEF_CLARIFICATION,
-        ),
+        (AgentCapability.PROJECT_INTAKE, AgentCapability.BRIEF_CLARIFICATION),
     ),
-    (
-        AgentIdentifier.TEAM_SELECTOR,
-        (AgentCapability.TEAM_SELECTION,),
-    ),
-    (
-        AgentIdentifier.HUMAN_GATE_CONTROLLER,
-        (AgentCapability.HUMAN_APPROVAL,),
-    ),
+    (AgentIdentifier.TEAM_SELECTOR, (AgentCapability.TEAM_SELECTION,)),
+    (AgentIdentifier.HUMAN_GATE_CONTROLLER, (AgentCapability.HUMAN_APPROVAL,)),
     (
         AgentIdentifier.ARTIFACT_MANAGER,
-        (
-            AgentCapability.ARTIFACT_MANAGEMENT,
-            AgentCapability.PROVENANCE_MANAGEMENT,
-        ),
+        (AgentCapability.ARTIFACT_MANAGEMENT, AgentCapability.PROVENANCE_MANAGEMENT),
     ),
-    (
-        AgentIdentifier.SANDBOX_CONTROLLER,
-        (AgentCapability.SANDBOX_CONTROL,),
-    ),
+    (AgentIdentifier.SANDBOX_CONTROLLER, (AgentCapability.SANDBOX_CONTROL,)),
 )
 
 
 _SPECIALIST_DEFINITIONS: Final[tuple[AgentDefinition, ...]] = (
     (
         AgentIdentifier.REQUIREMENTS_ANALYST,
-        (
-            AgentCapability.REQUIREMENTS_ANALYSIS,
-            AgentCapability.ACCEPTANCE_CRITERIA,
-        ),
+        (AgentCapability.REQUIREMENTS_ANALYSIS, AgentCapability.ACCEPTANCE_CRITERIA),
     ),
     (
         AgentIdentifier.UX_RESEARCHER_USER_MODELER,
-        (
-            AgentCapability.USER_RESEARCH,
-            AgentCapability.USER_MODELING,
-        ),
+        (AgentCapability.USER_RESEARCH, AgentCapability.USER_MODELING),
     ),
-    (
-        AgentIdentifier.UX_UI_DESIGNER,
-        (
-            AgentCapability.UX_DESIGN,
-            AgentCapability.UI_DESIGN,
-        ),
-    ),
-    (
-        AgentIdentifier.SOFTWARE_ARCHITECT,
-        (AgentCapability.SOFTWARE_ARCHITECTURE,),
-    ),
-    (
-        AgentIdentifier.FRONTEND_ENGINEER,
-        (AgentCapability.FRONTEND_ENGINEERING,),
-    ),
-    (
-        AgentIdentifier.BACKEND_ENGINEER,
-        (AgentCapability.BACKEND_ENGINEERING,),
-    ),
-    (
-        AgentIdentifier.MOBILE_ENGINEER,
-        (AgentCapability.MOBILE_ENGINEERING,),
-    ),
+    (AgentIdentifier.UX_UI_DESIGNER, (AgentCapability.UX_DESIGN, AgentCapability.UI_DESIGN)),
+    (AgentIdentifier.SOFTWARE_ARCHITECT, (AgentCapability.SOFTWARE_ARCHITECTURE,)),
+    (AgentIdentifier.FRONTEND_ENGINEER, (AgentCapability.FRONTEND_ENGINEERING,)),
+    (AgentIdentifier.BACKEND_ENGINEER, (AgentCapability.BACKEND_ENGINEERING,)),
+    (AgentIdentifier.MOBILE_ENGINEER, (AgentCapability.MOBILE_ENGINEERING,)),
     (
         AgentIdentifier.QA_TEST_ENGINEER,
-        (
-            AgentCapability.QUALITY_ASSURANCE,
-            AgentCapability.TEST_ENGINEERING,
-        ),
+        (AgentCapability.QUALITY_ASSURANCE, AgentCapability.TEST_ENGINEERING),
     ),
-    (
-        AgentIdentifier.SECURITY_REVIEWER,
-        (AgentCapability.SECURITY_REVIEW,),
-    ),
-    (
-        AgentIdentifier.ACCESSIBILITY_REVIEWER,
-        (AgentCapability.ACCESSIBILITY_REVIEW,),
-    ),
-    (
-        AgentIdentifier.INTEGRATION_ENGINEER,
-        (AgentCapability.SYSTEM_INTEGRATION,),
-    ),
+    (AgentIdentifier.SECURITY_REVIEWER, (AgentCapability.SECURITY_REVIEW,)),
+    (AgentIdentifier.ACCESSIBILITY_REVIEWER, (AgentCapability.ACCESSIBILITY_REVIEW,)),
+    (AgentIdentifier.INTEGRATION_ENGINEER, (AgentCapability.SYSTEM_INTEGRATION,)),
 )
 
 
@@ -242,10 +185,7 @@ _ALL_PROJECT_MODES: Final[frozenset[ProjectMode]] = frozenset(ProjectMode)
 
 
 def _catalog_entry(
-    definition: AgentDefinition,
-    *,
-    kind: AgentCatalogKind,
-    selection_policy: AgentSelectionPolicy,
+    definition: AgentDefinition, *, kind: AgentCatalogKind, selection_policy: AgentSelectionPolicy
 ) -> AgentCatalogEntry:
     """Build one entry using the current fixed-catalog contract."""
     agent_id, capabilities = definition
@@ -325,19 +265,13 @@ def agent_catalog_snapshot() -> dict[str, object]:
         for entry in AGENT_CATALOG.values()
     ]
 
-    return {
-        "catalog_version": AGENT_CATALOG_VERSION,
-        "agents": agents,
-    }
+    return {"catalog_version": AGENT_CATALOG_VERSION, "agents": agents}
 
 
 def agent_catalog_canonical_json() -> str:
     """Serialize the fixed catalog with deterministic ordering."""
     return json.dumps(
-        agent_catalog_snapshot(),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
+        agent_catalog_snapshot(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
 
 

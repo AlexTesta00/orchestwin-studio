@@ -79,35 +79,13 @@ class SyntheticFinding:
     content_hash: str
 
     def __post_init__(self) -> None:
-        validate_display_code(
-            self.finding_id,
-            prefix="UTF",
-            label="synthetic finding ID",
-        )
-        validate_positive_integer(
-            self.twin_version,
-            label="synthetic finding twin version",
-        )
-        validate_positive_integer(
-            self.artifact_version,
-            label="synthetic finding artifact version",
-        )
+        validate_display_code(self.finding_id, prefix="UTF", label="synthetic finding ID")
+        validate_positive_integer(self.twin_version, label="synthetic finding twin version")
+        validate_positive_integer(self.artifact_version, label="synthetic finding artifact version")
         normalized_text = (
-            (
-                self.location,
-                "synthetic finding location",
-                _MAX_LOCATION_LENGTH,
-            ),
-            (
-                self.summary,
-                "synthetic finding summary",
-                _MAX_SUMMARY_LENGTH,
-            ),
-            (
-                self.rationale,
-                "synthetic finding rationale",
-                _MAX_RATIONALE_LENGTH,
-            ),
+            (self.location, "synthetic finding location", _MAX_LOCATION_LENGTH),
+            (self.summary, "synthetic finding summary", _MAX_SUMMARY_LENGTH),
+            (self.rationale, "synthetic finding rationale", _MAX_RATIONALE_LENGTH),
             (
                 self.recommended_action,
                 "synthetic finding recommended action",
@@ -125,11 +103,7 @@ class SyntheticFinding:
             ),
         )
         for value, label, maximum_length in normalized_text:
-            normalized = normalize_required_text(
-                value,
-                label=label,
-                maximum_length=maximum_length,
-            )
+            normalized = normalize_required_text(value, label=label, maximum_length=maximum_length)
             if normalized != value:
                 raise ValueError(f"{label} must be normalized")
 
@@ -144,10 +118,7 @@ class SyntheticFinding:
             raise ValueError(
                 "synthetic finding evidence references must be normalized and canonical"
             )
-        if isinstance(self.confidence, bool) or not isinstance(
-            self.confidence,
-            int | float,
-        ):
+        if isinstance(self.confidence, bool) or not isinstance(self.confidence, int | float):
             raise ValueError("synthetic finding confidence must be numeric")
         if not 0 <= float(self.confidence) <= 1:
             raise ValueError("synthetic finding confidence must be between zero and one")
@@ -160,10 +131,7 @@ class SyntheticFinding:
             and not self.requires_human_validation
         ):
             raise ValueError("model-inferred and unsupported findings require human validation")
-        validate_sha256(
-            self.content_hash,
-            label="synthetic finding content hash",
-        )
+        validate_sha256(self.content_hash, label="synthetic finding content hash")
         expected_hash = synthetic_finding_hash(
             finding_id=self.finding_id,
             twin_id=self.twin_id,

@@ -56,9 +56,7 @@ def _listed(values: Iterable[str], conjunction: str) -> str:
 
 
 def _palette_text(
-    light: Mapping[str, str],
-    dark: Mapping[str, str],
-    font_pair: tuple[str, str],
+    light: Mapping[str, str], dark: Mapping[str, str], font_pair: tuple[str, str]
 ) -> str:
     heading, body = font_pair
     code = SYSTEM_ALTERNATIVE_CODE

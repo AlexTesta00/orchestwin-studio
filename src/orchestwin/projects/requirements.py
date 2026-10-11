@@ -54,25 +54,16 @@ class Requirement:
     kind: RequirementKind
     priority: RequirementPriority
     sources: tuple[RequirementSourceReference, ...]
-    user_twin_references: tuple[
-        UserTwinVersionReference,
-        ...,
-    ] = ()
+    user_twin_references: tuple[UserTwinVersionReference, ...] = ()
     need_ids: tuple[UUID, ...] = ()
 
     def __post_init__(self) -> None:
         """Protect identity, normalized text, and canonical grounding."""
-        validate_display_code(
-            self.code,
-            prefix="REQ",
-            label="requirement code",
-        )
+        validate_display_code(self.code, prefix="REQ", label="requirement code")
 
         if (
             normalize_required_text(
-                self.title,
-                label="requirement title",
-                maximum_length=_MAX_REQUIREMENT_TITLE_LENGTH,
+                self.title, label="requirement title", maximum_length=_MAX_REQUIREMENT_TITLE_LENGTH
             )
             != self.title
         ):
@@ -88,15 +79,11 @@ class Requirement:
         ):
             raise ValueError("requirement statement must be normalized")
 
-        if self.sources != canonical_requirement_sources(
-            self.sources,
-            require_items=True,
-        ):
+        if self.sources != canonical_requirement_sources(self.sources, require_items=True):
             raise ValueError("requirement sources must use canonical order")
 
         if self.user_twin_references != canonical_user_twin_references(
-            self.user_twin_references,
-            require_items=False,
+            self.user_twin_references, require_items=False
         ):
             raise ValueError("requirement User Twin references must use canonical order")
 
@@ -147,17 +134,11 @@ class UserStory:
 
     def __post_init__(self) -> None:
         """Protect identity, normalized intent, and requirement links."""
-        validate_display_code(
-            self.code,
-            prefix="USR",
-            label="user-story code",
-        )
+        validate_display_code(self.code, prefix="USR", label="user-story code")
 
         if (
             normalize_required_text(
-                self.goal,
-                label="user-story goal",
-                maximum_length=_MAX_USER_STORY_GOAL_LENGTH,
+                self.goal, label="user-story goal", maximum_length=_MAX_USER_STORY_GOAL_LENGTH
             )
             != self.goal
         ):
@@ -174,9 +155,7 @@ class UserStory:
             raise ValueError("user-story benefit must be normalized")
 
         if self.requirement_ids != canonical_uuid_tuple(
-            self.requirement_ids,
-            label="user-story requirement IDs",
-            require_items=True,
+            self.requirement_ids, label="user-story requirement IDs", require_items=True
         ):
             raise ValueError("user-story requirement IDs must use canonical order")
 
@@ -226,9 +205,7 @@ def create_requirement(
         id=requirement_id,
         code=code,
         title=normalize_required_text(
-            title,
-            label="requirement title",
-            maximum_length=_MAX_REQUIREMENT_TITLE_LENGTH,
+            title, label="requirement title", maximum_length=_MAX_REQUIREMENT_TITLE_LENGTH
         ),
         statement=normalize_required_text(
             statement,
@@ -237,15 +214,9 @@ def create_requirement(
         ),
         kind=kind,
         priority=priority,
-        sources=canonical_requirement_sources(
-            sources,
-            require_items=True,
-        ),
+        sources=canonical_requirement_sources(sources, require_items=True),
         user_twin_references=(
-            canonical_user_twin_references(
-                user_twin_references,
-                require_items=False,
-            )
+            canonical_user_twin_references(user_twin_references, require_items=False)
         ),
         need_ids=canonical_uuid_tuple(need_ids, label="requirement need IDs", require_items=False),
     )
@@ -267,19 +238,13 @@ def create_user_story(
         code=code,
         user_twin_reference=user_twin_reference,
         goal=normalize_required_text(
-            goal,
-            label="user-story goal",
-            maximum_length=_MAX_USER_STORY_GOAL_LENGTH,
+            goal, label="user-story goal", maximum_length=_MAX_USER_STORY_GOAL_LENGTH
         ),
         benefit=normalize_required_text(
-            benefit,
-            label="user-story benefit",
-            maximum_length=_MAX_USER_STORY_BENEFIT_LENGTH,
+            benefit, label="user-story benefit", maximum_length=_MAX_USER_STORY_BENEFIT_LENGTH
         ),
         requirement_ids=canonical_uuid_tuple(
-            requirement_ids,
-            label="user-story requirement IDs",
-            require_items=True,
+            requirement_ids, label="user-story requirement IDs", require_items=True
         ),
         need_ids=canonical_uuid_tuple(need_ids, label="user-story need IDs", require_items=False),
     )

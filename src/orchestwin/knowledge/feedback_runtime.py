@@ -37,14 +37,8 @@ class SqlAlchemyKnowledgeFeedbackQueryService:
                 session, owner_user_id=owner_user_id
             ).list(project_id=project_id, limit=FEEDBACK_LIMIT)
         return knowledge_feedback(
-            runs=runs,
-            validations=validations,
-            discussions=discussions,
-            applications=applications,
+            runs=runs, validations=validations, discussions=discussions, applications=applications
         )
 
 
-__all__ = [
-    "FEEDBACK_LIMIT",
-    "SqlAlchemyKnowledgeFeedbackQueryService",
-]
+__all__ = ["FEEDBACK_LIMIT", "SqlAlchemyKnowledgeFeedbackQueryService"]

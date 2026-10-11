@@ -104,10 +104,7 @@ _UNIT_STANDINGS: Final[Mapping[TeamRoleConstraintKind, PerspectiveStanding]] = M
 
 
 _EDITABLE_STANDINGS: Final = frozenset(
-    {
-        PerspectiveStanding.OPTIONAL,
-        PerspectiveStanding.CONTESTED,
-    }
+    {PerspectiveStanding.OPTIONAL, PerspectiveStanding.CONTESTED}
 )
 
 
@@ -243,18 +240,11 @@ _ASPECT_CONSIDERATIONS: Final[Mapping[GuidanceStage, Mapping[PerspectiveAspect, 
 )
 
 
-def _evidence_snapshot(
-    evidence: RuleEvidence,
-) -> dict[str, object]:
-    return {
-        "fields": [field.value for field in evidence.fields],
-        "terms": list(evidence.terms),
-    }
+def _evidence_snapshot(evidence: RuleEvidence) -> dict[str, object]:
+    return {"fields": [field.value for field in evidence.fields], "terms": list(evidence.terms)}
 
 
-def _expected_editable(
-    standing: PerspectiveStanding,
-) -> bool:
+def _expected_editable(standing: PerspectiveStanding) -> bool:
     return standing in _EDITABLE_STANDINGS
 
 
@@ -278,9 +268,7 @@ class AspectView:
         if self.editable is not _expected_editable(self.standing):
             raise ValueError("an aspect view is editable only when optional or contested")
 
-    def to_snapshot(
-        self,
-    ) -> dict[str, object]:
+    def to_snapshot(self) -> dict[str, object]:
         return {
             "key": self.key.value,
             "agent_id": self.agent_id.value,
@@ -320,9 +308,7 @@ class PerspectiveView:
         if tuple(aspect.key for aspect in self.aspects) != expected_aspects:
             raise ValueError("only software engineering holds aspects, all four in order")
 
-    def to_snapshot(
-        self,
-    ) -> dict[str, object]:
+    def to_snapshot(self) -> dict[str, object]:
         return {
             "key": self.key.value,
             "standing": self.standing.value,
@@ -351,16 +337,12 @@ def _selected_agents(
     return frozenset(selected)
 
 
-def _perspective_applied(
-    perspective: Perspective,
-    selected: frozenset[AgentIdentifier],
-) -> bool:
+def _perspective_applied(perspective: Perspective, selected: frozenset[AgentIdentifier]) -> bool:
     return all(agent_id in selected for agent_id in PERSPECTIVE_AGENT_IDS[perspective])
 
 
 def _requested_evidence(
-    constraints: DeterministicTeamConstraints,
-    agent_ids: tuple[AgentIdentifier, ...],
+    constraints: DeterministicTeamConstraints, agent_ids: tuple[AgentIdentifier, ...]
 ) -> RuleEvidence:
     return merge_rule_evidence(
         reason.evidence
@@ -371,8 +353,7 @@ def _requested_evidence(
 
 
 def _excluded_evidence(
-    constraints: DeterministicTeamConstraints,
-    agent_ids: tuple[AgentIdentifier, ...],
+    constraints: DeterministicTeamConstraints, agent_ids: tuple[AgentIdentifier, ...]
 ) -> RuleEvidence:
     return merge_rule_evidence(
         reason.evidence
@@ -383,8 +364,7 @@ def _excluded_evidence(
 
 
 def _unit_standing(
-    constraints: DeterministicTeamConstraints,
-    agent_id: AgentIdentifier,
+    constraints: DeterministicTeamConstraints, agent_id: AgentIdentifier
 ) -> PerspectiveStanding:
     return _UNIT_STANDINGS[constraints.constraint_for(agent_id).kind]
 
@@ -438,8 +418,7 @@ def _perspective_view(
 
 
 def perspective_views(
-    constraints: DeterministicTeamConstraints,
-    selected_agent_ids: Iterable[AgentIdentifier | str],
+    constraints: DeterministicTeamConstraints, selected_agent_ids: Iterable[AgentIdentifier | str]
 ) -> tuple[PerspectiveView, ...]:
     selected = _selected_agents(selected_agent_ids)
 
@@ -449,8 +428,7 @@ def perspective_views(
 
 
 def perspective_guidance(
-    selected_agent_ids: Iterable[AgentIdentifier | str],
-    stage: GuidanceStage,
+    selected_agent_ids: Iterable[AgentIdentifier | str], stage: GuidanceStage
 ) -> list[dict[str, object]]:
     selected = _selected_agents(selected_agent_ids)
     perspective_considerations = _PERSPECTIVE_CONSIDERATIONS[GuidanceStage(stage)]
@@ -470,12 +448,7 @@ def perspective_guidance(
                 if ASPECT_AGENT_IDS[aspect] in selected
             )
 
-        guidance.append(
-            {
-                "perspective": perspective.value,
-                "considerations": considerations,
-            }
-        )
+        guidance.append({"perspective": perspective.value, "considerations": considerations})
 
     return guidance
 

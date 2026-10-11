@@ -285,8 +285,7 @@ class HostedProviderCheck:
 
     async def observe(self):
         observations = await asyncio.gather(
-            *(self.probe(configuration) for _, configuration in self.models),
-            return_exceptions=True,
+            *(self.probe(configuration) for _, configuration in self.models), return_exceptions=True
         )
         models = {}
         for (entry_id, configuration), value in zip(self.models, observations, strict=True):
@@ -366,9 +365,7 @@ class RealModelRuntime:
     async def spent_total_microusd(self, session_factory):
         if self.budget is None or session_factory is None:
             return None
-        from orchestwin.models.proposal_evidence_persistence import (
-            SqlAlchemyProposalEvidenceStore,
-        )
+        from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
 
         try:
             async with asyncio.timeout(DATABASE_READINESS_TIMEOUT_SECONDS):

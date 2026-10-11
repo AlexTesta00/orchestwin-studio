@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from orchestwin.agents.selection_rules import (
-    TeamRoleConstraintKind,
-)
+from orchestwin.agents.selection_rules import TeamRoleConstraintKind
 from orchestwin.models.team_proposals import (
     TEAM_PROPOSAL_SCHEMA_VERSION,
     AgentTeamProposal,
@@ -26,10 +24,7 @@ class FakeDeterministicTeamProposalAdapter:
     PROVIDER_ID: ClassVar[str] = "fake-deterministic-team-proposal"
     PROVIDER_VERSION: ClassVar[int] = 1
 
-    async def propose(
-        self,
-        request: TeamProposalRequest,
-    ) -> TeamProposalGenerationResult:
+    async def propose(self, request: TeamProposalRequest) -> TeamProposalGenerationResult:
         """Return a reproducible mandatory-only team proposal."""
         constraints = request.constraints
         members = tuple(

@@ -6,18 +6,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
-from pydantic_settings import (
-    BaseSettings,
-    SettingsConfigDict,
-)
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from orchestwin.models.fake_team_proposals import (
-    FakeDeterministicTeamProposalAdapter,
-)
+from orchestwin.models.fake_team_proposals import FakeDeterministicTeamProposalAdapter
 from orchestwin.models.proposal_generation import ProposalRuntimeConfigurationError
-from orchestwin.models.team_proposals import (
-    TeamProposalPort,
-)
+from orchestwin.models.team_proposals import TeamProposalPort
 
 TEAM_PROPOSAL_PROVIDER_ENVIRONMENT: Final = "ORCHESTWIN_TEAM_PROPOSAL_PROVIDER"
 TeamProposalRuntimeConfigurationError = ProposalRuntimeConfigurationError
@@ -47,16 +40,13 @@ class TeamProposalRuntimeSettings(BaseSettings):
 
 
 def load_team_proposal_runtime_settings(
-    *,
-    env_file: str | None = ".env",
+    *, env_file: str | None = ".env"
 ) -> TeamProposalRuntimeSettings:
     """Load the team-proposal runtime policy."""
     return TeamProposalRuntimeSettings(_env_file=env_file)
 
 
-def create_team_proposal_port(
-    settings: TeamProposalRuntimeSettings,
-) -> TeamProposalPort:
+def create_team_proposal_port(settings: TeamProposalRuntimeSettings) -> TeamProposalPort:
     """Create the configured provider-independent proposal adapter."""
     if settings.provider is TeamProposalRuntimeProvider.FAKE_DETERMINISTIC:
         return FakeDeterministicTeamProposalAdapter()

@@ -1135,8 +1135,7 @@ def _parse_sheet(text: str, names: frozenset[str] | None) -> StyleSheet:
             if declaration.name.startswith("--"):
                 if _CUSTOM_PROPERTY.fullmatch(declaration.name) is None:
                     raise _fail(
-                        "STYLES_CUSTOM_PROPERTY",
-                        f"custom property {detail_name(declaration.name)}",
+                        "STYLES_CUSTOM_PROPERTY", f"custom property {detail_name(declaration.name)}"
                     )
                 declared.add(declaration.name)
             elif _PROPERTY.fullmatch(declaration.name) is None:

@@ -85,11 +85,7 @@ class AcceptanceCriterion:
 
     def __post_init__(self) -> None:
         """Protect identity, normalized text, and traceable ownership."""
-        validate_display_code(
-            self.code,
-            prefix="AC",
-            label="acceptance-criterion code",
-        )
+        validate_display_code(self.code, prefix="AC", label="acceptance-criterion code")
 
         if (
             normalize_required_text(
@@ -102,16 +98,12 @@ class AcceptanceCriterion:
             raise ValueError("acceptance-criterion statement must be normalized")
 
         if self.requirement_ids != canonical_uuid_tuple(
-            self.requirement_ids,
-            label="acceptance-criterion requirement IDs",
-            require_items=False,
+            self.requirement_ids, label="acceptance-criterion requirement IDs", require_items=False
         ):
             raise ValueError("acceptance-criterion requirement IDs must use canonical order")
 
         if self.user_story_ids != canonical_uuid_tuple(
-            self.user_story_ids,
-            label="acceptance-criterion user-story IDs",
-            require_items=False,
+            self.user_story_ids, label="acceptance-criterion user-story IDs", require_items=False
         ):
             raise ValueError("acceptance-criterion user-story IDs must use canonical order")
 
@@ -156,37 +148,14 @@ class UsageScenario:
 
     def __post_init__(self) -> None:
         """Protect ordered behavior and traceable references."""
-        validate_display_code(
-            self.code,
-            prefix="SCN",
-            label="scenario code",
-        )
+        validate_display_code(self.code, prefix="SCN", label="scenario code")
 
         for value, label, maximum_length in (
-            (
-                self.title,
-                "scenario title",
-                _MAX_TITLE_LENGTH,
-            ),
-            (
-                self.trigger,
-                "scenario trigger",
-                _MAX_STATEMENT_LENGTH,
-            ),
-            (
-                self.expected_outcome,
-                "scenario expected outcome",
-                _MAX_STATEMENT_LENGTH,
-            ),
+            (self.title, "scenario title", _MAX_TITLE_LENGTH),
+            (self.trigger, "scenario trigger", _MAX_STATEMENT_LENGTH),
+            (self.expected_outcome, "scenario expected outcome", _MAX_STATEMENT_LENGTH),
         ):
-            if (
-                normalize_required_text(
-                    value,
-                    label=label,
-                    maximum_length=maximum_length,
-                )
-                != value
-            ):
+            if normalize_required_text(value, label=label, maximum_length=maximum_length) != value:
                 raise ValueError(f"{label} must be normalized")
 
         if self.preconditions != normalize_text_items(
@@ -208,9 +177,7 @@ class UsageScenario:
             raise ValueError("scenario steps must be normalized")
 
         if self.requirement_ids != canonical_uuid_tuple(
-            self.requirement_ids,
-            label="scenario requirement IDs",
-            require_items=True,
+            self.requirement_ids, label="scenario requirement IDs", require_items=True
         ):
             raise ValueError("scenario requirement IDs must use canonical order")
 
@@ -279,17 +246,11 @@ class ProjectRisk:
 
     def __post_init__(self) -> None:
         """Protect risk identity, grounding, and affected requirements."""
-        validate_display_code(
-            self.code,
-            prefix="RSK",
-            label="risk code",
-        )
+        validate_display_code(self.code, prefix="RSK", label="risk code")
 
         if (
             normalize_required_text(
-                self.summary,
-                label="risk summary",
-                maximum_length=_MAX_RISK_SUMMARY_LENGTH,
+                self.summary, label="risk summary", maximum_length=_MAX_RISK_SUMMARY_LENGTH
             )
             != self.summary
         ):
@@ -297,25 +258,18 @@ class ProjectRisk:
 
         if (
             normalize_required_text(
-                self.mitigation,
-                label="risk mitigation",
-                maximum_length=_MAX_RISK_MITIGATION_LENGTH,
+                self.mitigation, label="risk mitigation", maximum_length=_MAX_RISK_MITIGATION_LENGTH
             )
             != self.mitigation
         ):
             raise ValueError("risk mitigation must be normalized")
 
         if self.requirement_ids != canonical_uuid_tuple(
-            self.requirement_ids,
-            label="risk requirement IDs",
-            require_items=True,
+            self.requirement_ids, label="risk requirement IDs", require_items=True
         ):
             raise ValueError("risk requirement IDs must use canonical order")
 
-        if self.sources != canonical_requirement_sources(
-            self.sources,
-            require_items=True,
-        ):
+        if self.sources != canonical_requirement_sources(self.sources, require_items=True):
             raise ValueError("risk sources must use canonical order")
 
     def to_snapshot(self) -> dict[str, object]:
@@ -352,11 +306,7 @@ class DefinitionOfDoneItem:
 
     def __post_init__(self) -> None:
         """Protect completion semantics and conditional applicability."""
-        validate_display_code(
-            self.code,
-            prefix="DOD",
-            label="Definition of Done code",
-        )
+        validate_display_code(self.code, prefix="DOD", label="Definition of Done code")
 
         if (
             normalize_required_text(
@@ -390,9 +340,7 @@ class DefinitionOfDoneItem:
             raise ValueError("a conditional Definition of Done item requires a condition")
 
         if self.requirement_ids != canonical_uuid_tuple(
-            self.requirement_ids,
-            label="Definition of Done requirement IDs",
-            require_items=False,
+            self.requirement_ids, label="Definition of Done requirement IDs", require_items=False
         ):
             raise ValueError("Definition of Done requirement IDs must use canonical order")
 
@@ -428,20 +376,14 @@ def create_acceptance_criterion(
         id=criterion_id,
         code=code,
         statement=normalize_required_text(
-            statement,
-            label="acceptance-criterion statement",
-            maximum_length=_MAX_STATEMENT_LENGTH,
+            statement, label="acceptance-criterion statement", maximum_length=_MAX_STATEMENT_LENGTH
         ),
         verification_method=verification_method,
         requirement_ids=canonical_uuid_tuple(
-            requirement_ids,
-            label="acceptance-criterion requirement IDs",
-            require_items=False,
+            requirement_ids, label="acceptance-criterion requirement IDs", require_items=False
         ),
         user_story_ids=canonical_uuid_tuple(
-            user_story_ids,
-            label="acceptance-criterion user-story IDs",
-            require_items=False,
+            user_story_ids, label="acceptance-criterion user-story IDs", require_items=False
         ),
     )
 
@@ -468,9 +410,7 @@ def create_usage_scenario(
         id=scenario_id,
         code=code,
         title=normalize_required_text(
-            title,
-            label="scenario title",
-            maximum_length=_MAX_TITLE_LENGTH,
+            title, label="scenario title", maximum_length=_MAX_TITLE_LENGTH
         ),
         actor=actor,
         preconditions=normalize_text_items(
@@ -481,9 +421,7 @@ def create_usage_scenario(
             require_unique=False,
         ),
         trigger=normalize_required_text(
-            trigger,
-            label="scenario trigger",
-            maximum_length=_MAX_STATEMENT_LENGTH,
+            trigger, label="scenario trigger", maximum_length=_MAX_STATEMENT_LENGTH
         ),
         steps=normalize_text_items(
             steps,
@@ -498,14 +436,10 @@ def create_usage_scenario(
             maximum_length=_MAX_STATEMENT_LENGTH,
         ),
         requirement_ids=canonical_uuid_tuple(
-            requirement_ids,
-            label="scenario requirement IDs",
-            require_items=True,
+            requirement_ids, label="scenario requirement IDs", require_items=True
         ),
         acceptance_criterion_ids=canonical_uuid_tuple(
-            acceptance_criterion_ids,
-            label="scenario acceptance-criterion IDs",
-            require_items=True,
+            acceptance_criterion_ids, label="scenario acceptance-criterion IDs", require_items=True
         ),
         context=normalize_optional_text(context, label="scenario context", maximum_length=2000),
         goal=normalize_optional_text(goal, label="scenario goal", maximum_length=2000),
@@ -536,26 +470,17 @@ def create_project_risk(
         id=risk_id,
         code=code,
         summary=normalize_required_text(
-            summary,
-            label="risk summary",
-            maximum_length=_MAX_RISK_SUMMARY_LENGTH,
+            summary, label="risk summary", maximum_length=_MAX_RISK_SUMMARY_LENGTH
         ),
         likelihood=likelihood,
         impact=impact,
         mitigation=normalize_required_text(
-            mitigation,
-            label="risk mitigation",
-            maximum_length=_MAX_RISK_MITIGATION_LENGTH,
+            mitigation, label="risk mitigation", maximum_length=_MAX_RISK_MITIGATION_LENGTH
         ),
         requirement_ids=canonical_uuid_tuple(
-            requirement_ids,
-            label="risk requirement IDs",
-            require_items=True,
+            requirement_ids, label="risk requirement IDs", require_items=True
         ),
-        sources=canonical_requirement_sources(
-            sources,
-            require_items=True,
-        ),
+        sources=canonical_requirement_sources(sources, require_items=True),
         review_status=review_status,
     )
 
@@ -575,21 +500,15 @@ def create_definition_of_done_item(
         id=item_id,
         code=code,
         statement=normalize_required_text(
-            statement,
-            label="Definition of Done statement",
-            maximum_length=_MAX_STATEMENT_LENGTH,
+            statement, label="Definition of Done statement", maximum_length=_MAX_STATEMENT_LENGTH
         ),
         verification_method=verification_method,
         applicability=applicability,
         condition=normalize_optional_text(
-            condition,
-            label="Definition of Done condition",
-            maximum_length=_MAX_CONDITION_LENGTH,
+            condition, label="Definition of Done condition", maximum_length=_MAX_CONDITION_LENGTH
         ),
         requirement_ids=canonical_uuid_tuple(
-            requirement_ids,
-            label="Definition of Done requirement IDs",
-            require_items=False,
+            requirement_ids, label="Definition of Done requirement IDs", require_items=False
         ),
     )
 

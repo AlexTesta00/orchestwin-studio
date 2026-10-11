@@ -23,9 +23,7 @@ class DesignRuntimeSettings(BaseSettings):
     """Environment-backed design provider configuration."""
 
     model_config = SettingsConfigDict(
-        env_prefix="ORCHESTWIN_DESIGN_",
-        case_sensitive=False,
-        extra="forbid",
+        env_prefix="ORCHESTWIN_DESIGN_", case_sensitive=False, extra="forbid"
     )
 
     mode: DesignRuntimeMode = DesignRuntimeMode.FAKE_DETERMINISTIC
@@ -40,9 +38,7 @@ class DesignRuntime:
     proposal_port: DesignProposalPort
 
 
-def build_design_proposal_port(
-    settings: DesignRuntimeSettings,
-) -> DesignProposalPort:
+def build_design_proposal_port(settings: DesignRuntimeSettings) -> DesignProposalPort:
     """Build the configured design proposal provider."""
     if settings.mode is DesignRuntimeMode.MODEL_ADAPTER:
         from orchestwin.models.model_proposals import ModelDesignAdapter
@@ -56,16 +52,11 @@ def build_design_proposal_port(
     raise RuntimeError(f"unsupported design runtime mode: {settings.mode}")
 
 
-def build_design_runtime(
-    settings: DesignRuntimeSettings | None = None,
-) -> DesignRuntime:
+def build_design_runtime(settings: DesignRuntimeSettings | None = None) -> DesignRuntime:
     """Resolve design provider dependencies without mutable global state."""
     resolved = settings if settings is not None else DesignRuntimeSettings()
 
-    return DesignRuntime(
-        mode=resolved.mode,
-        proposal_port=build_design_proposal_port(resolved),
-    )
+    return DesignRuntime(mode=resolved.mode, proposal_port=build_design_proposal_port(resolved))
 
 
 __all__ = [

@@ -12,11 +12,7 @@ def parse_hex(value: str) -> tuple[float, float, float]:
     text = value.strip().lower()
     if len(text) != 7 or text[0] != "#" or any(ch not in _HEX_DIGITS for ch in text[1:]):
         raise ValueError(f"invalid hex colour: {value!r}")
-    return (
-        int(text[1:3], 16) / 255,
-        int(text[3:5], 16) / 255,
-        int(text[5:7], 16) / 255,
-    )
+    return (int(text[1:3], 16) / 255, int(text[3:5], 16) / 255, int(text[5:7], 16) / 255)
 
 
 def format_hex(rgb: tuple[float, float, float]) -> str:

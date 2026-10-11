@@ -90,14 +90,8 @@ class GovernedDesignContext:
         if self.catalog_version is None or self.catalog_content_hash is None:
             return
 
-        validate_positive_integer(
-            self.catalog_version,
-            label="governed design catalog version",
-        )
-        validate_sha256(
-            self.catalog_content_hash,
-            label="governed design catalog content hash",
-        )
+        validate_positive_integer(self.catalog_version, label="governed design catalog version")
+        validate_sha256(self.catalog_content_hash, label="governed design catalog content hash")
 
     @property
     def fingerprint(self) -> str:
@@ -148,10 +142,7 @@ class DesignGovernancePort(Protocol):
     """Owner-scoped boundary exposing current approved design inputs."""
 
     async def load_current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> GovernedDesignContext | None:
         """Load current Requirements, Team, User Modeling, and Gate 4."""
 
@@ -159,17 +150,10 @@ class DesignGovernancePort(Protocol):
 class DesignPackageRepository(Protocol):
     """Persistence boundary for immutable Design Package versions."""
 
-    async def current(
-        self,
-        *,
-        project_id: UUID,
-    ) -> DesignPackageVersion | None:
+    async def current(self, *, project_id: UUID) -> DesignPackageVersion | None:
         """Return the latest owner-scoped Design Package version."""
 
-    async def append(
-        self,
-        version: DesignPackageVersion,
-    ) -> DesignVersionAppendStatus:
+    async def append(self, version: DesignPackageVersion) -> DesignVersionAppendStatus:
         """Append one immutable Design Package version."""
 
 
@@ -199,11 +183,7 @@ class DesignGenerationUnitOfWork(Protocol):
 class DesignGenerationUnitOfWorkFactory(Protocol):
     """Create one owner-scoped design Unit of Work."""
 
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> DesignGenerationUnitOfWork:
+    def __call__(self, *, owner_user_id: UUID) -> DesignGenerationUnitOfWork:
         """Create one transactional boundary."""
 
 
@@ -240,33 +220,21 @@ class LocalDesignGenerationService:
         self._clock = clock if clock is not None else _utc_now
 
     @evidence_application
-    async def generate(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-    ) -> DesignGenerationResult:
+    async def generate(self, *, owner_user_id: UUID, project_id: UUID) -> DesignGenerationResult:
         """Generate the initial Design Package from exact approved inputs."""
         context = await self._governance.load_current(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
+            owner_user_id=owner_user_id, project_id=project_id
         )
         issue = _governance_issue(context)
 
         if issue is not None:
-            return DesignGenerationResult(
-                status=DesignGenerationStatus.REJECTED,
-                issue=issue,
-            )
+            return DesignGenerationResult(status=DesignGenerationStatus.REJECTED, issue=issue)
 
         if context is None:
             raise RuntimeError("ready design context cannot be None")
 
         if (
-            await self._current_version(
-                owner_user_id=owner_user_id,
-                project_id=project_id,
-            )
+            await self._current_version(owner_user_id=owner_user_id, project_id=project_id)
             is not None
         ):
             return DesignGenerationResult(
@@ -283,19 +251,14 @@ class LocalDesignGenerationService:
                 proposal_issue=proposal.issue,
             )
 
-        if proposal.package is None or not _proposal_matches_context(
-            proposal.package,
-            context,
-        ):
+        if proposal.package is None or not _proposal_matches_context(proposal.package, context):
             return DesignGenerationResult(
                 status=DesignGenerationStatus.REJECTED,
                 issue=DesignGenerationIssueCode.INVALID_PROPOSAL,
             )
 
         if not await self._context_is_unchanged(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
-            previous=context,
+            owner_user_id=owner_user_id, project_id=project_id, previous=context
         ):
             return DesignGenerationResult(
                 status=DesignGenerationStatus.REJECTED,
@@ -331,21 +294,12 @@ class LocalDesignGenerationService:
             await bind_model_artifacts(unit, "DESIGN", (version,))
             await unit.commit()
 
-        return DesignGenerationResult(
-            status=DesignGenerationStatus.CREATED,
-            version=version,
-        )
+        return DesignGenerationResult(status=DesignGenerationStatus.CREATED, version=version)
 
     @evidence_application
-    async def regenerate(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-    ) -> DesignGenerationResult:
+    async def regenerate(self, *, owner_user_id: UUID, project_id: UUID) -> DesignGenerationResult:
         context = await self._governance.load_current(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
+            owner_user_id=owner_user_id, project_id=project_id
         )
         issue = _governance_issue(context)
         if issue is not None:
@@ -413,26 +367,18 @@ class LocalDesignGenerationService:
         return DesignGenerationResult(status=DesignGenerationStatus.CREATED, version=version)
 
     async def _current_version(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> DesignPackageVersion | None:
         """Read current state without holding a provider-call transaction."""
         async with self._uow_factory(owner_user_id=owner_user_id) as unit:
             return await unit.packages.current(project_id=project_id)
 
     async def _context_is_unchanged(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        previous: GovernedDesignContext,
+        self, *, owner_user_id: UUID, project_id: UUID, previous: GovernedDesignContext
     ) -> bool:
         """Reject provider output when governed inputs changed in flight."""
         current = await self._governance.load_current(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
+            owner_user_id=owner_user_id, project_id=project_id
         )
 
         return (
@@ -442,9 +388,7 @@ class LocalDesignGenerationService:
         )
 
 
-def _governance_issue(
-    context: GovernedDesignContext | None,
-) -> DesignGenerationIssueCode | None:
+def _governance_issue(context: GovernedDesignContext | None) -> DesignGenerationIssueCode | None:
     """Return the first approval blocker for design generation."""
     if context is None:
         return DesignGenerationIssueCode.PROJECT_NOT_FOUND
@@ -473,10 +417,7 @@ def _governance_issue(
 
 
 def _gate_approves(
-    gate: HumanGate | None,
-    *,
-    project_id: UUID,
-    reference: VersionedArtifactReference | None,
+    gate: HumanGate | None, *, project_id: UUID, reference: VersionedArtifactReference | None
 ) -> bool:
     """Return whether Gate 4 approves the exact current Requirements version."""
     if gate is None or reference is None:
@@ -494,8 +435,7 @@ def _gate_approves(
 
 
 def _proposal_matches_context(
-    package: DesignExplorationPackage,
-    context: GovernedDesignContext,
+    package: DesignExplorationPackage, context: GovernedDesignContext
 ) -> bool:
     """Validate exact provider grounding and preserve owner authority."""
     if (

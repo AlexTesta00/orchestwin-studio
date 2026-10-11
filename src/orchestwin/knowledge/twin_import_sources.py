@@ -148,11 +148,7 @@ class SqlAlchemyTwinImportCandidateQuery:
         self._session_factory = session_factory
 
     async def list(
-        self,
-        *,
-        owner_user_id: UUID,
-        exclude_project_id: UUID,
-        limit: int = DEFAULT_CANDIDATE_LIMIT,
+        self, *, owner_user_id: UUID, exclude_project_id: UUID, limit: int = DEFAULT_CANDIDATE_LIMIT
     ) -> tuple[TwinImportCandidate, ...]:
         if limit < 1:
             raise ValueError("twin import candidate limit must be positive")
@@ -168,8 +164,4 @@ class SqlAlchemyTwinImportCandidateQuery:
         return tuple(_candidate(row, found) for row in rows)
 
 
-__all__ = [
-    "DEFAULT_CANDIDATE_LIMIT",
-    "SqlAlchemyTwinImportCandidateQuery",
-    "TwinImportCandidate",
-]
+__all__ = ["DEFAULT_CANDIDATE_LIMIT", "SqlAlchemyTwinImportCandidateQuery", "TwinImportCandidate"]

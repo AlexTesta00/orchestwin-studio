@@ -21,8 +21,7 @@ class UserModelingRealignment:
 
 
 def user_modeling_is_aligned(
-    snapshot_version: UserModelingSnapshotVersion,
-    context: GovernedUserModelingContext,
+    snapshot_version: UserModelingSnapshotVersion, context: GovernedUserModelingContext
 ) -> bool:
     snapshot = snapshot_version.snapshot
     return (
@@ -128,8 +127,4 @@ def realigned_user_modeling(
     )
 
 
-__all__ = [
-    "UserModelingRealignment",
-    "realigned_user_modeling",
-    "user_modeling_is_aligned",
-]
+__all__ = ["UserModelingRealignment", "realigned_user_modeling", "user_modeling_is_aligned"]

@@ -54,9 +54,7 @@ def reference(version):
 async def latest_gate(session, *, project_id, owner_user_id, gate_type):
     row = await session.scalar(
         latest_owned_gate_statement(
-            project_id=project_id,
-            owner_user_id=owner_user_id,
-            gate_type=gate_type,
+            project_id=project_id, owner_user_id=owner_user_id, gate_type=gate_type
         )
     )
     return None if row is None else gate_record_to_domain(row)
@@ -258,9 +256,7 @@ class SqlAlchemyWorkflowInputsService:
             await repository.append_prototype(prototype)
             gates = SqlAlchemyHumanGateRepository(session)
             gate = await gates.get_latest_owned_for_update(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                gate_type=HumanGateType.DESIGN,
+                project_id=project_id, owner_user_id=owner_user_id, gate_type=HumanGateType.DESIGN
             )
             if gate is not None:
                 result = mark_human_gate_stale(
@@ -346,9 +342,7 @@ class SqlAlchemyWorkflowInputsService:
                 raise WorkflowInputError("INVALID_TRANSITION")
             gates = SqlAlchemyHumanGateRepository(session)
             previous = await gates.get_latest_owned_for_update(
-                owner_user_id=owner_user_id,
-                project_id=project_id,
-                gate_type=HumanGateType.DESIGN,
+                owner_user_id=owner_user_id, project_id=project_id, gate_type=HumanGateType.DESIGN
             )
             artifact = prototype_artifact(prototype)
             if action is HumanGateAction.SUBMIT:

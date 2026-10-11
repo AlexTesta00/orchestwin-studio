@@ -21,10 +21,7 @@ class PasswordPolicyViolation(StrEnum):
 class PasswordPolicyError(ValueError):
     """Raised when a password violates the local policy."""
 
-    def __init__(
-        self,
-        violation: PasswordPolicyViolation,
-    ) -> None:
+    def __init__(self, violation: PasswordPolicyViolation) -> None:
         self.violation = violation
         super().__init__(violation.value)
 
@@ -63,10 +60,7 @@ class Argon2PasswordService:
     """Hash and verify passwords using pwdlib's recommended Argon2 profile."""
 
     def __init__(
-        self,
-        *,
-        policy: PasswordPolicy | None = None,
-        password_hash: PasswordHash | None = None,
+        self, *, policy: PasswordPolicy | None = None, password_hash: PasswordHash | None = None
     ) -> None:
         self._policy = policy or PasswordPolicy()
         self._password_hash = password_hash or PasswordHash.recommended()
@@ -76,21 +70,13 @@ class Argon2PasswordService:
         validated_password = self._policy.validate(password)
         return self._password_hash.hash(validated_password)
 
-    def verify(
-        self,
-        password: str,
-        encoded_hash: str,
-    ) -> PasswordVerification:
+    def verify(self, password: str, encoded_hash: str) -> PasswordVerification:
         """Verify a password without exposing hash-format failures."""
         try:
-            valid, replacement_hash = self._password_hash.verify_and_update(
-                password,
-                encoded_hash,
-            )
+            valid, replacement_hash = self._password_hash.verify_and_update(password, encoded_hash)
         except UnknownHashError:
             return PasswordVerification(valid=False)
 
         return PasswordVerification(
-            valid=valid,
-            replacement_hash=(replacement_hash if valid else None),
+            valid=valid, replacement_hash=(replacement_hash if valid else None)
         )

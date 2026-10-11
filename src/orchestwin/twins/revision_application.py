@@ -9,18 +9,10 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from orchestwin.twins.epistemics import (
-    ProfileObservation,
-)
-from orchestwin.twins.persistence.repositories import (
-    VersionAppendStatus,
-)
-from orchestwin.twins.persistence.uow import (
-    UserModelingUnitOfWork,
-)
-from orchestwin.twins.revision_persistence import (
-    DiffPersistenceStatus,
-)
+from orchestwin.twins.epistemics import ProfileObservation
+from orchestwin.twins.persistence.repositories import VersionAppendStatus
+from orchestwin.twins.persistence.uow import UserModelingUnitOfWork
+from orchestwin.twins.revision_persistence import DiffPersistenceStatus
 from orchestwin.twins.revisions import (
     ProfileDiffDecisionStatus,
     ProfileDiffProposalIssueCode,
@@ -70,11 +62,7 @@ class ProfileRevisionApplicationIssueCode(StrEnum):
 class UserModelingRevisionUowFactory(Protocol):
     """Create an owner-scoped User Modeling Unit of Work."""
 
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> UserModelingUnitOfWork:
+    def __call__(self, *, owner_user_id: UUID) -> UserModelingUnitOfWork:
         """Create one transactional boundary."""
 
 
@@ -118,10 +106,7 @@ class LocalUserTwinProfileRevisionService:
         owner_user_id: UUID,
         project_id: UUID,
         twin_id: UUID,
-        replacements: Mapping[
-            UserTwinField,
-            ProfileObservation,
-        ],
+        replacements: Mapping[UserTwinField, ProfileObservation],
     ) -> ProfileRevisionApplicationResult:
         """Persist one explicit diff against the current User Modeling snapshot."""
         async with self._uow_factory(owner_user_id=owner_user_id) as uow:
@@ -138,10 +123,7 @@ class LocalUserTwinProfileRevisionService:
                     issue=(ProfileRevisionApplicationIssueCode.SNAPSHOT_NOT_FOUND),
                 )
 
-            if not _snapshot_contains_twin(
-                current_snapshot,
-                twin_id,
-            ):
+            if not _snapshot_contains_twin(current_snapshot, twin_id):
                 return ProfileRevisionApplicationResult(
                     status=(ProfileRevisionApplicationStatus.REJECTED),
                     issue=(ProfileRevisionApplicationIssueCode.TWIN_NOT_FOUND),
@@ -196,8 +178,7 @@ class LocalUserTwinProfileRevisionService:
             await uow.commit()
 
         return ProfileRevisionApplicationResult(
-            status=(ProfileRevisionApplicationStatus.CREATED),
-            diff=proposal.diff,
+            status=(ProfileRevisionApplicationStatus.CREATED), diff=proposal.diff
         )
 
     async def decide_revision(
@@ -216,10 +197,7 @@ class LocalUserTwinProfileRevisionService:
                     status=ProfileRevisionApplicationStatus.REJECTED,
                     issue=ProfileRevisionApplicationIssueCode.DIFF_NOT_FOUND,
                 )
-            current_diff = await uow.diffs.get(
-                project_id=project_id,
-                diff_id=diff_id,
-            )
+            current_diff = await uow.diffs.get(project_id=project_id, diff_id=diff_id)
 
             if current_diff is None:
                 return ProfileRevisionApplicationResult(
@@ -247,8 +225,7 @@ class LocalUserTwinProfileRevisionService:
 
             if domain_decision.status is ProfileDiffDecisionStatus.NO_CHANGE:
                 return ProfileRevisionApplicationResult(
-                    status=(ProfileRevisionApplicationStatus.NO_CHANGE),
-                    diff=domain_decision.diff,
+                    status=(ProfileRevisionApplicationStatus.NO_CHANGE), diff=domain_decision.diff
                 )
 
             if domain_decision.status is ProfileDiffDecisionStatus.REJECTED:
@@ -294,8 +271,7 @@ class LocalUserTwinProfileRevisionService:
                 await uow.commit()
 
                 return ProfileRevisionApplicationResult(
-                    status=(ProfileRevisionApplicationStatus.APPLIED),
-                    diff=decided_diff,
+                    status=(ProfileRevisionApplicationStatus.APPLIED), diff=decided_diff
                 )
 
             revision = materialize_approved_user_twin_profile_diff(
@@ -346,17 +322,12 @@ class LocalUserTwinProfileRevisionService:
         )
 
 
-def _snapshot_contains_twin(
-    snapshot: UserModelingSnapshotVersion,
-    twin_id: UUID,
-) -> bool:
+def _snapshot_contains_twin(snapshot: UserModelingSnapshotVersion, twin_id: UUID) -> bool:
     """Return whether the authoritative snapshot contains the requested twin."""
     return any(version.twin_id == twin_id for version in snapshot.snapshot.twin_versions)
 
 
-def _aware(
-    value: datetime,
-) -> datetime:
+def _aware(value: datetime) -> datetime:
     """Require timezone-aware application timestamps."""
     if value.utcoffset() is None:
         raise ValueError("profile revision clock must return timezone-aware timestamps")

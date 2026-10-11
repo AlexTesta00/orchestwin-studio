@@ -107,8 +107,7 @@ def _search_zones(elements: Sequence[Mapping[str, object]]) -> list[tuple[str, t
 
 
 def layout_zones(
-    archetype: LayoutArchetype,
-    elements: Sequence[Mapping[str, object]],
+    archetype: LayoutArchetype, elements: Sequence[Mapping[str, object]]
 ) -> tuple[tuple[str, tuple[Mapping[str, object], ...]], ...]:
     if archetype is LayoutArchetype.KANBAN_BOARD:
         return tuple(_kanban_zones(elements))
@@ -127,10 +126,4 @@ def layout_zones(
     return tuple((name, tuple(buckets[name])) for name in ordered if buckets[name])
 
 
-__all__ = [
-    "COLUMN_ZONE",
-    "MAIN_ZONE",
-    "SEARCH_ZONE",
-    "ZONE_RULES",
-    "layout_zones",
-]
+__all__ = ["COLUMN_ZONE", "MAIN_ZONE", "SEARCH_ZONE", "ZONE_RULES", "layout_zones"]

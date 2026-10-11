@@ -56,9 +56,6 @@ class DatabaseSettings(BaseSettings):
         return make_url(self.url.get_secret_value())
 
 
-def load_database_settings(
-    *,
-    env_file: str | Path | None = ".env",
-) -> DatabaseSettings:
+def load_database_settings(*, env_file: str | Path | None = ".env") -> DatabaseSettings:
     """Load a fresh database-settings value from explicit sources."""
     return DatabaseSettings(_env_file=env_file)

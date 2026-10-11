@@ -229,14 +229,10 @@ def create_visual_language(
     return VisualLanguage(
         choices=choices,
         product_name=normalize_required_text(
-            product_name,
-            label="visual product name",
-            maximum_length=MAX_PRODUCT_NAME_LENGTH,
+            product_name, label="visual product name", maximum_length=MAX_PRODUCT_NAME_LENGTH
         ),
         rationale=normalize_required_text(
-            rationale,
-            label="visual rationale",
-            maximum_length=MAX_VISUAL_RATIONALE_LENGTH,
+            rationale, label="visual rationale", maximum_length=MAX_VISUAL_RATIONALE_LENGTH
         ),
         palette=tuple(colours.items()),
         tokens=tuple(tokens.items()),

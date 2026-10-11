@@ -40,9 +40,7 @@ class UserModelingUnitOfWork(Protocol):
 
     async def has_pending_revision(self, *, project_id: UUID) -> bool: ...
 
-    async def __aenter__(
-        self,
-    ) -> UserModelingUnitOfWork:
+    async def __aenter__(self) -> UserModelingUnitOfWork:
         """Enter the transactional boundary."""
 
     async def __aexit__(
@@ -63,38 +61,21 @@ class UserModelingUnitOfWork(Protocol):
 class SqlAlchemyUserModelingUnitOfWork:
     """SQLAlchemy transaction coordinator for User Modeling."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-        *,
-        owner_user_id: UUID,
-    ) -> None:
+    def __init__(self, session: AsyncSession, *, owner_user_id: UUID) -> None:
         """Create owner-scoped repositories over one shared session."""
         self._session = session
         self._owner_user_id = owner_user_id
         self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
         self._completed = False
 
-        self.personas = SqlAlchemyPersonaVersionRepository(
-            session,
-            owner_user_id=owner_user_id,
-        )
-        self.twins = SqlAlchemyUserTwinVersionRepository(
-            session,
-            owner_user_id=owner_user_id,
-        )
+        self.personas = SqlAlchemyPersonaVersionRepository(session, owner_user_id=owner_user_id)
+        self.twins = SqlAlchemyUserTwinVersionRepository(session, owner_user_id=owner_user_id)
         self.snapshots = SqlAlchemyUserModelingSnapshotRepository(
-            session,
-            owner_user_id=owner_user_id,
+            session, owner_user_id=owner_user_id
         )
-        self.diffs = SqlAlchemyUserTwinProfileDiffRepository(
-            session,
-            owner_user_id=owner_user_id,
-        )
+        self.diffs = SqlAlchemyUserTwinProfileDiffRepository(session, owner_user_id=owner_user_id)
 
-    async def __aenter__(
-        self,
-    ) -> SqlAlchemyUserModelingUnitOfWork:
+    async def __aenter__(self) -> SqlAlchemyUserModelingUnitOfWork:
         """Return this transactional boundary."""
         self._completed = False
         return self

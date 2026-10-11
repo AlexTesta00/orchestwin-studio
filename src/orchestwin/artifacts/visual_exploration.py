@@ -99,9 +99,7 @@ def visual_exploration(project_id: UUID) -> dict[str, dict[str, tuple[str, ...]]
 
 
 def require_explored_choices(
-    code: str,
-    choices: VisualChoices,
-    exploration: Mapping[str, Mapping[str, Sequence[str]]],
+    code: str, choices: VisualChoices, exploration: Mapping[str, Mapping[str, Sequence[str]]]
 ) -> None:
     for name, allowed in exploration.get(code, {}).items():
         value = getattr(choices, name).value

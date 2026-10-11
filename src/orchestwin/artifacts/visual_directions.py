@@ -568,8 +568,7 @@ def _bound_dimensions(direction: VisualDirection) -> dict[str, tuple[str, ...]]:
 
 
 def direction_exploration(
-    base: Mapping[str, Mapping[str, Sequence[str]]],
-    directions: Mapping[str, VisualDirection],
+    base: Mapping[str, Mapping[str, Sequence[str]]], directions: Mapping[str, VisualDirection]
 ) -> dict[str, dict[str, tuple[str, ...]]]:
     exploration: dict[str, dict[str, tuple[str, ...]]] = {}
     added = tuple(

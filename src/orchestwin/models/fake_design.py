@@ -137,11 +137,7 @@ _ALTERNATIVE_TEMPLATES: Final[tuple[_AlternativeTemplate, ...]] = (
             "Make task state and recovery points visible while reducing the amount of "
             "information presented at each step."
         ),
-        information_architecture=(
-            "Task entry",
-            "Guided steps",
-            "Review and confirmation",
-        ),
+        information_architecture=("Task entry", "Guided steps", "Review and confirmation"),
         accessibility_considerations=(
             "Preserve a logical heading hierarchy and visible focus through every step.",
             "Announce progress, validation, and completion without relying on color alone.",
@@ -317,10 +313,7 @@ _ALTERNATIVE_TEMPLATES: Final[tuple[_AlternativeTemplate, ...]] = (
 class FakeDeterministicDesignAdapter:
     """Conservative local provider with no network or credential dependency."""
 
-    async def propose(
-        self,
-        request: DesignProposalRequest,
-    ) -> DesignProposalResult:
+    async def propose(self, request: DesignProposalRequest) -> DesignProposalResult:
         """Produce deterministic alternatives and synthetic User Twin critiques."""
         if AgentIdentifier.UX_UI_DESIGNER not in request.team.selected_agent_ids:
             return _rejected(DesignProposalIssueCode.UX_DESIGNER_REQUIRED)
@@ -414,8 +407,7 @@ def _build_package(request: DesignProposalRequest) -> DesignExplorationPackage:
             requirement_ids=requirement_ids,
         )
         for ordinal, (template, alternative) in enumerate(
-            zip(_ALTERNATIVE_TEMPLATES, alternatives, strict=True),
-            start=1,
+            zip(_ALTERNATIVE_TEMPLATES, alternatives, strict=True), start=1
         )
     )
 
@@ -445,26 +437,16 @@ def _build_alternative(
     twin_references: tuple[UserTwinVersionReference, ...],
 ) -> DesignAlternative:
     """Create one traceable alternative from a distinct interaction strategy."""
-    primary_goal = _bounded_fragment(
-        stories[0].goal,
-        maximum_length=_MAX_TITLE_FRAGMENT_LENGTH,
-    )
+    primary_goal = _bounded_fragment(stories[0].goal, maximum_length=_MAX_TITLE_FRAGMENT_LENGTH)
     workflows = tuple(
         _build_workflow(
-            request_hash=request_hash,
-            template=template,
-            story=story,
-            ordinal=story_ordinal,
+            request_hash=request_hash, template=template, story=story, ordinal=story_ordinal
         )
         for story_ordinal, story in enumerate(stories, start=1)
     )
 
     return create_design_alternative(
-        alternative_id=_artifact_id(
-            request_hash,
-            "alternative",
-            template.approach.value,
-        ),
+        alternative_id=_artifact_id(request_hash, "alternative", template.approach.value),
         code=f"DES-{ordinal:03d}",
         approach=template.approach,
         title=f"{template.title_prefix}: {primary_goal}",
@@ -501,24 +483,13 @@ def _build_alternative(
 
 
 def _build_workflow(
-    *,
-    request_hash: str,
-    template: _AlternativeTemplate,
-    story: UserStory,
-    ordinal: int,
+    *, request_hash: str, template: _AlternativeTemplate, story: UserStory, ordinal: int
 ) -> DesignWorkflow:
     """Create one approach-specific workflow for an approved user story."""
-    goal = _bounded_fragment(
-        story.goal,
-        maximum_length=_MAX_TITLE_FRAGMENT_LENGTH,
-    )
+    goal = _bounded_fragment(story.goal, maximum_length=_MAX_TITLE_FRAGMENT_LENGTH)
 
     return create_design_workflow(
-        workflow_id=_artifact_id(
-            request_hash,
-            "workflow",
-            f"{template.approach.value}:{story.id}",
-        ),
+        workflow_id=_artifact_id(request_hash, "workflow", f"{template.approach.value}:{story.id}"),
         code=f"FLOW-{ordinal:03d}",
         title=f"{template.title_prefix}: {goal}",
         steps=_workflow_steps(template.approach, story),
@@ -527,10 +498,7 @@ def _build_workflow(
     )
 
 
-def _workflow_steps(
-    approach: DesignApproach,
-    story: UserStory,
-) -> tuple[str, ...]:
+def _workflow_steps(approach: DesignApproach, story: UserStory) -> tuple[str, ...]:
     """Return visibly different task sequencing for each design approach."""
     if approach is DesignApproach.GUIDED_WORKFLOW:
         return (
@@ -599,9 +567,7 @@ def _build_critique(
         ),
         suggested_changes=(template.concern_mitigation,),
         provenance=_critique_provenance(
-            request=request,
-            twin=twin,
-            alternative_code=alternative.code,
+            request=request, twin=twin, alternative_code=alternative.code
         ),
         confidence=ConfidenceScore(0.6),
         rationale=(
@@ -619,11 +585,7 @@ def _unmet_needs(twin: DesignUserTwinInput) -> tuple[str, ...]:
             f"{observation.observation_key}."
         )
         for observation in twin.observations
-        if observation.value.kind
-        in {
-            ObservationValueKind.UNKNOWN,
-            ObservationValueKind.ABSTAINED,
-        }
+        if observation.value.kind in {ObservationValueKind.UNKNOWN, ObservationValueKind.ABSTAINED}
     )
 
 
@@ -636,17 +598,11 @@ def _twin_context(twin: DesignUserTwinInput) -> str:
     else:
         content = observation.value.items[0]
 
-    return _bounded_fragment(
-        content,
-        maximum_length=_MAX_CRITIQUE_CONTEXT_LENGTH,
-    )
+    return _bounded_fragment(content, maximum_length=_MAX_CRITIQUE_CONTEXT_LENGTH)
 
 
 def _critique_provenance(
-    *,
-    request: DesignProposalRequest,
-    twin: DesignUserTwinInput,
-    alternative_code: str,
+    *, request: DesignProposalRequest, twin: DesignUserTwinInput, alternative_code: str
 ) -> ObservationProvenance:
     """Preserve User Twin evidence and add explicit fake-provider provenance."""
     references: list[EvidenceReference] = []
@@ -699,11 +655,7 @@ def _build_concern(
 ) -> DesignConcern:
     """Create one explicit review concern for each design direction."""
     return create_design_concern(
-        concern_id=_artifact_id(
-            request_hash,
-            "concern",
-            template.approach.value,
-        ),
+        concern_id=_artifact_id(request_hash, "concern", template.approach.value),
         code=f"DRK-{ordinal:03d}",
         summary=template.concern_summary,
         mitigation=template.concern_mitigation,
@@ -712,11 +664,7 @@ def _build_concern(
     )
 
 
-def _bounded_fragment(
-    value: str,
-    *,
-    maximum_length: int,
-) -> str:
+def _bounded_fragment(value: str, *, maximum_length: int) -> str:
     """Keep supplied normalized text safe for bounded generated fields."""
     if len(value) <= maximum_length:
         return value
@@ -724,16 +672,9 @@ def _bounded_fragment(
     return f"{value[: maximum_length - 3].rstrip()}..."
 
 
-def _artifact_id(
-    request_hash: str,
-    artifact_kind: str,
-    identity: str,
-) -> UUID:
+def _artifact_id(request_hash: str, artifact_kind: str, identity: str) -> UUID:
     """Derive a stable UUID from exact request content and logical identity."""
-    return uuid5(
-        _FAKE_DESIGN_NAMESPACE,
-        f"{request_hash}:{artifact_kind}:{identity}",
-    )
+    return uuid5(_FAKE_DESIGN_NAMESPACE, f"{request_hash}:{artifact_kind}:{identity}")
 
 
 def _rejected(issue: DesignProposalIssueCode) -> DesignProposalResult:

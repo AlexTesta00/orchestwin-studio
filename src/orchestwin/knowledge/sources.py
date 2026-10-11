@@ -157,9 +157,7 @@ def _same(
 
 
 def stage_consistency_issue(
-    project_id: UUID,
-    versions: Mapping[str, object],
-    payloads: Mapping[str, Mapping[str, object]],
+    project_id: UUID, versions: Mapping[str, object], payloads: Mapping[str, Mapping[str, object]]
 ) -> str | None:
     if any(version.project_id != project_id for version in versions.values()):
         return "PROJECT_MISMATCH"
