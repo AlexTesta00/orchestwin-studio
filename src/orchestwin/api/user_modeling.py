@@ -12,7 +12,6 @@ from uuid import UUID
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Request,
     status,
 )
@@ -25,6 +24,7 @@ from pydantic import (
 
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
+from orchestwin.api.refusals import refusal
 from orchestwin.twins.application import (
     GroundedSnapshotGenerationResult,
     PersonaDecisionApplicationResult,
@@ -1096,17 +1096,11 @@ def create_user_modeling_router(
         owner_user_id: UUID = owner_user_id_dependency,
     ) -> SnapshotGenerationCommandPayload:
         if dependencies.owner_inputs is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"code": "OWNER_USER_MODELING_UNAVAILABLE"},
-            )
+            raise refusal(503, "OWNER_USER_MODELING_UNAVAILABLE")
         try:
             profiles = tuple(profile.to_domain() for profile in payload.profiles)
         except (TypeError, ValueError) as error:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail={"code": "INVALID_OWNER_USER_PROFILES"},
-            ) from error
+            raise refusal(422, "INVALID_OWNER_USER_PROFILES") from error
         result = await dependencies.owner_inputs.create(
             owner_user_id=owner_user_id, project_id=project_id, profiles=profiles
         )
@@ -1220,10 +1214,7 @@ def create_user_modeling_router(
         )
 
         if version is None:
-            raise HTTPException(
-                status_code=(status.HTTP_404_NOT_FOUND),
-                detail={"code": ("USER_MODELING_SNAPSHOT_NOT_FOUND")},
-            )
+            raise refusal(404, "USER_MODELING_SNAPSHOT_NOT_FOUND")
 
         return UserModelingSnapshotVersionPayload.from_domain(version)
 
@@ -1263,13 +1254,7 @@ def create_user_modeling_router(
         try:
             replacements = request.to_domain()
         except ValueError as error:
-            raise HTTPException(
-                status_code=(status.HTTP_422_UNPROCESSABLE_CONTENT),
-                detail={
-                    "code": ("INVALID_PROFILE_REPLACEMENT"),
-                    "message": str(error),
-                },
-            ) from error
+            raise refusal(422, "INVALID_PROFILE_REPLACEMENT", message=str(error)) from error
 
         result = await dependencies.revisions.propose_revision(
             owner_user_id=(owner_user_id),
@@ -1322,10 +1307,7 @@ def create_user_modeling_router(
         )
 
         if diff is None:
-            raise HTTPException(
-                status_code=(status.HTTP_404_NOT_FOUND),
-                detail={"code": ("PROFILE_DIFF_NOT_FOUND")},
-            )
+            raise refusal(404, "PROFILE_DIFF_NOT_FOUND")
 
         return UserTwinProfileDiffPayload.from_domain(diff)
 
@@ -1383,10 +1365,7 @@ def create_user_modeling_router(
         )
 
         if gate is None:
-            raise HTTPException(
-                status_code=(status.HTTP_404_NOT_FOUND),
-                detail={"code": ("USER_MODELING_GATE_NOT_FOUND")},
-            )
+            raise refusal(404, "USER_MODELING_GATE_NOT_FOUND")
 
         return HumanGatePayload.from_domain(gate)
 
@@ -1617,50 +1596,32 @@ def _readiness_payload(
     )
 
 
-def _raise_for_user_modeling_issue(
-    issue: (UserModelingApplicationIssueCode | None),
-) -> None:
+def _raise_for_user_modeling_issue(issue: UserModelingApplicationIssueCode | None) -> None:
     """Translate expected C09 failures to HTTP semantics."""
     if issue is None:
         return
 
     not_found = {
-        (UserModelingApplicationIssueCode.PROJECT_NOT_FOUND),
-        (UserModelingApplicationIssueCode.PERSONA_NOT_FOUND),
+        UserModelingApplicationIssueCode.PROJECT_NOT_FOUND,
+        UserModelingApplicationIssueCode.PERSONA_NOT_FOUND,
     }
-
-    raise HTTPException(
-        status_code=(status.HTTP_404_NOT_FOUND if issue in not_found else status.HTTP_409_CONFLICT),
-        detail={
-            "code": issue.value,
-        },
-    )
+    raise refusal(404 if issue in not_found else 409, issue.value)
 
 
-def _raise_for_revision_issue(
-    issue: (ProfileRevisionApplicationIssueCode | None),
-) -> None:
+def _raise_for_revision_issue(issue: ProfileRevisionApplicationIssueCode | None) -> None:
     """Translate expected C10 failures to HTTP semantics."""
     if issue is None:
         return
 
     not_found = {
-        (ProfileRevisionApplicationIssueCode.SNAPSHOT_NOT_FOUND),
-        (ProfileRevisionApplicationIssueCode.TWIN_NOT_FOUND),
-        (ProfileRevisionApplicationIssueCode.DIFF_NOT_FOUND),
+        ProfileRevisionApplicationIssueCode.SNAPSHOT_NOT_FOUND,
+        ProfileRevisionApplicationIssueCode.TWIN_NOT_FOUND,
+        ProfileRevisionApplicationIssueCode.DIFF_NOT_FOUND,
     }
-
-    raise HTTPException(
-        status_code=(status.HTTP_404_NOT_FOUND if issue in not_found else status.HTTP_409_CONFLICT),
-        detail={
-            "code": issue.value,
-        },
-    )
+    raise refusal(404 if issue in not_found else 409, issue.value)
 
 
-def _raise_for_gate_outcome(
-    result: GateApiResult,
-) -> None:
+def _raise_for_gate_outcome(result: GateApiResult) -> None:
     """Translate normalized Gate 3 failures."""
     if result.outcome in {
         GateApiOutcome.APPLIED,
@@ -1668,13 +1629,9 @@ def _raise_for_gate_outcome(
     }:
         return
 
-    raise HTTPException(
-        status_code=(
-            status.HTTP_404_NOT_FOUND
-            if result.outcome is GateApiOutcome.NOT_FOUND
-            else status.HTTP_409_CONFLICT
-        ),
-        detail={"code": (result.issue or result.outcome.value)},
+    raise refusal(
+        404 if result.outcome is GateApiOutcome.NOT_FOUND else 409,
+        result.issue or result.outcome.value,
     )
 
 

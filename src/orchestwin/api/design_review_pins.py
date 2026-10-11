@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from typing import Annotated, Final, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.runtime_access import database_sessions
 from orchestwin.artifacts.design_evaluation import (
     DesignEvaluationRun,
     finding_anchor_key,
@@ -29,7 +30,6 @@ from orchestwin.artifacts.generated_mockup_document import MockupPin, mockup_doc
 from orchestwin.artifacts.generated_mockup_styles import FORBIDDEN_CHARACTERS
 from orchestwin.artifacts.prototypes import PrototypeScreenState
 from orchestwin.evaluation.findings import SyntheticFinding
-from orchestwin.identity.domain import UserAccount
 
 DESIGN_REVIEW_PINS_API_PREFIX: Final = "/projects/{project_id}/design/evaluations"
 REVIEW_DOCUMENT_SOURCE: Final = "review"
@@ -247,14 +247,8 @@ class DesignReviewPinsApplication:
     def __init__(self, runtime):
         self.runtime = runtime
 
-    def _sessions(self):
-        database = getattr(self.runtime, "database_runtime", None)
-        if database is None:
-            raise HTTPException(503, detail={"code": "DATABASE_UNAVAILABLE"})
-        return database.session_factory
-
     async def _review(self, owner_user_id, project_id, run_id):
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             run = await SqlAlchemyDesignEvaluationRepository(
                 session, owner_user_id=owner_user_id
@@ -320,7 +314,7 @@ def create_design_review_pins_router():
         project_id: UUID,
         run_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         result = await DesignReviewPinsApplication(request.app.state.application_runtime).pins(
             owner_user_id=user.id, project_id=project_id, run_id=run_id
@@ -332,7 +326,7 @@ def create_design_review_pins_router():
         project_id: UUID,
         run_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         entry_screen: Annotated[str | None, Query(pattern=ENTRY_SCREEN_PATTERN)] = None,
     ):
         result = await DesignReviewPinsApplication(request.app.state.application_runtime).document(

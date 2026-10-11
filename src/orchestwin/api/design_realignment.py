@@ -3,12 +3,13 @@ from __future__ import annotations
 from typing import Annotated, Final
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
+from orchestwin.api.refusals import refusal
 from orchestwin.artifacts.design_realignment import DesignRealignmentIssue
-from orchestwin.identity.domain import UserAccount
 from orchestwin.projects.design_realignment_service import (
     DESIGN_NOT_FOUND,
     DesignAlignment,
@@ -18,7 +19,6 @@ from orchestwin.projects.design_realignment_service import (
 )
 
 DESIGN_REALIGNMENT_API_PREFIX: Final = "/projects/{project_id}/design/requirements-alignment"
-_NOT_FOUND_CODES: Final = frozenset({DESIGN_NOT_FOUND})
 _MISSING_CODES_ISSUE: Final = DesignRealignmentIssue.REQUIREMENT_NO_LONGER_AVAILABLE.value
 
 
@@ -71,26 +71,16 @@ class DesignRealignmentPayload(ApiModel):
         )
 
 
-def design_realignment_service_dependency(request: Request) -> DesignRealignmentService:
-    service = getattr(request.app.state, "design_realignment_service", None)
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "DESIGN_REALIGNMENT_SERVICE_UNAVAILABLE"},
-        )
-
-    return service
+design_realignment_service_dependency = app_service(
+    "design_realignment_service", {"code": "DESIGN_REALIGNMENT_SERVICE_UNAVAILABLE"}
+)
 
 
 def design_realignment_failure(error: DesignRealignmentFailure) -> HTTPException:
-    status_code = (
-        status.HTTP_404_NOT_FOUND if error.code in _NOT_FOUND_CODES else status.HTTP_409_CONFLICT
-    )
-    detail: dict[str, object] = {"code": error.code}
+    status_code = 404 if error.code == DESIGN_NOT_FOUND else 409
     if error.code == _MISSING_CODES_ISSUE:
-        detail["missing_codes"] = list(error.missing_codes)
-    return HTTPException(status_code=status_code, detail=detail)
+        return refusal(status_code, error.code, missing_codes=list(error.missing_codes))
+    return refusal(status_code, error.code)
 
 
 def create_design_realignment_router() -> APIRouter:
@@ -103,7 +93,7 @@ def create_design_realignment_router() -> APIRouter:
     )
     async def alignment_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignRealignmentService,
             Depends(design_realignment_service_dependency),
@@ -120,7 +110,7 @@ def create_design_realignment_router() -> APIRouter:
     )
     async def realign_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignRealignmentService,
             Depends(design_realignment_service_dependency),

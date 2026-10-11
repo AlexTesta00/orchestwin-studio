@@ -3,10 +3,9 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
 
 
 def _store(request: Request):
@@ -25,7 +24,7 @@ def create_proposal_evidence_router() -> APIRouter:
     async def generations(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
         before: UUID | None = None,
     ):
@@ -44,7 +43,7 @@ def create_proposal_evidence_router() -> APIRouter:
         project_id: UUID,
         generation_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         record = await _store(request).get_owned(
             owner_user_id=user.id,

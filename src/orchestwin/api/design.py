@@ -6,14 +6,21 @@ from datetime import datetime
 from typing import Annotated, Final, Literal, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.api.clarification import HumanGateEventResponse, HumanGateResponse
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.clarification import (
+    HumanGateEventResponse,
+    HumanGateResponse,
+    gate_event_response,
+    gate_response,
+)
+from orchestwin.api.dependencies import app_service
 from orchestwin.api.design_context import require_current_design_context
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
+from orchestwin.api.refusals import conflict, refusal
 from orchestwin.artifacts.design import (
     DesignApproach,
     DesignCritiqueKind,
@@ -83,7 +90,6 @@ from orchestwin.artifacts.visual_directions import (
     DirectionShape,
     DirectionType,
 )
-from orchestwin.identity.domain import UserAccount
 from orchestwin.knowledge.state import MAX_DESIGN_REQUEST_LENGTH
 from orchestwin.models.design import DesignProposalIssueCode
 from orchestwin.models.design_change import (
@@ -671,7 +677,7 @@ class DesignGateSubmissionPayload(ApiModel):
         """Map one Gate 5 submission result."""
         return cls(
             status=result.status,
-            gate=_gate_response(result.gate),
+            gate=gate_response(result.gate),
             events=tuple(HumanGateEventResponse.from_domain(event) for event in result.events),
             issue=result.issue,
         )
@@ -693,8 +699,8 @@ class DesignGateDecisionPayload(ApiModel):
         """Map one Gate 5 decision result."""
         return cls(
             status=result.status,
-            gate=_gate_response(result.gate),
-            event=_event_response(result.event),
+            gate=gate_response(result.gate),
+            event=gate_event_response(result.event),
             issue=result.issue,
         )
 
@@ -729,7 +735,7 @@ class DesignReadinessPayload(ApiModel):
         return cls(
             status=result.status,
             version=(None if version is None else DesignPackageVersionPayload.from_domain(version)),
-            gate=_gate_response(gate),
+            gate=gate_response(gate),
             has_package=version is not None,
             package_ready_for_gate=(version is not None and version.package.ready_for_gate),
             approved_current_package=approved,
@@ -876,76 +882,21 @@ class DesignGateService(Protocol):
         """Return Gate 5 event history."""
 
 
-def _state_service[Service](
-    request: Request,
-    *,
-    attribute: str,
-    unavailable_detail: str,
-) -> Service:
-    """Read one explicitly configured application service."""
-    service = getattr(request.app.state, attribute, None)
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=unavailable_detail,
-        )
-
-    return service
-
-
-def design_generation_service_dependency(
-    request: Request,
-) -> DesignGenerationService:
-    """Return the configured design generation service."""
-    return _state_service(
-        request,
-        attribute="design_generation_service",
-        unavailable_detail="design_generation_service_unavailable",
-    )
-
-
-def design_revision_service_dependency(
-    request: Request,
-) -> DesignRevisionService:
-    """Return the configured design revision service."""
-    return _state_service(
-        request,
-        attribute="design_revision_service",
-        unavailable_detail="design_revision_service_unavailable",
-    )
-
-
-def design_change_service_dependency(
-    request: Request,
-) -> DesignChangeService:
-    return _state_service(
-        request,
-        attribute="design_change_service",
-        unavailable_detail="design_change_service_unavailable",
-    )
-
-
-def design_query_service_dependency(
-    request: Request,
-) -> DesignQueryService:
-    """Return the configured design query service."""
-    return _state_service(
-        request,
-        attribute="design_query_service",
-        unavailable_detail="design_query_service_unavailable",
-    )
-
-
-def design_gate_service_dependency(
-    request: Request,
-) -> DesignGateService:
-    """Return the configured Design Gate 5 service."""
-    return _state_service(
-        request,
-        attribute="design_gate_service",
-        unavailable_detail="design_gate_service_unavailable",
-    )
+design_generation_service_dependency = app_service(
+    "design_generation_service", "design_generation_service_unavailable"
+)
+design_revision_service_dependency = app_service(
+    "design_revision_service", "design_revision_service_unavailable"
+)
+design_change_service_dependency = app_service(
+    "design_change_service", "design_change_service_unavailable"
+)
+design_query_service_dependency = app_service(
+    "design_query_service", "design_query_service_unavailable"
+)
+design_gate_service_dependency = app_service(
+    "design_gate_service", "design_gate_service_unavailable"
+)
 
 
 def create_design_router() -> APIRouter:
@@ -961,7 +912,7 @@ def create_design_router() -> APIRouter:
     async def generate_design_endpoint(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignGenerationService,
             Depends(design_generation_service_dependency),
@@ -991,7 +942,7 @@ def create_design_router() -> APIRouter:
     )
     async def current_design_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignQueryService,
             Depends(design_query_service_dependency),
@@ -1003,7 +954,7 @@ def create_design_router() -> APIRouter:
         )
 
         if version is None:
-            raise _not_found("DESIGN_PACKAGE_NOT_FOUND")
+            raise refusal(404, "DESIGN_PACKAGE_NOT_FOUND")
 
         return DesignPackageVersionPayload.from_domain(version)
 
@@ -1014,7 +965,7 @@ def create_design_router() -> APIRouter:
     )
     async def design_history_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignQueryService,
             Depends(design_query_service_dependency),
@@ -1037,19 +988,19 @@ def create_design_router() -> APIRouter:
         project_id: UUID,
         payload: DesignRevisionRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignRevisionService,
             Depends(design_revision_service_dependency),
         ],
     ) -> DesignRevisionPayload:
         if payload.package.project_id != project_id:
-            raise _unprocessable("DESIGN_PROJECT_MISMATCH")
+            raise refusal(422, "DESIGN_PROJECT_MISMATCH")
 
         try:
             proposed = payload.package.to_domain()
         except (TypeError, ValueError) as error:
-            raise _unprocessable("INVALID_DESIGN_PACKAGE") from error
+            raise refusal(422, "INVALID_DESIGN_PACKAGE") from error
 
         await require_current_design_context(
             getattr(request.app.state, "application_runtime", None),
@@ -1075,7 +1026,7 @@ def create_design_router() -> APIRouter:
         project_id: UUID,
         payload: DesignChangeRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ) -> DesignChangePayload:
         service = design_change_service_dependency(request)
 
@@ -1105,7 +1056,7 @@ def create_design_router() -> APIRouter:
     )
     async def revision_history_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignQueryService,
             Depends(design_query_service_dependency),
@@ -1126,7 +1077,7 @@ def create_design_router() -> APIRouter:
     async def get_revision_endpoint(
         project_id: UUID,
         diff_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignQueryService,
             Depends(design_query_service_dependency),
@@ -1139,7 +1090,7 @@ def create_design_router() -> APIRouter:
         )
 
         if diff is None:
-            raise _not_found("DESIGN_DIFF_NOT_FOUND")
+            raise refusal(404, "DESIGN_DIFF_NOT_FOUND")
 
         return DesignPackageDiffPayload.from_domain(diff)
 
@@ -1153,7 +1104,7 @@ def create_design_router() -> APIRouter:
         diff_id: UUID,
         payload: DesignRevisionDecisionRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignRevisionService,
             Depends(design_revision_service_dependency),
@@ -1186,7 +1137,7 @@ def create_design_router() -> APIRouter:
         project_id: UUID,
         payload: DesignRestoreRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ) -> DesignRestorePayload:
         service = design_revision_service_dependency(request)
         await require_current_design_context(
@@ -1204,8 +1155,8 @@ def create_design_router() -> APIRouter:
             )
         except DesignRestoreFailure as error:
             if error.code == DESIGN_VERSION_NOT_FOUND:
-                raise _not_found(error.code) from error
-            raise _conflict(error.code) from error
+                raise refusal(404, error.code) from error
+            raise conflict(error.code) from error
         _raise_revision_failure(result)
 
         return DesignRestorePayload(
@@ -1222,7 +1173,7 @@ def create_design_router() -> APIRouter:
     )
     async def submit_gate_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignGateService,
             Depends(design_gate_service_dependency),
@@ -1244,7 +1195,7 @@ def create_design_router() -> APIRouter:
     async def decide_gate_endpoint(
         project_id: UUID,
         payload: DesignGateDecisionRequest,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignGateService,
             Depends(design_gate_service_dependency),
@@ -1267,7 +1218,7 @@ def create_design_router() -> APIRouter:
     )
     async def current_gate_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignGateService,
             Depends(design_gate_service_dependency),
@@ -1279,7 +1230,7 @@ def create_design_router() -> APIRouter:
         )
 
         if gate is None:
-            raise _not_found("DESIGN_GATE_NOT_FOUND")
+            raise refusal(404, "DESIGN_GATE_NOT_FOUND")
 
         return HumanGateResponse.from_domain(gate)
 
@@ -1290,7 +1241,7 @@ def create_design_router() -> APIRouter:
     )
     async def gate_events_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignGateService,
             Depends(design_gate_service_dependency),
@@ -1302,7 +1253,7 @@ def create_design_router() -> APIRouter:
         )
 
         if gate is None:
-            raise _not_found("DESIGN_GATE_NOT_FOUND")
+            raise refusal(404, "DESIGN_GATE_NOT_FOUND")
 
         events = await service.gate_events(
             project_id=project_id,
@@ -1319,7 +1270,7 @@ def create_design_router() -> APIRouter:
     )
     async def readiness_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             DesignGateService,
             Depends(design_gate_service_dependency),
@@ -1335,27 +1286,15 @@ def create_design_router() -> APIRouter:
     return router
 
 
-def _gate_response(gate: HumanGate | None) -> HumanGateResponse | None:
-    """Map an optional human gate."""
-    return None if gate is None else HumanGateResponse.from_domain(gate)
-
-
-def _event_response(
-    event: HumanGateEvent | None,
-) -> HumanGateEventResponse | None:
-    """Map an optional human-gate event."""
-    return None if event is None else HumanGateEventResponse.from_domain(event)
-
-
 def _raise_generation_failure(result: DesignGenerationResult) -> None:
     """Translate expected design-generation failures into HTTP semantics."""
     if result.status is DesignGenerationStatus.CREATED:
         return
 
     if result.issue is DesignGenerationIssueCode.PROJECT_NOT_FOUND:
-        raise _not_found("PROJECT_NOT_FOUND")
+        raise refusal(404, "PROJECT_NOT_FOUND")
 
-    raise _conflict(
+    raise conflict(
         result.issue.value if result.issue is not None else "DESIGN_GENERATION_REJECTED",
         proposal_issue=result.proposal_issue,
     )
@@ -1373,14 +1312,14 @@ def _raise_revision_failure(result: DesignRevisionResult) -> None:
         DesignRevisionApplicationIssueCode.PACKAGE_NOT_FOUND,
         DesignRevisionApplicationIssueCode.DIFF_NOT_FOUND,
     }:
-        raise _not_found(result.issue.value)
+        raise refusal(404, result.issue.value)
 
     code = (
         result.domain_issue.value
         if result.domain_issue is not None
         else (result.issue.value if result.issue is not None else "DESIGN_REVISION_REJECTED")
     )
-    raise _conflict(code)
+    raise conflict(code)
 
 
 _CHANGE_NOT_FOUND = frozenset(
@@ -1402,15 +1341,12 @@ def design_change_payload(result: DesignChangeResult) -> DesignChangePayload:
     code = "DESIGN_CHANGE_REJECTED" if result.issue is None else result.issue.value
 
     if result.issue in _CHANGE_NOT_FOUND:
-        raise _not_found(code)
+        raise refusal(404, code)
 
     if result.issue is DesignChangeIssueCode.MODEL_NOT_CONFIGURED:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": code},
-        )
+        raise refusal(503, code)
 
-    raise _conflict(code)
+    raise conflict(code)
 
 
 def _raise_gate_submission_failure(
@@ -1425,9 +1361,9 @@ def _raise_gate_submission_failure(
         return
 
     if result.status is DesignGateSubmissionStatus.PACKAGE_NOT_FOUND:
-        raise _not_found("DESIGN_PACKAGE_NOT_FOUND")
+        raise refusal(404, "DESIGN_PACKAGE_NOT_FOUND")
 
-    raise _conflict(result.status.value)
+    raise conflict(result.status.value)
 
 
 def _raise_gate_decision_failure(
@@ -1441,42 +1377,9 @@ def _raise_gate_decision_failure(
         DesignGateDecisionStatus.GATE_NOT_FOUND,
         DesignGateDecisionStatus.PACKAGE_NOT_FOUND,
     }:
-        raise _not_found(result.status.value)
+        raise refusal(404, result.status.value)
 
-    raise _conflict(result.issue.value if result.issue is not None else result.status.value)
-
-
-def _not_found(code: str) -> HTTPException:
-    """Return one non-disclosing owner-scoped lookup error."""
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail={"code": code},
-    )
-
-
-def _conflict(
-    code: str,
-    *,
-    proposal_issue: DesignProposalIssueCode | None = None,
-) -> HTTPException:
-    """Return one typed state or governance conflict."""
-    detail = {"code": code}
-
-    if proposal_issue is not None:
-        detail["proposal_issue"] = proposal_issue.value
-
-    return HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail=detail,
-    )
-
-
-def _unprocessable(code: str) -> HTTPException:
-    """Return one typed invalid-input response."""
-    return HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        detail={"code": code},
-    )
+    raise conflict(result.issue.value if result.issue is not None else result.status.value)
 
 
 __all__ = [

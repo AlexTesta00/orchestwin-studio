@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.runtime_access import database_sessions
 from orchestwin.artifacts.design_finding_validation_persistence import (
     SqlAlchemyFindingValidationRepository,
 )
@@ -19,7 +19,6 @@ from orchestwin.artifacts.design_finding_validations import (
 from orchestwin.artifacts.design_packages import create_design_concern
 from orchestwin.artifacts.design_revision_application import DesignRevisionStatus
 from orchestwin.artifacts.design_revisions import DesignRevisionDecision
-from orchestwin.identity.domain import UserAccount
 from orchestwin.projects.briefs import BriefField
 from orchestwin.projects.insight_applications import (
     BRIEF_LIST_TARGETS,
@@ -153,15 +152,14 @@ def _application(owner_user_id, project_id, body, outcome, created_at) -> Insigh
         raise HTTPException(422, detail={"code": "INSIGHT_APPLICATION_INVALID"}) from error
 
 
+def _revision_rejected(code: str, result) -> HTTPException:
+    issue = None if result.issue is None else result.issue.value
+    return HTTPException(409, detail={"code": code, "issue": issue})
+
+
 class InsightApplicationService:
     def __init__(self, runtime):
         self.runtime = runtime
-
-    def _sessions(self):
-        database = getattr(self.runtime, "database_runtime", None)
-        if database is None:
-            raise HTTPException(503, detail={"code": "DATABASE_UNAVAILABLE"})
-        return database.session_factory
 
     def _service(self, name):
         service = getattr(self.runtime, name, None)
@@ -254,13 +252,7 @@ class InsightApplicationService:
             proposed_specification=proposed,
         )
         if proposal.status is not RequirementsRevisionStatus.CREATED or proposal.diff is None:
-            raise HTTPException(
-                409,
-                detail={
-                    "code": "REQUIREMENTS_REVISION_REJECTED",
-                    "issue": None if proposal.issue is None else proposal.issue.value,
-                },
-            )
+            raise _revision_rejected("REQUIREMENTS_REVISION_REJECTED", proposal)
         decision = await revisions.decide_revision(
             owner_user_id=owner_user_id,
             project_id=project_id,
@@ -268,13 +260,7 @@ class InsightApplicationService:
             decision=RequirementsRevisionDecision.APPROVE,
         )
         if decision.version is None:
-            raise HTTPException(
-                409,
-                detail={
-                    "code": "REQUIREMENTS_REVISION_REJECTED",
-                    "issue": None if decision.issue is None else decision.issue.value,
-                },
-            )
+            raise _revision_rejected("REQUIREMENTS_REVISION_REJECTED", decision)
         return decision.version.id, decision.version.version_number, None, code
 
     async def _apply_to_design(self, owner_user_id, project_id, body):
@@ -317,13 +303,7 @@ class InsightApplicationService:
             owner_user_id=owner_user_id, project_id=project_id, proposed_package=proposed
         )
         if proposal.status is not DesignRevisionStatus.CREATED or proposal.diff is None:
-            raise HTTPException(
-                409,
-                detail={
-                    "code": "DESIGN_REVISION_REJECTED",
-                    "issue": None if proposal.issue is None else proposal.issue.value,
-                },
-            )
+            raise _revision_rejected("DESIGN_REVISION_REJECTED", proposal)
         decision = await revisions.decide_revision(
             owner_user_id=owner_user_id,
             project_id=project_id,
@@ -331,13 +311,7 @@ class InsightApplicationService:
             decision=DesignRevisionDecision.APPROVE,
         )
         if decision.version is None:
-            raise HTTPException(
-                409,
-                detail={
-                    "code": "DESIGN_REVISION_REJECTED",
-                    "issue": None if decision.issue is None else decision.issue.value,
-                },
-            )
+            raise _revision_rejected("DESIGN_REVISION_REJECTED", decision)
         return decision.version.id, decision.version.version_number, None, code
 
     async def _dismissed_sources(self, owner_user_id, project_id, bodies) -> list[str]:
@@ -350,7 +324,7 @@ class InsightApplicationService:
                 keyed.append((body.source_id, key))
         if not keyed:
             return []
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             validations = await SqlAlchemyFindingValidationRepository(
                 session, owner_user_id=owner_user_id
@@ -365,7 +339,7 @@ class InsightApplicationService:
     async def _applied_sources(self, owner_user_id, project_id, bodies) -> list[str]:
         sources = [(body.source_kind, _normalized(body.source_id)) for body in bodies]
         repeated = {source for index, source in enumerate(sources) if source in sources[:index]}
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             recorded = await SqlAlchemyInsightApplicationRepository(
                 session, owner_user_id=owner_user_id
@@ -378,7 +352,7 @@ class InsightApplicationService:
         )
 
     async def _record(self, owner_user_id, applications) -> None:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             repository = SqlAlchemyInsightApplicationRepository(
                 session, owner_user_id=owner_user_id
@@ -437,7 +411,7 @@ class InsightApplicationService:
         return applications, version.version_number
 
     async def applications(self, *, owner_user_id, project_id):
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             return await SqlAlchemyInsightApplicationRepository(
                 session, owner_user_id=owner_user_id
@@ -452,7 +426,7 @@ def create_insight_application_router():
         project_id: UUID,
         body: InsightBatchRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         service = InsightApplicationService(request.app.state.application_runtime)
         applications, version_number = await service.apply_batch(
@@ -468,7 +442,7 @@ def create_insight_application_router():
         project_id: UUID,
         body: InsightApplicationRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         application = await InsightApplicationService(request.app.state.application_runtime).apply(
             owner_user_id=user.id, project_id=project_id, body=body
@@ -479,7 +453,7 @@ def create_insight_application_router():
     async def applications(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await InsightApplicationService(request.app.state.application_runtime).applications(
             owner_user_id=user.id, project_id=project_id

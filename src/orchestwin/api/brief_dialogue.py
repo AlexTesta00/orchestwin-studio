@@ -2,16 +2,15 @@ import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
 from orchestwin.api.clarification import BriefAssumptionResponse
 from orchestwin.api.projects import ProjectBriefVersionResponse
-from orchestwin.identity.domain import UserAccount
 from orchestwin.models.brief_dialogue import (
     ask_question,
     bind_question,
@@ -452,7 +451,7 @@ def create_brief_dialogue_router():
     async def current(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return dialogue_response(
             await application(request).current(owner_user_id=user.id, project_id=project_id)
@@ -463,7 +462,7 @@ def create_brief_dialogue_router():
         project_id: UUID,
         body: StartDialogueRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return dialogue_response(
             await application(request).start(
@@ -476,7 +475,7 @@ def create_brief_dialogue_router():
         project_id: UUID,
         body: DialogueAnswerRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return dialogue_response(
             await application(request).answer(
@@ -489,7 +488,7 @@ def create_brief_dialogue_router():
         project_id: UUID,
         body: DialogueTurnRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return dialogue_response(
             await application(request).next_question(
@@ -502,7 +501,7 @@ def create_brief_dialogue_router():
         project_id: UUID,
         body: DialogueTurnRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return dialogue_response(
             await application(request).synthesize(
@@ -515,7 +514,7 @@ def create_brief_dialogue_router():
         project_id: UUID,
         body: DialogueTurnRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return dialogue_response(
             await application(request).close(

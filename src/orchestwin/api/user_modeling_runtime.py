@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Never
+from typing import Never
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
 from orchestwin.api.user_modeling import (
     GateApiOutcome,
     GateApiResult,
     UserModelingApiDependencies,
     create_user_modeling_router,
 )
-from orchestwin.identity.domain import UserAccount
 from orchestwin.twins.runtime import UserModelingServices
 from orchestwin.twins.user_modeling_gate import (
     LocalUserModelingGateService,
@@ -26,7 +25,7 @@ from orchestwin.workflow.repository import HumanGateStateConflict
 
 
 async def authenticated_modeling_owner(
-    user: Annotated[UserAccount, Depends(current_user_dependency)],
+    user: CurrentUser,
 ) -> UUID:
     """Obtain owner scope only from the existing bearer authentication dependency."""
     return user.id

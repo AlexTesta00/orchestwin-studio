@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import Annotated, Final
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
+from orchestwin.api.refusals import refusal
 from orchestwin.twins.realignment import UserModelingRealignment
 from orchestwin.twins.realignment_service import (
     USER_TWINS_NOT_FOUND,
@@ -19,7 +20,6 @@ from orchestwin.twins.realignment_service import (
 USER_MODELING_REALIGNMENT_API_PREFIX: Final = (
     "/projects/{project_id}/user-modeling/context-alignment"
 )
-_NOT_FOUND_CODES: Final = frozenset({USER_TWINS_NOT_FOUND})
 
 
 class ApiModel(BaseModel):
@@ -65,25 +65,13 @@ class UserModelingRealignmentPayload(ApiModel):
         )
 
 
-def user_modeling_realignment_service_dependency(
-    request: Request,
-) -> UserModelingRealignmentService:
-    service = getattr(request.app.state, "user_modeling_realignment_service", None)
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "USER_MODELING_REALIGNMENT_SERVICE_UNAVAILABLE"},
-        )
-
-    return service
+user_modeling_realignment_service_dependency = app_service(
+    "user_modeling_realignment_service", {"code": "USER_MODELING_REALIGNMENT_SERVICE_UNAVAILABLE"}
+)
 
 
 def user_modeling_realignment_failure(error: UserModelingRealignmentFailure) -> HTTPException:
-    status_code = (
-        status.HTTP_404_NOT_FOUND if error.code in _NOT_FOUND_CODES else status.HTTP_409_CONFLICT
-    )
-    return HTTPException(status_code=status_code, detail={"code": error.code})
+    return refusal(404 if error.code == USER_TWINS_NOT_FOUND else 409, error.code)
 
 
 def create_user_modeling_realignment_router() -> APIRouter:
@@ -96,7 +84,7 @@ def create_user_modeling_realignment_router() -> APIRouter:
     )
     async def alignment_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             UserModelingRealignmentService,
             Depends(user_modeling_realignment_service_dependency),
@@ -113,7 +101,7 @@ def create_user_modeling_realignment_router() -> APIRouter:
     )
     async def realign_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             UserModelingRealignmentService,
             Depends(user_modeling_realignment_service_dependency),

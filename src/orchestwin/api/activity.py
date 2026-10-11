@@ -4,11 +4,11 @@ from collections.abc import Mapping
 from typing import Annotated, Any, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from orchestwin.activity import ActivityError
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 
 
 class ProjectActivityService(Protocol):
@@ -25,14 +25,9 @@ class ProjectActivityService(Protocol):
     ) -> dict: ...
 
 
-def activity_service_dependency(request: Request) -> ProjectActivityService:
-    service = getattr(request.app.state, "activity_service", None)
-    if service is None:
-        raise HTTPException(status_code=503, detail={"code": "ACTIVITY_SERVICE_UNAVAILABLE"})
-    return service
-
-
-CurrentUser = Annotated[UserAccount, Depends(current_user_dependency)]
+activity_service_dependency = app_service(
+    "activity_service", {"code": "ACTIVITY_SERVICE_UNAVAILABLE"}
+)
 ActivityService = Annotated[ProjectActivityService, Depends(activity_service_dependency)]
 Payload = Annotated[Any, Body()]
 _CONFLICTS = frozenset(

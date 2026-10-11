@@ -4,22 +4,23 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Annotated, Final
+from typing import Final
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
 from orchestwin.api.design import DesignPackagePayload
 from orchestwin.api.design_context import require_current_design_context
+from orchestwin.api.generation_evidence import record_accepted
 from orchestwin.api.generation_jobs import (
-    GENERATION_JOB_NOT_FOUND,
     GenerationJobFailure,
     GenerationJobKind,
     GenerationJobProgress,
     GenerationJobStage,
     generation_jobs,
+    owned_job,
 )
 from orchestwin.artifacts.design_evaluation_persistence import (
     SqlAlchemyDesignEvaluationRepository,
@@ -34,7 +35,6 @@ from orchestwin.artifacts.generated_mockup_structure import nodes_text
 from orchestwin.artifacts.generated_mockups import screen_trees
 from orchestwin.artifacts.visual_catalog import ARCHETYPES
 from orchestwin.artifacts.visual_icons import mockup_resources
-from orchestwin.identity.domain import UserAccount
 from orchestwin.models.design_drafts import requirements_language, requirements_view
 from orchestwin.models.design_mockups import MockupDraft, bind_mockup
 from orchestwin.models.generated_mockup_drafts import (
@@ -196,7 +196,7 @@ def _alternative(package, alternative_id):
     return next((item for item in package.alternatives if item.id == alternative_id), None)
 
 
-def _route_kind(route):
+def route_kind(route):
     return getattr(getattr(route, "configuration", None), "provider_kind", None)
 
 
@@ -205,7 +205,7 @@ def _unpriced(route) -> bool:
     return isinstance(prices, ModelPrices) and prices.unpriced
 
 
-def _result_cost(result) -> int:
+def result_cost(result) -> int:
     return 0 if result is None else provider_result_cost_microusd(result.to_snapshot())
 
 
@@ -376,7 +376,7 @@ class ModelMockupApplication:
             model=model if chosen is not None and isinstance(model, str) else None,
             static_check=getattr(self.runtime, "final_evaluator_runtime", None) is not None,
             paid=chosen is None
-            or _route_kind(chosen) is not StructuredGenerationProviderKind.CLAUDE_CODE_CLI,
+            or route_kind(chosen) is not StructuredGenerationProviderKind.CLAUDE_CODE_CLI,
         )
 
     @evidence_application
@@ -500,7 +500,7 @@ class ModelMockupApplication:
         return route
 
     def design_references(self, route, taken: int = 0):
-        if _route_kind(route) is not StructuredGenerationProviderKind.CLAUDE_CODE_CLI:
+        if route_kind(route) is not StructuredGenerationProviderKind.CLAUDE_CODE_CLI:
             return None
         return load_design_references(
             getattr(self.runtime, "design_references_dir", None), limit=MAX_ATTACHMENTS - taken
@@ -596,13 +596,13 @@ class ModelMockupApplication:
                     **attached,
                 )
             except ProposalGenerationError as error:
-                cost += _result_cost(error.result)
+                cost += result_cost(error.result)
                 if attempt < MAX_GENERATIONS and _retryable(error):
                     await retire_model_generation(role=MOCKUP_ATTEMPT, code=error.code)
                     previous_answer, rejection = None, _discarded(error)
                     continue
                 raise
-            cost += _result_cost(getattr(current_proposal_evidence(), "result", None))
+            cost += result_cost(getattr(current_proposal_evidence(), "result", None))
             progress.update(GenerationJobStage.VALIDATING, attempt)
             try:
                 binding = bind_generated_mockup(
@@ -635,15 +635,7 @@ class ModelMockupApplication:
             warnings=binding.warning_snapshots(),
             cost_microusd=cost,
         )
-        related = list(scope.related_generations)
-        await scope.event(
-            "ADAPTER_ACCEPTED",
-            {
-                "result": _payload(result),
-                "generated_content_hashes": {"DESIGN": [proposed.content_hash]},
-                **({"related_generations": related} if related else {}),
-            },
-        )
+        await record_accepted(scope, _payload(result), "DESIGN", proposed.content_hash)
         return result
 
     async def prepare_mockup(self, *, owner_user_id, project_id, body):
@@ -833,7 +825,7 @@ def create_design_mockup_router():
         project_id: UUID,
         body: MockupRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         result = await ModelMockupApplication(request.app.state.application_runtime).generate(
             owner_user_id=user.id,
@@ -847,7 +839,7 @@ def create_design_mockup_router():
         project_id: UUID,
         alternative_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return await ModelMockupApplication(request.app.state.application_runtime).latest(
             owner_user_id=user.id, project_id=project_id, alternative_id=alternative_id
@@ -857,7 +849,7 @@ def create_design_mockup_router():
     async def capabilities(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return ModelMockupApplication(request.app.state.application_runtime).capabilities()
 
@@ -866,7 +858,7 @@ def create_design_mockup_router():
         project_id: UUID,
         body: MockupRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         jobs = generation_jobs(request)
         application = ModelMockupApplication(request.app.state.application_runtime)
@@ -886,11 +878,9 @@ def create_design_mockup_router():
         project_id: UUID,
         job_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
-        job = generation_jobs(request).get(user.id, project_id, job_id, GenerationJobKind.MOCKUP)
-        if job is None:
-            raise HTTPException(404, detail={"code": GENERATION_JOB_NOT_FOUND})
+        job = owned_job(request, user.id, project_id, job_id, GenerationJobKind.MOCKUP)
         return job.to_payload()
 
     @router.get("/document")
@@ -898,7 +888,7 @@ def create_design_mockup_router():
         project_id: UUID,
         alternative_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         source: MockupDocumentSource = MockupDocumentSource.LATEST,
         entry_screen: str | None = None,
     ):
@@ -934,4 +924,6 @@ __all__ = [
     "generated_route",
     "job_failure",
     "job_payload",
+    "result_cost",
+    "route_kind",
 ]

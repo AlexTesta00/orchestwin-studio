@@ -5,10 +5,11 @@ from __future__ import annotations
 from typing import Annotated, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.artifacts.references import ArtifactKind, VersionedArtifactReference
 from orchestwin.artifacts.traceability import (
     ArtifactGraphLink,
@@ -19,7 +20,6 @@ from orchestwin.artifacts.traceability import (
     ArtifactGraphStage,
     CrossStageArtifactGraph,
 )
-from orchestwin.identity.domain import UserAccount
 from orchestwin.projects.requirements_primitives import canonical_json
 
 ARTIFACT_GRAPH_API_PREFIX = "/projects/{project_id}/artifacts"
@@ -162,19 +162,9 @@ class CrossStageArtifactGraphPayload(ApiModel):
         )
 
 
-def artifact_graph_query_service_dependency(
-    request: Request,
-) -> ArtifactGraphQueryService:
-    """Resolve the application-scoped artifact graph query service."""
-    service = getattr(request.app.state, "artifact_graph_query_service", None)
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "ARTIFACT_GRAPH_SERVICE_UNAVAILABLE"},
-        )
-
-    return service
+artifact_graph_query_service_dependency = app_service(
+    "artifact_graph_query_service", {"code": "ARTIFACT_GRAPH_SERVICE_UNAVAILABLE"}
+)
 
 
 def create_artifact_graph_router() -> APIRouter:
@@ -188,7 +178,7 @@ def create_artifact_graph_router() -> APIRouter:
     )
     async def current_graph_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             ArtifactGraphQueryService,
             Depends(artifact_graph_query_service_dependency),
@@ -214,7 +204,7 @@ def create_artifact_graph_router() -> APIRouter:
     )
     async def export_graph_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             ArtifactGraphQueryService,
             Depends(artifact_graph_query_service_dependency),

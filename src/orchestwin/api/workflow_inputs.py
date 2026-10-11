@@ -5,8 +5,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.workflow_inputs import (
     PROVIDED_PROTOTYPE_CODE_UNAVAILABLE,
     PROVIDED_PROTOTYPE_EVALUATION_UNAVAILABLE,
@@ -16,16 +16,9 @@ from orchestwin.workflow_inputs import (
     WorkflowInputError,
 )
 
-CurrentUser = Annotated[UserAccount, Depends(current_user_dependency)]
-
-
-def workflow_service(request: Request):
-    service = getattr(request.app.state, "workflow_inputs_service", None)
-    if service is None:
-        raise HTTPException(503, detail={"code": "WORKFLOW_INPUTS_SERVICE_UNAVAILABLE"})
-    return service
-
-
+workflow_service = app_service(
+    "workflow_inputs_service", {"code": "WORKFLOW_INPUTS_SERVICE_UNAVAILABLE"}
+)
 Service = Annotated[object, Depends(workflow_service)]
 
 
