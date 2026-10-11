@@ -9,7 +9,6 @@ from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.projects.code_changes import (
     AlignedPoint,
@@ -29,7 +28,7 @@ from orchestwin.projects.code_changes import (
     twin_critique_from_snapshot,
 )
 from orchestwin.projects.persistence.acceptance_tests import TEST_RUNS
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import OwnedProjectRepository
 
 DEFAULT_LIST_LIMIT: Final = 200
 UNIQUE_COMMIT: Final = "uq_project_code_changes_commit"
@@ -248,27 +247,7 @@ def _task_values(task: CodeTask) -> dict[str, object]:
     }
 
 
-class SqlAlchemyCodeChangeRepository:
-    def __init__(self, session: AsyncSession, *, owner_user_id: UUID) -> None:
-        self._session = session
-        self._owner_user_id = owner_user_id
-
-    def _owned_project(self, project_id: UUID):
-        return sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == project_id,
-            ProjectRecord.owner_user_id == self._owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
-
-    async def project_exists(self, project_id: UUID) -> bool:
-        return (
-            await self._session.execute(self._owned_project(project_id))
-        ).scalar_one_or_none() is not None
-
-    async def _lock_project(self, project_id: UUID) -> bool:
-        statement = self._owned_project(project_id).with_for_update()
-        return (await self._session.execute(statement)).scalar_one_or_none() is not None
-
+class SqlAlchemyCodeChangeRepository(OwnedProjectRepository):
     def _owned_changes(self, project_id: UUID, *columns):
         return sa.select(*(columns or _SUMMARY_COLUMNS)).where(
             CHANGES.c.project_id == project_id,

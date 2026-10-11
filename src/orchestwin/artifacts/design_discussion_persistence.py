@@ -16,7 +16,7 @@ from orchestwin.artifacts.design_discussion import (
     DiscussionStatus,
     design_discussion_from_snapshot,
 )
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import owned_project_query
 
 OPEN_DISCUSSION_INDEX: Final = "uq_design_discussions_open_version"
 
@@ -83,11 +83,7 @@ class SqlAlchemyDesignDiscussionRepository:
         self._owner_user_id = owner_user_id
 
     async def _owns(self, project_id: UUID) -> bool:
-        statement = sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == project_id,
-            ProjectRecord.owner_user_id == self._owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
+        statement = owned_project_query(project_id, self._owner_user_id)
         return (await self._session.execute(statement)).scalar_one_or_none() is not None
 
     def _headers(self, project_id: UUID):

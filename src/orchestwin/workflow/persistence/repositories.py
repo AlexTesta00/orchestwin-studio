@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from orchestwin.projects.persistence.models import (
     ProjectRecord,
 )
+from orchestwin.projects.persistence.owned import owned_project_query
 from orchestwin.workflow.gates import (
     GateArtifactReference,
     HumanGate,
@@ -244,13 +245,7 @@ class SqlAlchemyHumanGateRepository:
         against a concurrent readiness/decision transaction holding the project.
         """
         project = await self._session.scalar(
-            select(ProjectRecord.id)
-            .where(
-                ProjectRecord.id == project_id,
-                ProjectRecord.owner_user_id == owner_user_id,
-                ProjectRecord.archived_at.is_(None),
-            )
-            .with_for_update()
+            owned_project_query(project_id, owner_user_id).with_for_update()
         )
         if project is None:
             return None

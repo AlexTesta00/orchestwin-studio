@@ -4,15 +4,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Final
 from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.knowledge.state import MAX_LEARNED_OBSERVATIONS
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import OwnedProjectRepository
 from orchestwin.projects.research_evidence import EvidenceUpdateSource
 from orchestwin.projects.twin_learning import (
     KeptObservation,
@@ -28,8 +26,6 @@ from orchestwin.projects.twin_learning import (
     observation_code,
     proposed_observation_from_snapshot,
 )
-
-PENDING_INDEX: Final = "uq_twin_updates_pending"
 
 UPDATES = sa.table(
     "twin_updates",
@@ -156,27 +152,7 @@ def _update(row: Mapping[str, object]) -> TwinUpdate:
     )
 
 
-class SqlAlchemyTwinLearningRepository:
-    def __init__(self, session: AsyncSession, *, owner_user_id: UUID) -> None:
-        self._session = session
-        self._owner_user_id = owner_user_id
-
-    def _owned_project(self, project_id: UUID):
-        return sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == project_id,
-            ProjectRecord.owner_user_id == self._owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
-
-    async def project_exists(self, project_id: UUID) -> bool:
-        return (
-            await self._session.execute(self._owned_project(project_id))
-        ).scalar_one_or_none() is not None
-
-    async def _lock_project(self, project_id: UUID) -> bool:
-        statement = self._owned_project(project_id).with_for_update()
-        return (await self._session.execute(statement)).scalar_one_or_none() is not None
-
+class SqlAlchemyTwinLearningRepository(OwnedProjectRepository):
     def _owned(self, table, project_id: UUID):
         return sa.select(*table.c).where(
             table.c.project_id == project_id,
@@ -479,7 +455,6 @@ class SqlAlchemyTwinLearningRepository:
 
 __all__ = [
     "OBSERVATIONS",
-    "PENDING_INDEX",
     "UPDATES",
     "SqlAlchemyTwinLearningRepository",
     "TwinLearningWriteResult",

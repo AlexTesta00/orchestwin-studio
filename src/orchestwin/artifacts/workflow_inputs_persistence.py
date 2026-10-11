@@ -9,7 +9,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.artifacts.provided_prototypes import provided_prototype_from_snapshot
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import owned_project_query
 from orchestwin.workflow_inputs import WorkflowInputError, workflow_records
 
 
@@ -40,11 +40,7 @@ class SqlAlchemyWorkflowInputsRepository:
         self.owner_user_id = owner_user_id
 
     async def owned(self, project_id: UUID, *, lock=False) -> bool:
-        query = sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == project_id,
-            ProjectRecord.owner_user_id == self.owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
+        query = owned_project_query(project_id, self.owner_user_id)
         if lock:
             query = query.with_for_update()
         return await self.session.scalar(query) is not None
