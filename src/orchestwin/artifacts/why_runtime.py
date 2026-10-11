@@ -76,6 +76,10 @@ def _mockup_package(payload):
         for key in ("approach", "visual_language"):
             if alternative.get(key) is None:
                 alternative.pop(key, None)
+        language = alternative.get("visual_language", {})
+        for key in ("direction", "design_system"):
+            if language.get(key) is None:
+                language.pop(key, None)
     for critique in payload.get("critiques", ()):
         for key in ("verdict", "quote"):
             if critique.get(key) is None:
