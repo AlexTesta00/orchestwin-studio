@@ -3,19 +3,28 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 from uuid import UUID, uuid4
 
+from orchestwin.projects.checks import aware as _aware
+from orchestwin.projects.checks import codes as _codes
+from orchestwin.projects.checks import count as _count
+from orchestwin.projects.checks import normalized_block, normalized_line
+from orchestwin.projects.checks import optional_text as _optional_text
+from orchestwin.projects.checks import optional_time as _optional_time
+from orchestwin.projects.checks import optional_uuid as _optional_uuid
+from orchestwin.projects.checks import timestamp as _timestamp
+from orchestwin.projects.checks import tuple_of as _tuple_of
+from orchestwin.projects.checks import uuid_value as _uuid
+from orchestwin.projects.checks import uuids as _uuids
 from orchestwin.projects.code_changes import (
     LOCALE_PATTERN,
     MAX_LOCALE_LENGTH,
     normalize_commit,
     normalize_path,
-    normalized_block,
-    normalized_line,
 )
 
 
@@ -63,35 +72,6 @@ class ProposalAlreadyDecided(Exception):
         super().__init__(proposal)
         self.proposal = proposal
         self.status = status
-
-
-def _aware(value: object, label: str) -> None:
-    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError(f"{label} must be a timezone-aware timestamp")
-
-
-def _timestamp(value: datetime) -> str:
-    return value.astimezone(UTC).isoformat()
-
-
-def _uuid(value: object, label: str) -> None:
-    if not isinstance(value, UUID):
-        raise ValueError(f"{label} must be a UUID")
-
-
-def _count(value: object, label: str, *, minimum: int = 0) -> None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
-        raise ValueError(f"{label} must be an integer of at least {minimum}")
-
-
-def _codes(values: object, pattern: re.Pattern[str], label: str) -> None:
-    if not isinstance(values, tuple):
-        raise ValueError(f"{label} must be a tuple")
-    for value in values:
-        if not isinstance(value, str) or pattern.fullmatch(value) is None:
-            raise ValueError(f"{label} holds an invalid code")
-    if len(set(values)) != len(values):
-        raise ValueError(f"{label} must not repeat a code")
 
 
 def proposal_code(number: int) -> str:
@@ -149,13 +129,7 @@ def normalize_excerpt(value: object) -> str:
 
 
 def normalize_note(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError("decision note must be a text")
-    if not value.strip():
-        return None
-    return normalized_block(value, label="decision note", maximum=MAX_NOTE_LENGTH)
+    return _optional_text(value, normalized_block, label="decision note", maximum=MAX_NOTE_LENGTH)
 
 
 def normalize_locale(value: object) -> str:
@@ -414,14 +388,6 @@ class AlignmentProposal:
         }
 
 
-def _optional_uuid(value: object) -> UUID | None:
-    return None if value is None else UUID(str(value))
-
-
-def _optional_time(value: object) -> datetime | None:
-    return None if value is None else datetime.fromisoformat(str(value))
-
-
 def proposal_from_snapshot(
     payload: Mapping[str, object],
     *,
@@ -504,16 +470,8 @@ class KnowledgeAlignmentRun:
             raise ValueError("run summary must be normalized")
         _aware(self.created_at, "run timestamp")
         _count(self.cost_microusd, "run cost")
-        if not isinstance(self.generation_ids, tuple) or not all(
-            isinstance(item, UUID) for item in self.generation_ids
-        ):
-            raise ValueError("generation IDs must be a tuple of UUID")
-        if len(set(self.generation_ids)) != len(self.generation_ids):
-            raise ValueError("generation IDs must not repeat")
-        if not isinstance(self.proposals, tuple) or not all(
-            isinstance(item, AlignmentProposal) for item in self.proposals
-        ):
-            raise ValueError("run proposals must be a tuple of AlignmentProposal")
+        _uuids(self.generation_ids, "generation IDs")
+        _tuple_of(self.proposals, AlignmentProposal, "run proposals")
         if len(self.proposals) > MAX_PROPOSALS:
             raise ValueError(f"a run holds at most {MAX_PROPOSALS} proposals")
         for section in ProposalSection:

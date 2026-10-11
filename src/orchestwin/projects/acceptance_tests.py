@@ -5,7 +5,7 @@ import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from typing import Final
 from urllib.parse import urlsplit
@@ -41,13 +41,24 @@ from orchestwin.knowledge.state import (
     TEST_KEYS,
     TEST_ROLES,
 )
+from orchestwin.projects.checks import aware as _aware
+from orchestwin.projects.checks import code as _code
+from orchestwin.projects.checks import codes as _codes
+from orchestwin.projects.checks import control_free as _control_free
+from orchestwin.projects.checks import count as _count
+from orchestwin.projects.checks import normalized as _normalized
+from orchestwin.projects.checks import optional_code as _optional_code
+from orchestwin.projects.checks import optional_normalized as _optional_normalized
+from orchestwin.projects.checks import timestamp as _timestamp
+from orchestwin.projects.checks import tuple_of as _tuple_of
+from orchestwin.projects.checks import uuid_value as _uuid
+from orchestwin.projects.checks import uuids as _uuids
 from orchestwin.projects.code_changes import (
     LOCALE_PATTERN,
     MAX_LOCALE_LENGTH,
     MAX_TWIN_NAME_LENGTH,
     CritiqueVerdict,
     FindingSeverity,
-    normalized_line,
 )
 from orchestwin.twins.limits import MAX_USER_TWINS
 
@@ -152,73 +163,6 @@ class TestPlanUnknown(LookupError):
         self.plan_id = plan_id
 
 
-def _aware(value: object, label: str) -> None:
-    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError(f"{label} must be a timezone-aware timestamp")
-
-
-def _timestamp(value: datetime) -> str:
-    return value.astimezone(UTC).isoformat()
-
-
-def _uuid(value: object, label: str) -> None:
-    if not isinstance(value, UUID):
-        raise ValueError(f"{label} must be a UUID")
-
-
-def _uuids(values: object, label: str, *, maximum: int | None = None) -> None:
-    if not isinstance(values, tuple) or not all(isinstance(item, UUID) for item in values):
-        raise ValueError(f"{label} must be a tuple of UUID")
-    if len(set(values)) != len(values):
-        raise ValueError(f"{label} must not repeat")
-    if maximum is not None and len(values) > maximum:
-        raise ValueError(f"{label} hold at most {maximum} items")
-
-
-def _count(value: object, label: str, *, minimum: int = 0, maximum: int | None = None) -> None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
-        raise ValueError(f"{label} must be an integer of at least {minimum}")
-    if maximum is not None and value > maximum:
-        raise ValueError(f"{label} must be at most {maximum}")
-
-
-def _control_free(value: str) -> bool:
-    return all(ord(character) >= 32 and ord(character) != 127 for character in value)
-
-
-def _code(value: object, pattern: re.Pattern[str], label: str) -> None:
-    if not isinstance(value, str) or pattern.fullmatch(value) is None:
-        raise ValueError(f"{label} holds an invalid code")
-
-
-def _codes(
-    values: object,
-    pattern: re.Pattern[str],
-    label: str,
-    *,
-    minimum: int = 0,
-    maximum: int | None = None,
-) -> None:
-    if not isinstance(values, tuple):
-        raise ValueError(f"{label} must be a tuple")
-    for value in values:
-        _code(value, pattern, label)
-    if len(set(values)) != len(values):
-        raise ValueError(f"{label} must not repeat a code")
-    if len(values) < minimum or (maximum is not None and len(values) > maximum):
-        raise ValueError(f"{label} hold between {minimum} and {maximum} codes")
-
-
-def _normalized(value: object, *, label: str, maximum: int) -> None:
-    if normalized_line(value, label=label, maximum=maximum) != value:
-        raise ValueError(f"{label} must be normalized")
-
-
-def _optional_normalized(value: object, *, label: str, maximum: int) -> None:
-    if value is not None:
-        _normalized(value, label=label, maximum=maximum)
-
-
 def _bounded(value: object, *, label: str, maximum: int) -> None:
     if not isinstance(value, str) or cut_text(value, maximum=maximum, label=label) != value:
         raise ValueError(f"{label} must be a collapsed text of at most {maximum} characters")
@@ -236,11 +180,6 @@ def _locale(value: object) -> None:
         or _LOCALE.fullmatch(value) is None
     ):
         raise ValueError("locale must be a language tag such as it-IT")
-
-
-def _tuple_of(values: object, kind: type, label: str) -> None:
-    if not isinstance(values, tuple) or not all(isinstance(item, kind) for item in values):
-        raise ValueError(f"{label} must be a tuple of {kind.__name__}")
 
 
 def cut_text(value: object, *, maximum: int, label: str = "text") -> str:
@@ -994,13 +933,9 @@ class TestFinding:
         if not isinstance(self.severity, FindingSeverity):
             raise ValueError("finding severity must be a FindingSeverity")
         _normalized(self.text, label="finding text", maximum=MAX_FINDING_LENGTH)
-        for value, pattern, label in (
-            (self.criterion, _CRITERION_CODE, "finding criterion"),
-            (self.requirement, _REQUIREMENT_CODE, "finding requirement"),
-            (self.screen, _SCREEN_CODE, "finding screen"),
-        ):
-            if value is not None:
-                _code(value, pattern, label)
+        _optional_code(self.criterion, _CRITERION_CODE, "finding criterion")
+        _optional_code(self.requirement, _REQUIREMENT_CODE, "finding requirement")
+        _optional_code(self.screen, _SCREEN_CODE, "finding screen")
         _optional_normalized(self.action, label="finding action", maximum=MAX_ACTION_LENGTH)
 
     def to_snapshot(self) -> dict[str, object]:
