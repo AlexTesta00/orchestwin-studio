@@ -19,20 +19,24 @@ from orchestwin.twins.user_twins import (
     UserTwinLifecycleStatus,
     VersionedArtifactReference,
 )
+from orchestwin.workflow.gate_flow import (
+    Clock,
+    GateOutcomes,
+    UuidFactory,
+    current_time,
+    decide_current,
+    gate_history,
+    gate_is_currently_approved,
+    latest_gate,
+    submit_artifact,
+)
 from orchestwin.workflow.gates import (
-    DEFAULT_GATE_ITERATION_LIMIT,
     GateArtifactReference,
     HumanGate,
     HumanGateAction,
     HumanGateEvent,
     HumanGateIssueCode,
-    HumanGateStatus,
-    HumanGateTransitionStatus,
     HumanGateType,
-    create_human_gate,
-    mark_human_gate_stale,
-    next_human_gate_iteration,
-    transition_human_gate,
 )
 from orchestwin.workflow.repository import (
     HumanGateRepository,
@@ -200,16 +204,6 @@ class UserModelingGateDecisionResult:
     issue: HumanGateIssueCode | None = None
 
 
-Clock = Callable[
-    [],
-    datetime,
-]
-UuidFactory = Callable[
-    [],
-    UUID,
-]
-
-
 def utc_now() -> datetime:
     """Return current timezone-aware UTC time."""
     return datetime.now(UTC)
@@ -233,13 +227,7 @@ def user_modeling_gate_is_currently_approved(
     version: (UserModelingSnapshotVersion | None),
 ) -> bool:
     """Return whether Gate 3 approves the exact current snapshot."""
-    if gate is None or version is None:
-        return False
-
-    return (
-        gate.status is HumanGateStatus.APPROVED
-        and gate.artifact == user_modeling_artifact_reference(version)
-    )
+    return gate_is_currently_approved(gate, version, user_modeling_artifact_reference)
 
 
 def user_modeling_approval_manifest(
@@ -320,6 +308,15 @@ def user_modeling_approval_state(
     )
 
 
+_OUTCOMES = GateOutcomes(
+    submission=UserModelingGateSubmissionResult,
+    submission_status=UserModelingGateSubmissionStatus,
+    new_artifact_required=UserModelingGateSubmissionStatus.NEW_SNAPSHOT_REQUIRED,
+    decision=UserModelingGateDecisionResult,
+    decision_status=UserModelingGateDecisionStatus,
+)
+
+
 class LocalUserModelingGateService:
     """Gate 3 approval use cases composed from explicit ports."""
 
@@ -357,124 +354,15 @@ class LocalUserModelingGateService:
                     status=(UserModelingGateSubmissionStatus.SNAPSHOT_NOT_FOUND)
                 )
 
-            artifact = user_modeling_artifact_reference(version)
-
-            latest = await unit.gates.get_latest_owned_for_update(
+            return await submit_artifact(
+                unit.gates,
+                user_modeling_artifact_reference(version),
                 project_id=project_id,
-                owner_user_id=(owner_user_id),
-                gate_type=(HumanGateType.USER_MODELING),
-            )
-
-            if latest is not None and latest.artifact == artifact:
-                return await self._submit_existing(
-                    unit=unit,
-                    gate=latest,
-                    owner_user_id=(owner_user_id),
-                    occurred_at=timestamp,
-                )
-
-            stale_events: list[HumanGateEvent] = []
-
-            if latest is not None:
-                if latest.status in {
-                    HumanGateStatus.CANCELLED,
-                    HumanGateStatus.PAUSED_NEEDS_HUMAN,
-                }:
-                    return UserModelingGateSubmissionResult(
-                        status=(UserModelingGateSubmissionStatus.GATE_BLOCKED),
-                        gate=latest,
-                    )
-
-                if latest.status is not HumanGateStatus.STALE:
-                    stale_result = mark_human_gate_stale(
-                        latest,
-                        current_artifact=(artifact),
-                        occurred_at=(timestamp),
-                        event_id=(self._event_id_factory()),
-                    )
-
-                    if stale_result.status is HumanGateTransitionStatus.REJECTED:
-                        return UserModelingGateSubmissionResult(
-                            status=(UserModelingGateSubmissionStatus.TRANSITION_REJECTED),
-                            gate=latest,
-                            issue=(stale_result.issue),
-                        )
-
-                    if (
-                        stale_result.status is HumanGateTransitionStatus.APPLIED
-                        and stale_result.event is not None
-                    ):
-                        await unit.gates.save_transition(
-                            previous_gate=(latest),
-                            updated_gate=(stale_result.gate),
-                            event=(stale_result.event),
-                        )
-
-                        stale_events.append(stale_result.event)
-                        latest = stale_result.gate
-
-                budget = next_human_gate_iteration(
-                    latest,
-                    await unit.gates.list_events_owned(
-                        project_id=project_id,
-                        owner_user_id=(owner_user_id),
-                        gate_id=latest.id,
-                    ),
-                )
-
-                if budget is None:
-                    return UserModelingGateSubmissionResult(
-                        status=(UserModelingGateSubmissionStatus.ITERATION_LIMIT_REACHED),
-                        gate=latest,
-                        events=tuple(stale_events),
-                    )
-
-                next_iteration, max_iterations = budget
-            else:
-                next_iteration = 1
-                max_iterations = DEFAULT_GATE_ITERATION_LIMIT
-
-            draft = create_human_gate(
-                gate_id=(self._gate_id_factory()),
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
-                gate_type=(HumanGateType.USER_MODELING),
-                artifact=artifact,
-                iteration=next_iteration,
-                max_iterations=(max_iterations),
-                created_at=timestamp,
-            )
-
-            submitted = transition_human_gate(
-                draft,
-                action=(HumanGateAction.SUBMIT),
-                actor_user_id=(owner_user_id),
-                occurred_at=(timestamp),
-                event_id=(self._event_id_factory()),
-            )
-
-            if submitted.status is not HumanGateTransitionStatus.APPLIED or submitted.event is None:
-                return UserModelingGateSubmissionResult(
-                    status=(UserModelingGateSubmissionStatus.TRANSITION_REJECTED),
-                    gate=draft,
-                    events=tuple(stale_events),
-                    issue=submitted.issue,
-                )
-
-            persisted = await unit.gates.add_with_event(
-                gate=submitted.gate,
-                event=submitted.event,
-            )
-
-            all_events = (
-                *stale_events,
-                submitted.event,
-            )
-
-            return UserModelingGateSubmissionResult(
-                status=(UserModelingGateSubmissionStatus.SUBMITTED),
-                gate=persisted,
-                events=all_events,
+                owner_user_id=owner_user_id,
+                occurred_at=timestamp,
+                gate_id_factory=self._gate_id_factory,
+                event_id_factory=self._event_id_factory,
+                outcomes=_OUTCOMES,
             )
 
     async def decide(
@@ -499,91 +387,16 @@ class LocalUserModelingGateService:
                     status=(UserModelingGateDecisionStatus.SNAPSHOT_NOT_FOUND)
                 )
 
-            gate = await unit.gates.get_latest_owned_for_update(
+            return await decide_current(
+                unit.gates,
+                user_modeling_artifact_reference(version),
                 project_id=project_id,
-                owner_user_id=(owner_user_id),
-                gate_type=(HumanGateType.USER_MODELING),
-            )
-
-            if gate is None:
-                return UserModelingGateDecisionResult(
-                    status=(UserModelingGateDecisionStatus.GATE_NOT_FOUND)
-                )
-
-            if action is HumanGateAction.SUBMIT:
-                return UserModelingGateDecisionResult(
-                    status=(UserModelingGateDecisionStatus.REJECTED),
-                    gate=gate,
-                    issue=(HumanGateIssueCode.INVALID_TRANSITION),
-                )
-
-            current_artifact = user_modeling_artifact_reference(version)
-
-            if gate.artifact != current_artifact:
-                stale_result = mark_human_gate_stale(
-                    gate,
-                    current_artifact=(current_artifact),
-                    occurred_at=(timestamp),
-                    event_id=(self._event_id_factory()),
-                )
-
-                if (
-                    stale_result.status is HumanGateTransitionStatus.APPLIED
-                    and stale_result.event is not None
-                ):
-                    await unit.gates.save_transition(
-                        previous_gate=gate,
-                        updated_gate=(stale_result.gate),
-                        event=(stale_result.event),
-                    )
-
-                    return UserModelingGateDecisionResult(
-                        status=(UserModelingGateDecisionStatus.ARTIFACT_STALE),
-                        gate=(stale_result.gate),
-                        event=(stale_result.event),
-                    )
-
-                if stale_result.status is HumanGateTransitionStatus.NO_CHANGE:
-                    return UserModelingGateDecisionResult(
-                        status=(UserModelingGateDecisionStatus.ARTIFACT_STALE),
-                        gate=gate,
-                    )
-
-                return UserModelingGateDecisionResult(
-                    status=(UserModelingGateDecisionStatus.REJECTED),
-                    gate=gate,
-                    issue=(stale_result.issue),
-                )
-
-            transition = transition_human_gate(
-                gate,
+                owner_user_id=owner_user_id,
                 action=action,
-                actor_user_id=(owner_user_id),
-                occurred_at=timestamp,
                 reason=reason,
-                event_id=(self._event_id_factory()),
-            )
-
-            if (
-                transition.status is not HumanGateTransitionStatus.APPLIED
-                or transition.event is None
-            ):
-                return UserModelingGateDecisionResult(
-                    status=(UserModelingGateDecisionStatus.REJECTED),
-                    gate=gate,
-                    issue=(transition.issue),
-                )
-
-            persisted = await unit.gates.save_transition(
-                previous_gate=gate,
-                updated_gate=(transition.gate),
-                event=(transition.event),
-            )
-
-            return UserModelingGateDecisionResult(
-                status=(UserModelingGateDecisionStatus.APPLIED),
-                gate=persisted,
-                event=(transition.event),
+                occurred_at=timestamp,
+                event_id_factory=self._event_id_factory,
+                outcomes=_OUTCOMES,
             )
 
     async def current_gate(
@@ -593,12 +406,12 @@ class LocalUserModelingGateService:
         owner_user_id: UUID,
     ) -> HumanGate | None:
         """Return the latest owner-scoped Gate 3."""
-        async with self._unit_of_work_factory() as unit:
-            return await unit.gates.get_latest_owned_for_update(
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
-                gate_type=(HumanGateType.USER_MODELING),
-            )
+        return await latest_gate(
+            self._unit_of_work_factory(),
+            HumanGateType.USER_MODELING,
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+        )
 
     async def gate_events(
         self,
@@ -611,87 +424,15 @@ class LocalUserModelingGateService:
         ...,
     ]:
         """Return append-only owner-scoped Gate 3 history."""
-        async with self._unit_of_work_factory() as unit:
-            return await unit.gates.list_events_owned(
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
-                gate_id=gate_id,
-            )
-
-    async def _submit_existing(
-        self,
-        *,
-        unit: UserModelingGateUnitOfWork,
-        gate: HumanGate,
-        owner_user_id: UUID,
-        occurred_at: datetime,
-    ) -> UserModelingGateSubmissionResult:
-        """Submit a draft or report the current snapshot's gate state."""
-        if gate.status is HumanGateStatus.PENDING_APPROVAL:
-            return UserModelingGateSubmissionResult(
-                status=(UserModelingGateSubmissionStatus.ALREADY_PENDING),
-                gate=gate,
-            )
-
-        if gate.status is HumanGateStatus.APPROVED:
-            return UserModelingGateSubmissionResult(
-                status=(UserModelingGateSubmissionStatus.ALREADY_APPROVED),
-                gate=gate,
-            )
-
-        if gate.status is HumanGateStatus.DRAFT:
-            transition = transition_human_gate(
-                gate,
-                action=(HumanGateAction.SUBMIT),
-                actor_user_id=(owner_user_id),
-                occurred_at=(occurred_at),
-                event_id=(self._event_id_factory()),
-            )
-
-            if (
-                transition.status is not HumanGateTransitionStatus.APPLIED
-                or transition.event is None
-            ):
-                return UserModelingGateSubmissionResult(
-                    status=(UserModelingGateSubmissionStatus.TRANSITION_REJECTED),
-                    gate=gate,
-                    issue=(transition.issue),
-                )
-
-            persisted = await unit.gates.save_transition(
-                previous_gate=gate,
-                updated_gate=(transition.gate),
-                event=(transition.event),
-            )
-
-            return UserModelingGateSubmissionResult(
-                status=(UserModelingGateSubmissionStatus.SUBMITTED),
-                gate=persisted,
-                events=(transition.event,),
-            )
-
-        if gate.status in {
-            HumanGateStatus.PAUSED,
-            HumanGateStatus.CANCELLED,
-            HumanGateStatus.PAUSED_NEEDS_HUMAN,
-        }:
-            return UserModelingGateSubmissionResult(
-                status=(UserModelingGateSubmissionStatus.GATE_BLOCKED),
-                gate=gate,
-            )
-
-        return UserModelingGateSubmissionResult(
-            status=(UserModelingGateSubmissionStatus.NEW_SNAPSHOT_REQUIRED),
-            gate=gate,
+        return await gate_history(
+            self._unit_of_work_factory(),
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            gate_id=gate_id,
         )
 
     def _current_time(
         self,
     ) -> datetime:
         """Return and validate the injected application clock."""
-        timestamp = self._clock()
-
-        if timestamp.tzinfo is None:
-            raise ValueError("User Modeling gate clock must be timezone-aware")
-
-        return timestamp
+        return current_time(self._clock, "User Modeling gate clock must be timezone-aware")
