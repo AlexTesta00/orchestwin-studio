@@ -3,26 +3,29 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any, Final
 
 import anthropic
 
 from orchestwin.models.generation_budget import cost_microusd
+from orchestwin.models.hosted_answers import (
+    checked_answer,
+    count,
+    elapsed,
+    hosted_failure,
+    served_identity,
+    strict_schema,
+)
 from orchestwin.models.hosted_configuration import (
     HostedModelConfiguration,
     declared_limits_problem,
     served_model_matches,
 )
 from orchestwin.models.hosted_schema import (
-    HostedSchemaError,
-    hosted_output_schema,
     hosted_user_message,
     parse_prompted_answer,
     prune_undefined_properties,
-    shorten_overlong_strings,
-    validate_against_schema,
-    violation_message,
 )
 from orchestwin.models.openai_compatible import (
     OpenAICompatibleTimeoutError,
@@ -33,22 +36,17 @@ from orchestwin.models.strict_evaluator_json import strict_json_object
 from orchestwin.models.structured_generation import (
     ModelRuntimeIdentity,
     StructuredGenerationFailureCode,
-    StructuredGenerationFinishReason,
     StructuredGenerationPort,
     StructuredGenerationProviderKind,
     StructuredGenerationRequest,
     StructuredGenerationResult,
     StructuredGenerationUsage,
     StructuredOutputMode,
-    create_structured_generation_success,
-    failed_structured_generation_result,
-    successful_structured_generation_result,
 )
 from orchestwin.projects.requirements_primitives import canonical_json
 
 ANTHROPIC_MESSAGES_URL: Final = "https://api.anthropic.com/v1/messages"
 READINESS_TIMEOUT_SECONDS: Final = 10
-_MAX_IDENTIFIER_LENGTH: Final = 256
 _KIND: Final = StructuredGenerationProviderKind.ANTHROPIC_HOSTED
 _Code = StructuredGenerationFailureCode
 _ERROR_TYPES: Final = {
@@ -137,12 +135,8 @@ class AnthropicMessagesTransport:
         return AnthropicTransportResponse(
             status_code=200,
             body=body.encode("utf-8"),
-            elapsed_milliseconds=_elapsed(started),
+            elapsed_milliseconds=elapsed(started),
         )
-
-
-def _elapsed(started: float) -> int:
-    return max(0, round((time.perf_counter() - started) * 1000))
 
 
 def _generic_status_failure(
@@ -189,7 +183,7 @@ def _status_response(
     return AnthropicTransportResponse(
         status_code=status,
         body=_error_body(error),
-        elapsed_milliseconds=_elapsed(started),
+        elapsed_milliseconds=elapsed(started),
         failure=(code, retryable),
     )
 
@@ -213,25 +207,10 @@ class AnthropicHostedStructuredAdapter(StructuredGenerationPort):
         retry_note: str | None = None,
     ) -> StructuredGenerationResult:
         mode = StructuredOutputMode(output_mode)
-        if request.expected_identity != self._configuration.identity:
-            return _failure(
-                _Code.IDENTITY_MISMATCH,
-                "The requested model identity differs from the configured hosted model.",
-                mode=mode,
-                retryable=False,
-            )
-        full_schema = json.loads(request.output_schema.canonical_schema_json)
-        schema = None
-        if mode is StructuredOutputMode.STRICT:
-            try:
-                schema = hosted_output_schema(full_schema, _KIND)
-            except HostedSchemaError:
-                return _failure(
-                    _Code.INVALID_REQUEST,
-                    "The output schema cannot be expressed for the hosted model provider.",
-                    mode=mode,
-                    retryable=False,
-                )
+        schemas = strict_schema(request, self._configuration, mode, _KIND)
+        if isinstance(schemas, StructuredGenerationResult):
+            return schemas
+        full_schema, schema = schemas
         max_tokens = self._configuration.max_tokens(request.max_output_tokens)
         payload = request_payload(
             self._configuration, request, max_tokens, schema=schema, retry_note=retry_note
@@ -305,7 +284,7 @@ class AnthropicHostedStructuredAdapter(StructuredGenerationPort):
                 usage=usage,
             )
         try:
-            identity = _served_identity(self._configuration, message.get("model"))
+            identity = served_identity(self._configuration, message.get("model"))
             text = _text(message.get("content"))
             output = (
                 strict_json_object(text)
@@ -320,40 +299,15 @@ class AnthropicHostedStructuredAdapter(StructuredGenerationPort):
                 retryable=False,
                 usage=usage,
             )
-        output, shortened = shorten_overlong_strings(output, full_schema)
-        violations = validate_against_schema(output, full_schema)
-        if violations and mode is StructuredOutputMode.PROMPTED:
-            pruned = prune_undefined_properties(output, full_schema)
-            if pruned is not None:
-                output, violations = pruned.payload, ()
-        if violations:
-            return _failure(
-                _Code.RESPONSE_SCHEMA_ERROR,
-                violation_message(violations),
-                mode=mode,
-                retryable=False,
-                usage=usage,
-                shortened_paths=shortened,
-            )
-        try:
-            success = create_structured_generation_success(
-                payload=output,
-                actual_identity=identity,
-                usage=usage,
-                finish_reason=StructuredGenerationFinishReason.STOP,
-                provider_request_id=_provider_request_id(message.get("id")),
-            )
-        except (ValueError, TypeError):
-            return _failure(
-                _Code.RESPONSE_SCHEMA_ERROR,
-                "The hosted model answer does not satisfy the structured contract.",
-                mode=mode,
-                retryable=False,
-                usage=usage,
-                shortened_paths=shortened,
-            )
-        return successful_structured_generation_result(
-            provider_kind=_KIND, success=success, output_mode=mode, shortened_paths=shortened
+        return checked_answer(
+            output,
+            full_schema,
+            mode=mode,
+            kind=_KIND,
+            identity=identity,
+            usage=usage,
+            request_id=message.get("id"),
+            prune=prune_undefined_properties,
         )
 
 
@@ -387,35 +341,8 @@ def request_payload(
     return payload
 
 
-def _failure(
-    code: StructuredGenerationFailureCode,
-    message: str,
-    *,
-    mode: StructuredOutputMode,
-    retryable: bool,
-    status: int | None = None,
-    usage: StructuredGenerationUsage | None = None,
-    shortened_paths: tuple[str, ...] = (),
-) -> StructuredGenerationResult:
-    return failed_structured_generation_result(
-        provider_kind=_KIND,
-        code=code,
-        message=message,
-        retryable=retryable,
-        provider_status_code=status,
-        usage=usage,
-        output_mode=mode,
-        shortened_paths=shortened_paths,
-    )
-
-
-def _count(values: dict[str, object], key: str, *, required: bool) -> int:
-    value = values.get(key)
-    if value is None and not required:
-        return 0
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{key} must be a non-negative integer")
-    return value
+def _failure(code: _Code, message: str, **details: Any) -> StructuredGenerationResult:
+    return hosted_failure(_KIND, code, message, **details)
 
 
 def _usage(
@@ -423,13 +350,13 @@ def _usage(
 ) -> StructuredGenerationUsage:
     if not isinstance(value, dict):
         raise ValueError("message usage is required")
-    input_tokens = _count(value, "input_tokens", required=True)
-    output_tokens = _count(value, "output_tokens", required=True)
-    cache_read = _count(value, "cache_read_input_tokens", required=False)
-    cache_write = _count(value, "cache_creation_input_tokens", required=False)
+    input_tokens = count(value, "input_tokens", required=True)
+    output_tokens = count(value, "output_tokens", required=True)
+    cache_read = count(value, "cache_read_input_tokens", required=False)
+    cache_write = count(value, "cache_creation_input_tokens", required=False)
     details = value.get("output_tokens_details")
     reasoning = (
-        _count(details, "thinking_tokens", required=False) if isinstance(details, dict) else 0
+        count(details, "thinking_tokens", required=False) if isinstance(details, dict) else 0
     )
     return StructuredGenerationUsage(
         input_tokens=input_tokens,
@@ -461,27 +388,6 @@ def _text(content: object) -> str:
     if not texts:
         raise ValueError("message content has no text block")
     return "".join(texts)
-
-
-def _served_identity(
-    configuration: HostedModelConfiguration, served: object
-) -> ModelRuntimeIdentity:
-    if not isinstance(served, str) or not served:
-        raise ValueError("served model is required")
-    if served_model_matches(configuration.model, served):
-        return configuration.identity
-    return replace(configuration.identity, base_model_revision=served)
-
-
-def _provider_request_id(value: object) -> str | None:
-    if (
-        isinstance(value, str)
-        and value
-        and len(value) <= _MAX_IDENTIFIER_LENGTH
-        and not any(character.isspace() for character in value)
-    ):
-        return value
-    return None
 
 
 def build_anthropic_adapter(

@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from dataclasses import replace
 from typing import Any, Final
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from orchestwin.models.generation_budget import cost_microusd
+from orchestwin.models.hosted_answers import (
+    checked_answer,
+    count,
+    hosted_failure,
+    served_identity,
+    strict_schema,
+)
 from orchestwin.models.hosted_configuration import (
     HostedModelConfiguration,
     OpenAICompatibleHostedProviderEntry,
@@ -16,14 +21,9 @@ from orchestwin.models.hosted_configuration import (
     served_model_matches,
 )
 from orchestwin.models.hosted_schema import (
-    HostedSchemaError,
-    hosted_output_schema,
     hosted_user_message,
     parse_prompted_answer,
     prune_undefined_properties,
-    shorten_overlong_strings,
-    validate_against_schema,
-    violation_message,
 )
 from orchestwin.models.openai_compatible import (
     OpenAICompatibleTimeoutError,
@@ -35,21 +35,16 @@ from orchestwin.models.strict_evaluator_json import strict_json_object
 from orchestwin.models.structured_generation import (
     ModelRuntimeIdentity,
     StructuredGenerationFailureCode,
-    StructuredGenerationFinishReason,
     StructuredGenerationPort,
     StructuredGenerationProviderKind,
     StructuredGenerationRequest,
     StructuredGenerationResult,
     StructuredGenerationUsage,
     StructuredOutputMode,
-    create_structured_generation_success,
-    failed_structured_generation_result,
-    successful_structured_generation_result,
 )
 
 READINESS_TIMEOUT_SECONDS: Final = 10
 _MAX_MODEL_RESPONSE_BYTES: Final = 65_536
-_MAX_IDENTIFIER_LENGTH: Final = 256
 _KIND: Final = StructuredGenerationProviderKind.OPENAI_COMPATIBLE_HOSTED
 _Code = StructuredGenerationFailureCode
 _DECLARED_WINDOW_KEYS: Final = ("context_window", "context_length", "max_context_length")
@@ -86,25 +81,10 @@ class OpenAICompatibleHostedStructuredAdapter(StructuredGenerationPort):
         retry_note: str | None = None,
     ) -> StructuredGenerationResult:
         mode = StructuredOutputMode(output_mode)
-        if request.expected_identity != self._configuration.identity:
-            return _failure(
-                _Code.IDENTITY_MISMATCH,
-                "The requested model identity differs from the configured hosted model.",
-                mode=mode,
-                retryable=False,
-            )
-        full_schema = json.loads(request.output_schema.canonical_schema_json)
-        schema = None
-        if mode is StructuredOutputMode.STRICT:
-            try:
-                schema = hosted_output_schema(full_schema, _KIND)
-            except HostedSchemaError:
-                return _failure(
-                    _Code.INVALID_REQUEST,
-                    "The output schema cannot be expressed for the hosted model provider.",
-                    mode=mode,
-                    retryable=False,
-                )
+        schemas = strict_schema(request, self._configuration, mode, _KIND)
+        if isinstance(schemas, StructuredGenerationResult):
+            return schemas
+        full_schema, schema = schemas
         max_tokens = self._configuration.max_tokens(request.max_output_tokens)
         payload = request_payload(
             self._configuration, request, max_tokens, schema=schema, retry_note=retry_note
@@ -174,7 +154,7 @@ class OpenAICompatibleHostedStructuredAdapter(StructuredGenerationPort):
                 usage=usage,
             )
         try:
-            identity = _served_identity(self._configuration, body.get("model"))
+            identity = served_identity(self._configuration, body.get("model"))
             content = message.get("content")
             if not isinstance(content, str):
                 raise ValueError("completion content must be a string")
@@ -191,40 +171,15 @@ class OpenAICompatibleHostedStructuredAdapter(StructuredGenerationPort):
                 retryable=False,
                 usage=usage,
             )
-        output, shortened = shorten_overlong_strings(output, full_schema)
-        violations = validate_against_schema(output, full_schema)
-        if violations and mode is StructuredOutputMode.PROMPTED:
-            pruned = prune_undefined_properties(output, full_schema)
-            if pruned is not None:
-                output, violations = pruned.payload, ()
-        if violations:
-            return _failure(
-                _Code.RESPONSE_SCHEMA_ERROR,
-                violation_message(violations),
-                mode=mode,
-                retryable=False,
-                usage=usage,
-                shortened_paths=shortened,
-            )
-        try:
-            success = create_structured_generation_success(
-                payload=output,
-                actual_identity=identity,
-                usage=usage,
-                finish_reason=StructuredGenerationFinishReason.STOP,
-                provider_request_id=_provider_request_id(body.get("id")),
-            )
-        except (ValueError, TypeError):
-            return _failure(
-                _Code.RESPONSE_SCHEMA_ERROR,
-                "The hosted model answer does not satisfy the structured contract.",
-                mode=mode,
-                retryable=False,
-                usage=usage,
-                shortened_paths=shortened,
-            )
-        return successful_structured_generation_result(
-            provider_kind=_KIND, success=success, output_mode=mode, shortened_paths=shortened
+        return checked_answer(
+            output,
+            full_schema,
+            mode=mode,
+            kind=_KIND,
+            identity=identity,
+            usage=usage,
+            request_id=body.get("id"),
+            prune=prune_undefined_properties,
         )
 
 
@@ -303,26 +258,8 @@ def hosted_http_failure(
     return _failure(code, message, mode=output_mode, retryable=retryable, status=status_code)
 
 
-def _failure(
-    code: StructuredGenerationFailureCode,
-    message: str,
-    *,
-    mode: StructuredOutputMode,
-    retryable: bool,
-    status: int | None = None,
-    usage: StructuredGenerationUsage | None = None,
-    shortened_paths: tuple[str, ...] = (),
-) -> StructuredGenerationResult:
-    return failed_structured_generation_result(
-        provider_kind=_KIND,
-        code=code,
-        message=message,
-        retryable=retryable,
-        provider_status_code=status,
-        usage=usage,
-        output_mode=mode,
-        shortened_paths=shortened_paths,
-    )
+def _failure(code: _Code, message: str, **details: Any) -> StructuredGenerationResult:
+    return hosted_failure(_KIND, code, message, **details)
 
 
 def _single_choice(body: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -335,31 +272,22 @@ def _single_choice(body: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]
     return choice, choice["message"]
 
 
-def _count(values: dict[str, Any], key: str) -> int:
-    value = values.get(key)
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{key} must be a non-negative integer")
-    return value
-
-
 def _usage(
     value: object, elapsed_milliseconds: int, configuration: HostedModelConfiguration
 ) -> StructuredGenerationUsage:
     if not isinstance(value, dict):
         raise ValueError("completion usage is required")
-    prompt_tokens = _count(value, "prompt_tokens")
-    output_tokens = _count(value, "completion_tokens")
+    prompt_tokens = count(value, "prompt_tokens", required=True)
+    output_tokens = count(value, "completion_tokens", required=True)
     details = value.get("prompt_tokens_details")
-    cached = 0
-    if isinstance(details, dict) and details.get("cached_tokens") is not None:
-        cached = _count(details, "cached_tokens")
+    cached = count(details, "cached_tokens", required=False) if isinstance(details, dict) else 0
     if cached > prompt_tokens:
         raise ValueError("cached tokens exceed the prompt tokens")
     input_tokens = prompt_tokens - cached
     completion = value.get("completion_tokens_details")
-    reasoning = 0
-    if isinstance(completion, dict) and completion.get("reasoning_tokens") is not None:
-        reasoning = _count(completion, "reasoning_tokens")
+    reasoning = (
+        count(completion, "reasoning_tokens", required=False) if isinstance(completion, dict) else 0
+    )
     return StructuredGenerationUsage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
@@ -373,27 +301,6 @@ def _usage(
             prices=configuration.prices,
         ),
     )
-
-
-def _served_identity(
-    configuration: HostedModelConfiguration, served: object
-) -> ModelRuntimeIdentity:
-    if not isinstance(served, str) or not served:
-        raise ValueError("served model is required")
-    if served_model_matches(configuration.model, served):
-        return configuration.identity
-    return replace(configuration.identity, base_model_revision=served)
-
-
-def _provider_request_id(value: object) -> str | None:
-    if (
-        isinstance(value, str)
-        and value
-        and len(value) <= _MAX_IDENTIFIER_LENGTH
-        and not any(character.isspace() for character in value)
-    ):
-        return value
-    return None
 
 
 def build_openai_hosted_adapter(

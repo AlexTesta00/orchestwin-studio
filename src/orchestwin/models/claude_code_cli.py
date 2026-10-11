@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import os
 import re
 import shutil
@@ -16,19 +15,21 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Final
 
+from orchestwin.models.hosted_answers import (
+    checked_answer,
+    count,
+    elapsed,
+    hosted_failure,
+    strict_schema,
+)
 from orchestwin.models.hosted_configuration import (
     HostedModelConfiguration,
     served_model_matches,
 )
 from orchestwin.models.hosted_schema import (
-    HostedSchemaError,
-    hosted_output_schema,
     hosted_user_message,
     parse_prompted_answer,
     prune_undefined_properties,
-    shorten_overlong_strings,
-    validate_against_schema,
-    violation_message,
 )
 from orchestwin.models.openai_compatible import (
     OpenAICompatibleTimeoutError,
@@ -40,16 +41,12 @@ from orchestwin.models.structured_generation import (
     GenerationAttachment,
     ModelRuntimeIdentity,
     StructuredGenerationFailureCode,
-    StructuredGenerationFinishReason,
     StructuredGenerationPort,
     StructuredGenerationProviderKind,
     StructuredGenerationRequest,
     StructuredGenerationResult,
     StructuredGenerationUsage,
     StructuredOutputMode,
-    create_structured_generation_success,
-    failed_structured_generation_result,
-    successful_structured_generation_result,
 )
 from orchestwin.projects.requirements_primitives import canonical_json
 
@@ -80,7 +77,6 @@ CLAUDE_CODE_NOT_LOGGED_IN: Final = "CLAUDE_CODE_NOT_LOGGED_IN"
 CLAUDE_CODE_NOT_ON_SUBSCRIPTION: Final = "CLAUDE_CODE_NOT_ON_SUBSCRIPTION"
 _KIND: Final = StructuredGenerationProviderKind.CLAUDE_CODE_CLI
 _Code = StructuredGenerationFailureCode
-_MAX_IDENTIFIER_LENGTH: Final = 256
 _MAX_VERSION_LENGTH: Final = 64
 _MAX_SUBSCRIPTION_LENGTH: Final = 64
 _FOLDER_PREFIX: Final = "orchestwin-claude-"
@@ -282,10 +278,6 @@ def _write_attachments(directory: Path, attachments: Sequence[GenerationAttachme
             raise OpenAICompatibleTransportError("the attachment could not be written") from None
 
 
-def _elapsed(started: float) -> int:
-    return max(0, round((time.perf_counter() - started) * 1000))
-
-
 class ClaudeCodeTransport:
     def __init__(
         self,
@@ -333,7 +325,7 @@ class ClaudeCodeTransport:
         return ClaudeCodeResponse(
             status_code=answer_status(outcome.stdout),
             body=outcome.stdout,
-            elapsed_milliseconds=_elapsed(started),
+            elapsed_milliseconds=elapsed(started),
         )
 
 
@@ -356,25 +348,10 @@ class ClaudeCodeStructuredAdapter(StructuredGenerationPort):
         retry_note: str | None = None,
     ) -> StructuredGenerationResult:
         mode = StructuredOutputMode(output_mode)
-        if request.expected_identity != self._configuration.identity:
-            return _failure(
-                _Code.IDENTITY_MISMATCH,
-                "The requested model identity differs from the configured hosted model.",
-                mode=mode,
-                retryable=False,
-            )
-        full_schema = json.loads(request.output_schema.canonical_schema_json)
-        schema = None
-        if mode is StructuredOutputMode.STRICT:
-            try:
-                schema = hosted_output_schema(full_schema, _KIND)
-            except HostedSchemaError:
-                return _failure(
-                    _Code.INVALID_REQUEST,
-                    "The output schema cannot be expressed for the hosted model provider.",
-                    mode=mode,
-                    retryable=False,
-                )
+        schemas = strict_schema(request, self._configuration, mode, _KIND)
+        if isinstance(schemas, StructuredGenerationResult):
+            return schemas
+        full_schema, schema = schemas
         max_tokens = self._configuration.max_tokens(request.max_output_tokens)
         payload = request_payload(
             self._configuration, request, max_tokens, schema=schema, retry_note=retry_note
@@ -468,40 +445,15 @@ class ClaudeCodeStructuredAdapter(StructuredGenerationPort):
                 retryable=False,
                 usage=usage,
             )
-        output, shortened = shorten_overlong_strings(output, full_schema)
-        violations = validate_against_schema(output, full_schema)
-        if violations and mode is StructuredOutputMode.PROMPTED:
-            pruned = prune_undefined_properties(output, full_schema)
-            if pruned is not None:
-                output, violations = pruned.payload, ()
-        if violations:
-            return _failure(
-                _Code.RESPONSE_SCHEMA_ERROR,
-                violation_message(violations),
-                mode=mode,
-                retryable=False,
-                usage=usage,
-                shortened_paths=shortened,
-            )
-        try:
-            success = create_structured_generation_success(
-                payload=output,
-                actual_identity=identity,
-                usage=usage,
-                finish_reason=StructuredGenerationFinishReason.STOP,
-                provider_request_id=_provider_request_id(answer.get("session_id")),
-            )
-        except (ValueError, TypeError):
-            return _failure(
-                _Code.RESPONSE_SCHEMA_ERROR,
-                "The hosted model answer does not satisfy the structured contract.",
-                mode=mode,
-                retryable=False,
-                usage=usage,
-                shortened_paths=shortened,
-            )
-        return successful_structured_generation_result(
-            provider_kind=_KIND, success=success, output_mode=mode, shortened_paths=shortened
+        return checked_answer(
+            output,
+            full_schema,
+            mode=mode,
+            kind=_KIND,
+            identity=identity,
+            usage=usage,
+            request_id=answer.get("session_id"),
+            prune=prune_undefined_properties,
         )
 
 
@@ -558,35 +510,8 @@ def _program_message(body: bytes) -> str:
     return text if isinstance(text, str) else ""
 
 
-def _failure(
-    code: StructuredGenerationFailureCode,
-    message: str,
-    *,
-    mode: StructuredOutputMode,
-    retryable: bool,
-    status: int | None = None,
-    usage: StructuredGenerationUsage | None = None,
-    shortened_paths: tuple[str, ...] = (),
-) -> StructuredGenerationResult:
-    return failed_structured_generation_result(
-        provider_kind=_KIND,
-        code=code,
-        message=message,
-        retryable=retryable,
-        provider_status_code=status,
-        usage=usage,
-        output_mode=mode,
-        shortened_paths=shortened_paths,
-    )
-
-
-def _count(values: Mapping[str, object], key: str, *, required: bool) -> int:
-    value = values.get(key)
-    if value is None and not required:
-        return 0
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{key} must be a non-negative integer")
-    return value
+def _failure(code: _Code, message: str, **details: Any) -> StructuredGenerationResult:
+    return hosted_failure(_KIND, code, message, **details)
 
 
 def _usage(value: object, elapsed_milliseconds: int) -> StructuredGenerationUsage:
@@ -594,13 +519,13 @@ def _usage(value: object, elapsed_milliseconds: int) -> StructuredGenerationUsag
         raise ValueError("result usage is required")
     details = value.get("output_tokens_details")
     return StructuredGenerationUsage(
-        input_tokens=_count(value, "input_tokens", required=True),
-        output_tokens=_count(value, "output_tokens", required=True),
+        input_tokens=count(value, "input_tokens", required=True),
+        output_tokens=count(value, "output_tokens", required=True),
         latency_milliseconds=elapsed_milliseconds,
-        cache_read_input_tokens=_count(value, "cache_read_input_tokens", required=False),
-        cache_write_input_tokens=_count(value, "cache_creation_input_tokens", required=False),
+        cache_read_input_tokens=count(value, "cache_read_input_tokens", required=False),
+        cache_write_input_tokens=count(value, "cache_creation_input_tokens", required=False),
         reasoning_tokens=(
-            _count(details, "thinking_tokens", required=False) if isinstance(details, dict) else 0
+            count(details, "thinking_tokens", required=False) if isinstance(details, dict) else 0
         ),
         cost_microusd=None,
     )
@@ -615,7 +540,7 @@ def _served_identity(
     for name, figures in model_usage.items():
         if not isinstance(name, str) or not name or not isinstance(figures, dict):
             raise ValueError("every served model needs its figures")
-        produced[name] = _count(figures, "outputTokens", required=False)
+        produced[name] = count(figures, "outputTokens", required=False)
     if any(served_model_matches(configuration.model, name) for name in produced):
         return configuration.identity
     revision = max(produced, key=lambda name: (produced[name], name))
@@ -632,17 +557,6 @@ def _output(answer: Mapping[str, Any], mode: StructuredOutputMode) -> dict[str, 
     if not isinstance(text, str):
         raise ValueError("the result text is required")
     return parse_prompted_answer(text)
-
-
-def _provider_request_id(value: object) -> str | None:
-    if (
-        isinstance(value, str)
-        and value
-        and len(value) <= _MAX_IDENTIFIER_LENGTH
-        and not any(character.isspace() for character in value)
-    ):
-        return value
-    return None
 
 
 def build_claude_code_adapter(
