@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli.api import usage
 from orchestwin.cli.client import api_failure, payload
 from orchestwin.cli.errors import ApiFailure
+from orchestwin.cli.shapes import dict_list as _items
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -316,9 +317,3 @@ def iterations(client: StudioClient, project_id: str) -> list[Mapping[str, objec
 def project_jobs(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
     document = client.get(f"/projects/{project_id}/generation-jobs")
     return _items(document.get("items") if isinstance(document, dict) else None)
-
-
-def _items(value: object) -> list[Mapping[str, object]]:
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, dict)]

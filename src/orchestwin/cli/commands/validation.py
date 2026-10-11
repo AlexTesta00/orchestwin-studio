@@ -4,7 +4,7 @@ import argparse
 import json
 
 from orchestwin.cli.api import validation
-from orchestwin.cli.errors import SIGN_IN_STATUS, CliError
+from orchestwin.cli.errors import CliError, signed_out_reason
 from orchestwin.cli.mcp.knowledge import FolderProblem, load
 from orchestwin.cli.views.validation import show
 from orchestwin.cli.views.workflow_inputs import show_records
@@ -55,9 +55,7 @@ def run(context, arguments):
         raise CliError("VALIDATION_INPUT_INVALID", status=2)
     if arguments.action is None and (arguments.alternative or arguments.document_hash):
         raise CliError("VALIDATION_INPUT_INVALID", status=2)
-    project = context.project()
-    if project is None:
-        raise CliError("PROJECT_NOT_LINKED")
+    project = context.linked_project()
     if arguments.offline:
         answer = _local(project, arguments)
         context.console.error("validation.offline", reason="--offline")
@@ -77,10 +75,7 @@ def run(context, arguments):
                 else validation.overview(client, identity)
             )
         except CliError as error:
-            if (
-                error.code not in {"STUDIO_UNREACHABLE", "NOT_SIGNED_IN"}
-                and error.status != SIGN_IN_STATUS
-            ):
+            if signed_out_reason(error) is None:
                 raise
             answer = _local(project, arguments)
             context.console.error("validation.offline", reason=error.code)

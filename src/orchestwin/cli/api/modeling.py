@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Final
 
-from orchestwin.cli.jobs import reply_body
+from orchestwin.cli.api.replies import send as _send
+from orchestwin.cli.shapes import mapping_list as _mapping_list
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -11,7 +12,6 @@ if TYPE_CHECKING:
 READY: Final = "READY_FOR_REQUIREMENTS_DEFINITION"
 PENDING: Final = "PENDING_CONFIRMATION"
 CONFIRMED: Final = "CONFIRMED"
-REJECTED: Final = "REJECTED"
 CONFIRM: Final = "CONFIRM"
 APPROVE: Final = "APPROVE"
 REJECT: Final = "REJECT"
@@ -46,10 +46,7 @@ def readiness(client: StudioClient, project_id: str) -> Mapping[str, object]:
 
 
 def personas(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
-    document = client.get(f"{modeling_path(project_id)}/personas", optional=True)
-    if not isinstance(document, list):
-        return []
-    return [item for item in document if isinstance(item, Mapping)]
+    return _mapping_list(client.get(f"{modeling_path(project_id)}/personas", optional=True))
 
 
 def decide(
@@ -208,14 +205,4 @@ def observation(version: Mapping[str, object], key: str) -> str | list[str] | No
 
 def twins(version: Mapping[str, object]) -> list[Mapping[str, object]]:
     body = version.get("snapshot")
-    value = body.get("twin_versions") if isinstance(body, Mapping) else None
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
-
-
-def _send(
-    client: StudioClient, method: str, path: str, body: object | None = None
-) -> tuple[int, object]:
-    reply = client.request(method, path, body=body)
-    return reply.status, reply_body(reply)
+    return _mapping_list(body.get("twin_versions") if isinstance(body, Mapping) else None)

@@ -38,8 +38,11 @@ class CommandContext:
         self.generation_waits: list[tuple[datetime, float, int | None]] = []
 
     def project(self, *, required: bool = True) -> ProjectFolder | None:
+        return self.linked_project() if required else ProjectFolder.find(self.directory)
+
+    def linked_project(self) -> ProjectFolder:
         found = ProjectFolder.find(self.directory)
-        if found is None and required:
+        if found is None:
             raise CliError("PROJECT_NOT_LINKED")
         return found
 
@@ -57,3 +60,9 @@ class CommandContext:
 
     def text(self, key: str, /, **values: object) -> str:
         return self.console.text(key, **values)
+
+    def confirm(self, key: str, /, *, default: bool, **values: object) -> bool:
+        return self.assume_yes or self.console.confirm(key, default=default, **values)
+
+    def now_text(self) -> str:
+        return self.environment.now().isoformat(timespec="seconds")

@@ -9,21 +9,25 @@ from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import modeling as modeling_api
 from orchestwin.cli.api import twin_chat
+from orchestwin.cli.api.usage import MICRO_USD
 from orchestwin.cli.client import ensure_access
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows.code_order import project_language
 from orchestwin.cli.flows.design_state import bullets, wrapped
 from orchestwin.cli.flows.review import places, review_locale
+from orchestwin.cli.folder import DESIGN_DOCUMENT, REQUIREMENTS_DOCUMENT
 from orchestwin.cli.messages import text as message_text
 from orchestwin.cli.project import LOCAL_FOLDER, read_json
+from orchestwin.cli.shapes import mappings as _mappings
+from orchestwin.cli.shapes import sequence as _list
+from orchestwin.cli.shapes import squeezed as _text
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
     from orchestwin.cli.project import ProjectFolder
 
-MICRO_USD: Final = 1_000_000
 CRITIQUE_KEYS: Final[Mapping[str, str]] = {
     changes_api.FINE: "verify.critique_fine",
     changes_api.CONCERN: "verify.critique_concern",
@@ -40,9 +44,7 @@ VERDICT_KEYS: Final[Mapping[str, str]] = {
     changes_api.DESIGN_OUTDATED: "verify.verdict_design_outdated",
     changes_api.REQUIREMENTS_OUTDATED: "verify.verdict_requirements_outdated",
 }
-REQUIREMENTS_DOCUMENT: Final = ("requirements", "requirements.json")
-DESIGN_DOCUMENT: Final = ("design", "design.json")
-TWINS_DOCUMENT: Final = ("twins", "twins.json")
+TWINS_DOCUMENT: Final = "twins/twins.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,9 +64,7 @@ class Titles:
 
 
 def prepare(context: CommandContext, *, repository: bool = True) -> Workspace:
-    project = context.project()
-    if project is None:
-        raise CliError("PROJECT_NOT_LINKED")
+    project = context.linked_project()
     link = project.link()
     client = context.client()
     ensure_access(context, client)
@@ -157,7 +157,7 @@ def record(
 
 
 def twins_count(client: StudioClient, project: ProjectFolder) -> int:
-    document = read_json(project.knowledge.joinpath(*TWINS_DOCUMENT))
+    document = read_json(project.knowledge / TWINS_DOCUMENT)
     versions = twin_chat.twin_versions(document if isinstance(document, Mapping) else None)
     if not versions:
         snapshot = modeling_api.snapshot(client, project.link().project_id)
@@ -195,13 +195,9 @@ def review(
         changes_api.review_body(locale, again),
         label=label,
     )
-    body = result.body
     if result.status_code < 400:
-        run = body.get("run") if isinstance(body, Mapping) else None
-        if not isinstance(run, Mapping):
-            raise ApiFailure("API_FAILURE", http_status=result.status_code)
-        return run
-    failure = failure_of(result.status_code, body)
+        return jobs.answer_member(result, "run")
+    failure = failure_of(result.status_code, result.body)
     if failure.code == changes_api.REVIEW_EXISTS:
         found = latest_run(workspace, commit)
         if found is not None:
@@ -226,7 +222,7 @@ def failure_of(status: int, body: object) -> ApiFailure:
 
 def titles(project: ProjectFolder) -> Titles:
     requirements: dict[str, str] = {}
-    document = read_json(project.knowledge.joinpath(*REQUIREMENTS_DOCUMENT))
+    document = read_json(project.knowledge / REQUIREMENTS_DOCUMENT)
     specification = document.get("specification") if isinstance(document, dict) else None
     items = specification.get("requirements") if isinstance(specification, dict) else None
     for item in items if isinstance(items, list) else []:
@@ -234,7 +230,7 @@ def titles(project: ProjectFolder) -> Titles:
         title = _text(item.get("title")) if isinstance(item, dict) else ""
         if isinstance(code, str) and title:
             requirements[code] = title
-    design = read_json(project.knowledge.joinpath(*DESIGN_DOCUMENT))
+    design = read_json(project.knowledge / DESIGN_DOCUMENT)
     package = design.get("package") if isinstance(design, dict) else None
     screens, _ = places(package) if isinstance(package, Mapping) else ({}, {})
     return Titles(requirements=requirements, screens=screens)
@@ -373,15 +369,3 @@ def finding_line(context: CommandContext, finding: Mapping[str, object], names: 
 def named(context: CommandContext, code: str, titles_by_code: Mapping[str, str]) -> str:
     title = titles_by_code.get(code)
     return context.text("verify.named", code=code, title=title) if title else code
-
-
-def _mappings(value: object) -> list[Mapping[str, object]]:
-    return [item for item in _list(value) if isinstance(item, Mapping)]
-
-
-def _list(value: object) -> list[object]:
-    return list(value) if isinstance(value, list | tuple) else []
-
-
-def _text(value: object) -> str:
-    return " ".join(value.split()) if isinstance(value, str) else ""

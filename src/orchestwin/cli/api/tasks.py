@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.errors import ApiFailure
 from orchestwin.cli.jobs import reply_body
+from orchestwin.cli.shapes import mappings
+from orchestwin.cli.shapes import required_mapping as _mapping_of
+from orchestwin.cli.shapes import squeezed as _text
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -25,13 +28,9 @@ MAX_TASK_NOTE_LENGTH: Final = 300
 MAX_FINDING_LENGTH: Final = 400
 OPEN_FILTER: Final = "open"
 ALL_FILTER: Final = "all"
-CREATED: Final = "CREATED"
-UPDATED: Final = "UPDATED"
-TASK_SOURCE_INVALID: Final = "TASK_SOURCE_INVALID"
 CODE_TASK_NOT_FOUND: Final = "CODE_TASK_NOT_FOUND"
 TEST_RUN_NOT_FOUND: Final = "TEST_RUN_NOT_FOUND"
 CODE_CHANGE_NOT_FOUND: Final = "CODE_CHANGE_NOT_FOUND"
-CODE_CHANGE_AMBIGUOUS: Final = "CODE_CHANGE_AMBIGUOUS"
 CODE_PATTERN: Final = re.compile(r"TSK-[0-9]{3,6}", re.IGNORECASE)
 ORIGIN_KEYS: Final = ("kind", "commit", "test_run_id", "twin_id", "twin_name", "finding")
 CUT_MARK: Final = "…"
@@ -259,19 +258,3 @@ def origin_text(
     if not _text(origin.get("twin_id")) and not _text(origin.get("finding")):
         return context.text("tasks.origin_verdict", commit=shown)
     return context.text("tasks.origin_commit", twin=twin, commit=shown)
-
-
-def mappings(value: object) -> list[Mapping[str, object]]:
-    if not isinstance(value, list | tuple):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
-
-
-def _mapping_of(document: object, status: int) -> Mapping[str, object]:
-    if not isinstance(document, Mapping):
-        raise ApiFailure("API_FAILURE", http_status=status)
-    return document
-
-
-def _text(value: object) -> str:
-    return " ".join(value.split()) if isinstance(value, str) else ""

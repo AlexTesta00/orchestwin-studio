@@ -51,7 +51,7 @@ class Request:
 def decode(line: str) -> object:
     content = line.strip().removeprefix(BYTE_ORDER_MARK).strip()
     try:
-        return json.loads(content, parse_constant=_refuse_constant)
+        return json.loads(content, parse_constant=refuse_constant)
     except (ValueError, RecursionError):
         raise parse_error() from None
 
@@ -218,5 +218,5 @@ def internal_error(kind: str) -> RpcError:
     )
 
 
-def _refuse_constant(value: str) -> object:
+def refuse_constant(value: str) -> object:
     raise ValueError(f"{value} is not JSON")

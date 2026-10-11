@@ -7,7 +7,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api import usage
-from orchestwin.cli.errors import CliError
+from orchestwin.cli.errors import BUDGET_CODES, PAYMENT_REQUIRED, ApiFailure, CliError
+from orchestwin.cli.shapes import is_whole
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -94,6 +95,79 @@ def confirm_spending(
         return
     if not ask or not console.confirm("costs.confirm", default=True):
         raise CliError("SPENDING_REFUSED")
+
+
+def say_estimate(
+    context: CommandContext,
+    client: StudioClient,
+    operations: Sequence[str],
+    *,
+    subscription_key: str,
+    estimate_key: str,
+) -> None:
+    total = estimate(operations)
+    minutes = minutes_text(total.minutes)
+    if uses_subscription(client):
+        context.console.say(subscription_key, minutes=minutes)
+        return
+    context.console.say(estimate_key, amount=amount_text(total, context.language), minutes=minutes)
+
+
+def budget_or_failure(
+    context: CommandContext,
+    client: StudioClient,
+    project_id: str,
+    failure: ApiFailure,
+    operation: str,
+) -> CliError:
+    if failure.http_status == PAYMENT_REQUIRED or failure.code in BUDGET_CODES:
+        return budget_error(context, client, project_id, failure.code, operation)
+    return failure
+
+
+def budget_error(
+    context: CommandContext,
+    client: StudioClient,
+    project_id: str,
+    code: str | None,
+    operation: str,
+) -> CliError:
+    if code == "GENERATION_BUDGET_UNAVAILABLE":
+        return CliError("GENERATION_BUDGET_UNAVAILABLE")
+    reason, amount = ceiling(client, project_id, operation)
+    if reason is None:
+        return CliError("GENERATION_BUDGET_EXCEEDED")
+    return CliError(
+        "GENERATION_BUDGET_EXCEEDED",
+        values={"reason": reason, "ceiling": usd_text(amount, context.language)},
+    )
+
+
+def ceiling(client: StudioClient, project_id: str, operation: str) -> tuple[str | None, float]:
+    try:
+        budget = usage.budget(client)
+    except CliError:
+        return None, 0.0
+    if budget is None:
+        return None, 0.0
+    need = round(ESTIMATES[operation].high_usd * usage.MICRO_USD)
+    total = budget.get("total_microusd")
+    remaining = budget.get("remaining_total_microusd")
+    if is_whole(total) and is_whole(remaining) and remaining < need:
+        return "total", total / usage.MICRO_USD
+    try:
+        spent = usage.project_usage(client, project_id)
+    except CliError:
+        spent = None
+    limit = budget.get("per_project_microusd")
+    totals = spent.get("totals") if spent is not None else None
+    used = totals.get("cost_microusd") if isinstance(totals, Mapping) else None
+    if is_whole(limit) and is_whole(used) and limit - used < need:
+        return "project", limit / usage.MICRO_USD
+    single = budget.get("per_generation_microusd")
+    if is_whole(single):
+        return "generation", single / usage.MICRO_USD
+    return None, 0.0
 
 
 def uses_subscription(client: StudioClient) -> bool:

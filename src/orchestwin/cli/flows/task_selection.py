@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api import tasks as tasks_api
 from orchestwin.cli.flows.design_state import wrapped
+from orchestwin.cli.shapes import squeezed as _text
 
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
@@ -192,7 +193,3 @@ def _candidates(
                 )
             )
     return tuple(found)
-
-
-def _text(value: object) -> str:
-    return " ".join(value.split()) if isinstance(value, str) else ""

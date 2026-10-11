@@ -11,6 +11,8 @@ from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows import design_generate
 from orchestwin.cli.flows.code_order import project_language
 from orchestwin.cli.messages import known
+from orchestwin.cli.shapes import mappings as _findings
+from orchestwin.cli.shapes import sequence as _list
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -382,11 +384,3 @@ def _label(element: Mapping[str, object]) -> str:
         if text:
             return text if len(text) <= LABEL_LIMIT else text[: LABEL_LIMIT - 1].rstrip() + "…"
     return ""
-
-
-def _list(value: object) -> list[object]:
-    return list(value) if isinstance(value, list | tuple) else []
-
-
-def _findings(value: object) -> list[Mapping[str, object]]:
-    return [item for item in _list(value) if isinstance(item, Mapping)]

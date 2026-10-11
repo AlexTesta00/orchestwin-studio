@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.client import api_failure
+from orchestwin.cli.shapes import is_whole as _amount
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -57,7 +58,3 @@ def spent_usd(document: Mapping[str, object]) -> float | None:
     totals = document.get("totals")
     value = totals.get("cost_microusd") if isinstance(totals, Mapping) else None
     return value / MICRO_USD if _amount(value) else None
-
-
-def _amount(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)

@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import contextlib
-import os
 import re
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import TYPE_CHECKING, Final
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
-from orchestwin.cli import costs, jobs
+from orchestwin.cli import costs
 from orchestwin.cli import folder as knowledge
-from orchestwin.cli.api import changes as changes_api
-from orchestwin.cli.api import tasks as tasks_api
 from orchestwin.cli.api import tests as tests_api
 from orchestwin.cli.browser import (
     BrowserError,
@@ -25,44 +22,43 @@ from orchestwin.cli.browser import (
 from orchestwin.cli.client import ensure_access
 from orchestwin.cli.console import ProgressOutcome
 from orchestwin.cli.errors import USAGE_STATUS, ApiFailure, CliError
-from orchestwin.cli.flows import (
-    publish,
-    task_selection,
-    test_plan,
-    test_report,
-    test_settings,
-    verify_review,
+from orchestwin.cli.flows import test_plan, test_report, test_settings, verify_review
+from orchestwin.cli.flows.test_application import WEB_SCHEMES, Application, chosen_application
+from orchestwin.cli.flows.test_results import (
+    INTERRUPTED,
+    offer_tasks,
+    open_tasks,
+    passed_tasks,
+    publish_folder,
+    recorded_run,
+    review_run,
+    run_body,
+    with_review,
+    write_files,
 )
+from orchestwin.cli.flows.test_results import cut as _cut
+from orchestwin.cli.flows.test_results import error_code as _error_code
 from orchestwin.cli.flows.test_server import StaticServer
 from orchestwin.cli.http import is_loopback
-from orchestwin.cli.messages import known
+from orchestwin.cli.shapes import squeezed as _text
 
 if TYPE_CHECKING:
     from orchestwin.cli.browser import BrowserProgram, Page
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
     from orchestwin.cli.flows.test_plan import PlanChoice, SavedPlan
-    from orchestwin.cli.flows.test_report import Names
     from orchestwin.cli.flows.test_settings import TestSettings
     from orchestwin.cli.folder import FolderSummary
     from orchestwin.cli.project import ProjectFolder
 
-COMMAND: Final = "test"
 APPROVED: Final = "APPROVED"
-INDEX_PAGE: Final = "index.html"
 EXPECT_ATTEMPTS: Final = 4
 EXPECT_PAUSE_SECONDS: Final = 0.4
-REVIEW_LIMIT_SECONDS: Final = 900.0
 TOLERANCE: Final = 1e-9
 UNKNOWN_VERSION: Final = "unknown"
-WEB_SCHEMES: Final = ("http", "https")
 STAGES: Final = ("requirements", "design")
-SPENDING_REFUSED: Final = "SPENDING_REFUSED"
-INTERRUPTED: Final = "GENERATION_INTERRUPTED"
-INPUT_CLOSED: Final = "INPUT_CLOSED"
 CRITERION_PATTERN: Final = re.compile(r"AC-[0-9]{3,6}")
 UNSAFE_SEGMENT: Final = re.compile(r"[^A-Za-z0-9_-]+")
-UNSAFE_FOLDER: Final = re.compile(r"[\\:]+")
 BROWSER_DETAIL_KEYS: Final[Mapping[str, str]] = {
     "PAGE_NOT_LOADED": "test.detail_page_not_loaded",
     "ACTION_FAILED": "test.detail_action_failed",
@@ -93,22 +89,6 @@ class TestOutcome:
     folder: Path
     report: Path
     weak: tuple[Mapping[str, object], ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class Application:
-    kind: str
-    address: str
-    location: str
-    saved: Mapping[str, str]
-    direct: bool
-
-    @property
-    def static(self) -> bool:
-        return self.kind == tests_api.STATIC
-
-    def document(self) -> dict[str, str]:
-        return {"kind": self.kind, "address": self.address}
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,9 +286,7 @@ def execute(context: CommandContext, request: TestRequest) -> TestOutcome:
 
 
 def prepare(context: CommandContext, request: TestRequest) -> Prepared:
-    project = context.project()
-    if project is None:
-        raise CliError("PROJECT_NOT_LINKED")
+    project = context.linked_project()
     link = project.link()
     client = context.client()
     ensure_access(context, client)
@@ -342,91 +320,6 @@ def approved_folder(project: ProjectFolder) -> FolderSummary:
     if found is None or not all(_approved(found, stage) for stage in STAGES):
         raise CliError("TEST_DESIGN_REQUIRED")
     return found
-
-
-def chosen_application(
-    context: CommandContext,
-    project: ProjectFolder,
-    requested: Mapping[str, object] | None,
-    settings: TestSettings | None,
-) -> Application:
-    if requested is not None:
-        return application_of(project, requested, base=context.directory)
-    if settings is not None and settings.application is not None:
-        return application_of(project, settings.application, base=project.root)
-    raise CliError("TEST_APPLICATION_REQUIRED", status=USAGE_STATUS)
-
-
-def application_of(
-    project: ProjectFolder, value: Mapping[str, object], *, base: Path
-) -> Application:
-    kind = str(value.get("kind") or "").strip().upper()
-    address = str(value.get("address") or "").strip()
-    if kind == tests_api.URL:
-        return url_application(address)
-    if kind == tests_api.STATIC:
-        return static_application(project, address, base=base)
-    raise CliError("TEST_APPLICATION_REQUIRED", status=USAGE_STATUS)
-
-
-def url_application(address: str) -> Application:
-    try:
-        parts = urlsplit(address)
-        host = parts.hostname
-    except ValueError:
-        parts, host = None, None
-    if (
-        parts is None
-        or not host
-        or parts.scheme.lower() not in WEB_SCHEMES
-        or len(address) > tests_api.MAX_ADDRESS_LENGTH
-        or any(character.isspace() for character in address)
-    ):
-        raise CliError("TEST_URL_INVALID", status=USAGE_STATUS, values={"address": address})
-    return Application(
-        kind=tests_api.URL,
-        address=address,
-        location=address,
-        saved={"kind": tests_api.URL, "address": address},
-        direct=is_loopback(host),
-    )
-
-
-def static_application(project: ProjectFolder, address: str, *, base: Path) -> Application:
-    path = Path(address) if address else Path()
-    folder = Path(os.path.abspath(path if path.is_absolute() else base / path))
-    if not address or not folder.is_dir() or not (folder / INDEX_PAGE).is_file():
-        raise CliError(
-            "TEST_STATIC_INVALID", status=USAGE_STATUS, values={"folder": address or "-"}
-        )
-    root = Path(os.path.abspath(project.root))
-    try:
-        relative: PurePosixPath | None = PurePosixPath(folder.relative_to(root).as_posix())
-    except ValueError:
-        relative = None
-    return Application(
-        kind=tests_api.STATIC,
-        address=static_address(folder, relative),
-        location=str(folder),
-        saved={
-            "kind": tests_api.STATIC,
-            "address": str(folder) if relative is None else relative.as_posix(),
-        },
-        direct=True,
-    )
-
-
-def static_address(folder: Path, relative: PurePosixPath | None) -> str:
-    if relative is None:
-        parts = [folder.name]
-    else:
-        parts = [part for part in relative.parts if part not in ("", ".")]
-        if not parts:
-            return "."
-    cleaned = [UNSAFE_FOLDER.sub("-", part).strip() or "-" for part in parts]
-    cleaned = ["-" if part in (".", "..") else part for part in cleaned]
-    text = "/".join(cleaned)[: tests_api.MAX_ADDRESS_LENGTH].strip("/")
-    return text or "-"
 
 
 def browser_choice(requested: Sequence[str], settings: TestSettings | None) -> str:
@@ -547,7 +440,7 @@ def plan_for(
     )
     weak = test_plan.weak_expectations(tests_api.mappings(plan.get("paths")), sent)
     saved = test_plan.SavedPlan(
-        saved_at=_now_text(context),
+        saved_at=context.now_text(),
         application=ready.application.document(),
         plan=plan,
         weak=tuple(weak),
@@ -677,7 +570,7 @@ def replan(
         console.say("test.replan_failed", code=_error_code(error))
         return None
     weak = test_plan.weak_expectations(tests_api.mappings(plan.get("paths")), sent)
-    updated = saved.with_replan(plan, saved_at=_now_text(context), weak=weak)
+    updated = saved.with_replan(plan, saved_at=context.now_text(), weak=weak)
     test_plan.save_plan(ready.project, updated)
     codes = [str(path.get("code") or "-") for path in tests_api.mappings(plan.get("paths"))]
     if codes:
@@ -986,229 +879,6 @@ def screenshot_path(code: str, browser: str, index: int) -> str:
     return f"{_segment(code)}/{_segment(browser)}/{index:02d}.png"
 
 
-def run_body(
-    ready: Prepared,
-    execution: Execution,
-    browsers: Sequence[Browser],
-    *,
-    started: object,
-    finished: object,
-) -> dict[str, object]:
-    wanted = set(ready.criteria)
-    not_covered = [
-        {
-            "criterion": str(item["criterion"]),
-            "reason": _cut(_text(item.get("reason")), tests_api.MAX_REASON_LENGTH),
-        }
-        for item in execution.saved.not_covered()
-        if _text(item.get("reason")) and (not wanted or item.get("criterion") in wanted)
-    ]
-    return {
-        "plan_id": execution.saved.plan_id,
-        "replan_ids": execution.saved.replan_ids,
-        "started_at": _moment(started),
-        "finished_at": _moment(finished),
-        "application": ready.application.document(),
-        "browsers": [browser.document() for browser in browsers],
-        "results": [outcome.document() for outcome in execution.results][: tests_api.MAX_RESULTS],
-        "not_covered": not_covered,
-    }
-
-
-def recorded_run(document: Mapping[str, object]) -> Mapping[str, object]:
-    run = document.get("run")
-    if not isinstance(run, Mapping) or not isinstance(run.get("id"), str):
-        raise ApiFailure("API_FAILURE", http_status=201)
-    return run
-
-
-def write_files(
-    context: CommandContext,
-    ready: Prepared,
-    folder: Path,
-    run: Mapping[str, object],
-    names: Names,
-    labels: Mapping[str, str],
-    first_attempt: Sequence[Mapping[str, object]],
-    weak: Sequence[Mapping[str, object]] = (),
-) -> Path:
-    test_report.write_run(folder, run, first_attempt=first_attempt)
-    test_report.write_latest(test_plan.tests_folder(ready.project), folder, run)
-    return test_report.write_report(
-        context,
-        folder,
-        run,
-        project_name=ready.project_name,
-        names=names,
-        labels=labels,
-        first_attempt=first_attempt,
-        weak=weak,
-    )
-
-
-def review_run(
-    context: CommandContext,
-    ready: Prepared,
-    run: Mapping[str, object],
-    *,
-    available: bool,
-) -> Mapping[str, object] | None:
-    console = context.console
-    console.write()
-    if not available:
-        console.say("test.review_unavailable")
-        return None
-    try:
-        return reviewed(context, ready, run)
-    except CliError as error:
-        if error.code == INTERRUPTED:
-            raise
-        if error.code == SPENDING_REFUSED:
-            console.say("test.review_skipped")
-        elif error.code == tests_api.NO_TEST_MODEL:
-            console.say("test.review_unavailable")
-        else:
-            say_error(context, error)
-        return None
-
-
-def reviewed(
-    context: CommandContext, ready: Prepared, run: Mapping[str, object]
-) -> Mapping[str, object]:
-    twins = verify_review.twins_count(ready.client, ready.project)
-    context.console.say("test.reviewing", twins=twins)
-    costs.confirm_spending(context, ready.client, [tests_api.REVIEW_OPERATION] * twins)
-    run_id = str(run.get("id") or "")
-    result = jobs.generate(
-        context,
-        ready.client,
-        ready.project_id,
-        tests_api.review_path(ready.project_id, run_id),
-        tests_api.review_body(ready.locale),
-        label=context.text("test.review_label"),
-        limit_seconds=REVIEW_LIMIT_SECONDS,
-    )
-    if result.status_code < 400:
-        review = result.body.get("review") if isinstance(result.body, Mapping) else None
-        if not isinstance(review, Mapping):
-            raise ApiFailure("API_FAILURE", http_status=result.status_code)
-        return review
-    if tests_api.code_of(result.body) == tests_api.REVIEW_EXISTS:
-        found = tests_api.reviews(ready.client, ready.project_id, run_id)
-        if found:
-            return found[0]
-    raise test_plan.refusal(
-        context,
-        ready.client,
-        ready.project,
-        result.status_code,
-        result.body,
-        tests_api.REVIEW_OPERATION,
-    )
-
-
-def with_review(run: Mapping[str, object], review: Mapping[str, object]) -> dict[str, object]:
-    cost = run.get("cost_microusd")
-    added = review.get("cost_microusd")
-    total = cost if isinstance(cost, int) and not isinstance(cost, bool) else 0
-    if isinstance(added, int) and not isinstance(added, bool):
-        total += added
-    return {
-        **run,
-        "critiques": [dict(item) for item in tests_api.critiques_of(review)],
-        "reviewed_at": review.get("reviewed_at"),
-        "cost_microusd": total,
-    }
-
-
-def open_tasks(ready: Prepared) -> tuple[Mapping[str, object], ...]:
-    try:
-        document = changes_api.alignment(ready.client, ready.project_id)
-    except CliError:
-        return ()
-    return tuple(changes_api.open_tasks(document))
-
-
-def passed_tasks(
-    context: CommandContext, run: Mapping[str, object], tasks: Sequence[Mapping[str, object]]
-) -> None:
-    passed = {
-        str(item.get("code"))
-        for item in tests_api.criteria_of(run)
-        if item.get("status") == tests_api.PASSED and isinstance(item.get("code"), str)
-    }
-    if not passed:
-        return
-    for task in tasks:
-        codes = [code for code in tasks_api.criteria_of(task) if code in passed]
-        if tasks_api.is_open(task) and codes:
-            code = tasks_api.task_code(task)
-            context.console.say("test.task_maybe_done", task=code, criteria=", ".join(codes))
-
-
-def offer_tasks(
-    context: CommandContext,
-    ready: Prepared,
-    run: Mapping[str, object],
-    tasks: Sequence[Mapping[str, object]],
-) -> None:
-    console = context.console
-    candidates = task_selection.candidates_of_run(run, tasks)
-    if not any(item.offered for item in candidates):
-        return
-    console.write()
-    console.say("test.tasks_intro")
-    try:
-        chosen = task_selection.choose(context, candidates, question_key="test.tasks_question")
-    except CliError as error:
-        if error.code != INPUT_CLOSED:
-            raise
-        console.say("test.tasks_later")
-        return
-    if not chosen:
-        console.say("test.tasks_none")
-        return
-    items = [tasks_api.finding_item(item.source) for item in chosen if item.source is not None]
-    try:
-        count, created = tasks_api.create_all(ready.client, ready.project_id, items)
-    except CliError as error:
-        console.say("test.tasks_failed", code=_error_code(error))
-        return
-    console.say("test.tasks_created", count=count)
-    console.items([f"{tasks_api.task_code(task)}: {tasks_api.task_text(task)}" for task in created])
-    console.say("test.tasks_next")
-
-
-def publish_folder(context: CommandContext, ready: Prepared) -> None:
-    console = context.console
-    console.write()
-    try:
-        found = publish.publish_and_pull(context, ready.client, ready.project)
-    except CliError as error:
-        console.say("test.folder_not_updated", code=_error_code(error))
-        return
-    console.say("test.folder_updated", version=found.version_number)
-
-
-def say_error(context: CommandContext, error: CliError) -> None:
-    key = error_key(error)
-    if key is None:
-        context.console.say("test.review_failed", code=error.code)
-        return
-    context.console.say(key, **error.values)
-
-
-def error_key(error: CliError) -> str | None:
-    reason = error.values.get("reason")
-    candidates: list[str] = []
-    if isinstance(reason, str) and reason:
-        candidates.extend(
-            (f"{COMMAND}.errors.{error.code}.{reason}", f"errors.{error.code}.{reason}")
-        )
-    candidates.extend((f"{COMMAND}.errors.{error.code}", f"errors.{error.code}"))
-    return next((key for key in candidates if known(key)), None)
-
-
 def _approved(found: FolderSummary, stage: str) -> bool:
     entry = found.stage(stage)
     return (
@@ -1240,11 +910,6 @@ def _error_detail(error: CliError) -> str:
     return str(detail) if detail else error.code
 
 
-def _error_code(error: CliError) -> str:
-    inner = error.values.get("code")
-    return str(inner) if isinstance(inner, str) and inner else error.code
-
-
 def _heading(path: Mapping[str, object]) -> str:
     return _text(path.get("heading")).rstrip(". ") or "-"
 
@@ -1254,26 +919,9 @@ def _segment(value: str) -> str:
     return cleaned or "path"
 
 
-def _moment(value: object) -> str:
-    isoformat = getattr(value, "isoformat", None)
-    return str(isoformat(timespec="seconds")) if callable(isoformat) else str(value)
-
-
-def _now_text(context: CommandContext) -> str:
-    return context.environment.now().isoformat(timespec="seconds")
-
-
 def _url(snapshot: PageSnapshot | None) -> str | None:
     return None if snapshot is None else snapshot.url
 
 
 def _title(snapshot: PageSnapshot | None) -> str | None:
     return None if snapshot is None else snapshot.title
-
-
-def _cut(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
-
-
-def _text(value: object) -> str:
-    return " ".join(value.split()) if isinstance(value, str) else ""

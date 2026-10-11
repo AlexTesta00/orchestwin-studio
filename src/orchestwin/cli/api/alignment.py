@@ -5,6 +5,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.errors import ApiFailure
+from orchestwin.cli.shapes import mapping_list as _items
+from orchestwin.cli.shapes import required_mapping as _mapping_of
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -18,7 +20,6 @@ PROPOSED: Final = "PROPOSED"
 APPLIED: Final = "APPLIED"
 SKIPPED: Final = "SKIPPED"
 WAITING: Final = "waiting"
-ALL: Final = "all"
 APPLY_OPERATIONS: Final[Mapping[str, str]] = MappingProxyType(
     {REQUIREMENTS: "REQUIREMENTS_CHANGE", DESIGN: "DESIGN_CHANGE"}
 )
@@ -26,10 +27,7 @@ MAX_REQUEST: Final[Mapping[str, int]] = MappingProxyType(
     {REQUIREMENTS: 2000, DESIGN: 1000, TESTS: 600}
 )
 MAX_REASON: Final = 300
-MAX_COMMITS: Final = 50
 PROPOSAL_DECIDED: Final = "ALIGNMENT_PROPOSAL_DECIDED"
-PROPOSAL_NOT_FOUND: Final = "ALIGNMENT_PROPOSAL_NOT_FOUND"
-NO_MODEL: Final = "KNOWLEDGE_ALIGNMENT_MODEL_NOT_CONFIGURED"
 REVISION_PENDING: Final = "REVISION_PENDING"
 UNCHANGED: Final = "UNCHANGED"
 LATEST_RUN_KEYS: Final = (
@@ -178,15 +176,3 @@ def unchanged_code(code: str) -> bool:
 def by_section(items: Sequence[Mapping[str, object]]) -> list[Mapping[str, object]]:
     order = {section: index for index, section in enumerate(SECTIONS)}
     return sorted(items, key=lambda item: (order.get(section_of(item), len(order)), code_of(item)))
-
-
-def _items(value: object) -> list[Mapping[str, object]]:
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
-
-
-def _mapping_of(document: object, status: int = 200) -> Mapping[str, object]:
-    if not isinstance(document, Mapping):
-        raise ApiFailure("API_FAILURE", http_status=status)
-    return document

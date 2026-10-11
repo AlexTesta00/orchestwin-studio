@@ -6,7 +6,9 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import folder as knowledge
 from orchestwin.cli.errors import USAGE_STATUS, CliError
+from orchestwin.cli.folder import DESIGN_DOCUMENT, STATE_DOCUMENT
 from orchestwin.cli.project import read_json
+from orchestwin.cli.shapes import mapping_or_empty as _mapping
 
 if TYPE_CHECKING:
     from orchestwin.cli.folder import FolderSummary
@@ -14,19 +16,16 @@ if TYPE_CHECKING:
 
 APPROVED: Final = "APPROVED"
 DESIGN_STAGE: Final = "design"
-STATE_DOCUMENT: Final = "state/state.json"
 STATE_TEXT: Final = "state/state.md"
 TASK_STATUSES: Final = ("OPEN", "DONE", "DROPPED")
 TASK_ORIGINS: Final = ("CODE_CHANGE", "TEST_RUN", "OWNER")
 OPEN: Final = TASK_STATUSES[0]
-CODE_CHANGE: Final = TASK_ORIGINS[0]
 TEST_RUN: Final = TASK_ORIGINS[1]
 OWNER: Final = TASK_ORIGINS[2]
 INDEX_TEXT: Final = "ORCHESTWIN.md"
 REQUIREMENTS_TEXT: Final = "requirements/requirements.md"
 DESIGN_TEXT: Final = "design/design.md"
 MOCKUP_FILE: Final = "design/mockup.html"
-DESIGN_DOCUMENT: Final = "design/design.json"
 TWINS_TEXT: Final = "twins/twins.md"
 FEEDBACK_TEXT: Final = "twins/feedback/feedback.md"
 READ_FIRST: Final = (
@@ -252,7 +251,7 @@ def facts_of(project: ProjectFolder, summary: FolderSummary, *, language: str) -
     link = project.link()
     root = project.knowledge
     return OrderFacts(
-        project_name=_inline(summary.project_name) or _inline(link.project_name),
+        project_name=inline(summary.project_name) or inline(link.project_name),
         knowledge_folder=link.knowledge_folder,
         version_number=summary.version_number,
         alternative=alternative_code(project),
@@ -355,7 +354,7 @@ def work_text(work: Work) -> str:
     if work.tasks:
         lines = [TASKS_INTRODUCTION]
         for task in work.tasks:
-            lines.append(TASK_LINE.format(code=task.code, text=_inline(task.text)))
+            lines.append(TASK_LINE.format(code=task.code, text=inline(task.text)))
             lines.append(FROM_LINE.format(origin=origin_text(task)))
             if task.subjects:
                 lines.append(ABOUT_LINE.format(codes=", ".join(task.subjects)))
@@ -377,8 +376,8 @@ def origin_text(task: Task) -> str:
         return WRITTEN_BY_OWNER
     name = _text(origin.get("twin_name"))
     finding = _text(origin.get("finding"))
-    twin = SOME_TWIN if name is None else NAMED_TWIN.format(name=_inline(name))
-    quoted = "" if finding is None else QUOTED_FINDING.format(text=_inline(finding))
+    twin = SOME_TWIN if name is None else NAMED_TWIN.format(name=inline(name))
+    quoted = "" if finding is None else QUOTED_FINDING.format(text=inline(finding))
     if kind == TEST_RUN:
         return TEST_FINDING.format(twin=twin, finding=quoted)
     commit = commit_words(_text(origin.get("commit")) or task.from_commit)
@@ -399,13 +398,9 @@ def _codes(value: object) -> tuple[str, ...]:
     return tuple(code for item in value if (code := _text(item)) is not None)
 
 
-def _mapping(value: object) -> Mapping[str, object]:
-    return value if isinstance(value, Mapping) else {}
-
-
 def _text(value: object) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-def _inline(value: object) -> str:
+def inline(value: object) -> str:
     return " ".join(str(value).split())

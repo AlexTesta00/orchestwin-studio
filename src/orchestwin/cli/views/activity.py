@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api.sections import STAGE_OF
 from orchestwin.cli.console import format_elapsed
+from orchestwin.cli.shapes import is_number as number
+from orchestwin.cli.shapes import mappings
 
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
@@ -122,13 +124,3 @@ def moment(value: object) -> str:
 
 def duration(value: object) -> str:
     return format_elapsed(float(value)) if number(value) else "-"
-
-
-def number(value: object) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool)
-
-
-def mappings(value: object) -> list[Mapping[str, object]]:
-    if not isinstance(value, list | tuple):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]

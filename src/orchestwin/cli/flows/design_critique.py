@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from orchestwin.cli import costs
 from orchestwin.cli.api import design as design_api
 from orchestwin.cli.api import design_critique as critique_api
+from orchestwin.cli.api.usage import MICRO_USD
 from orchestwin.cli.browser import BrowserError, find_browsers, open_page
 from orchestwin.cli.errors import USAGE_STATUS, ApiFailure, CliError
 from orchestwin.cli.flows import (
@@ -23,18 +24,19 @@ from orchestwin.cli.flows import (
 from orchestwin.cli.flows.code_order import project_language
 from orchestwin.cli.flows.test_report import moment_text
 from orchestwin.cli.http import is_loopback
+from orchestwin.cli.shapes import mapping_or_empty as _mapping
+from orchestwin.cli.shapes import sequence as _list
+from orchestwin.cli.shapes import squeezed as _text
 
 if TYPE_CHECKING:
     from orchestwin.cli.browser import BrowserProgram, PageSnapshot
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
-    from orchestwin.cli.jobs import JobResult
     from orchestwin.cli.project import ProjectFolder
 
 CRITIQUE: Final = "DESIGN_CRITIQUE"
 LATEST: Final = "latest"
 MEBIBYTE: Final = 1024 * 1024
-MICRO_USD: Final = 1_000_000
 MAX_IMAGE_BYTES: Final = 5 * MEBIBYTE
 MAX_PAGE_BYTES: Final = 200 * 1024
 MAX_TITLE_LENGTH: Final = 200
@@ -377,7 +379,7 @@ def redraw_as_mockup(
         client,
         project,
         state,
-        iteration_result(result),
+        design_change.iteration_result(result),
         request=request,
         before=before,
         reviewing=False,
@@ -387,24 +389,6 @@ def redraw_as_mockup(
     if status == 0 and reached is not None and reached != state.version_number:
         console.say("design.critique_redrawn", title=title, version=reached)
     return status
-
-
-def iteration_result(result: JobResult) -> Mapping[str, object]:
-    body = result.body
-    job = body if isinstance(body, Mapping) and isinstance(body.get("job_id"), str) else None
-    if job is not None and result.status_code < 400:
-        value = job.get("result")
-        if isinstance(value, Mapping) and isinstance(value.get("package"), Mapping):
-            return value
-        raise ApiFailure("API_FAILURE", http_status=result.status_code)
-    failure = design_generate.failure_of(result.status_code, body)
-    if job is not None and job.get("status") == design_change.REJECTED:
-        reasons = "; ".join(design_generate.failure_reasons(job))
-        raise CliError(
-            "GENERATION_REJECTED",
-            values={"code": failure.code, "detail": reasons or failure.code},
-        )
-    design_generate.raise_failure(failure)
 
 
 def redraw_language(context: CommandContext, project: ProjectFolder) -> str:
@@ -477,15 +461,3 @@ def cost_text(context: CommandContext, run: Mapping[str, object]) -> str:
 
 def _json(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False).encode("utf-8")
-
-
-def _text(value: object) -> str:
-    return " ".join(value.split()) if isinstance(value, str) else ""
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _list(value: object) -> list[object]:
-    return list(value) if isinstance(value, list | tuple) else []

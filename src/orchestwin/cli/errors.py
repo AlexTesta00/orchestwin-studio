@@ -11,6 +11,10 @@ SPENDING_STATUS: Final = 5
 NOT_LINKED_STATUS: Final = 6
 NOT_VERIFIED_STATUS: Final = 7
 INTERRUPTED_STATUS: Final = 130
+PAYMENT_REQUIRED: Final = 402
+UNREACHABLE: Final = "unreachable"
+NOT_SIGNED_IN: Final = "not_signed_in"
+SESSION_EXPIRED: Final = "session_expired"
 BUDGET_CODES: Final = frozenset({"GENERATION_BUDGET_EXCEEDED", "GENERATION_BUDGET_UNAVAILABLE"})
 STATUSES: Final[Mapping[str, int]] = MappingProxyType(
     {
@@ -80,8 +84,18 @@ class ApiFailure(CliError):
 
 
 def api_status(code: str, http_status: int) -> int:
-    if http_status == 402 or code in BUDGET_CODES:
+    if http_status == PAYMENT_REQUIRED or code in BUDGET_CODES:
         return SPENDING_STATUS
     if http_status == 401:
         return SIGN_IN_STATUS
     return 1
+
+
+def signed_out_reason(error: CliError) -> str | None:
+    if error.code == "STUDIO_UNREACHABLE":
+        return UNREACHABLE
+    if error.code == "NOT_SIGNED_IN":
+        return NOT_SIGNED_IN
+    if error.status == SIGN_IN_STATUS:
+        return SESSION_EXPIRED
+    return None

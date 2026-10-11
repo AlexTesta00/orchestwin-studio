@@ -7,16 +7,16 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli.api import brief as brief_api
 from orchestwin.cli.api import team as team_api
 from orchestwin.cli.api.projects import approves
-from orchestwin.cli.console import Choice
+from orchestwin.cli.console import ATTEMPTS, Choice
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows.answers import APPROVE
+from orchestwin.cli.shapes import version_number_of as _number
 
 if TYPE_CHECKING:
-    from orchestwin.cli.commands.init import Journey
+    from orchestwin.cli.flows.journey import Journey
 
 STAGE: Final = "team"
 OPERATION: Final = "TEAM_PROPOSAL"
-ATTEMPTS: Final = 5
 ALWAYS: Final = "ALWAYS"
 PERSPECTIVE_INDENT: Final = "  "
 ASPECT_INDENT: Final = "      "
@@ -305,8 +305,3 @@ def _numbers(journey: Journey, count: int) -> list[int]:
             return sorted({int(token) for token in tokens})
         journey.say("init.team_switch_invalid", count=count)
     raise CliError("ANSWER_NOT_VALID")
-
-
-def _number(version: Mapping[str, object] | None) -> int | None:
-    value = None if version is None else version.get("version_number")
-    return value if isinstance(value, int) and not isinstance(value, bool) else None

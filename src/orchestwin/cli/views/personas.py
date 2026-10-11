@@ -17,7 +17,6 @@ PERSONA_FIELDS = {
     "constraints": "operational_constraints",
     "contexts": "context_of_use",
 }
-STATUSES = ("EVIDENCED", "INFERRED", "HYPOTHESIZED", "CONTESTED", "UNKNOWN")
 DECLARATION_FIELDS = ("represents", "does_not_represent", "contexts", "evidence_gaps")
 
 

@@ -4,7 +4,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
-from orchestwin.cli.jobs import reply_body
+from orchestwin.cli.api.brief import project_path
+from orchestwin.cli.api.replies import send as _send
+from orchestwin.cli.shapes import mapping_list as _mapping_list
+from orchestwin.cli.shapes import mapping_or_none as _mapping
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -58,16 +61,9 @@ EDIT_ISSUES: Final = (
     "UNUSED_RATIONALE",
 )
 READY: Final = "READY_FOR_MAIN_WORKFLOW"
-PROPOSAL_REQUIRED: Final = "TEAM_PROPOSAL_REQUIRED"
 APPROVAL_REQUIRED: Final = "TEAM_APPROVAL_REQUIRED"
 BLOCKED: Final = "BLOCKED_BY_CONSTRAINTS"
-UPDATED: Final = "UPDATED"
 UNCHANGED: Final = "UNCHANGED"
-REJECTED: Final = "REJECTED"
-
-
-def project_path(project_id: str) -> str:
-    return f"/projects/{project_id}"
 
 
 def current(client: StudioClient, project_id: str) -> Mapping[str, object] | None:
@@ -159,10 +155,7 @@ def unit_of(agent: str) -> str | None:
 
 
 def issues(document: object) -> list[Mapping[str, object]]:
-    value = document.get("issues") if isinstance(document, Mapping) else None
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
+    return _mapping_list(document.get("issues") if isinstance(document, Mapping) else None)
 
 
 def version(document: object) -> Mapping[str, object] | None:
@@ -176,14 +169,3 @@ def _units(value: object) -> list[Mapping[str, object]]:
     return [
         item for item in value if isinstance(item, Mapping) and isinstance(item.get("key"), str)
     ]
-
-
-def _send(
-    client: StudioClient, method: str, path: str, body: object | None = None
-) -> tuple[int, object]:
-    reply = client.request(method, path, body=body)
-    return reply.status, reply_body(reply)
-
-
-def _mapping(value: object) -> Mapping[str, object] | None:
-    return value if isinstance(value, Mapping) else None

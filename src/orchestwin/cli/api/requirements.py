@@ -3,18 +3,17 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Final
 
+from orchestwin.cli.api.replies import send as _send
 from orchestwin.cli.errors import ApiFailure
-from orchestwin.cli.jobs import reply_body
+from orchestwin.cli.shapes import mapping_list as _mapping_list
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
 
 READY: Final = "READY_FOR_DESIGN_EXPLORATION"
-REQUIRED: Final = "REQUIREMENTS_REQUIRED"
 PROPOSED: Final = "PROPOSED"
 APPROVE: Final = "APPROVE"
 REJECT: Final = "REJECT"
-APPLIED: Final = "APPLIED"
 UNCHANGED: Final = "REQUIREMENTS_UNCHANGED"
 PRIORITIES: Final = ("MUST", "SHOULD", "COULD", "WONT_FOR_NOW")
 KINDS: Final = ("FUNCTIONAL", "NON_FUNCTIONAL", "CONSTRAINT")
@@ -69,10 +68,7 @@ def current(client: StudioClient, project_id: str) -> Mapping[str, object] | Non
 
 
 def revisions(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
-    document = client.get(f"{requirements_path(project_id)}/revisions", optional=True)
-    if not isinstance(document, list):
-        return []
-    return [item for item in document if isinstance(item, Mapping)]
+    return _mapping_list(client.get(f"{requirements_path(project_id)}/revisions", optional=True))
 
 
 def propose_revision(
@@ -122,11 +118,6 @@ def decide(
     )
 
 
-def gate(client: StudioClient, project_id: str) -> Mapping[str, object] | None:
-    document = client.get(f"{requirements_path(project_id)}/gate", optional=True)
-    return document if isinstance(document, Mapping) else None
-
-
 def submit_gate(client: StudioClient, project_id: str) -> tuple[int, object]:
     return _send(client, "POST", f"{requirements_path(project_id)}/gate/submit")
 
@@ -145,10 +136,7 @@ def specification(version: Mapping[str, object]) -> Mapping[str, object]:
 
 
 def entries(version: Mapping[str, object], key: str) -> list[Mapping[str, object]]:
-    value = specification(version).get(key)
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
+    return _mapping_list(specification(version).get(key))
 
 
 def artifact(envelope: object) -> Mapping[str, object] | None:
@@ -160,14 +148,4 @@ def artifact(envelope: object) -> Mapping[str, object] | None:
 
 
 def operations(diff: Mapping[str, object]) -> list[Mapping[str, object]]:
-    value = diff.get("operations")
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
-
-
-def _send(
-    client: StudioClient, method: str, path: str, body: object | None = None
-) -> tuple[int, object]:
-    reply = client.request(method, path, body=body)
-    return reply.status, reply_body(reply)
+    return _mapping_list(diff.get("operations"))

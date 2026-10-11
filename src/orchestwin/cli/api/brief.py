@@ -3,7 +3,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Final
 
-from orchestwin.cli.jobs import reply_body
+from orchestwin.cli.api.replies import send as _send
+from orchestwin.cli.shapes import mapping_list as _mapping_list
+from orchestwin.cli.shapes import mapping_or_none as _mapping
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -99,10 +101,7 @@ def close(client: StudioClient, project_id: str, turns: int) -> tuple[int, objec
 
 
 def assumptions(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
-    document = client.get(f"{project_path(project_id)}/brief-assumptions")
-    if not isinstance(document, list):
-        return []
-    return [item for item in document if isinstance(item, Mapping)]
+    return _mapping_list(client.get(f"{project_path(project_id)}/brief-assumptions"))
 
 
 def proposed(items: Iterable[Mapping[str, object]]) -> list[Mapping[str, object]]:
@@ -198,10 +197,7 @@ def status(state: Mapping[str, object]) -> str | None:
 
 
 def turns(state: Mapping[str, object]) -> list[Mapping[str, object]]:
-    value = snapshot(state).get("turns")
-    if not isinstance(value, list):
-        return []
-    return [turn for turn in value if isinstance(turn, Mapping)]
+    return _mapping_list(snapshot(state).get("turns"))
 
 
 def pending(state: Mapping[str, object]) -> Mapping[str, object] | None:
@@ -256,17 +252,6 @@ def _turn(client: StudioClient, project_id: str, action: str, turns: int) -> tup
         f"{project_path(project_id)}/brief-dialogue/{action}",
         {"expected_turn_count": turns},
     )
-
-
-def _send(
-    client: StudioClient, method: str, path: str, body: object | None = None
-) -> tuple[int, object]:
-    reply = client.request(method, path, body=body)
-    return reply.status, reply_body(reply)
-
-
-def _mapping(value: object) -> Mapping[str, object] | None:
-    return value if isinstance(value, Mapping) else None
 
 
 def _texts(value: object) -> list[str]:

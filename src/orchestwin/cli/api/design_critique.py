@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
-import secrets
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api.design import design_path
 from orchestwin.cli.client import payload
 from orchestwin.cli.errors import ApiFailure
+from orchestwin.cli.http import multipart
+from orchestwin.cli.shapes import dict_list as _dict_list
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -16,7 +17,6 @@ IMAGE: Final = "IMAGE"
 WEB_PAGE: Final = "WEB_PAGE"
 KINDS: Final = (IMAGE, WEB_PAGE)
 SHOTS_FIELD: Final = "shots"
-RECORDED: Final = "DESIGN_CRITIQUE_RECORDED"
 CRITIQUE_TIMEOUT: Final = 1800.0
 
 type Shot = tuple[str, str, bytes, int | None]
@@ -57,23 +57,7 @@ def source_form(
 
 
 def form(fields: Mapping[str, str], files: Sequence[tuple[str, str, bytes]]) -> tuple[str, bytes]:
-    contents = [value.encode("utf-8") for value in fields.values()]
-    contents.extend(content for _, _, content in files)
-    boundary = _boundary(contents)
-    parts: list[bytes] = []
-    for name, value in fields.items():
-        head = f'--{boundary}\r\nContent-Disposition: form-data; name="{_quoted(name)}"\r\n\r\n'
-        parts.append(head.encode("utf-8") + value.encode("utf-8") + b"\r\n")
-    for file_name, media_type, content in files:
-        head = (
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="{SHOTS_FIELD}"; '
-            f'filename="{_quoted(file_name)}"\r\n'
-            f"Content-Type: {media_type}\r\n\r\n"
-        )
-        parts.append(head.encode("utf-8") + content + b"\r\n")
-    parts.append(f"--{boundary}--\r\n".encode("ascii"))
-    return f"multipart/form-data; boundary={boundary}", b"".join(parts)
+    return multipart(fields, [(SHOTS_FIELD, *file) for file in files])
 
 
 def upload_source(
@@ -115,24 +99,5 @@ def critiques(client: StudioClient, project_id: str) -> list[Mapping[str, object
     return _items(client.get(critiques_path(project_id), optional=True))
 
 
-def sources(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
-    return _items(client.get(sources_path(project_id), optional=True))
-
-
 def _items(document: object) -> list[Mapping[str, object]]:
-    items = document.get("items") if isinstance(document, dict) else None
-    if not isinstance(items, list):
-        return []
-    return [item for item in items if isinstance(item, dict)]
-
-
-def _boundary(contents: Sequence[bytes]) -> str:
-    while True:
-        boundary = f"orchestwin-{secrets.token_hex(16)}"
-        marker = boundary.encode("ascii")
-        if not any(marker in content for content in contents):
-            return boundary
-
-
-def _quoted(value: str) -> str:
-    return value.replace('"', "%22").replace("\r", "%0D").replace("\n", "%0A")
+    return _dict_list(document.get("items") if isinstance(document, dict) else None)

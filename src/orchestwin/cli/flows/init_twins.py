@@ -5,19 +5,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api import modeling
-from orchestwin.cli.commands import archetypes
-from orchestwin.cli.console import Choice
+from orchestwin.cli.console import ATTEMPTS, Choice
 from orchestwin.cli.errors import CliError
 from orchestwin.cli.flows.answers import APPROVE
 from orchestwin.cli.views import personas
 
 if TYPE_CHECKING:
-    from orchestwin.cli.commands.init import Journey
+    from orchestwin.cli.flows.journey import Journey
 
 STAGE: Final = "twins"
 PERSONA_OPERATION: Final = "PERSONA_PROPOSAL"
 TWIN_OPERATION: Final = "USER_TWIN_GENERATION"
-ATTEMPTS: Final = 5
 PERSONA_DETAILS: Final = (
     ("persona.role", "init.detail_role"),
     ("persona.summary", "init.detail_summary"),
@@ -61,6 +59,8 @@ def read(journey: Journey) -> TwinsState:
 
 
 def run(journey: Journey, state: TwinsState) -> bool:
+    from orchestwin.cli.commands import archetypes
+
     snapshot = None
     if modeling.current_snapshot(state.readiness):
         snapshot = modeling.snapshot(journey.client, journey.project_id)

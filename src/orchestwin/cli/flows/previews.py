@@ -127,18 +127,18 @@ def index_html(
     ]
     lines = [
         "<!doctype html>",
-        f'<html lang="{_escape(context.language)}">',
+        f'<html lang="{escape(context.language)}">',
         "<head>",
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         '<meta name="referrer" content="no-referrer">',
-        f"<title>{_escape(title)}</title>",
+        f"<title>{escape(title)}</title>",
         f"<style>{STYLES}</style>",
         "</head>",
         "<body>",
         "<main>",
-        f"<h1>{_escape(title)}</h1>",
-        f'<p class="lead">{_escape(context.text("design.page_lead"))}</p>',
+        f"<h1>{escape(title)}</h1>",
+        f'<p class="lead">{escape(context.text("design.page_lead"))}</p>',
         '<ul class="cards">',
         *cards,
         "</ul>",
@@ -161,32 +161,32 @@ def _card(
     badges = []
     if alternative.recommended:
         badges.append(
-            f'<span class="badge">{_escape(context.text("design.page_recommended"))}</span>'
+            f'<span class="badge">{escape(context.text("design.page_recommended"))}</span>'
         )
     if chosen:
         badges.append(
-            f'<span class="badge chosen">{_escape(context.text("design.page_chosen"))}</span>'
+            f'<span class="badge chosen">{escape(context.text("design.page_chosen"))}</span>'
         )
     parts = [
         f'<li class="card{" chosen" if chosen else ""}">',
-        f'<p class="code">{_escape(alternative.code)}{"".join(badges)}</p>',
-        f"<h2>{_escape(alternative.title)}</h2>",
+        f'<p class="code">{escape(alternative.code)}{"".join(badges)}</p>',
+        f"<h2>{escape(alternative.title)}</h2>",
     ]
     if alternative.summary:
-        parts.append(f"<p>{_escape(alternative.summary)}</p>")
+        parts.append(f"<p>{escape(alternative.summary)}</p>")
     if alternative.product_name:
         product = context.text("design.page_product", name=alternative.product_name)
-        parts.append(f'<p class="muted">{_escape(product)}</p>')
+        parts.append(f'<p class="muted">{escape(product)}</p>')
     if alternative.direction is not None:
         direction = context.text("design.page_direction", name=alternative.direction.name)
-        parts.append(f'<p class="muted">{_escape(direction)}</p>')
+        parts.append(f'<p class="muted">{escape(direction)}</p>')
     verdicts = _verdicts(context, state, alternative)
     if verdicts:
-        parts.append(f"<h3>{_escape(context.text('design.page_twins'))}</h3>")
+        parts.append(f"<h3>{escape(context.text('design.page_twins'))}</h3>")
         parts.append(f'<ul class="verdicts">{"".join(verdicts)}</ul>')
     if change is not None and before is not None and change.alternative_id == alternative.id:
         request = context.text("design.page_change", request=change.request)
-        parts.append(f'<p class="muted">{_escape(request)}</p>')
+        parts.append(f'<p class="muted">{escape(request)}</p>')
         links = [
             _link(before, context.text("design.page_before", version=change.before_version or "-")),
         ]
@@ -198,7 +198,7 @@ def _card(
         label = context.text("design.page_open", code=alternative.code)
         parts.append(f'<p class="actions">{_link(page, label)}</p>')
     else:
-        parts.append(f'<p class="missing">{_escape(context.text("design.page_missing"))}</p>')
+        parts.append(f'<p class="missing">{escape(context.text("design.page_missing"))}</p>')
     parts.append("</li>")
     return "".join(parts)
 
@@ -208,26 +208,26 @@ def _verdicts(context: CommandContext, state: DesignState, alternative: Alternat
     for verdict in state.verdicts:
         if verdict.alternative_id != alternative.id:
             continue
-        text = _escape(verdict.verdict or "")
+        text = escape(verdict.verdict or "")
         if verdict.quote:
-            quote = _escape(context.text("design.page_quote", quote=verdict.quote))
+            quote = escape(context.text("design.page_quote", quote=verdict.quote))
             text = f"{text} {quote}" if text else quote
         points = [] if verdict.verdict else design_state.point_lines(context, verdict)
         if not text and not points:
             continue
-        body = f"<strong>{_escape(verdict.twin_name)}</strong>"
+        body = f"<strong>{escape(verdict.twin_name)}</strong>"
         if text:
             body = f"{body}: {text}"
         if points:
-            listed = "".join(f"<li>{_escape(line)}</li>" for line in points)
+            listed = "".join(f"<li>{escape(line)}</li>" for line in points)
             body = f'{body}<ul class="points">{listed}</ul>'
         items.append(f"<li>{body}</li>")
     return items
 
 
 def _link(target: str, label: str) -> str:
-    return f'<a href="{_escape(target)}">{_escape(label)}</a>'
+    return f'<a href="{escape(target)}">{escape(label)}</a>'
 
 
-def _escape(value: object) -> str:
+def escape(value: object) -> str:
     return html.escape(str(value), quote=True)

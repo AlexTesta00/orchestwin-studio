@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli import costs
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.commands import status as status_command
-from orchestwin.cli.errors import BUDGET_CODES, USAGE_STATUS, ApiFailure, CliError
+from orchestwin.cli.errors import (
+    BUDGET_CODES,
+    PAYMENT_REQUIRED,
+    USAGE_STATUS,
+    ApiFailure,
+    CliError,
+)
 from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows import verify_decision, verify_review
 
@@ -185,15 +191,12 @@ def dry_run(context: CommandContext, workspace: Workspace, commits: Sequence[git
 
 
 def say_estimate(context: CommandContext, workspace: Workspace, operations: Sequence[str]) -> None:
-    total = costs.estimate(operations)
-    minutes = costs.minutes_text(total.minutes)
-    if costs.uses_subscription(workspace.client):
-        context.console.say("verify.dry_run_subscription", minutes=minutes)
-        return
-    context.console.say(
-        "verify.dry_run_estimate",
-        amount=costs.amount_text(total, context.language),
-        minutes=minutes,
+    costs.say_estimate(
+        context,
+        workspace.client,
+        operations,
+        subscription_key="verify.dry_run_subscription",
+        estimate_key="verify.dry_run_estimate",
     )
 
 
@@ -231,8 +234,10 @@ def review_commit(
     try:
         return verify_review.review(context, workspace, commit, locale=locale, again=again)
     except ApiFailure as failure:
-        if failure.http_status == 402 or failure.code in BUDGET_CODES:
-            raise budget_error(context, workspace, failure.code) from None
+        if failure.http_status == PAYMENT_REQUIRED or failure.code in BUDGET_CODES:
+            raise costs.budget_error(
+                context, workspace.client, workspace.project_id, failure.code, BUDGET_OPERATION
+            ) from None
         raise
 
 
@@ -305,15 +310,6 @@ def recheck_line(context: CommandContext, change: Mapping[str, object]) -> str:
         design=_number(reference, "design_version_number"),
         alternative=reference.get("alternative_code") or "-",
     )
-
-
-def budget_error(context: CommandContext, workspace: Workspace, code: str) -> CliError:
-    from orchestwin.cli.commands.init import Journey
-
-    journey = Journey(
-        context, workspace.client, workspace.project, script=None, until=None, idea=None
-    )
-    return journey.budget_error(code, BUDGET_OPERATION)
 
 
 def decision_items(

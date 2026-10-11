@@ -7,12 +7,13 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api import brief
 from orchestwin.cli.api.projects import approves
-from orchestwin.cli.console import Choice
+from orchestwin.cli.console import ATTEMPTS, Choice
 from orchestwin.cli.errors import CliError
 from orchestwin.cli.flows.answers import ACCEPT_ALL
+from orchestwin.cli.shapes import version_number_of as _number
 
 if TYPE_CHECKING:
-    from orchestwin.cli.commands.init import Journey
+    from orchestwin.cli.flows.journey import Journey
 
 STAGE: Final = "brief"
 OPERATION: Final = "BRIEF_DIALOGUE"
@@ -21,7 +22,6 @@ QUIT_WORDS: Final = frozenset({"/esci", "/quit"})
 SPECIAL_WORDS: Final = DONE_WORDS | QUIT_WORDS | {"?"}
 DONE: Final = "DONE"
 QUIT: Final = "QUIT"
-ATTEMPTS: Final = 5
 NOTHING_TO_ACCEPT: Final = "NOTHING_TO_ACCEPT"
 MANUAL_FIELDS: Final = ("problem", "target_users", "goals", "functional_requirements")
 
@@ -500,8 +500,3 @@ def _code(document: object) -> str | None:
         return str(detail["code"])
     status = document.get("status")
     return status if isinstance(status, str) else None
-
-
-def _number(version: Mapping[str, object] | None) -> int | None:
-    value = None if version is None else version.get("version_number")
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
