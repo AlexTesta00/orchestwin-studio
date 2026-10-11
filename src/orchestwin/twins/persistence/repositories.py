@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
@@ -21,6 +22,8 @@ from orchestwin.twins.persistence.snapshots import (
 from orchestwin.twins.personas import (
     PersonaProfileVersion,
 )
+from orchestwin.twins.record_values import owned_project_exists as _owned_project_exists
+from orchestwin.twins.record_values import project_is_owned as _project_is_owned
 from orchestwin.twins.user_twins import (
     UserModelingSnapshotVersion,
     UserTwinProfileVersion,
@@ -167,18 +170,6 @@ class UserModelingSnapshotRepository(Protocol):
 
 
 _UUID = postgresql.UUID(as_uuid=True)
-
-PROJECTS = sa.table(
-    "projects",
-    sa.column(
-        "id",
-        _UUID,
-    ),
-    sa.column(
-        "owner_user_id",
-        _UUID,
-    ),
-)
 
 PROJECT_BRIEF_VERSIONS = sa.table(
     "project_brief_versions",
@@ -417,28 +408,62 @@ USER_MODELING_SNAPSHOT_VERSIONS = sa.table(
 )
 
 
-class SqlAlchemyPersonaVersionRepository:
-    """SQLAlchemy implementation of owner-scoped persona persistence."""
+class _ProfileVersionRepository[VersionT]:
+    _table: sa.TableClause
+    _identity: str
+    _from_record: Callable[[Mapping[str, object]], VersionT]
 
-    def __init__(
-        self,
-        session: AsyncSession,
-        *,
-        owner_user_id: UUID,
-    ) -> None:
+    def __init__(self, session: AsyncSession, *, owner_user_id: UUID) -> None:
         """Bind repository access to one authenticated owner."""
         self._session = session
         self._owner_user_id = owner_user_id
 
-    async def append(
-        self,
-        version: PersonaProfileVersion,
-    ) -> VersionAppendStatus:
+    def _owned(self, project_id: UUID) -> sa.Select:
+        return _owned_select(self._table, project_id=project_id, owner_user_id=self._owner_user_id)
+
+    def _versions(self, project_id: UUID, identity: UUID) -> sa.Select:
+        return self._owned(project_id).where(self._table.c[self._identity] == identity)
+
+    async def _one(self, statement: sa.Select) -> VersionT | None:
+        row = (await self._session.execute(statement)).mappings().one_or_none()
+        return None if row is None else self._from_record(row)
+
+    async def _all(self, statement: sa.Select) -> tuple[VersionT, ...]:
+        rows = (await self._session.execute(statement)).mappings().all()
+        return tuple(self._from_record(row) for row in rows)
+
+    async def _get(self, project_id: UUID, identity: UUID, version_number: int) -> VersionT | None:
+        statement = self._versions(project_id, identity)
+        return await self._one(statement.where(self._table.c.version_number == version_number))
+
+    async def _current(self, project_id: UUID, identity: UUID) -> VersionT | None:
+        statement = self._versions(project_id, identity)
+        return await self._one(statement.order_by(self._table.c.version_number.desc()).limit(1))
+
+    async def _history(self, project_id: UUID, identity: UUID) -> tuple[VersionT, ...]:
+        statement = self._versions(project_id, identity)
+        return await self._all(statement.order_by(self._table.c.version_number.asc()))
+
+    async def list_current(self, *, project_id: UUID) -> tuple[VersionT, ...]:
+        identity = self._table.c[self._identity]
+        versions = await self._all(
+            self._owned(project_id).order_by(identity.asc(), self._table.c.version_number.asc())
+        )
+        latest = {getattr(version, self._identity): version for version in versions}
+        return tuple(latest[key] for key in sorted(latest, key=lambda value: value.hex))
+
+
+class SqlAlchemyPersonaVersionRepository(_ProfileVersionRepository[PersonaProfileVersion]):
+    """SQLAlchemy implementation of owner-scoped persona persistence."""
+
+    _table = PERSONA_PROFILE_VERSIONS
+    _identity = "persona_id"
+    _from_record = staticmethod(persona_version_from_record)
+
+    async def append(self, version: PersonaProfileVersion) -> VersionAppendStatus:
         """Append a version only when the owner controls the project."""
         if not await _project_is_owned(
-            self._session,
-            project_id=(version.project_id),
-            owner_user_id=(self._owner_user_id),
+            self._session, project_id=version.project_id, owner_user_id=self._owner_user_id
         ):
             return VersionAppendStatus.PROJECT_NOT_FOUND
 
@@ -449,139 +474,33 @@ class SqlAlchemyPersonaVersionRepository:
         return VersionAppendStatus.APPENDED
 
     async def get(
-        self,
-        *,
-        project_id: UUID,
-        persona_id: UUID,
-        version_number: int,
+        self, *, project_id: UUID, persona_id: UUID, version_number: int
     ) -> PersonaProfileVersion | None:
         """Read one exact persona version without leaking foreign projects."""
-        statement = _owned_select(
-            PERSONA_PROFILE_VERSIONS,
-            project_id=project_id,
-            owner_user_id=(self._owner_user_id),
-        ).where(
-            PERSONA_PROFILE_VERSIONS.c.persona_id == persona_id,
-            PERSONA_PROFILE_VERSIONS.c.version_number == version_number,
-        )
+        return await self._get(project_id, persona_id, version_number)
 
-        row = (await self._session.execute(statement)).mappings().one_or_none()
-
-        if row is None:
-            return None
-
-        return persona_version_from_record(row)
-
-    async def current(
-        self,
-        *,
-        project_id: UUID,
-        persona_id: UUID,
-    ) -> PersonaProfileVersion | None:
+    async def current(self, *, project_id: UUID, persona_id: UUID) -> PersonaProfileVersion | None:
         """Read the most recent persona revision."""
-        statement = (
-            _owned_select(
-                PERSONA_PROFILE_VERSIONS,
-                project_id=project_id,
-                owner_user_id=(self._owner_user_id),
-            )
-            .where(PERSONA_PROFILE_VERSIONS.c.persona_id == persona_id)
-            .order_by(PERSONA_PROFILE_VERSIONS.c.version_number.desc())
-            .limit(1)
-        )
-
-        row = (await self._session.execute(statement)).mappings().one_or_none()
-
-        if row is None:
-            return None
-
-        return persona_version_from_record(row)
+        return await self._current(project_id, persona_id)
 
     async def history(
-        self,
-        *,
-        project_id: UUID,
-        persona_id: UUID,
-    ) -> tuple[
-        PersonaProfileVersion,
-        ...,
-    ]:
+        self, *, project_id: UUID, persona_id: UUID
+    ) -> tuple[PersonaProfileVersion, ...]:
         """Read complete persona history."""
-        statement = (
-            _owned_select(
-                PERSONA_PROFILE_VERSIONS,
-                project_id=project_id,
-                owner_user_id=(self._owner_user_id),
-            )
-            .where(PERSONA_PROFILE_VERSIONS.c.persona_id == persona_id)
-            .order_by(PERSONA_PROFILE_VERSIONS.c.version_number.asc())
-        )
-
-        rows = (await self._session.execute(statement)).mappings().all()
-
-        return tuple(persona_version_from_record(row) for row in rows)
-
-    async def list_current(
-        self,
-        *,
-        project_id: UUID,
-    ) -> tuple[
-        PersonaProfileVersion,
-        ...,
-    ]:
-        """Return latest persona versions in deterministic identity order."""
-        statement = _owned_select(
-            PERSONA_PROFILE_VERSIONS,
-            project_id=project_id,
-            owner_user_id=(self._owner_user_id),
-        ).order_by(
-            PERSONA_PROFILE_VERSIONS.c.persona_id.asc(),
-            PERSONA_PROFILE_VERSIONS.c.version_number.asc(),
-        )
-
-        rows = (await self._session.execute(statement)).mappings().all()
-
-        versions = tuple(persona_version_from_record(row) for row in rows)
-
-        latest: dict[
-            UUID,
-            PersonaProfileVersion,
-        ] = {}
-
-        for version in versions:
-            latest[version.persona_id] = version
-
-        return tuple(
-            latest[persona_id]
-            for persona_id in sorted(
-                latest,
-                key=lambda value: value.hex,
-            )
-        )
+        return await self._history(project_id, persona_id)
 
 
-class SqlAlchemyUserTwinVersionRepository:
+class SqlAlchemyUserTwinVersionRepository(_ProfileVersionRepository[UserTwinProfileVersion]):
     """SQLAlchemy implementation of User Twin version persistence."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-        *,
-        owner_user_id: UUID,
-    ) -> None:
-        """Bind repository access to one authenticated owner."""
-        self._session = session
-        self._owner_user_id = owner_user_id
+    _table = USER_TWIN_PROFILE_VERSIONS
+    _identity = "twin_id"
+    _from_record = staticmethod(user_twin_version_from_record)
 
-    async def append(
-        self,
-        version: UserTwinProfileVersion,
-    ) -> VersionAppendStatus:
+    async def append(self, version: UserTwinProfileVersion) -> VersionAppendStatus:
         """Append one User Twin after project and persona checks."""
         if not await _project_is_owned(
-            self._session,
-            project_id=(version.project_id),
-            owner_user_id=(self._owner_user_id),
+            self._session, project_id=version.project_id, owner_user_id=self._owner_user_id
         ):
             return VersionAppendStatus.PROJECT_NOT_FOUND
 
@@ -589,10 +508,10 @@ class SqlAlchemyUserTwinVersionRepository:
 
         if not await _persona_context_exists(
             self._session,
-            project_id=(version.project_id),
-            persona_id=(persona_reference.persona_id),
-            version_number=(persona_reference.version_number),
-            content_hash=(persona_reference.content_hash),
+            project_id=version.project_id,
+            persona_id=persona_reference.persona_id,
+            version_number=persona_reference.version_number,
+            content_hash=persona_reference.content_hash,
         ):
             return VersionAppendStatus.CONTEXT_NOT_FOUND
 
@@ -603,115 +522,20 @@ class SqlAlchemyUserTwinVersionRepository:
         return VersionAppendStatus.APPENDED
 
     async def get(
-        self,
-        *,
-        project_id: UUID,
-        twin_id: UUID,
-        version_number: int,
+        self, *, project_id: UUID, twin_id: UUID, version_number: int
     ) -> UserTwinProfileVersion | None:
         """Read one exact User Twin version."""
-        statement = _owned_select(
-            USER_TWIN_PROFILE_VERSIONS,
-            project_id=project_id,
-            owner_user_id=(self._owner_user_id),
-        ).where(
-            USER_TWIN_PROFILE_VERSIONS.c.twin_id == twin_id,
-            USER_TWIN_PROFILE_VERSIONS.c.version_number == version_number,
-        )
+        return await self._get(project_id, twin_id, version_number)
 
-        row = (await self._session.execute(statement)).mappings().one_or_none()
-
-        if row is None:
-            return None
-
-        return user_twin_version_from_record(row)
-
-    async def current(
-        self,
-        *,
-        project_id: UUID,
-        twin_id: UUID,
-    ) -> UserTwinProfileVersion | None:
+    async def current(self, *, project_id: UUID, twin_id: UUID) -> UserTwinProfileVersion | None:
         """Read the most recent User Twin revision."""
-        statement = (
-            _owned_select(
-                USER_TWIN_PROFILE_VERSIONS,
-                project_id=project_id,
-                owner_user_id=(self._owner_user_id),
-            )
-            .where(USER_TWIN_PROFILE_VERSIONS.c.twin_id == twin_id)
-            .order_by(USER_TWIN_PROFILE_VERSIONS.c.version_number.desc())
-            .limit(1)
-        )
-
-        row = (await self._session.execute(statement)).mappings().one_or_none()
-
-        if row is None:
-            return None
-
-        return user_twin_version_from_record(row)
+        return await self._current(project_id, twin_id)
 
     async def history(
-        self,
-        *,
-        project_id: UUID,
-        twin_id: UUID,
-    ) -> tuple[
-        UserTwinProfileVersion,
-        ...,
-    ]:
+        self, *, project_id: UUID, twin_id: UUID
+    ) -> tuple[UserTwinProfileVersion, ...]:
         """Read complete User Twin history."""
-        statement = (
-            _owned_select(
-                USER_TWIN_PROFILE_VERSIONS,
-                project_id=project_id,
-                owner_user_id=(self._owner_user_id),
-            )
-            .where(USER_TWIN_PROFILE_VERSIONS.c.twin_id == twin_id)
-            .order_by(USER_TWIN_PROFILE_VERSIONS.c.version_number.asc())
-        )
-
-        rows = (await self._session.execute(statement)).mappings().all()
-
-        return tuple(user_twin_version_from_record(row) for row in rows)
-
-    async def list_current(
-        self,
-        *,
-        project_id: UUID,
-    ) -> tuple[
-        UserTwinProfileVersion,
-        ...,
-    ]:
-        """Return latest User Twin versions in canonical identity order."""
-        statement = _owned_select(
-            USER_TWIN_PROFILE_VERSIONS,
-            project_id=project_id,
-            owner_user_id=(self._owner_user_id),
-        ).order_by(
-            USER_TWIN_PROFILE_VERSIONS.c.twin_id.asc(),
-            USER_TWIN_PROFILE_VERSIONS.c.version_number.asc(),
-        )
-
-        rows = (await self._session.execute(statement)).mappings().all()
-
-        versions = tuple(user_twin_version_from_record(row) for row in rows)
-
-        latest: dict[
-            UUID,
-            UserTwinProfileVersion,
-        ] = {}
-
-        for version in versions:
-            latest[version.twin_id] = version
-
-        return tuple(
-            latest[twin_id]
-            for twin_id in sorted(
-                latest,
-                key=lambda value: value.hex,
-            )
-        )
+        return await self._history(project_id, twin_id)
 
 
 class SqlAlchemyUserModelingSnapshotRepository:
@@ -830,41 +654,6 @@ def _owned_select(
             owner_user_id=(owner_user_id),
         ),
     )
-
-
-def _owned_project_exists(
-    *,
-    project_id: UUID,
-    owner_user_id: UUID,
-) -> sa.ColumnElement[bool]:
-    """Return an EXISTS predicate that prevents cross-owner access."""
-    return sa.exists(
-        sa.select(sa.literal(1))
-        .select_from(PROJECTS)
-        .where(
-            PROJECTS.c.id == project_id,
-            PROJECTS.c.owner_user_id == owner_user_id,
-        )
-    )
-
-
-async def _project_is_owned(
-    session: AsyncSession,
-    *,
-    project_id: UUID,
-    owner_user_id: UUID,
-) -> bool:
-    """Resolve ownership without distinguishing missing and foreign projects."""
-    statement = sa.select(sa.literal(True)).where(
-        _owned_project_exists(
-            project_id=project_id,
-            owner_user_id=(owner_user_id),
-        )
-    )
-
-    result = await session.execute(statement)
-
-    return result.scalar_one_or_none() is True
 
 
 async def _persona_context_exists(
