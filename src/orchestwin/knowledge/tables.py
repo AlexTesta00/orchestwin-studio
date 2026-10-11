@@ -179,8 +179,6 @@ TABLE_COLUMNS: Final = {
     for name, columns in tables.items()
     if name not in ("needs", "journeys")
 }
-NEEDS_TABLE_COLUMNS: Final = _STAGE_COLUMNS[_REQUIREMENTS_STAGE]["needs"]
-JOURNEYS_TABLE_COLUMNS: Final = _STAGE_COLUMNS[_REQUIREMENTS_STAGE]["journeys"]
 CRITIQUE_VERDICT_COLUMNS: Final = ("verdict", "quote")
 DIRECTION_DIMENSIONS: Final = (
     "direction_name",
@@ -704,8 +702,6 @@ def knowledge_tables(
 __all__ = [
     "CRITIQUE_VERDICT_COLUMNS",
     "DIRECTION_DIMENSIONS",
-    "JOURNEYS_TABLE_COLUMNS",
-    "NEEDS_TABLE_COLUMNS",
     "REQUIREMENTS_CHAIN_COLUMNS",
     "TABLE_COLUMNS",
     "design_tables",
