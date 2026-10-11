@@ -66,17 +66,6 @@ export interface KnowledgeAlignmentRunListPayload {
   items: KnowledgeAlignmentRunSummaryPayload[];
 }
 
-export interface KnowledgeAlignmentRunResponsePayload {
-  run: KnowledgeAlignmentRunPayload;
-}
-
-export interface KnowledgeAlignmentRequest {
-  locale?: string;
-  from_commit: string | null;
-  to_commit: string;
-  commits: string[];
-}
-
 export interface AlignmentLatestRunPayload {
   id: string;
   from_commit: string | null;

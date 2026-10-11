@@ -51,10 +51,6 @@ const messages = {
       show: "Dettagli tecnici",
       hide: "Nascondi dettagli tecnici",
     },
-    drawer: {
-      show: "Dettagli tecnici",
-      hide: "Nascondi i dettagli",
-    },
     panel: {
       close: "Chiudi",
     },
@@ -67,7 +63,6 @@ const messages = {
   },
   app: {
     homeAriaLabel: "Pagina iniziale di OrchesTwin Studio",
-    title: "OrchesTwin Studio",
   },
   locale: {
     en: "Inglese",
@@ -137,7 +132,6 @@ const messages = {
     },
   },
   home: {
-    eyebrow: "Tesi · Agentic User-Centred Design",
     title: "Un'idea diventa un'applicazione. Tu decidi a ogni passo.",
     lead: "OrchesTwin Studio orchestra l'AI lungo sei passi governati: guarda il progetto dalle prospettive che gli servono, costruisce utenti sintetici a partire dal tuo brief, scrive i requisiti, esplora il design e ti consegna un dossier per realizzare l'applicazione con i tuoi strumenti. Ogni passo si chiude con la tua approvazione.",
     enter: "Entra nello Studio",
@@ -152,7 +146,6 @@ const messages = {
       two: {
         label: "Regola due",
         title: "Un'ipotesi resta tale finché non è verificata",
-        text: "Le opinioni dei twin, i requisiti e le critiche sono proposte, mai prove. Diventano decisioni solo quando le approvi e si verificano sull'applicazione che realizzi dal dossier.",
       },
     },
     twins: {
@@ -210,59 +203,12 @@ const messages = {
         },
       },
     },
-    objectives: {
-      eyebrow: "Obiettivi dell'interfaccia",
-      title: "Sette principi, verificabili uno per uno",
-      items: {
-        results: {
-          title: "Orientata al risultato",
-          text: "Prima esiti, decisioni e prossima azione. La meccanica tecnica arriva dopo, solo su richiesta.",
-        },
-        minimal: {
-          title: "Minimale",
-          text: "Un'azione principale per schermata, testi brevi, nessun cruscotto pieno di numeri.",
-        },
-        clear: {
-          title: "Chiara",
-          text: "Ogni schermata risponde a tre domande: dove sono, cosa è successo, cosa decido adesso.",
-        },
-        stepwise: {
-          title: "A passi",
-          text: "Una sequenza visibile di sei passi con il loro stato. La prima volta li percorri in ordine, poi ognuno diventa una sezione che puoi riaprire.",
-        },
-        plain: {
-          title: "Senza gergo",
-          text: "Verbi e nomi comuni. Niente identificatori, hash o codici di stato in primo piano. Italiano e inglese.",
-        },
-        accessible: {
-          title: "Accessibile",
-          text: "Contrasto WCAG 2 AA su ogni testo, un solo h1 per pagina, uso completo da tastiera. La piattaforma scarta le app che falliscono axe-core: lo Studio si tiene allo stesso metro.",
-        },
-        honest: {
-          title: "Stati onesti",
-          text: "Le attese mostrano avanzamento e durata prevista. I fallimenti dicono qual è la prossima mossa.",
-        },
-      },
-    },
-    users: {
-      primary: {
-        label: "Utente principale",
-        title: "Il committente",
-        text: "Una persona di business o un esperto del dominio: chi organizza un evento, chi gestisce un negozio, chi insegna. Conosce il problema, non l'ingegneria del software. Non deve mai incontrare identificatori, hash o selettori.",
-      },
-      secondary: {
-        label: "Utente secondario",
-        title: "Il revisore esperto",
-        text: "Relatore o ingegnere: vuole aprire il dettaglio di ogni passo, con prove, hash, file generati e log. Tutto esiste, ma resta dietro un'affordance «Dettagli».",
-      },
-    },
     closing: {
       title: "Prova il percorso completo, dal brief al dossier",
       text: "Sei passi, un cancello umano per ciascuno, una cartella pronta per i tuoi strumenti di sviluppo.",
     },
     footer: {
       thesis: "OrchesTwin Studio · tesi in Agentic User-Centred Design",
-      stack: "Vue 3 · TypeScript · Pinia · Tailwind",
     },
   },
   twinChat: {
@@ -272,7 +218,6 @@ const messages = {
       "Le risposte sono generate dall'AI a partire dal profilo approvato: sono ipotesi da verificare con persone reali, non risultati di ricerca.",
     stale:
       "Questa conversazione è iniziata con la versione {n} del profilo: le prossime risposte useranno la versione corrente.",
-    you: "Tu:",
     insights: "Spunti emersi",
     confidence: "confidenza {value}",
     groundedOn: "Basato su: {fields}",
@@ -281,7 +226,6 @@ const messages = {
     thinking: "Il twin sta rispondendo…",
     questionLabel: "La tua domanda per il twin",
     questionMissing: "Scrivi una domanda prima di inviare.",
-    ask: "Chiedi",
     kinds: {
       NEED: "Bisogno",
       FRUSTRATION: "Frustrazione",
@@ -294,33 +238,18 @@ const messages = {
     new: "Nuovo progetto",
     import: "Parti da una cartella di conoscenza",
     cancel: "Annulla",
-    note: "I progetti restano fermi finché non sei tu a farli avanzare.",
-    table: {
-      name: "Progetto",
-      mode: "Punto di partenza",
-      updated: "Aggiornato",
-      open: "Apri",
-    },
-    eyebrow: "Il tuo spazio",
-    title: "Progetti",
     description: "Riprendi un'idea o inizia qualcosa di nuovo.",
     listTitle: "I tuoi progetti",
     emptyTitle: "Nessun progetto presente",
     emptyDescription: "Dai un nome alla tua idea. Ti guideremo nei prossimi passaggi.",
-    currentVersion: "Descrizione aggiornata · versione {version}",
     create: {
-      title: "Crea un progetto",
-      name: "Nome del progetto",
       mode: "Da dove vuoi partire?",
-      submit: "Crea progetto",
     },
     modes: {
       greenfield: "Una nuova idea",
       brownfield: "Un prodotto esistente",
     },
     detail: {
-      back: "Torna ai progetti",
-      eyebrow: "Dettaglio del progetto",
       importedFrom:
         "Nato dalla cartella di conoscenza di {project}, versione {version}. Rivedi e approva ogni passo.",
     },
@@ -334,9 +263,6 @@ const messages = {
     },
   },
   briefDialogue: {
-    title: "Racconta la tua idea",
-    intro:
-      "Descrivi in due righe cosa vuoi realizzare. Lo Studio ti farà una domanda alla volta e alla fine comporrà il brief, che potrai correggere nel modulo.",
     statementLabel: "La tua idea",
     statementPlaceholder:
       "Per esempio: una pagina web per gestire la lista degli ospiti di un workshop. La usano i volontari all'ingresso.",
@@ -345,7 +271,6 @@ const messages = {
     restart: "Riapri il dialogo",
     preferForm: "Preferisci compilare il modulo?",
     openForm: "Passa al modulo",
-    goToForm: "Controlla il brief",
     progress: "Domanda {asked} di {limit}",
     essentialsLeft:
       "{count} informazione essenziale ancora da chiedere | {count} informazioni essenziali ancora da chiedere",
@@ -380,18 +305,12 @@ const messages = {
     },
   },
   brief: {
-    editorTitle: "Racconta la tua idea",
-    textFields: "Il punto di partenza",
-    listFields: "Cosa vorresti ottenere",
     markUnknown: "Non lo so ancora",
     oneItemPerLine: "Inserisci un elemento per riga.",
     missingSummary:
       "{count} informazione da chiarire: puoi completarla nei prossimi passaggi. | {count} informazioni da chiarire: puoi completarle nei prossimi passaggi.",
     saveVersion: "Salva la descrizione",
     saving: "Salvataggio…",
-    historyTitle: "Cronologia delle versioni",
-    noVersions: "Non è stata ancora salvata una descrizione.",
-    version: "Versione {version}",
     fields: {
       name: "Nome",
       description: "Descrizione",

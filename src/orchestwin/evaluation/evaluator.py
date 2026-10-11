@@ -6,7 +6,6 @@ import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
 from uuid import UUID
 
 from orchestwin.evaluation.artifacts import (
@@ -267,18 +266,6 @@ class UserTwinEvaluationResponse:
             "content_hash": self.content_hash,
             "disclaimer": self.disclaimer,
         }
-
-
-class UserTwinEvaluatorPort(Protocol):
-    """Provider-independent asynchronous synthetic evaluator boundary."""
-
-    @property
-    def configuration(self) -> UserTwinEvaluatorConfiguration: ...
-
-    async def evaluate(
-        self,
-        request: UserTwinEvaluationRequest,
-    ) -> UserTwinEvaluationResponse: ...
 
 
 @dataclass(frozen=True, slots=True)
