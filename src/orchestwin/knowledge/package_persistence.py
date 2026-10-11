@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.knowledge.packages import KnowledgePackageVersion
 from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import owned_project_query
 
 PROJECT_VERSION_CONSTRAINT: Final = "uq_knowledge_package_versions_project_version"
 
@@ -68,13 +69,6 @@ class SqlAlchemyKnowledgePackageRepository:
         self._session = session
         self._owner_user_id = owner_user_id
 
-    def _owned_project(self, project_id: UUID) -> sa.Select:
-        return sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == project_id,
-            ProjectRecord.owner_user_id == self._owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
-
     def _owned_versions(self, project_id: UUID, *columns: sa.ColumnElement) -> sa.Select:
         return (
             sa.select(*columns)
@@ -88,7 +82,7 @@ class SqlAlchemyKnowledgePackageRepository:
         )
 
     async def lock_project(self, *, project_id: UUID) -> bool:
-        statement = self._owned_project(project_id).with_for_update()
+        statement = owned_project_query(project_id, self._owner_user_id).with_for_update()
         return (await self._session.execute(statement)).scalar_one_or_none() is not None
 
     async def latest(self, *, project_id: UUID) -> KnowledgePackageVersion | None:
@@ -127,8 +121,8 @@ class SqlAlchemyKnowledgePackageRepository:
             raise ValueError("knowledge package owner does not match the repository owner")
         if not version.matches(archive):
             raise ValueError("knowledge package archive does not match its hash and size")
-        owned = await self._session.execute(self._owned_project(version.project_id))
-        if owned.scalar_one_or_none() is None:
+        owned = owned_project_query(version.project_id, self._owner_user_id)
+        if (await self._session.execute(owned)).scalar_one_or_none() is None:
             return KnowledgePackageWriteStatus.PROJECT_NOT_FOUND
         try:
             async with self._session.begin_nested():

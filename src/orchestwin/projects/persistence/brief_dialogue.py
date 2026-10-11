@@ -14,7 +14,7 @@ from orchestwin.projects.brief_dialogue import (
     DialogueAnswerKind,
 )
 from orchestwin.projects.briefs import BriefField
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import owned_project_query
 
 DIALOGUES = sa.table(
     "brief_dialogues",
@@ -160,13 +160,7 @@ class SqlAlchemyBriefDialogueRepository:
 
     async def _project_is_owned(self, project_id: UUID) -> bool:
         return (
-            await self._session.scalar(
-                sa.select(ProjectRecord.id).where(
-                    ProjectRecord.id == project_id,
-                    ProjectRecord.owner_user_id == self._owner_user_id,
-                    ProjectRecord.archived_at.is_(None),
-                )
-            )
+            await self._session.scalar(owned_project_query(project_id, self._owner_user_id))
         ) is not None
 
     async def _lock(self, dialogue_id: UUID):

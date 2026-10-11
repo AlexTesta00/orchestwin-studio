@@ -14,7 +14,7 @@ from orchestwin.projects.insight_applications import (
     InsightTarget,
     insight_application_from_snapshot,
 )
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import owned_project_query
 
 APPLICATIONS = sa.table(
     "insight_applications",
@@ -86,11 +86,7 @@ class SqlAlchemyInsightApplicationRepository:
         self._owner_user_id = owner_user_id
 
     async def create(self, application: InsightApplication) -> InsightApplicationWriteStatus:
-        owned = sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == application.project_id,
-            ProjectRecord.owner_user_id == self._owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
+        owned = owned_project_query(application.project_id, self._owner_user_id)
         if (
             application.owner_user_id != self._owner_user_id
             or (await self._session.execute(owned)).scalar_one_or_none() is None

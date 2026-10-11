@@ -7,7 +7,6 @@ from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.projects.knowledge_alignment import (
     AlignmentProposal,
@@ -19,7 +18,7 @@ from orchestwin.projects.knowledge_alignment import (
     proposal_origin_from_snapshot,
     proposal_subjects_from_snapshot,
 )
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import OwnedProjectRepository
 
 RUNS = sa.table(
     "knowledge_alignment_runs",
@@ -153,27 +152,7 @@ def _proposal_values(proposal: AlignmentProposal) -> dict[str, object]:
     }
 
 
-class SqlAlchemyKnowledgeAlignmentRepository:
-    def __init__(self, session: AsyncSession, *, owner_user_id: UUID) -> None:
-        self._session = session
-        self._owner_user_id = owner_user_id
-
-    def _owned_project(self, project_id: UUID):
-        return sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == project_id,
-            ProjectRecord.owner_user_id == self._owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
-
-    async def project_exists(self, project_id: UUID) -> bool:
-        return (
-            await self._session.execute(self._owned_project(project_id))
-        ).scalar_one_or_none() is not None
-
-    async def _lock_project(self, project_id: UUID) -> bool:
-        statement = self._owned_project(project_id).with_for_update()
-        return (await self._session.execute(statement)).scalar_one_or_none() is not None
-
+class SqlAlchemyKnowledgeAlignmentRepository(OwnedProjectRepository):
     def _owned_runs(self, project_id: UUID):
         return sa.select(*RUNS.c).where(
             RUNS.c.project_id == project_id, RUNS.c.owner_user_id == self._owner_user_id

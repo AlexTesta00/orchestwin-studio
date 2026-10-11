@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import owned_project_query
 from orchestwin.projects.research_evidence import (
     MAX_PROJECT_EVIDENCE_BYTES,
     MAX_PROJECT_EVIDENCE_VERSIONS,
@@ -102,15 +102,8 @@ class SqlAlchemyResearchEvidenceRepository:
         self.session = session
         self.owner_user_id = owner_user_id
 
-    def _owned(self, project_id: UUID):
-        return sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == project_id,
-            ProjectRecord.owner_user_id == self.owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
-
     async def owned(self, project_id: UUID, *, lock: bool = False) -> bool:
-        statement = self._owned(project_id)
+        statement = owned_project_query(project_id, self.owner_user_id)
         if lock:
             statement = statement.with_for_update()
         return (await self.session.scalar(statement)) is not None
