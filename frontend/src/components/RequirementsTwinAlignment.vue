@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from "vue";
 
+import { fill } from "./textFormat";
 import UiButton from "./UiButton.vue";
 import { useSurface } from "./UiSurface.vue";
 
-import { apiClient } from "@/api/client";
 import {
   RequirementsAlignmentApiError,
   requirementsAlignmentApi,
   type RequirementsAlignmentApi,
 } from "@/api/requirementsAlignment";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
 import type { AuthorizedRequest } from "@/stores/requirements";
 import type {
   RequirementsAlignmentPayload,
@@ -127,7 +127,7 @@ const palettes = {
   },
 };
 
-const auth = useAuthStore();
+const authorizedRequest = useAuthorizedRequest(() => props.authorize);
 const surface = useSurface(() => undefined);
 const palette = computed(() => palettes[surface.value]);
 const titleId = `requirements-alignment-${useId()}`;
@@ -170,14 +170,6 @@ const failureText = computed(() => {
 
 function lookup(table: Record<string, string>, code: string | null): string | null {
   return code !== null && Object.hasOwn(table, code) ? (table[code] ?? null) : null;
-}
-
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
-
-function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
-  return props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
 }
 
 function apply(result: RequirementsAlignmentPayload): void {

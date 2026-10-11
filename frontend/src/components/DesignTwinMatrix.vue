@@ -35,6 +35,7 @@ import { computed, onBeforeUnmount, onMounted, provide, ref, useId } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
+import { fill } from "./textFormat";
 
 type Locale = "en" | "it";
 
@@ -141,10 +142,6 @@ const rows = computed(() =>
     }),
   })),
 );
-
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
 
 function initialsOf(name: string): string {
   const words = name.trim().split(/\s+/u).filter(Boolean);

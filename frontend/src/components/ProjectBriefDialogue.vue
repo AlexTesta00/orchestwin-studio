@@ -3,11 +3,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useI18n } from "vue-i18n";
 
 import { briefDialogueApi, type BriefDialogueApi } from "@/api/briefDialogue";
-import { apiClient } from "@/api/client";
 import type { BriefField, ProjectBriefVersionResponse } from "@/api/contracts";
+import { briefDialogueCopy } from "@/components/briefDialogueCopy";
 import UiBrandMark from "@/components/UiBrandMark.vue";
 import UiButton from "@/components/UiButton.vue";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
 import { type AuthorizedBriefDialogueRequest, useBriefDialogueStore } from "@/stores/briefDialogue";
 import type { BriefDialogueTurnPayload } from "@/types/briefDialogue";
 
@@ -31,84 +31,9 @@ const emit = defineEmits<{
 const { t } = useI18n({ useScope: "global" });
 const { t: tl } = useI18n({
   useScope: "local",
-  messages: {
-    en: {
-      chat: {
-        analyst: "Requirements analyst",
-        analystSays: "The analyst:",
-        youSay: "You:",
-        greeting:
-          "Hi! I am the requirements analyst. Tell me your idea in two lines: what do you want to build?",
-        typing: "The analyst is writing",
-        shapeTitle: "The brief takes shape",
-        shapeIntro: "Each answer fills a point. What is missing, I will propose at the end.",
-        waiting: "Waiting for your answer",
-        asking: "I am asking you now",
-        openPoint: "You do not know yet: it stays an open point",
-        startHint: "Then I will ask one question at a time and compose the brief.",
-        answerHint: "Answer in your own words. Press Enter to send.",
-        listHint: "One item per line. Press Send when you are done.",
-        unknownHint: "Not sure yet?",
-        seeBrief: "See the brief and the proposals",
-        fields: {
-          name: "Name",
-          description: "The idea",
-          problem: "The problem",
-          goals: "Goals",
-          target_users: "For whom",
-          domain: "Context",
-          technical_constraints: "Technical constraints",
-          temporal_constraints: "Timing",
-          budget: "Budget",
-          functional_requirements: "What it must do",
-          non_functional_requirements: "Expected qualities",
-          risks: "Risks",
-          stakeholders: "People involved",
-          available_artifacts: "Available materials",
-          definition_of_done: "When it is done",
-        },
-      },
-    },
-    it: {
-      chat: {
-        analyst: "Analista delle esigenze",
-        analystSays: "L'analista:",
-        youSay: "Tu:",
-        greeting:
-          "Ciao! Sono l'analista delle esigenze. Raccontami l'idea in due righe: che cosa vuoi realizzare?",
-        typing: "L'analista sta scrivendo",
-        shapeTitle: "Il brief prende forma",
-        shapeIntro: "Ogni risposta riempie un punto. Quello che manca te lo proporrò alla fine.",
-        waiting: "In attesa della tua risposta",
-        asking: "Te lo sto chiedendo ora",
-        openPoint: "Non lo sai ancora: resta un punto aperto",
-        startHint: "Poi ti farò una domanda alla volta e comporrò il brief.",
-        answerHint: "Rispondi con parole tue. Premi Invio per mandarla.",
-        listHint: "Un elemento per riga. Premi Invia quando hai finito.",
-        unknownHint: "Non lo sai ancora?",
-        seeBrief: "Vedi il brief e le proposte",
-        fields: {
-          name: "Nome",
-          description: "L'idea",
-          problem: "Il problema",
-          goals: "Obiettivi",
-          target_users: "Per chi",
-          domain: "Contesto",
-          technical_constraints: "Vincoli tecnici",
-          temporal_constraints: "Tempi",
-          budget: "Budget",
-          functional_requirements: "Cosa deve fare",
-          non_functional_requirements: "Qualità attese",
-          risks: "Rischi",
-          stakeholders: "Persone coinvolte",
-          available_artifacts: "Materiali disponibili",
-          definition_of_done: "Quando sarà finito",
-        },
-      },
-    },
-  },
+  messages: briefDialogueCopy,
 });
-const auth = useAuthStore();
+const authorize = useAuthorizedRequest(() => props.authorize);
 const store = useBriefDialogueStore();
 
 const statement = ref("");
@@ -143,9 +68,6 @@ const defaultEssentials: readonly BriefField[] = [
   "target_users",
   "functional_requirements",
 ];
-
-const authorize: AuthorizedBriefDialogueRequest = (operation) =>
-  props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
 
 const dialogue = computed(() => store.dialogue);
 const active = computed(() => store.isActive);

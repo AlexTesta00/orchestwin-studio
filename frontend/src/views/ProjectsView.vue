@@ -11,6 +11,7 @@ import GuidanceModeNote from "@/components/GuidanceModeNote.vue";
 import UiButton from "@/components/UiButton.vue";
 import UiStateBlock from "@/components/UiStateBlock.vue";
 import UiSurface from "@/components/UiSurface.vue";
+import { fill } from "@/components/textFormat";
 import { useAuthStore } from "@/stores/auth";
 import { useProjectsStore } from "@/stores/projects";
 import type { ProjectImportPayload } from "@/types/projectImports";
@@ -189,10 +190,6 @@ onMounted(() => {
   }
   imageShown.value = true;
 });
-
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
 
 function plural(forms: readonly [string, string], count: number): string {
   return fill(count === 1 ? forms[0] : forms[1], { n: count });

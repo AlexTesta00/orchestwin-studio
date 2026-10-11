@@ -1,21 +1,23 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 
+import { developmentCopy } from "./developmentCopy";
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import ProjectTwinLearningBlock from "./ProjectTwinLearningBlock.vue";
 import { placeLabel } from "./screenNames";
+import { commandParts, fill, plural } from "./textFormat";
 import UiButton from "./UiButton.vue";
 import UiClaimFrame from "./UiClaimFrame.vue";
 import UiStatusChip from "./UiStatusChip.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import UiTechnicalDetails from "./UiTechnicalDetails.vue";
 
-import { apiClient } from "../api/client";
 import type { CodeChangesApi } from "../api/codeChanges";
 import type { GenerationJobsApi } from "../api/generationJobs";
 import type { KnowledgeAlignmentApi } from "../api/knowledgeAlignment";
 import type { TwinLearningApi } from "../api/twinLearning";
-import { useAuthStore } from "../stores/auth";
+import { useAuthorizedRequest } from "../composables/useAuthorizedRequest";
+import { useIntlFormats } from "../composables/useIntlFormats";
 import { useCodeChangesStore, type AuthorizedRequest } from "../stores/codeChanges";
 import { useDesignStore } from "../stores/design";
 import { useGenerationResume } from "../stores/generationJobs";
@@ -75,245 +77,6 @@ provide(
   computed<SurfaceContext>(() => "night"),
 );
 
-const messages = {
-  en: {
-    eyebrow: "After the design",
-    title: "Development outside the Studio",
-    intro:
-      "The code is written with your own tools. Here you read how the commits stand against the approved requirements and design.",
-    terminal:
-      "Reviews and decisions are made from the terminal with `ut verify`: this page only shows their result.",
-    refresh: "Read again",
-    loading: "Loading the development state…",
-    loadFailed: "The development state could not be loaded.",
-    details: "Details",
-    noModel: "On this Studio the twins cannot review the code: connect a model.",
-    empty: "No commit recorded yet. Record the first one with `ut verify` or `ut watch`.",
-    reference: "The approved reference",
-    requirements: "Requirements",
-    design: "Design",
-    aligned: "Aligned point",
-    versionValue: "version {number}",
-    requirementsMissing: "not approved yet",
-    designMissing: "not approved yet",
-    alignedValue: "commit {commit} · {date}",
-    noAligned: "No commit aligned yet",
-    designAhead:
-      "The design is at version {current}, the code is aligned with version {aligned}: from the terminal `ut align --from-design` brings the code up to the current design.",
-    pendingTitle: "Pending commits ({count})",
-    pendingIntro: "The commits recorded after the aligned point.",
-    noPending: "No commit after the aligned point.",
-    staleReviews: [
-      "1 review was made against earlier versions of the requirements or of the design: `ut verify --recheck` has the twins review that commit again.",
-      "{count} reviews were made against earlier versions of the requirements or of the design: `ut verify --recheck` has the twins review those commits again.",
-    ],
-    staleChip: "To re-review",
-    reviewedAgainst:
-      "Reviewed against requirements version {requirements} and design version {design}{alternative}",
-    files: ["{count} file", "{count} files"],
-    verdictBadge: {
-      NONE: "Not reviewed yet",
-      ALIGNED: "Review: aligned",
-      CODE_DRIFT: "Review: the code should change",
-      DESIGN_OUTDATED: "Review: the design should change",
-      REQUIREMENTS_OUTDATED: "Review: the requirements should change",
-    },
-    decisionBadge: {
-      NONE: "No decision yet",
-      ALIGNED: "Decision: aligned point",
-      DESIGN_CHANGE: "Decision: new design requested",
-      REQUIREMENTS_CHANGE: "Decision: requirements change requested",
-      CODE_TASKS: "Decision: tasks for the code",
-      DISMISSED: "Decision: nothing to do",
-    },
-    tasksTitle: "Open tasks for the code ({count})",
-    tasksIntro: "They close when a later commit is marked as aligned.",
-    noTasks: "No open task.",
-    origin: {
-      owner: "Written by you",
-      verdict: "From the decision on the commit {commit}",
-      twinCommit: "From {twin} on the commit {commit}",
-      twinTests: "From {twin} on the acceptance tests",
-      tests: "From the acceptance tests",
-      criteria: ["criterion {codes}", "criteria {codes}"],
-    },
-    tasksClosed: "Tasks closed so far: {list}.",
-    tasksDone: ["{count} done", "{count} done"],
-    tasksDropped: ["{count} dropped", "{count} dropped"],
-    tasksTerminal:
-      "From the terminal, `ut tasks` adds, closes and drops the tasks, and `ut code` hands the open ones to your coding agent.",
-    latestReview: "Latest review",
-    runTitle: "Latest review, commit {commit}",
-    runMeta:
-      "{date} · checked against requirements version {requirements} and design version {design}{alternative}",
-    noRun: "No commit has been reviewed yet.",
-    runLoading: "Loading the latest review…",
-    runFailed: "The latest review could not be loaded.",
-    runMissing: "The latest review is not available.",
-    critique: {
-      FINE: "No concerns",
-      CONCERN: "Some concerns",
-      DRIFT: "Off course",
-    },
-    severity: {
-      LOW: "Minor",
-      MEDIUM: "Moderate",
-      HIGH: "Major",
-    },
-    about: "About",
-    action: "Suggested action",
-    noFindings: "No remarks.",
-    verdictTitle: "The model's verdict",
-    verdict: {
-      ALIGNED: "The code follows the approved requirements and design.",
-      CODE_DRIFT:
-        "The code moves away from the approved requirements or design: the code should change.",
-      DESIGN_OUTDATED: "The change is a sound evolution: the design should get a new version.",
-      REQUIREMENTS_OUTDATED:
-        "The change is a sound evolution: the requirements should get a new version.",
-    },
-    designRequest: "Design change to request",
-    requirementsRequest: "Requirements change to request",
-    codeTasks: "Tasks proposed for the code",
-    codeTasksNote: "They become open tasks only when you decide so with `ut verify`.",
-    knowledgeTitle: "Knowledge alignment",
-    knowledgeCommits: "Commits",
-    knowledgeRange: "from {from} to {to}",
-    knowledgeUpTo: "up to {to}",
-    knowledgeDate: "Date",
-    knowledgeProposals: "Proposals",
-    knowledgeWaiting: "Waiting for a decision",
-    knowledgeNone: "The knowledge has not been compared with the code yet.",
-    knowledgeTerminal:
-      "Proposals are made from the terminal with `ut align`; you decide them here and in the sections. In the other direction, `ut align --from-design` brings the code up to a design that changed after the code was written.",
-    knowledgePush:
-      "The hand-made changes of the knowledge folder go back to the Studio from the terminal with `ut push`: you approve the differences and a new version is born.",
-    technical: "Development state",
-    technicalChanges: "Recorded commits",
-    technicalPending: "Pending commits",
-    technicalTasks: "Open tasks",
-    technicalRun: "Latest review",
-  },
-  it: {
-    eyebrow: "Dopo il design",
-    title: "Sviluppo fuori dallo Studio",
-    intro:
-      "Il codice si scrive con i tuoi strumenti. Qui leggi come stanno i commit rispetto ai requisiti e al design approvati.",
-    terminal:
-      "Revisioni e decisioni si fanno dal terminale con `ut verify`: questa pagina ne mostra solo il risultato.",
-    refresh: "Rileggi",
-    loading: "Carico lo stato dello sviluppo…",
-    loadFailed: "Non è stato possibile caricare lo stato dello sviluppo.",
-    details: "Dettagli",
-    noModel: "In questo Studio i twin non possono rivedere il codice: collega un modello.",
-    empty: "Nessun commit registrato. Registra il primo con `ut verify` o `ut watch`.",
-    reference: "Il riferimento approvato",
-    requirements: "Requisiti",
-    design: "Design",
-    aligned: "Punto allineato",
-    versionValue: "versione {number}",
-    requirementsMissing: "non ancora approvati",
-    designMissing: "non ancora approvato",
-    alignedValue: "commit {commit} · {date}",
-    noAligned: "Nessun commit ancora allineato",
-    designAhead:
-      "Il design è alla versione {current}, il codice è allineato alla versione {aligned}: dal terminale `ut align --from-design` porta il codice al design attuale.",
-    pendingTitle: "Commit in attesa ({count})",
-    pendingIntro: "I commit registrati dopo il punto allineato.",
-    noPending: "Nessun commit dopo il punto allineato.",
-    staleReviews: [
-      "1 revisione è stata fatta su versioni precedenti dei requisiti o del design: `ut verify --recheck` fa riesaminare quel commit ai twin.",
-      "{count} revisioni sono state fatte su versioni precedenti dei requisiti o del design: `ut verify --recheck` fa riesaminare quei commit ai twin.",
-    ],
-    staleChip: "Da riesaminare",
-    reviewedAgainst:
-      "Rivisto rispetto ai requisiti versione {requirements} e al design versione {design}{alternative}",
-    files: ["{count} file", "{count} file"],
-    verdictBadge: {
-      NONE: "Non ancora rivisto",
-      ALIGNED: "Revisione: allineato",
-      CODE_DRIFT: "Revisione: va cambiato il codice",
-      DESIGN_OUTDATED: "Revisione: va aggiornato il design",
-      REQUIREMENTS_OUTDATED: "Revisione: vanno aggiornati i requisiti",
-    },
-    decisionBadge: {
-      NONE: "Nessuna decisione",
-      ALIGNED: "Decisione: punto allineato",
-      DESIGN_CHANGE: "Decisione: chiesto un nuovo design",
-      REQUIREMENTS_CHANGE: "Decisione: chiesta una modifica dei requisiti",
-      CODE_TASKS: "Decisione: compiti per il codice",
-      DISMISSED: "Decisione: niente da fare",
-    },
-    tasksTitle: "Compiti aperti per il codice ({count})",
-    tasksIntro: "Si chiudono quando un commit successivo viene segnato come allineato.",
-    noTasks: "Nessun compito aperto.",
-    origin: {
-      owner: "Scritto da te",
-      verdict: "Dalla decisione sul commit {commit}",
-      twinCommit: "Da {twin} sul commit {commit}",
-      twinTests: "Da {twin} sulla verifica dei criteri",
-      tests: "Dalla verifica dei criteri",
-      criteria: ["criterio {codes}", "criteri {codes}"],
-    },
-    tasksClosed: "Compiti chiusi finora: {list}.",
-    tasksDone: ["{count} completato", "{count} completati"],
-    tasksDropped: ["{count} scartato", "{count} scartati"],
-    tasksTerminal:
-      "Dal terminale, `ut tasks` aggiunge, chiude e scarta i compiti, e `ut code` affida quelli aperti al tuo agente di programmazione.",
-    latestReview: "Ultima revisione",
-    runTitle: "Ultima revisione, commit {commit}",
-    runMeta:
-      "{date} · confrontata con i requisiti versione {requirements} e il design versione {design}{alternative}",
-    noRun: "Nessun commit è ancora stato rivisto.",
-    runLoading: "Carico l'ultima revisione…",
-    runFailed: "Non è stato possibile caricare l'ultima revisione.",
-    runMissing: "L'ultima revisione non è disponibile.",
-    critique: {
-      FINE: "Nessun dubbio",
-      CONCERN: "Qualche dubbio",
-      DRIFT: "Fuori strada",
-    },
-    severity: {
-      LOW: "Minore",
-      MEDIUM: "Moderata",
-      HIGH: "Importante",
-    },
-    about: "Riguarda",
-    action: "Azione suggerita",
-    noFindings: "Nessuna osservazione.",
-    verdictTitle: "Il verdetto del modello",
-    verdict: {
-      ALIGNED: "Il codice segue i requisiti e il design approvati.",
-      CODE_DRIFT:
-        "Il codice si allontana dai requisiti o dal design approvati: va cambiato il codice.",
-      DESIGN_OUTDATED: "La modifica è un'evoluzione sensata: il design merita una nuova versione.",
-      REQUIREMENTS_OUTDATED:
-        "La modifica è un'evoluzione sensata: i requisiti meritano una nuova versione.",
-    },
-    designRequest: "Modifica del design da chiedere",
-    requirementsRequest: "Modifica dei requisiti da chiedere",
-    codeTasks: "Compiti proposti per il codice",
-    codeTasksNote: "Diventano compiti aperti solo quando lo decidi con `ut verify`.",
-    knowledgeTitle: "Allineamento della conoscenza",
-    knowledgeCommits: "Commit",
-    knowledgeRange: "da {from} a {to}",
-    knowledgeUpTo: "fino a {to}",
-    knowledgeDate: "Data",
-    knowledgeProposals: "Proposte",
-    knowledgeWaiting: "In attesa di decisione",
-    knowledgeNone: "La conoscenza non è ancora stata confrontata con il codice.",
-    knowledgeTerminal:
-      "Le proposte si fanno dal terminale con `ut align`; qui e nelle sezioni le decidi. Nella direzione contraria, `ut align --from-design` porta il codice a un design cambiato dopo che il codice è stato scritto.",
-    knowledgePush:
-      "Le modifiche fatte a mano nella cartella di conoscenza tornano nello Studio dal terminale con `ut push`: approvi le differenze e nasce una versione nuova.",
-    technical: "Stato dello sviluppo",
-    technicalChanges: "Commit registrati",
-    technicalPending: "Commit in attesa",
-    technicalTasks: "Compiti aperti",
-    technicalRun: "Ultima revisione",
-  },
-} as const;
-
 const VERDICT_STATUS: Readonly<Record<AlignmentStatus, ChipStatus>> = {
   ALIGNED: "approved",
   CODE_DRIFT: "failed",
@@ -351,14 +114,14 @@ const DEVELOPMENT_OPERATIONS: readonly GenerationOperation[] = [
   "KNOWLEDGE_ALIGNMENT",
 ];
 
-const auth = useAuthStore();
+const authorizedRequest = useAuthorizedRequest(() => props.authorize);
 const design = useDesignStore();
 const requirements = useRequirementsStore();
 const store = useCodeChangesStore();
 const learning = useTwinLearningStore();
 const knowledge = useKnowledgeAlignmentStore();
 
-const copy = computed(() => messages[props.locale]);
+const copy = computed(() => developmentCopy[props.locale]);
 const intlLocale = computed(() => (props.locale === "it" ? "it-IT" : "en-GB"));
 const failure = ref<{ operation: "load" | "run"; code: string | null } | null>(null);
 let refreshes = 0;
@@ -405,17 +168,7 @@ const knowledgeRun = computed<KnowledgeAlignmentRunSummaryPayload | null>(() => 
   );
 });
 
-const dateFormat = computed(
-  () =>
-    new Intl.DateTimeFormat(intlLocale.value, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }),
-);
-
-const listFormat = computed(
-  () => new Intl.ListFormat(intlLocale.value, { style: "long", type: "conjunction" }),
-);
+const { dateFormat, listFormat } = useIntlFormats(intlLocale);
 
 const requirementTitles = computed<Readonly<Record<string, string>>>(() => {
   if (requirements.projectId !== props.projectId) {
@@ -622,21 +375,6 @@ const technicalRows = computed(() => {
   return rows;
 });
 
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
-
-function plural(count: number, forms: readonly [string, string]): string {
-  return fill(count === 1 ? forms[0] : forms[1], { count });
-}
-
-function commandParts(text: string): { key: number; text: string; command: boolean }[] {
-  return text
-    .split("`")
-    .map((part, index) => ({ key: index, text: part, command: index % 2 === 1 }))
-    .filter((part) => part.text.length > 0);
-}
-
 function shortCommit(commit: string): string {
   return commit.slice(0, SHORT_COMMIT);
 }
@@ -732,10 +470,6 @@ function findingSubjects(finding: CritiqueFindingPayload): Subject[] {
     subjects.push({ key: `file:${finding.about.file}`, code: null, title: finding.about.file });
   }
   return subjects;
-}
-
-function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
-  return props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
 }
 
 async function refresh(): Promise<void> {

@@ -5,10 +5,11 @@ import UiButton from "./UiButton.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import { modelFeedback } from "./modelFeedback";
 
-import { apiClient } from "../api/client";
 import type { KnowledgeAlignmentApi } from "../api/knowledgeAlignment";
-import { useAuthStore } from "../stores/auth";
-import { errorCodeOf, generationFailureMessage } from "../stores/designMockups";
+import { useAuthorizedRequest } from "../composables/useAuthorizedRequest";
+import { useIntlFormats } from "../composables/useIntlFormats";
+import { generationFailureMessage } from "../stores/designMockupMessages";
+import { errorCodeOf } from "../stores/jobWatch";
 import {
   useKnowledgeAlignmentStore,
   type AuthorizedRequest,
@@ -152,28 +153,18 @@ const messages = {
 } as const;
 
 const store = useKnowledgeAlignmentStore();
-const auth = useAuthStore();
+const authorizedRequest = useAuthorizedRequest(() => props.authorize);
 const root = ref<HTMLElement | null>(null);
 const titleId = useId();
 const copy = computed(() => messages[props.locale]);
+const { listFormat } = useIntlFormats(() => (props.locale === "it" ? "it-IT" : "en-GB"));
 const projectId = computed(() => props.projectId.trim());
 const texts = ref<Record<string, string>>({});
 const kept = ref<Record<string, AlignmentProposalPayload>>({});
 const failures = ref<Record<string, CardFailure>>({});
 
-function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
-  return props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
-}
-
 function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
-}
-
-function listOf(items: readonly string[]): string {
-  return new Intl.ListFormat(props.locale === "it" ? "it-IT" : "en-GB", {
-    style: "long",
-    type: "conjunction",
-  }).format(items);
 }
 
 const cards = computed<AlignmentProposalPayload[]>(() => {
@@ -269,7 +260,9 @@ function subjectsOf(proposal: AlignmentProposalPayload): string {
     ...proposal.subjects.criteria,
   ];
 
-  return codes.length === 0 ? "" : fill(copy.value.about, { items: listOf(codes) });
+  return codes.length === 0
+    ? ""
+    : fill(copy.value.about, { items: listFormat.value.format(codes) });
 }
 
 function shortCommits(proposal: AlignmentProposalPayload): string {

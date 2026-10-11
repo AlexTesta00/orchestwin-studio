@@ -1,201 +1,5 @@
 <script lang="ts">
-import type { DesignChangePayload, DesignPackagePayload } from "../types/design";
-
-export type ChangeLocale = "en" | "it";
-
-type Sentence = readonly [string, string];
-
-const CHANGE_SENTENCES: Readonly<Record<string, Sentence>> = {
-  "ALTERNATIVE:ADD": ["A new alternative: {alternative}", "Una nuova alternativa: {alternative}"],
-  "ALTERNATIVE:REPLACE": [
-    "The alternative {alternative} changes",
-    "Cambia l'alternativa {alternative}",
-  ],
-  "ALTERNATIVE:REMOVE": [
-    "The alternative {alternative} is removed",
-    "Viene tolta l'alternativa {alternative}",
-  ],
-  "CRITIQUE:ADD": [
-    "A new opinion of {twin} on {alternative}",
-    "Un nuovo parere di {twin} su {alternative}",
-  ],
-  "CRITIQUE:REPLACE": [
-    "The opinion of {twin} on {alternative} changes",
-    "Cambia il parere di {twin} su {alternative}",
-  ],
-  "CRITIQUE:REMOVE": [
-    "The opinion of {twin} on {alternative} is removed",
-    "Viene tolto il parere di {twin} su {alternative}",
-  ],
-  "CRITIQUE_VERDICT:ADD": [
-    "{twin} gives a verdict on {alternative}",
-    "{twin} dà un giudizio su {alternative}",
-  ],
-  "CRITIQUE_VERDICT:REPLACE": [
-    "The verdict of {twin} on {alternative} changes",
-    "Cambia il giudizio di {twin} su {alternative}",
-  ],
-  "CRITIQUE_VERDICT:REMOVE": [
-    "The verdict of {twin} on {alternative} is removed",
-    "Viene tolto il giudizio di {twin} su {alternative}",
-  ],
-  "CONCERN:ADD": ["A new point of attention: {concern}", "Un nuovo punto di attenzione: {concern}"],
-  "CONCERN:REPLACE": [
-    "The point of attention “{concern}” changes",
-    "Cambia il punto di attenzione «{concern}»",
-  ],
-  "CONCERN:REMOVE": [
-    "The point of attention “{concern}” is removed",
-    "Viene tolto il punto di attenzione «{concern}»",
-  ],
-  "PROTOTYPE:ADD": [
-    "The mockup of the chosen design is added",
-    "Si aggiunge il mockup del design scelto",
-  ],
-  "PROTOTYPE:REPLACE": [
-    "The mockup of the chosen design changes",
-    "Cambia il mockup del design scelto",
-  ],
-  "PROTOTYPE:REMOVE": [
-    "The mockup of the chosen design is removed",
-    "Si toglie il mockup del design scelto",
-  ],
-  "SELECTION:ADD": ["You choose {alternative}", "Scegli {alternative}"],
-  "SELECTION:REPLACE": ["You choose {alternative}", "Scegli {alternative}"],
-  "SELECTION:REMOVE": ["No alternative stays chosen", "Nessuna alternativa resta scelta"],
-  "SELECTION:RECOMMENDATION": [
-    "The designer now recommends {alternative}",
-    "Il designer ora consiglia {alternative}",
-  ],
-  "OPEN_QUESTIONS:*": ["The open questions change", "Cambiano le domande aperte"],
-  "GENERATED_MOCKUP:ADD": [
-    "The mockup drawn by the model for {alternative} enters the design",
-    "Entra nel design il mockup disegnato dal modello per {alternative}",
-  ],
-  "GENERATED_MOCKUP:REPLACE": [
-    "The mockup drawn for {alternative} changes",
-    "Cambia il mockup disegnato per {alternative}",
-  ],
-  "GENERATED_MOCKUP:REMOVE": [
-    "The mockup drawn for {alternative} leaves the design",
-    "Esce dal design il mockup disegnato per {alternative}",
-  ],
-  "GENERATED_SCREEN:ADD": ["A new screen: “{screen}”", "Una nuova schermata: «{screen}»"],
-  "GENERATED_SCREEN:REPLACE": ["The screen “{screen}” changes", "Cambia la schermata «{screen}»"],
-  "GENERATED_SCREEN:REMOVE": [
-    "The screen “{screen}” is removed",
-    "Viene tolta la schermata «{screen}»",
-  ],
-  "GENERATED_STYLES:*": [
-    "The colours and styles of the mockup change",
-    "Cambiano colori e stili del mockup",
-  ],
-  "OWNER_ASSERTION:ADD": ["A new rule", "Una nuova regola"],
-  "OWNER_ASSERTION:REPLACE": ["A rule changes", "Cambia una regola"],
-  "OWNER_ASSERTION:REMOVE": ["A rule is removed", "Viene tolta una regola"],
-  "OWNER_ASSERTION_ORDER:*": ["The order of the rules changes", "Cambia l'ordine delle regole"],
-};
-
-const UNKNOWN_CHANGE: Sentence = ["Another change to the design", "Un'altra modifica al design"];
-
-const FALLBACKS = {
-  alternative: ["an alternative", "un'alternativa"],
-  twin: ["a twin", "un twin"],
-  concern: ["a point of attention", "un punto di attenzione"],
-  screen: ["a screen", "una schermata"],
-} as const;
-
-function textOf(record: Record<string, unknown> | null, key: string): string | null {
-  const value = record?.[key];
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-}
-
-function selectionKey(change: DesignChangePayload): string {
-  const owner = "owner_selected_alternative_id";
-  if (change.kind === "REMOVE" || (change.after !== null && textOf(change.after, owner) === null)) {
-    return "SELECTION:REMOVE";
-  }
-  if (
-    change.before !== null &&
-    change.after !== null &&
-    textOf(change.before, owner) === textOf(change.after, owner)
-  ) {
-    return "SELECTION:RECOMMENDATION";
-  }
-  return `SELECTION:${change.kind}`;
-}
-
-function selectedAlternativeOf(change: DesignChangePayload): string | null {
-  if (change.artifact_kind !== "SELECTION") {
-    return null;
-  }
-  return selectionKey(change) === "SELECTION:RECOMMENDATION"
-    ? textOf(change.after, "recommended_alternative_id")
-    : textOf(change.after, "owner_selected_alternative_id");
-}
-
-export function designChangeSentence(
-  change: DesignChangePayload,
-  packages: readonly (DesignPackagePayload | null | undefined)[],
-  locale: ChangeLocale,
-): string {
-  const index = locale === "it" ? 1 : 0;
-  const known = packages.filter(
-    (item): item is DesignPackagePayload => item !== null && item !== undefined,
-  );
-  const key =
-    change.artifact_kind === "SELECTION"
-      ? selectionKey(change)
-      : `${change.artifact_kind}:${change.kind}`;
-  const template =
-    CHANGE_SENTENCES[key] ?? CHANGE_SENTENCES[`${change.artifact_kind}:*`] ?? UNKNOWN_CHANGE;
-  const critique =
-    change.artifact_kind === "CRITIQUE" || change.artifact_kind === "CRITIQUE_VERDICT"
-      ? (known.flatMap((item) => item.critiques).find((item) => item.id === change.artifact_id) ??
-        null)
-      : null;
-  const alternativeId =
-    critique?.design_alternative_id ?? selectedAlternativeOf(change) ?? change.artifact_id;
-  const alternative =
-    known.flatMap((item) => item.alternatives).find((item) => item.id === alternativeId) ?? null;
-  const concern =
-    known.flatMap((item) => item.concerns).find((item) => item.id === change.artifact_id) ?? null;
-  const values: Record<string, string> = {
-    alternative:
-      alternative === null
-        ? FALLBACKS.alternative[index]
-        : `${alternative.code} · ${alternative.title}`,
-    twin: critique?.user_twin_reference.name ?? FALLBACKS.twin[index],
-    concern:
-      concern?.summary ??
-      textOf(change.after, "summary") ??
-      textOf(change.before, "summary") ??
-      FALLBACKS.concern[index],
-    screen:
-      textOf(change.after, "title") ??
-      textOf(change.before, "title") ??
-      textOf(change.after, "code") ??
-      textOf(change.before, "code") ??
-      FALLBACKS.screen[index],
-  };
-  return template[index].replace(/\{(\w+)\}/g, (_match, key: string) => values[key] ?? "");
-}
-
-export function designChangeQuote(change: DesignChangePayload): string | null {
-  return change.artifact_kind === "OWNER_ASSERTION"
-    ? (textOf(change.after, "text") ?? textOf(change.before, "text"))
-    : null;
-}
-
-const PLACE_CODE = /^(?:SCR|ELM)-\d+\b[\s:·-]*/;
-
-export function readablePlace(location: string): string {
-  return location
-    .split("·")
-    .map((part) => part.trim().replace(PLACE_CODE, "").trim())
-    .filter((part) => part.length > 0)
-    .join(" · ");
-}
+export { designChangeQuote, designChangeSentence, readablePlace } from "./designChanges";
 </script>
 
 <script setup lang="ts">
@@ -212,7 +16,9 @@ import {
   watch,
 } from "vue";
 
-import { apiClient } from "@/api/client";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
+import { QUOTE_CLASS, useGateState } from "@/composables/useGateState";
+import { rendered, useStepTargets } from "@/composables/useStepTargets";
 import AlignmentProposalsNotice from "./AlignmentProposalsNotice.vue";
 import ArtifactViewSwitch, { type ArtifactView } from "./ArtifactViewSwitch.vue";
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
@@ -221,13 +27,7 @@ import DesignAlternativeComparison, {
   MOCKUP_READ_FAILURE,
 } from "./DesignAlternativeComparison.vue";
 import DesignCritiquePanel from "./DesignCritiquePanel.vue";
-import DesignIterationPanel, {
-  generationFailureText,
-  generationReasonText,
-  generationRetryable,
-  type IterationJob,
-  type IterationSide,
-} from "./DesignIterationPanel.vue";
+import DesignIterationPanel from "./DesignIterationPanel.vue";
 import DesignLoopNextStep from "./DesignLoopNextStep.vue";
 import DesignObservationList, {
   type ObservationCritique,
@@ -254,11 +54,19 @@ import UiDecisionBar from "./UiDecisionBar.vue";
 import UiStateBlock from "./UiStateBlock.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import UiTechnicalDetails from "./UiTechnicalDetails.vue";
+import { designChangeQuote, designChangeSentence } from "./designChanges";
+import { designFlowCopy } from "./designFlowCopy";
+import {
+  generationFailureText,
+  generationReasonText,
+  generationRetryable,
+} from "./iterationMessages";
+import type { IterationJob, IterationSide } from "./iterationTypes";
 import { generationProgress, modelFeedback } from "./modelFeedback";
 import { elementNames, type ScreenName, type WorkflowName } from "./screenNames";
+import { confidence, fill, formatDate } from "./textFormat";
 import { rosterAvatar, type TwinRoster } from "./twinIdentity";
 import { type UpstreamValue, watchUpstream } from "./upstreamChange";
-import { workflowStatusLabel } from "./workflowLabels";
 import { designApi, type DesignApi, type DesignDistanceApi } from "../api/design";
 import type { DesignAlignmentApi } from "../api/designAlignment";
 import type { DesignCritiqueApi } from "../api/designCritique";
@@ -274,7 +82,6 @@ import { designReviewPinsApi, type DesignReviewPinsApi } from "../api/designRevi
 import { isGenerationInterrupted } from "../api/generationJobs";
 import { modelUsageApi, type ModelUsageApi } from "../api/modelUsage";
 import type { RequirementsApi } from "../api/requirements";
-import { useAuthStore } from "../stores/auth";
 import { useGuidanceStore } from "../stores/guidance";
 import { type AuthorizedRequest, useDesignStore } from "../stores/design";
 import {
@@ -294,9 +101,9 @@ import type {
   DesignGenerationPayload,
   DesignMockupPayload,
   DesignPackageDiffPayload,
+  DesignPackagePayload,
   DesignPackageVersionPayload,
   DesignRevisionPayload,
-  HumanGateStatus,
   PrototypeElementPayload,
   SyntheticDesignCritiquePayload,
   VersionedArtifactReferencePayload,
@@ -339,11 +146,7 @@ interface ThumbnailWant {
   key: string;
 }
 
-const BAR_TARGET = "step-decision-bar";
-const ROW_TARGET = "step-technical-row";
 const DESIGNER_AVATAR = "/team/ux.webp";
-const QUOTE_CLASS =
-  "m-0 border-l-2 border-on-night/40 pl-3 leading-normal whitespace-pre-line text-on-night-2";
 const ELEMENT_LABEL_LIMIT = 80;
 const SEVERITY_RANK: Record<SyntheticFindingSeverity, number> = {
   critical: 4,
@@ -417,386 +220,7 @@ provide(
   computed<SurfaceContext>(() => "night"),
 );
 
-const messages = {
-  en: {
-    designer: "UX/UI designer",
-    noPackage:
-      "I am ready to propose a look for your app: I prepare the alternatives and have the twins try them.",
-    prerequisite: "Approve the requirements first: then I can prepare the alternatives.",
-    generate: "Prepare the design alternatives",
-    generating: "The designer is preparing the alternatives…",
-    loading: "Loading the design…",
-    updating: "Updating the design…",
-    introOne: "I prepared one alternative and had the twins try it. Their opinion is below.",
-    introMany: "I prepared {n} alternatives and had the twins try them. Their opinion is below.",
-    introChosen:
-      "You chose {alternative}. Read what the twins think and approve the design when you are ready.",
-    introIterate:
-      "You chose {alternative}. If something should change, ask for changes: I draw a new version and you compare it with the current one.",
-    numbers: ["no", "one", "two", "three", "four", "five", "six", "seven", "eight"],
-    viewLabel: "Views of the design",
-    loadError: "Design & Evaluation could not be loaded.",
-    genericFailure: "The request could not be completed. You can try again.",
-    mockupRequired: "The mockup of this alternative is not ready yet: wait for it before choosing.",
-    mockupRequiredDeclarative: "Try the mockup of this alternative first: then you can choose it.",
-    pendingOther:
-      "Another change is waiting for your decision above: apply it or discard it first.",
-    proposeFailed: "Your choice could not be recorded, so nothing changed. Try again in a moment.",
-    contextChanged:
-      "An earlier step needs updating. Review that step before choosing a design alternative. Your current choice is unchanged.",
-    applyFailed:
-      "Your choice is recorded but it was not applied yet. Press “Choose this one” again.",
-    noChanges: "This design is already the current one.",
-    iterationApplyFailed:
-      "The new version is recorded but it was not applied yet. Press “Apply the new version” again.",
-    iterationStale: "The design changed in the meantime: this version can no longer be applied.",
-    iterationPending:
-      "A new version is already waiting for your decision: apply it or discard it before asking for other changes.",
-    ruleTooLong:
-      "A rule can have at most 300 characters: shorten the request or do not keep it as a rule.",
-    ruleFailed: "The rule could not be removed. Try again in a moment.",
-    hintTry: "Try the mockup first: then you can choose it.",
-    hintPendingOther: "Decide first on the change waiting above.",
-    notCovered: "The mockup does not show these requirements yet: {list}.",
-    previewTitle: "Mockup of {alternative}",
-    previewDraft: "Model-generated draft · not applied",
-    previewCurrent: "The mockup of the chosen design",
-    previewHelp:
-      "Explore the screens and controls. Example results illustrate the design; the application is built from the knowledge folder with your own tools.",
-    previewMissing: "This alternative has no preview yet. Creating it takes a moment.",
-    previewError: "The preview could not be loaded.",
-    createMockup: "Create the preview",
-    reloadPreview: "Try again",
-    closePreview: "Close the preview",
-    pendingTitle: ["A change is waiting for your decision", "Changes waiting for your decision"],
-    applyDiff: "Apply the change",
-    rejectDiff: "Discard it",
-    diffReason: "Why you discard it (needed to discard it)",
-    reasonRequired: "A reason is required to reject or to discard.",
-    regenerateText:
-      "Did you bring insights into the project? Regenerate the alternatives: the twins will review them again.",
-    regenerate: "Regenerate the alternatives",
-    regenerating: "The designer is regenerating the alternatives…",
-    regenerationRejected: "The design could not be regenerated.",
-    regenerationRequirements:
-      "The requirements have changed and are waiting for your approval. Approve them again, then regenerate the design alternatives.",
-    regenerationNoPackage:
-      "There is no design to regenerate yet. Generate the design alternatives first.",
-    concernsTitle: "Points of attention and open questions ({n})",
-    concerns: "Points of attention",
-    remedy: "Remedy",
-    openQuestions: "Open questions",
-    approveGate: "Approve the chosen design",
-    askChanges: "Ask for changes",
-    barChoose:
-      "Choose one of the alternatives with “Choose this one”: then you approve the design here.",
-    barApprove:
-      "You approve {alternative}. The knowledge folder will contain this design and the opinion of the twins.",
-    barApproved:
-      "You approved this design. You can still ask for changes in words: the new version comes back here for your approval.",
-    barApprovedDrawing:
-      "The designer is drawing the new version you asked for: the approved design stays as it is until you apply it.",
-    barApprovedWaiting: "The new version is waiting above: apply it, then approve it here.",
-    barPending:
-      "A proposed change is waiting above: if you approve now, it stays out of this version.",
-    barIteration:
-      "A new version is waiting above: if you approve now, you approve the current one.",
-    barDrawing:
-      "The designer is drawing the new version you asked for: you can wait for it or approve the current one.",
-    barRevision:
-      "You asked for changes: ask the designer for a new version, choose another alternative or regenerate the alternatives.",
-    barRequestIteration: "Until you apply the new version, the current design stays as it is.",
-    barRequestRevision:
-      "The current design does not change: your note stays in the history of the design.",
-    iterationPlaceholder:
-      "Write what to change: the designer draws a new version and you decide whether to apply it.",
-    revisionPlaceholder:
-      "Write what is wrong: the request is recorded with your note. For a different design, choose another alternative or regenerate the alternatives.",
-    keepRule: "Keep it as a rule for the next versions",
-    keepRuleHint: "The designer will follow it every time it draws a new version.",
-    submitFailed:
-      "The design could not be brought to your approval, so nothing was approved. Try again in a moment.",
-    approveFailed:
-      "The design is ready for your approval, but the approval did not go through. Press “Approve the chosen design” again.",
-    requestFailed:
-      "Your request for changes could not be recorded. Your note is still there: try again in a moment.",
-    moreActions: "Other choices on the approval",
-    reason: "Reason (needed to reject or to ask for a revision)",
-    rejectGate: "Reject the design",
-    requestRevision: "Ask for a revision",
-    pause: "Pause the approval",
-    cancelGate: "Cancel the approval",
-    pausedText: "The approval of this design is paused.",
-    resume: "Resume the approval",
-    revisionTitle: "You asked for changes",
-    rejectedTitle: "You rejected this design",
-    cancelledTitle: "You cancelled the approval",
-    closedText:
-      "To change it, choose another alternative, ask for changes or regenerate the alternatives: the new version comes back here for your approval.",
-    yourNote: "Your note",
-    ready: "Design approved by you. Next: the Dossier.",
-    reanchoredReview:
-      "The design was re-anchored to the new Definition: you can ask the twins for a new evaluation.",
-    matrixEmpty: "The twins have not given an opinion on these alternatives yet.",
-    readObservations: "Read every observation of {twin} on {alternative} ({count})",
-    closeObservations: "Close the observations",
-    version: "Version",
-    statusChoose: "waiting for your choice",
-    statusPending: "waiting for your decision",
-    statusApproved: "approved",
-    statusPaused: "paused",
-    statusRevision: "changes requested",
-    statusRejected: "rejected",
-    statusCancelled: "approval cancelled",
-    contentHash: "Content hash",
-    basedOn: "Based on version",
-    created: "Created",
-    approval: "Approval",
-    decisionCounter: "Decision no. {n}",
-    requirements: "Requirements",
-    catalog: "Style catalogue",
-    model: "Model that draws the mockups",
-    localModel: "local model, declarative preview",
-    mockupGeneration: "Mockup of {code}",
-    generations: "Generations of the project",
-    cost: "Cost of the generations",
-    tokens: "Tokens",
-    tokensValue: "{input} in · {output} out · {reasoning} reasoning",
-    none: "None",
-    methodology:
-      "Gate 5 approves the exact Design Package ID, version, and content hash. Owner approval is governance, not empirical validation. Synthetic User Twin feedback remains a design hypothesis.",
-    history: "Versions of the design",
-    historyItem: "Version {n} · {date}",
-    historyTitle: "Versions of the design ({n})",
-    historyCurrent: "current",
-    restoreVersion: "Go back to this version",
-    restoreNamed: "version {n}",
-    restoreText:
-      "A new version is created, identical to version {n}: then it has to be approved, like every new version.",
-    restoreConfirm: "Go back to version {n}",
-    restoreCancel: "Cancel",
-    restoreRunning: "Going back to version {n}…",
-    restoreDone:
-      "Version {m} created from version {n}: approve it with “Approve the chosen design”.",
-    restoreCurrent:
-      "The current design is already the same as version {n}: there is nothing to restore.",
-    restoreMissing: "Version {n} is no longer in the Studio: reload the page.",
-    restoreRequirements:
-      "Version {n} cites requirements that the Definition no longer contains: it cannot come back.",
-    restoreTwins:
-      "Version {n} was prepared with twins different from the current ones: it cannot come back.",
-    restoreContext: "An earlier step needs updating: update it, then go back to this version.",
-    restoreFailed:
-      "Going back to version {n} did not work, so nothing changed. Try again in a moment.",
-    decided: "Changes already decided",
-    applied: "Applied",
-    discarded: "Discarded",
-    provenance: "Provenance of the critiques",
-    confidence: "self-assessed confidence {value}",
-    usage: "Generations with the hosted model",
-    usageItem: "{date} · {purpose} · {model} · {status}",
-    subscription: "subscription",
-    mockupNotes: "Notes of the Studio on the mockups",
-    mockupNotesIntro: "The Studio accepted these mockups and noted these points.",
-    mockupNotesOf: "{code} · {title}",
-    onScreen: "On the screen “{title}”: {text}",
-    redrawRequest:
-      "Redraw the mockup so that it reproduces the look and the structure of the supplied design “{title}”: same layout, colours and hierarchy of the content, with the screens and the requirements of the project.",
-  },
-  it: {
-    designer: "Designer UX/UI",
-    noPackage:
-      "Sono pronto a proporti un aspetto per la tua app: preparo le alternative e le faccio provare ai twin.",
-    prerequisite: "Approva prima i requisiti: poi posso preparare le alternative.",
-    generate: "Prepara le alternative di design",
-    generating: "Il designer sta preparando le alternative…",
-    loading: "Carico il design…",
-    updating: "Aggiorno il design…",
-    introOne:
-      "Ho preparato un'alternativa e l'ho fatta provare ai twin. Il loro parere è qui sotto.",
-    introMany:
-      "Ho preparato {n} alternative e le ho fatte provare ai twin. Il loro parere è qui sotto.",
-    introChosen:
-      "Hai scelto {alternative}. Leggi il parere dei twin e approva il design quando sei pronto.",
-    introIterate:
-      "Hai scelto {alternative}. Se qualcosa va cambiato, chiedi modifiche: disegno una nuova versione e la confronti con quella attuale.",
-    numbers: ["nessuna", "una", "due", "tre", "quattro", "cinque", "sei", "sette", "otto"],
-    viewLabel: "Viste del design",
-    loadError: "Non è stato possibile caricare Design e valutazione.",
-    genericFailure: "Non è stato possibile completare la richiesta. Puoi riprovare.",
-    mockupRequired:
-      "Il mockup di questa alternativa non è ancora pronto: aspettalo prima di sceglierla.",
-    mockupRequiredDeclarative:
-      "Prova prima il mockup di questa alternativa: poi potrai sceglierla.",
-    pendingOther:
-      "Un'altra modifica aspetta la tua decisione qui sopra: applicala o scartala prima.",
-    proposeFailed:
-      "Non è stato possibile registrare la tua scelta: non è cambiato nulla. Riprova tra poco.",
-    contextChanged:
-      "Un passo precedente è da aggiornare. Rivedi quel passo prima di scegliere un'alternativa di design. La scelta attuale non è cambiata.",
-    applyFailed:
-      "La tua scelta è registrata ma non è ancora stata applicata. Premi di nuovo «Scegli questa».",
-    noChanges: "Questo design è già quello attuale.",
-    iterationApplyFailed:
-      "La nuova versione è registrata ma non è ancora stata applicata. Premi di nuovo «Applica la nuova versione».",
-    iterationStale: "Il design è cambiato nel frattempo: questa versione non si può più applicare.",
-    iterationPending:
-      "Una nuova versione aspetta già la tua decisione: applicala o scartala prima di chiedere altre modifiche.",
-    ruleTooLong:
-      "Una regola può avere al massimo 300 caratteri: accorcia la richiesta o non tenerla come regola.",
-    ruleFailed: "Non è stato possibile togliere la regola. Riprova tra poco.",
-    hintTry: "Prova prima il mockup: poi potrai sceglierla.",
-    hintPendingOther: "Decidi prima la modifica che aspetta qui sopra.",
-    notCovered: "Il mockup non mostra ancora questi requisiti: {list}.",
-    previewTitle: "Mockup di {alternative}",
-    previewDraft: "Bozza generata dal modello · non applicata",
-    previewCurrent: "Il mockup del design scelto",
-    previewHelp:
-      "Esplora schermate e controlli. I risultati di esempio illustrano il design; l'applicazione si realizza dalla cartella di conoscenza con i tuoi strumenti.",
-    previewMissing:
-      "Questa alternativa non ha ancora un'anteprima. Crearla richiede qualche istante.",
-    previewError: "Non è stato possibile caricare l'anteprima.",
-    createMockup: "Crea l'anteprima",
-    reloadPreview: "Riprova",
-    closePreview: "Chiudi l'anteprima",
-    pendingTitle: [
-      "Una modifica aspetta la tua decisione",
-      "Modifiche che aspettano la tua decisione",
-    ],
-    applyDiff: "Applica la modifica",
-    rejectDiff: "Scartala",
-    diffReason: "Perché la scarti (serve per scartarla)",
-    reasonRequired: "Per respingere o scartare serve una motivazione.",
-    regenerateText:
-      "Hai portato degli spunti nel progetto? Rigenera le alternative: i twin le valuteranno di nuovo.",
-    regenerate: "Rigenera le alternative",
-    regenerating: "Il designer sta rigenerando le alternative…",
-    regenerationRejected: "Non è stato possibile rigenerare il design.",
-    regenerationRequirements:
-      "I requisiti sono cambiati e aspettano la tua approvazione. Riapprovali, poi rigenera le alternative di design.",
-    regenerationNoPackage:
-      "Non c'è ancora un design da rigenerare. Genera prima le alternative di design.",
-    concernsTitle: "Punti di attenzione e domande aperte ({n})",
-    concerns: "Punti di attenzione",
-    remedy: "Rimedio",
-    openQuestions: "Domande aperte",
-    approveGate: "Approva il design scelto",
-    askChanges: "Chiedi modifiche",
-    barChoose: "Scegli una delle alternative con «Scegli questa»: poi approvi il design qui.",
-    barApprove:
-      "Approvi {alternative}. La cartella di conoscenza conterrà questo design e il parere dei twin.",
-    barApproved:
-      "Hai approvato questo design. Puoi ancora chiedere modifiche a parole: la nuova versione torna qui per la tua approvazione.",
-    barApprovedDrawing:
-      "Il designer sta disegnando la nuova versione che hai chiesto: il design approvato resta com'è finché non la applichi.",
-    barApprovedWaiting: "La nuova versione aspetta qui sopra: applicala, poi approvala qui.",
-    barPending:
-      "Una modifica proposta aspetta qui sopra: se approvi ora, resta fuori da questa versione.",
-    barIteration: "Una nuova versione aspetta qui sopra: se approvi ora, approvi quella attuale.",
-    barDrawing:
-      "Il designer sta disegnando la nuova versione che hai chiesto: puoi aspettarla o approvare quella attuale.",
-    barRevision:
-      "Hai chiesto modifiche: chiedi al designer una nuova versione, scegli un'altra alternativa o rigenera le alternative.",
-    barRequestIteration: "Finché non applichi la nuova versione, il design attuale resta com'è.",
-    barRequestRevision: "Il design attuale non cambia: la tua nota resta nella storia del design.",
-    iterationPlaceholder:
-      "Scrivi che cosa cambiare: il designer disegna una nuova versione e decidi tu se applicarla.",
-    revisionPlaceholder:
-      "Scrivi che cosa non va: la richiesta viene registrata con la tua nota. Per un design diverso scegli un'altra alternativa o rigenera le alternative.",
-    keepRule: "Tienila come regola per le prossime versioni",
-    keepRuleHint: "Il designer la rispetterà ogni volta che disegna una nuova versione.",
-    submitFailed:
-      "Non è stato possibile portare il design alla tua approvazione: non è stato approvato nulla. Riprova tra poco.",
-    approveFailed:
-      "Il design è pronto per la tua approvazione, ma l'approvazione non è andata a buon fine. Premi di nuovo «Approva il design scelto».",
-    requestFailed:
-      "Non è stato possibile registrare la tua richiesta di modifiche. La nota è ancora lì: riprova tra poco.",
-    moreActions: "Altre scelte sull'approvazione",
-    reason: "Motivazione (serve per respingere o per chiedere una revisione)",
-    rejectGate: "Respingi il design",
-    requestRevision: "Chiedi una revisione",
-    pause: "Metti in pausa l'approvazione",
-    cancelGate: "Annulla l'approvazione",
-    pausedText: "L'approvazione di questo design è in pausa.",
-    resume: "Riprendi l'approvazione",
-    revisionTitle: "Hai chiesto modifiche",
-    rejectedTitle: "Hai respinto questo design",
-    cancelledTitle: "Hai annullato l'approvazione",
-    closedText:
-      "Per cambiarlo scegli un'altra alternativa, chiedi modifiche o rigenera le alternative: la nuova versione torna qui per la tua approvazione.",
-    yourNote: "La tua nota",
-    ready: "Design approvato da te. Ora il Dossier.",
-    reanchoredReview:
-      "Il design è stato riagganciato alla Definizione nuova: puoi chiedere ai twin una nuova valutazione.",
-    matrixEmpty: "I twin non hanno ancora espresso un parere su queste alternative.",
-    readObservations: "Leggi tutte le osservazioni di {twin} su {alternative} ({count})",
-    closeObservations: "Chiudi le osservazioni",
-    version: "Versione",
-    statusChoose: "in attesa della tua scelta",
-    statusPending: "in attesa della tua decisione",
-    statusApproved: "approvata",
-    statusPaused: "in pausa",
-    statusRevision: "modifiche richieste",
-    statusRejected: "respinta",
-    statusCancelled: "approvazione annullata",
-    contentHash: "Hash del contenuto",
-    basedOn: "Basata sulla versione",
-    created: "Creata il",
-    approval: "Approvazione",
-    decisionCounter: "Decisione n. {n}",
-    requirements: "Requisiti",
-    catalog: "Catalogo degli stili",
-    model: "Modello che disegna i mockup",
-    localModel: "modello locale, anteprima dichiarativa",
-    mockupGeneration: "Mockup di {code}",
-    generations: "Generazioni del progetto",
-    cost: "Costo delle generazioni",
-    tokens: "Token",
-    tokensValue: "{input} in ingresso · {output} in uscita · {reasoning} di ragionamento",
-    none: "Nessuno",
-    methodology:
-      "Il Gate 5 approva ID, versione e hash esatti del Design Package. L'approvazione del proprietario è governance, non validazione empirica. Il feedback sintetico degli User Twin resta un'ipotesi progettuale.",
-    history: "Versioni del design",
-    historyItem: "Versione {n} · {date}",
-    historyTitle: "Versioni del design ({n})",
-    historyCurrent: "attuale",
-    restoreVersion: "Torna a questa versione",
-    restoreNamed: "versione {n}",
-    restoreText:
-      "Nasce una versione nuova, uguale alla versione {n}: poi va approvata, come ogni versione nuova.",
-    restoreConfirm: "Torna alla versione {n}",
-    restoreCancel: "Annulla",
-    restoreRunning: "Torno alla versione {n}…",
-    restoreDone:
-      "Versione {m} creata dalla versione {n}: approvala con «Approva il design scelto».",
-    restoreCurrent:
-      "Il design attuale è già uguale alla versione {n}: non c'è niente da ripristinare.",
-    restoreMissing: "La versione {n} non c'è più nello Studio: ricarica la pagina.",
-    restoreRequirements:
-      "La versione {n} cita requisiti che la Definizione non contiene più: non può tornare.",
-    restoreTwins:
-      "La versione {n} è stata preparata con twin diversi da quelli di adesso: non può tornare.",
-    restoreContext: "Un passo precedente è da aggiornare: aggiornalo, poi torna a questa versione.",
-    restoreFailed:
-      "Il ritorno alla versione {n} non è riuscito: non è cambiato nulla. Riprova tra poco.",
-    decided: "Modifiche già decise",
-    applied: "Applicata",
-    discarded: "Scartata",
-    provenance: "Provenienza delle critiche",
-    confidence: "confidenza auto-valutata {value}",
-    usage: "Generazioni con il modello ospitato",
-    usageItem: "{date} · {purpose} · {model} · {status}",
-    subscription: "abbonamento",
-    mockupNotes: "Note dello Studio sui mockup",
-    mockupNotesIntro: "Lo Studio ha accettato questi mockup e ha annotato questi punti.",
-    mockupNotesOf: "{code} · {title}",
-    onScreen: "Nella schermata «{title}»: {text}",
-    redrawRequest:
-      "Ridisegna il mockup perché riproduca l'aspetto e la struttura del design fornito «{title}»: stessa disposizione, stessi colori e stessa gerarchia dei contenuti, con le schermate e i requisiti del progetto.",
-  },
-} as const;
-
-const auth = useAuthStore();
+const authorizedRequest = useAuthorizedRequest(() => props.authorize);
 const guidance = useGuidanceStore();
 const store = useDesignStore();
 const loopStore = useDesignLoopStore();
@@ -806,7 +230,7 @@ const tray = useInsightTrayStore();
 const modeling = useUserModelingStore();
 const requirementsStore = useRequirementsStore();
 
-const copy = computed(() => messages[props.locale]);
+const copy = computed(() => designFlowCopy[props.locale]);
 const api = computed(() => props.api ?? designApi);
 const loop = computed(() => props.loopApi ?? designLoopApi);
 const mockupsApi = computed(() => props.mockupsApi ?? designMockupsApi);
@@ -822,8 +246,8 @@ const previewSection = ref<HTMLElement | null>(null);
 const iterationSection = ref<HTMLElement | null>(null);
 const viewSwitch = ref<InstanceType<typeof ArtifactViewSwitch> | null>(null);
 const decisionBar = ref<InstanceType<typeof UiDecisionBar> | null>(null);
-const barTarget = ref<HTMLElement | null>(null);
-const rowTarget = ref<HTMLElement | null>(null);
+const { barTarget, rowTarget, refreshTargets, refreshAfterRender, trackTargets, untrackTargets } =
+  useStepTargets(root, { active: () => props.active, onRefresh: refreshStepShown });
 const view = ref<ArtifactView>("text");
 const viewPanelId = "design-view-panel";
 const localError = ref<string | null>(null);
@@ -865,7 +289,6 @@ let dialogSequence = 0;
 let usageSequence = 0;
 let distanceSequence = 0;
 let distanceKey: string | null = null;
-let visibility: ResizeObserver | null = null;
 
 const current = computed(() => (store.projectId === props.projectId ? store.current : null));
 const packageValue = computed(() => current.value?.package ?? null);
@@ -951,35 +374,15 @@ const mockupsPaid = computed(
   () => !(mockups.projectId === props.projectId && mockups.capabilities?.paid === false),
 );
 
-const gateTargetsCurrent = computed(() => {
-  const gate = store.gate;
-  const version = current.value;
-  if (gate === null || version === null) {
-    return false;
-  }
-  return (
-    gate.artifact.artifact_id === version.id &&
-    gate.artifact.version === version.version_number &&
-    gate.artifact.content_hash === version.content_hash
-  );
-});
-const canSubmitGate = computed(() => {
-  const version = current.value;
-  if (version === null || !version.ready_for_gate) {
-    return false;
-  }
-  if (store.gate === null || !gateTargetsCurrent.value) {
-    return true;
-  }
-  return store.gate.status === "DRAFT" || store.gate.status === "STALE";
-});
-const gatePending = computed(
-  () => gateTargetsCurrent.value && store.gate?.status === "PENDING_APPROVAL",
-);
-const gatePaused = computed(() => gateTargetsCurrent.value && store.gate?.status === "PAUSED");
-const gateStatus = computed<HumanGateStatus | null>(() =>
-  gateTargetsCurrent.value ? (store.gate?.status ?? null) : null,
-);
+const { canSubmitGate, gatePending, gatePaused, gateStatus, closedTitle, closedNote, versionRows } =
+  useGateState({
+    store,
+    version: current,
+    copy,
+    locale: () => props.locale,
+    revision: () => decisionState.value === "revision",
+    readyForGate: true,
+  });
 const decisionState = computed<DecisionState>(() => {
   const version = current.value;
   if (version === null) {
@@ -1020,27 +423,6 @@ const secondaryLabel = computed(() =>
   (iterationMode.value || decisionState.value === "approve") && !iterationWaiting.value
     ? copy.value.askChanges
     : null,
-);
-const closedTitle = computed(() => {
-  if (decisionState.value === "revision") {
-    return copy.value.revisionTitle;
-  }
-  return gateStatus.value === "REJECTED" ? copy.value.rejectedTitle : copy.value.cancelledTitle;
-});
-const closedNote = computed(() => {
-  const kind = decisionState.value === "revision" ? "REQUEST_REVISION" : "REJECT";
-  const gateId = store.gate?.id;
-  return (
-    store.gateEvents
-      .filter((event) => event.gate_id === gateId && event.kind === kind)
-      .at(-1)
-      ?.reason?.trim() ?? ""
-  );
-});
-const decisionCounter = computed(() =>
-  fill(copy.value.decisionCounter, {
-    n: store.gate?.iteration ?? 1,
-  }),
 );
 
 const reviewRun = computed<DesignEvaluationRunPayload | null>(() => {
@@ -1597,25 +979,9 @@ const technicalRows = computed(() => {
     return [];
   }
   const text = copy.value;
-  const gate = store.gate;
   const grounding = version.package.grounding;
   const rows: { label: string; value: string }[] = [
-    { label: text.contentHash, value: version.content_hash },
-    {
-      label: text.basedOn,
-      value:
-        version.based_on_version_number === null
-          ? text.none
-          : String(version.based_on_version_number),
-    },
-    { label: text.created, value: formatDate(version.created_at) },
-    {
-      label: text.approval,
-      value:
-        gate === null
-          ? workflowStatusLabel(null, props.locale)
-          : `${workflowStatusLabel(gate.status, props.locale)} · ${decisionCounter.value}`,
-    },
+    ...versionRows.value,
     { label: text.requirements, value: `v${grounding.requirements_reference.version_number}` },
     { label: text.catalog, value: `v${grounding.catalog.version}` },
     {
@@ -1680,19 +1046,6 @@ const mockupNotes = computed(() => {
   return notes;
 });
 
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
-
-function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(props.locale, { dateStyle: "medium", timeStyle: "short" }).format(
-        date,
-      );
-}
-
 function money(microusd: number | null): string {
   return new Intl.NumberFormat(props.locale === "it" ? "it-IT" : "en-US", {
     style: "currency",
@@ -1704,12 +1057,6 @@ function money(microusd: number | null): string {
 
 function count(value: number): string {
   return new Intl.NumberFormat(props.locale === "it" ? "it-IT" : "en-US").format(value);
-}
-
-function percent(value: number): string {
-  return new Intl.NumberFormat(props.locale, { style: "percent", maximumFractionDigits: 0 }).format(
-    value,
-  );
 }
 
 function twinAvatarOf(twinId: string): string {
@@ -1944,13 +1291,6 @@ function reviewAffected(diff: DesignPackageDiffPayload): boolean {
 
 function changed(): void {
   emit("sections-changed");
-}
-
-function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
-  if (props.authorize !== undefined) {
-    return props.authorize(operation);
-  }
-  return auth.withAccessToken(apiClient, operation);
 }
 
 async function run(operation: () => Promise<unknown>): Promise<boolean> {
@@ -2964,32 +2304,12 @@ async function applyInsight(request: ObservationInsightRequest): Promise<void> {
   }
 }
 
-function rendered(element: Element): boolean {
-  return typeof element.checkVisibility !== "function" || element.checkVisibility();
-}
-
-function refreshTargets(): void {
+function refreshStepShown(): void {
   const element = root.value;
-  const visible = props.active && element !== null && element.isConnected && rendered(element);
-  const bar = document.getElementById(BAR_TARGET);
-  const row = document.getElementById(ROW_TARGET);
-  const nextBar = visible && bar !== null && rendered(bar) ? bar : null;
-  const nextRow = visible && row !== null && rendered(row) ? row : null;
-  if (barTarget.value !== nextBar) {
-    barTarget.value = nextBar;
-  }
-  if (rowTarget.value !== nextRow) {
-    rowTarget.value = nextRow;
-  }
   const shown = props.active && element !== null && (!element.isConnected || rendered(element));
   if (stepShown.value !== shown) {
     stepShown.value = shown;
   }
-}
-
-async function refreshWhenDrawn(): Promise<void> {
-  await nextTick();
-  refreshTargets();
 }
 
 watch(
@@ -3079,7 +2399,7 @@ watch(
   { immediate: true, flush: "post" },
 );
 
-watch(() => props.active, refreshWhenDrawn);
+watch(() => props.active, refreshAfterRender);
 
 watch(
   () => [iterations.state, iterations.result?.generation_id, iterationScreen.value] as const,
@@ -3153,21 +2473,13 @@ watch(secondaryLabel, (label) => {
   }
 });
 
-onMounted(() => {
-  refreshTargets();
-  void refreshWhenDrawn();
-  if (typeof ResizeObserver === "undefined" || root.value === null) {
-    return;
-  }
-  visibility = new ResizeObserver(refreshTargets);
-  visibility.observe(root.value);
-});
+onMounted(trackTargets);
 
 onUpdated(refreshTargets);
 
 onBeforeUnmount(() => {
   lifetime.abort();
-  visibility?.disconnect();
+  untrackTargets();
   declarativeEpoch++;
   dialogSequence++;
 });
@@ -3415,7 +2727,7 @@ onBeforeUnmount(() => {
                     {{
                       fill(copy.historyItem, {
                         n: version.version_number,
-                        date: formatDate(version.created_at),
+                        date: formatDate(version.created_at, locale),
                       })
                     }}
                   </span>
@@ -3992,7 +3304,7 @@ onBeforeUnmount(() => {
                   {{
                     fill(copy.historyItem, {
                       n: version.version_number,
-                      date: formatDate(version.created_at),
+                      date: formatDate(version.created_at, locale),
                     })
                   }}
                 </span>
@@ -4062,7 +3374,7 @@ onBeforeUnmount(() => {
                   {{ critique.code }} · {{ critique.user_twin_reference.name }}
                 </strong>
                 · {{ critique.epistemic_status }} · {{ critique.human_validation }} ·
-                {{ fill(copy.confidence, { value: percent(critique.confidence) }) }}
+                {{ fill(copy.confidence, { value: confidence(critique.confidence, locale) }) }}
                 <span class="block">{{ critique.rationale }}</span>
                 <span
                   v-for="reference in critique.provenance"
@@ -4081,7 +3393,7 @@ onBeforeUnmount(() => {
               <li v-for="item in usage.items" :key="item.generation_id" class="break-all">
                 {{
                   fill(copy.usageItem, {
-                    date: formatDate(item.recorded_at),
+                    date: formatDate(item.recorded_at, locale),
                     purpose: item.purpose ?? item.task,
                     model: item.model,
                     status: item.status,

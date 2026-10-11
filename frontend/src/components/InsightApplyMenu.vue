@@ -2,9 +2,9 @@
 import { computed, ref, useId } from "vue";
 
 import { useSurface, type SurfaceContext } from "./UiSurface.vue";
-import { apiClient } from "@/api/client";
+import { fill } from "./textFormat";
 import { designLoopApi, type DesignLoopApi } from "@/api/designLoop";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
 import { type AuthorizedDesignLoopRequest, useDesignLoopStore } from "@/stores/designLoop";
 import { MAX_TRAY_ITEMS, useInsightTrayStore } from "@/stores/insightTray";
 import type {
@@ -129,7 +129,7 @@ const messages = {
   },
 } as const;
 
-const auth = useAuthStore();
+const authorize = useAuthorizedRequest(() => props.authorize);
 const store = useDesignLoopStore();
 const tray = useInsightTrayStore();
 const noteId = `insight-brief-note-${useId()}`;
@@ -149,13 +149,6 @@ const chosenField = computed<InsightBriefField>({
     briefField.value = value;
   },
 });
-
-const authorize: AuthorizedDesignLoopRequest = (operation) =>
-  props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
-
-function fill(template: string, values: Record<string, string | number | null>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
 
 async function apply(target: ProjectTarget): Promise<void> {
   if (busy.value) return;
@@ -178,7 +171,7 @@ async function apply(target: ProjectTarget): Promise<void> {
       props.api ?? designLoopApi,
     );
     outcome.value = fill(copy.value.applied[target], {
-      code: application.target_code,
+      code: application.target_code ?? "",
       version: application.target_version_number,
     });
     emit("applied", application);
