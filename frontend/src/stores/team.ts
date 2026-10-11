@@ -1,7 +1,6 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 
-import { ApiError } from "@/api/client";
 import type {
   AgentCatalogResponse,
   AgentIdentifier,
@@ -15,29 +14,10 @@ import type {
   TeamProposalVersionResponse,
 } from "@/api/team-contracts";
 import type { HumanGateEventResponse, HumanGateResponse } from "@/api/workflow-contracts";
+import { errorDetailOf, optionalResource } from "@/stores/storeErrors";
 
 export interface TeamAuthorizedRequest {
   <T>(operation: (accessToken: string) => Promise<T>): Promise<T>;
-}
-
-function errorCode(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.detail;
-  }
-
-  return "unexpected_error";
-}
-
-async function optionalResource<T>(operation: () => Promise<T>): Promise<T | null> {
-  try {
-    return await operation();
-  } catch (error: unknown) {
-    if (error instanceof ApiError && error.status === 404) {
-      return null;
-    }
-
-    throw error;
-  }
 }
 
 export const useTeamStore = defineStore("team", () => {
@@ -84,7 +64,7 @@ export const useTeamStore = defineStore("team", () => {
     try {
       return await operation();
     } catch (error: unknown) {
-      errorDetail.value = errorCode(error);
+      errorDetail.value = errorDetailOf(error);
 
       return null;
     } finally {

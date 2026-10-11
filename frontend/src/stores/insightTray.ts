@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 
 import { DesignLoopApiError, type InsightBatchApi } from "../api/designLoop";
+import { isRecord } from "../api/http";
 import type {
   InsightApplicationRequest,
   InsightBriefField,
@@ -33,10 +34,6 @@ interface InsightTrayState {
   results: Record<string, InsightTrayResult>;
   failures: Record<string, InsightTrayFailure>;
   applying: string[];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function batchFailure(error: unknown): InsightTrayFailure {

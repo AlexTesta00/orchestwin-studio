@@ -1,7 +1,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 
-import { ApiError, type ApiClient } from "@/api/client";
+import { ApiError } from "@/api/client";
 import type {
   AccessMode,
   AuthenticationApi,
@@ -10,18 +10,11 @@ import type {
   GuidanceMode,
   UserResponse,
 } from "@/api/contracts";
+import { errorDetailOf } from "@/stores/storeErrors";
 
 export type AuthenticationStatus = "idle" | "loading" | "authenticated" | "anonymous";
 
 type AuthorizedOperation<T> = (accessToken: string) => Promise<T>;
-
-function errorCode(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.detail;
-  }
-
-  return "unexpected_error";
-}
 
 export const useAuthStore = defineStore("auth", () => {
   const status = ref<AuthenticationStatus>("idle");
@@ -62,7 +55,7 @@ export const useAuthStore = defineStore("auth", () => {
       return true;
     } catch (error: unknown) {
       clearAuthentication();
-      errorDetail.value = errorCode(error);
+      errorDetail.value = errorDetailOf(error);
       return false;
     }
   }
@@ -76,7 +69,7 @@ export const useAuthStore = defineStore("auth", () => {
       return true;
     } catch (error: unknown) {
       clearAuthentication();
-      errorDetail.value = errorCode(error);
+      errorDetail.value = errorDetailOf(error);
       return false;
     }
   }
@@ -98,7 +91,7 @@ export const useAuthStore = defineStore("auth", () => {
         return true;
       } catch (error: unknown) {
         clearAuthentication();
-        errorDetail.value = reportError ? errorCode(error) : null;
+        errorDetail.value = reportError ? errorDetailOf(error) : null;
         return false;
       } finally {
         refreshInFlight = null;
@@ -218,8 +211,3 @@ export const useAuthStore = defineStore("auth", () => {
     chooseGuidanceMode,
   };
 });
-
-export type AuthenticationClient = Pick<
-  ApiClient,
-  "accessMode" | "register" | "login" | "refresh" | "logout" | "me" | "chooseGuidanceMode"
->;

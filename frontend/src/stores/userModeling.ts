@@ -17,6 +17,7 @@ import type {
   UserTwinProfileDiffPayload,
   UserTwinVersionPayload,
 } from "../types/userModeling";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type UserModelingOperation =
   | "load"
@@ -31,11 +32,7 @@ export type UserModelingOperation =
   | "submit-gate"
   | "decide-gate";
 
-export interface UserModelingStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type UserModelingStoreError = StoreError;
 
 interface UserModelingState {
   projectId: string | null;
@@ -76,30 +73,6 @@ function emptyPendingState(): Record<UserModelingOperation, boolean> {
     "decide-revision": false,
     "submit-gate": false,
     "decide-gate": false,
-  };
-}
-
-function toStoreError(error: unknown): UserModelingStoreError {
-  if (error instanceof UserModelingApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected User Modeling error occurred",
-    code: null,
-    status: null,
   };
 }
 
@@ -288,7 +261,11 @@ export const useUserModelingStore = defineStore("userModeling", {
         return;
       }
 
-      this.error = toStoreError(error);
+      this.error = storeErrorOf(
+        error,
+        UserModelingApiError,
+        "An unexpected User Modeling error occurred",
+      );
     },
 
     applySnapshot(snapshot: UserModelingSnapshotVersionPayload): void {
