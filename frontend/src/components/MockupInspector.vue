@@ -1,252 +1,41 @@
 <script lang="ts">
-import type { DesignChangeTarget } from "../api/designIterations";
-import { TARGET_HTML_LIMIT, TARGET_LABEL_LIMIT } from "../stores/designIterations";
-
-export interface InspectorBox {
-  code: string;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
-export interface InspectorHighlight {
-  hover: InspectorBox | null;
-  selected: InspectorBox | null;
-}
-
-export interface InspectedElement {
-  code: string;
-  tag: string;
-  text: string;
-  screen: string | null;
-  requirements: string[];
-}
-
-export interface ScreenElements {
-  screen: string | null;
-  elements: Element[];
-}
-
-export const NO_HIGHLIGHT: InspectorHighlight = { hover: null, selected: null };
-
-const SCREEN = "section[id^='SCR-']";
-const MARKED = "[data-elm]";
-const PIN = "ot-pin";
-const SRCDOC_LINK = /(\shref=")about:srcdoc#(SCR-[0-9]{3}")/g;
-const NAME_ATTRIBUTES = ["value", "placeholder", "title", "alt"] as const;
-const SILENT = new Set(["script", "style", "template", "noscript", "select", "textarea", "svg"]);
-const BLOCKS = new Set([
-  "article",
-  "aside",
-  "blockquote",
-  "br",
-  "caption",
-  "dd",
-  "details",
-  "div",
-  "dl",
-  "dt",
-  "fieldset",
-  "figcaption",
-  "figure",
-  "footer",
-  "form",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "header",
-  "hr",
-  "legend",
-  "li",
-  "main",
-  "nav",
-  "ol",
-  "p",
-  "section",
-  "summary",
-  "table",
-  "tbody",
-  "td",
-  "tfoot",
-  "th",
-  "thead",
-  "tr",
-  "ul",
-]);
-
-function normalize(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function clip(value: string, limit: number): string {
-  const characters = [...value];
-  return characters.length <= limit ? value : characters.slice(0, limit).join("").trimEnd();
-}
-
-function isElement(node: Node): node is Element {
-  return node.nodeType === 1;
-}
-
-function silent(element: Element): boolean {
-  return (
-    SILENT.has(element.localName) ||
-    element.hasAttribute("hidden") ||
-    element.classList.contains(PIN)
-  );
-}
-
-function collect(node: Node, parts: string[]): void {
-  for (const child of node.childNodes) {
-    if (child.nodeType === 3) {
-      parts.push(child.textContent ?? "");
-      continue;
-    }
-    if (!isElement(child) || silent(child)) {
-      continue;
-    }
-    const block = BLOCKS.has(child.localName);
-    if (block) {
-      parts.push(" ");
-    }
-    collect(child, parts);
-    if (block) {
-      parts.push(" ");
-    }
-  }
-}
-
-function ownText(element: Element): string {
-  if (element.localName === "select") {
-    const option = element.querySelector("option[selected]") ?? element.querySelector("option");
-    return normalize(option?.textContent ?? "");
-  }
-  if (element.localName === "textarea") {
-    return normalize(element.textContent ?? "");
-  }
-  const parts: string[] = [];
-  collect(element, parts);
-  return normalize(parts.join(""));
-}
-
-function referencedText(element: Element): string {
-  const page = element.ownerDocument;
-  const names = (element.getAttribute("aria-labelledby") ?? "").split(/\s+/).filter(Boolean);
-  return normalize(names.map((name) => page.getElementById(name)?.textContent ?? "").join(" "));
-}
-
-function labelText(element: Element): string {
-  const id = element.getAttribute("id");
-  const labels = [...element.ownerDocument.querySelectorAll("label[for]")].filter(
-    (label) => id !== null && label.getAttribute("for") === id,
-  );
-  const owner = element.closest("label");
-  return normalize(
-    [...labels, ...(owner === null ? [] : [owner])].map((label) => ownText(label)).join(" "),
-  );
-}
-
-export function elementText(element: Element): string {
-  const candidates = [
-    () => ownText(element),
-    () => referencedText(element),
-    () => normalize(element.getAttribute("aria-label") ?? ""),
-    () => labelText(element),
-    ...NAME_ATTRIBUTES.map((name) => () => normalize(element.getAttribute(name) ?? "")),
-  ];
-  for (const candidate of candidates) {
-    const text = candidate();
-    if (text.length > 0) {
-      return clip(text, TARGET_LABEL_LIMIT);
-    }
-  }
-  return "";
-}
-
-export function requirementsOf(element: Element): string[] {
-  const value = element.closest("[data-req]")?.getAttribute("data-req") ?? "";
-  return [...new Set(value.split(/[\s,]+/).filter((code) => code.length > 0))];
-}
-
-export function describeElement(element: Element): InspectedElement {
-  return {
-    code: element.getAttribute("data-elm") ?? "",
-    tag: element.localName,
-    text: elementText(element),
-    screen: element.closest(SCREEN)?.id ?? null,
-    requirements: requirementsOf(element),
-  };
-}
-
-function rendered(element: Element): boolean {
-  const box = element.getBoundingClientRect();
-  return box.width > 0 && box.height > 0;
-}
-
-export function visibleScreen(page: Document): Element | null {
-  const screens = [...page.querySelectorAll(SCREEN)];
-  return (
-    screens.find(rendered) ??
-    screens.find((screen) => screen.hasAttribute("data-entry")) ??
-    screens[0] ??
-    null
-  );
-}
-
-export function screenElements(page: Document): ScreenElements {
-  const screen = visibleScreen(page);
-  const scope = screen ?? page.body ?? page.documentElement;
-  const seen = new Set<string>();
-  const elements = [...scope.querySelectorAll(MARKED)].filter((element) => {
-    const code = element.getAttribute("data-elm") ?? "";
-    if (code.length === 0 || seen.has(code)) {
-      return false;
-    }
-    seen.add(code);
-    return true;
-  });
-  return { screen: screen?.id ?? null, elements };
-}
-
-export function markedElements(html: string): boolean {
-  return new DOMParser().parseFromString(html, "text/html").querySelector(MARKED) !== null;
-}
-
-export function changeTarget(element: Element, screen: string | null): DesignChangeTarget | null {
-  const code = element.getAttribute("data-elm");
-  const screenCode = element.closest(SCREEN)?.id ?? screen;
-  if (code === null || code.length === 0 || screenCode === null || screenCode.length === 0) {
-    return null;
-  }
-  const copy = element.cloneNode(true) as Element;
-  for (const pin of [...copy.querySelectorAll(`.${PIN}`)]) {
-    pin.remove();
-  }
-  return {
-    screen_code: screenCode,
-    element_code: code,
-    label: elementText(element) || code,
-    html: clip(copy.outerHTML.replace(SRCDOC_LINK, "$1#$2"), TARGET_HTML_LIMIT),
-  };
-}
-
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
+export {
+  changeTarget,
+  describeElement,
+  elementText,
+  markedElements,
+  requirementsOf,
+  screenElements,
+  visibleScreen,
+} from "./mockupElements";
 </script>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 
-import { generationFailureText } from "./DesignIterationPanel.vue";
+import { generationFailureText } from "./iterationMessages";
+import {
+  changeTarget,
+  clip,
+  describeElement,
+  isElement,
+  MARKED,
+  screenElements,
+  type InspectedElement,
+  type InspectorBox,
+  type InspectorHighlight,
+} from "./mockupElements";
+import { mockupInspectorCopy } from "./mockupInspectorCopy";
 import { modelFeedback } from "./modelFeedback";
 import { elementNames, withScreenNames } from "./screenNames";
+import { fill } from "./textFormat";
 import UiStateBlock from "./UiStateBlock.vue";
 import { designApi as defaultDesignApi, type DesignApi } from "../api/design";
-import { designIterationsApi, type DesignIterationsApi } from "../api/designIterations";
+import {
+  designIterationsApi,
+  type DesignChangeTarget,
+  type DesignIterationsApi,
+} from "../api/designIterations";
 import { designLoopApi, type DesignEvaluationScope, type DesignLoopApi } from "../api/designLoop";
 import { designMockupsApi, type DesignMockupsApi } from "../api/designMockups";
 import { useDesignStore } from "../stores/design";
@@ -337,159 +126,6 @@ const emit = defineEmits<{
   applied: [versionId: string];
 }>();
 
-const messages = {
-  it: {
-    title: "Elementi indicabili",
-    reading: "Leggo gli elementi della schermata…",
-    none: "In questa schermata non ci sono elementi indicabili.",
-    hint: "Passa sul mockup e fai clic su un elemento, oppure sceglilo dall'elenco con le frecce e Invio.",
-    noText: "Senza testo",
-    selection: "Elemento scelto",
-    code: "Codice",
-    screen: "Schermata",
-    text: "Testo",
-    requirements: "Requisiti",
-    noRequirements: "Nessun requisito collegato",
-    ask: "Che cosa cambio?",
-    count: "{n} di {max} caratteri",
-    review: "Chiedi subito il parere dei twin",
-    apply: "Applica la modifica",
-    estimate: "Di solito servono da 5 a 10 minuti.",
-    estimateReview: "Di solito servono da 5 a 10 minuti, più il parere dei twin.",
-    pending:
-      "Una nuova versione aspetta già la tua decisione: applicala o scartala prima di chiedere altre modifiche.",
-    chosen: "Hai scelto {code}: {text}",
-    cleared: "Nessun elemento scelto.",
-    drawing:
-      "Sto disegnando la nuova versione con le tue indicazioni. Può richiedere qualche minuto: intanto puoi continuare a guardare il design.",
-    ready: "Ecco la nuova versione. Confrontala con quella attuale e decidi se applicarla.",
-    applyVersion: "Applica la nuova versione",
-    versionReview: "Dopo l'applicazione i twin guardano {code}: di solito serve un paio di minuti.",
-    versionAlone:
-      "Applicarla non avvia nessuna generazione: la versione proposta diventa quella attuale.",
-    applied: "Hai applicato la nuova versione: ora è quella attuale.",
-    unapplied: {
-      stale: "Il design è cambiato nel frattempo: questa versione non si può più applicare.",
-      pending:
-        "Un'altra modifica aspetta la tua decisione nella pagina del passo Design: applicala o scartala prima.",
-      unchanged: "Questa versione è già quella attuale.",
-      recorded:
-        "La nuova versione è registrata ma non è ancora stata applicata. Premi di nuovo «Applica la nuova versione».",
-      failed: "Il design è rimasto com'era. Riprova tra poco.",
-    },
-    reviewing: "I twin stanno guardando l'elemento…",
-    reviewingScreen: "I twin stanno guardando la schermata…",
-    reviewTime: "Di solito serve un paio di minuti: intanto puoi continuare a guardare il mockup.",
-    reviewed: "I twin hanno detto la loro su {code}: le loro note sono accanto all'elemento.",
-    reviewedNone:
-      "I twin non hanno lasciato note su {code}: il loro giudizio è nelle revisioni del passo Design.",
-    reviewedScreen:
-      "I twin hanno detto la loro su {code}: scegli un elemento per leggere le loro note.",
-    reviewFailed: "Il parere dei twin non è arrivato",
-    reviewerMissing:
-      "Il modello che interpreta i twin non è collegato, quindi i twin non possono dare il loro parere.",
-    reviewBusy:
-      "I twin stanno già facendo un'altra revisione: chiedi il loro parere quando hanno finito.",
-    askTwins: "Chiedi il parere dei twin su questo elemento",
-    askTwinsTime: "Di solito serve un paio di minuti.",
-    notes: "Che cosa ne dicono i twin",
-    notesNote: "Sono ipotesi dei twin da pesare, non prove.",
-    verdicts: { helps: "Aiuta", slows: "Rallenta", blocks: "Blocca" },
-    todo: "Cosa fare",
-    tryThis: "Prova questo",
-    tried:
-      "Ho scritto il suggerimento in «Che cosa cambio?»: controllalo e premi «Applica la modifica».",
-    failures: {
-      rejected: "La nuova versione va rifatta",
-      failed: "La nuova versione non è stata disegnata",
-      start: "La richiesta non è partita",
-      apply: "La nuova versione non è stata applicata",
-    },
-    stages: {
-      GENERATING: "Il designer sta disegnando le schermate.",
-      VALIDATING: "Lo Studio controlla la nuova versione.",
-      RETRYING: "Il primo tentativo non andava bene: il designer lo sta rifacendo.",
-      none: "Il designer sta lavorando alla nuova versione.",
-    },
-  },
-  en: {
-    title: "Elements you can point at",
-    reading: "Reading the elements of the screen…",
-    none: "This screen has no elements to point at.",
-    hint: "Move over the mockup and click an element, or choose it from the list with the arrow keys and Enter.",
-    noText: "No text",
-    selection: "Chosen element",
-    code: "Code",
-    screen: "Screen",
-    text: "Text",
-    requirements: "Requirements",
-    noRequirements: "No linked requirement",
-    ask: "What should I change?",
-    count: "{n} of {max} characters",
-    review: "Ask the twins for their opinion right away",
-    apply: "Apply the change",
-    estimate: "It usually takes 5 to 10 minutes.",
-    estimateReview: "It usually takes 5 to 10 minutes, plus the opinion of the twins.",
-    pending:
-      "A new version is already waiting for your decision: apply it or discard it before asking for other changes.",
-    chosen: "You chose {code}: {text}",
-    cleared: "No element chosen.",
-    drawing:
-      "I am drawing the new version from your instructions. It can take a few minutes: meanwhile you can keep looking at the design.",
-    ready:
-      "Here is the new version. Compare it with the current one and decide whether to apply it.",
-    applyVersion: "Apply the new version",
-    versionReview:
-      "Once it is applied the twins look at {code}: it usually takes a couple of minutes.",
-    versionAlone: "Applying it starts no generation: the proposed version becomes the current one.",
-    applied: "You applied the new version: it is now the current one.",
-    unapplied: {
-      stale: "The design changed in the meantime: this version can no longer be applied.",
-      pending:
-        "Another change is waiting for your decision on the page of the Design step: apply it or discard it first.",
-      unchanged: "This version is already the current one.",
-      recorded:
-        "The new version is recorded but it was not applied yet. Press “Apply the new version” again.",
-      failed: "The design stayed as it was. Try again in a moment.",
-    },
-    reviewing: "The twins are looking at the element…",
-    reviewingScreen: "The twins are looking at the screen…",
-    reviewTime:
-      "It usually takes a couple of minutes: meanwhile you can keep looking at the mockup.",
-    reviewed: "The twins gave their opinion on {code}: their notes are next to the element.",
-    reviewedNone:
-      "The twins left no note on {code}: their judgement is in the reviews of the Design step.",
-    reviewedScreen:
-      "The twins gave their opinion on {code}: choose an element to read their notes.",
-    reviewFailed: "The opinion of the twins did not arrive",
-    reviewerMissing:
-      "The model that plays the twins is not connected, so the twins cannot give their opinion.",
-    reviewBusy:
-      "The twins are already doing another review: ask for their opinion once they have finished.",
-    askTwins: "Ask the twins for their opinion on this element",
-    askTwinsTime: "It usually takes a couple of minutes.",
-    notes: "What the twins say about it",
-    notesNote: "They are hypotheses of the twins to weigh, not evidence.",
-    verdicts: { helps: "Helps", slows: "Slows down", blocks: "Blocks" },
-    todo: "What to do",
-    tryThis: "Try this",
-    tried:
-      "I wrote the suggestion in “What should I change?”: check it and press “Apply the change”.",
-    failures: {
-      rejected: "The new version needs another try",
-      failed: "The new version was not drawn",
-      start: "The request did not start",
-      apply: "The new version was not applied",
-    },
-    stages: {
-      GENERATING: "The designer is drawing the screens.",
-      VALIDATING: "The Studio is checking the new version.",
-      RETRYING: "The first attempt was not good enough: the designer is redoing it.",
-      none: "The designer is working on the new version.",
-    },
-  },
-} as const;
-
 const REVEAL_MARGIN = 16;
 const REVIEW_BUSY = "DESIGN_REVIEW_BUSY";
 const REVIEW_FAILED = "DESIGN_LOOP_REQUEST_FAILED";
@@ -512,7 +148,7 @@ const iterations = useDesignIterationsStore();
 const design = useDesignStore();
 const loop = useDesignLoopStore();
 
-const copy = computed(() => messages[props.locale]);
+const copy = computed(() => mockupInspectorCopy[props.locale]);
 
 const titleId = useId();
 const selectionId = useId();

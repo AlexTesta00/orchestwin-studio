@@ -65,14 +65,17 @@ import type { DesignMockupsApi } from "../api/designMockups";
 import { activitySignalKey } from "../stores/activityJournal";
 import type { AuthorizedMockupRequest } from "../stores/designMockups";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
-import MockupInspector, {
+import MockupInspector from "./MockupInspector.vue";
+import MockupWhyElements from "./MockupWhyElements.vue";
+import MockupScenarioWalkthrough from "./MockupScenarioWalkthrough.vue";
+import { mockupDialogCopy } from "./mockupDialogCopy";
+import {
   markedElements,
   NO_HIGHLIGHT,
   type InspectorBox,
   type InspectorHighlight,
-} from "./MockupInspector.vue";
-import MockupWhyElements from "./MockupWhyElements.vue";
-import MockupScenarioWalkthrough from "./MockupScenarioWalkthrough.vue";
+} from "./mockupElements";
+import { fill, moveTabFocus } from "./textFormat";
 import { whyContextKey } from "./whyContext";
 import UiSegmented from "./UiSegmented.vue";
 import UiStateBlock from "./UiStateBlock.vue";
@@ -133,65 +136,6 @@ const emit = defineEmits<{
   applied: [versionId: string];
 }>();
 
-const messages = {
-  it: {
-    close: "Chiudi il mockup",
-    screens: "Schermate del mockup",
-    width: "Larghezza del mockup",
-    widths: { desktop: "Desktop", tablet: "Tablet", phone: "Telefono" },
-    frame: "Mockup navigabile: {title}",
-    hint: "Il mockup è navigabile: i suoi collegamenti portano alle altre schermate.",
-    inspect: "Indica un elemento",
-    inspectHint: "Un clic sul mockup sceglie l'elemento; Esc toglie la scelta.",
-    noElements: "Questo mockup non ha elementi indicabili",
-    opening: "Apro la schermata…",
-    empty: "Il mockup non è ancora disponibile.",
-    observations: "Osservazioni dei twin",
-    one: "1 osservazione",
-    many: "{n} osservazioni",
-    note: "I numeri viola sul mockup sono le osservazioni dei twin: ipotesi da pesare, non prove.",
-    where: "Dove",
-    screen: "Schermata «{title}»",
-    unanchored: "Riguarda tutta la schermata: sul mockup non ha un punto preciso.",
-    show: "Mostra la schermata «{title}»",
-    severity: {
-      critical: "Critica",
-      major: "Importante",
-      moderate: "Moderata",
-      minor: "Minore",
-      observation: "Nota",
-    },
-  },
-  en: {
-    close: "Close the mockup",
-    screens: "Mockup screens",
-    width: "Mockup width",
-    widths: { desktop: "Desktop", tablet: "Tablet", phone: "Phone" },
-    frame: "Navigable mockup: {title}",
-    hint: "The mockup can be navigated: its links lead to the other screens.",
-    inspect: "Point at an element",
-    inspectHint: "A click on the mockup chooses the element; Esc clears the choice.",
-    noElements: "This mockup has no elements to point at",
-    opening: "Opening the screen…",
-    empty: "The mockup is not available yet.",
-    observations: "What the twins noticed",
-    one: "1 observation",
-    many: "{n} observations",
-    note: "The purple numbers on the mockup are the observations of the twins: hypotheses to weigh, not evidence.",
-    where: "Where",
-    screen: "Screen “{title}”",
-    unanchored: "It concerns the whole screen: it has no precise point on the mockup.",
-    show: "Show the screen “{title}”",
-    severity: {
-      critical: "Critical",
-      major: "Major",
-      moderate: "Moderate",
-      minor: "Minor",
-      observation: "Note",
-    },
-  },
-} as const;
-
 const SEVERITY_STYLES: Record<MockupSeverity, string> = {
   critical: "bg-fail-on-night/12 text-fail-on-night",
   major: "bg-warn-on-night/12 text-warn-on-night",
@@ -215,7 +159,7 @@ provide(
 const { locale: appLocale } = useI18n({ useScope: "global" });
 
 const lang = computed<Locale>(() => props.locale ?? (appLocale.value === "it" ? "it" : "en"));
-const copy = computed(() => messages[lang.value]);
+const copy = computed(() => mockupDialogCopy[lang.value]);
 const whyContext = inject(whyContextKey, null);
 const activity = inject(activitySignalKey, null);
 const hasSidecar = computed(
@@ -335,10 +279,6 @@ function initialWidth(): FrameWidth {
   return window.matchMedia("(max-width: 639px)").matches ? "phone" : "desktop";
 }
 
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
-
 function titleOf(code: string): string | null {
   return screens.value.find((screen) => screen.code === code)?.title ?? null;
 }
@@ -412,20 +352,7 @@ function onFocusOut(event: FocusEvent): void {
 }
 
 function moveFocus(event: KeyboardEvent): void {
-  const count = screens.value.length;
-  const targets: Record<string, number> = {
-    ArrowRight: focusIndex.value + 1,
-    ArrowLeft: focusIndex.value - 1,
-    Home: 0,
-    End: count - 1,
-  };
-  const target = targets[event.key];
-  if (target === undefined || count === 0) {
-    return;
-  }
-  event.preventDefault();
-  focusIndex.value = (target + count) % count;
-  tablist.value?.querySelectorAll<HTMLElement>("[role='tab']")[focusIndex.value]?.focus();
+  moveTabFocus(event, focusIndex, screens.value.length, tablist.value);
 }
 
 function focusables(): HTMLElement[] {

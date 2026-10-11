@@ -5,8 +5,9 @@ import UiAgentMessage from "./UiAgentMessage.vue";
 import UiButton from "./UiButton.vue";
 import { useSurface, type SurfaceContext } from "./UiSurface.vue";
 import { modelFeedback } from "./modelFeedback";
+import { fill } from "./textFormat";
 import { GENERATION_POLL_TIMEOUT, type GenerationRequestJob } from "../api/generationJobs";
-import { generationFailureMessage } from "../stores/designMockups";
+import { generationFailureMessage } from "../stores/designMockupMessages";
 import type { GenerationResumeFailure } from "../stores/generationJobs";
 import type { GenerationOperation } from "../types/designMockups";
 
@@ -188,10 +189,6 @@ const palettes = {
 };
 
 const palette = computed(() => palettes[context.value]);
-
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
 
 function subject(operation: GenerationOperation): Subject {
   return copy.value.subjects[operation];

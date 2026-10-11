@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 
-import { apiClient } from "@/api/client";
+import { fill } from "./textFormat";
 import { designLoopApi, type InsightBatchApi } from "@/api/designLoop";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
 import type { AuthorizedDesignLoopRequest } from "@/stores/designLoop";
 import { type InsightTrayItem, useInsightTrayStore } from "@/stores/insightTray";
 
@@ -67,7 +67,7 @@ const messages = {
 
 type ConflictCode = keyof (typeof messages)["en"]["conflicts"];
 
-const auth = useAuthStore();
+const authorize = useAuthorizedRequest(() => props.authorize);
 const tray = useInsightTrayStore();
 const uid = useId();
 const copy = computed(() => messages[props.locale]);
@@ -79,13 +79,6 @@ const visible = computed(() => tray.isVisible(props.projectId));
 const listOpen = ref(false);
 const summary = ref<HTMLElement | null>(null);
 const closeButton = ref<HTMLButtonElement | null>(null);
-
-const authorize: AuthorizedDesignLoopRequest = (operation) =>
-  props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
-
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
 
 const countText = computed(() =>
   items.value.length === 1 ? copy.value.one : fill(copy.value.many, { count: items.value.length }),

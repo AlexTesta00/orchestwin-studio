@@ -2,14 +2,15 @@
 import { computed, ref, useId } from "vue";
 
 import UiButton from "./UiButton.vue";
+import { fill } from "./textFormat";
 
-import { apiClient } from "@/api/client";
 import {
   ProjectImportsApiError,
   projectImportsApi,
   type ProjectImportsApi,
 } from "@/api/projectImports";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
+import { useIntlFormats } from "@/composables/useIntlFormats";
 import type { AuthorizedRequest } from "@/stores/requirements";
 import type { ProjectImportPayload } from "@/types/projectImports";
 
@@ -144,12 +145,13 @@ const messages = {
   },
 } as const;
 
-const auth = useAuthStore();
+const authorizedRequest = useAuthorizedRequest(() => props.authorize);
 const id = useId();
 const fileId = `project-import-file-${id}`;
 const nameId = `project-import-name-${id}`;
 const hintId = `project-import-hint-${id}`;
 const copy = computed(() => messages[props.locale]);
+const { listFormat } = useIntlFormats(() => (props.locale === "it" ? "it-IT" : "en-GB"));
 const api = computed(() => props.api ?? projectImportsApi);
 const file = ref<File | null>(null);
 const name = ref("");
@@ -190,25 +192,14 @@ const dropClasses = computed(() => [
 
 defineExpose({ busy });
 
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
-
 function incompleteText(location: string | null): string {
   const first = FOLDER_STAGES.findIndex((stage) => stage === location);
   const missing = first < 0 ? [] : FOLDER_STAGES.slice(first);
   const names = missing.map((stage) => fill(copy.value.step, { name: copy.value.stages[stage] }));
-  const steps = new Intl.ListFormat(props.locale === "it" ? "it-IT" : "en-GB", {
-    style: "long",
-    type: "conjunction",
-  }).format(names);
+  const steps = listFormat.value.format(names);
   const template = missing.length === 1 ? copy.value.incompleteStep : copy.value.incompleteSteps;
   const sentence = missing.length === 0 ? copy.value.incomplete : fill(template, { steps });
   return `${sentence} ${copy.value.incompleteHelp}`;
-}
-
-function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
-  return props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
 }
 
 function failureOf(error: unknown): ImportFailure {

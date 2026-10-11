@@ -55,6 +55,7 @@ export interface ObservationInsightRequest {
 import { computed, provide, useId } from "vue";
 import { useI18n } from "vue-i18n";
 
+import { observationListCopy } from "./observationListCopy";
 import UiClaimFrame from "./UiClaimFrame.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import {
@@ -66,6 +67,7 @@ import {
   type ScreenNaming,
   type WorkflowName,
 } from "./screenNames";
+import { fill } from "./textFormat";
 
 type Locale = "en" | "it";
 
@@ -135,127 +137,6 @@ const emit = defineEmits<{
   "apply-insight": [request: ObservationInsightRequest];
 }>();
 
-const messages = {
-  it: {
-    heading: "{twin} su {code} · {title}",
-    fallbackHeading: "Osservazioni dei twin",
-    noFindings: "Nessuna osservazione: il twin non ha nulla da obiettare su questa alternativa.",
-    nothing: "Questo twin non ha ancora espresso un parere su questa alternativa.",
-    where: "Dove",
-    action: "Azione suggerita",
-    decisionGroup: "La tua decisione su questa osservazione",
-    confirm: "Confermo",
-    dismiss: "Non pertinente",
-    confirmed: "Confermata · portala nel progetto:",
-    confirmationNotice:
-      "La tua conferma è una decisione di progetto: non è una verifica con persone reali.",
-    dismissed: "Non pertinente: resta fuori dal progetto.",
-    reconsider: "Confermala",
-    saving: "Salvo la tua decisione…",
-    decisionError: "Non è stato possibile salvare la tua decisione. Riprova.",
-    findingNotFound: "Questa osservazione non è più disponibile. Ricarica la pagina.",
-    bring: "Porta nel progetto",
-    bringGroup: "Portala nel progetto",
-    targets: { BRIEF: "Brief", REQUIREMENTS: "Requisiti", DESIGN: "Design" },
-    applied: {
-      BRIEF: "Messa da parte per il brief",
-      REQUIREMENTS: "Aggiunta ai requisiti come proposta",
-      DESIGN: "Aggiunta al design come proposta",
-    },
-    applying: "La porto nel progetto…",
-    applyErrors: {
-      INSIGHT_ALREADY_APPLIED: "Questo spunto è già nel progetto.",
-      INSIGHT_SOURCE_DISMISSED:
-        "Hai segnato questa osservazione come non pertinente, quindi resta fuori dal progetto.",
-      default: "Non è stato possibile portare lo spunto nel progetto. Riprova.",
-    },
-    lists: {
-      strengths: "Punti di forza",
-      concerns: "Criticità",
-      unmet_needs: "Bisogni non coperti",
-      accessibility_observations: "Accessibilità",
-      trust_concerns: "Fiducia",
-      questions: "Domande aperte",
-      suggested_changes: "Modifiche suggerite",
-    },
-    severity: {
-      critical: "Critica",
-      major: "Importante",
-      moderate: "Moderata",
-      minor: "Minore",
-      observation: "Nota",
-    },
-    criterion: {
-      usefulness: "Utilità",
-      comprehensibility: "Comprensibilità",
-      actionability: "Azionabilità",
-      cognitive_load: "Carico cognitivo",
-      trust: "Fiducia",
-      accessibility: "Accessibilità",
-      task_alignment: "Aderenza al compito",
-    },
-  },
-  en: {
-    heading: "{twin} on {code} · {title}",
-    fallbackHeading: "What the twins noticed",
-    noFindings: "No observations: the twin has nothing to object to in this alternative.",
-    nothing: "This twin has not given an opinion on this alternative yet.",
-    where: "Where",
-    action: "Suggested action",
-    decisionGroup: "Your decision on this observation",
-    confirm: "I confirm",
-    dismiss: "Not relevant",
-    confirmed: "Confirmed · bring it into the project:",
-    confirmationNotice:
-      "Your confirmation is a project decision: it is not a check with real people.",
-    dismissed: "Not relevant: it stays out of the project.",
-    reconsider: "Confirm it",
-    saving: "Saving your decision…",
-    decisionError: "Your decision could not be saved. Try again.",
-    findingNotFound: "This observation is no longer available. Reload the page.",
-    bring: "Bring into the project",
-    bringGroup: "Bring it into the project",
-    targets: { BRIEF: "Brief", REQUIREMENTS: "Requirements", DESIGN: "Design" },
-    applied: {
-      BRIEF: "Set aside for the brief",
-      REQUIREMENTS: "Added to the requirements as a proposal",
-      DESIGN: "Added to the design as a proposal",
-    },
-    applying: "Bringing it into the project…",
-    applyErrors: {
-      INSIGHT_ALREADY_APPLIED: "This insight is already in the project.",
-      INSIGHT_SOURCE_DISMISSED:
-        "You marked this observation as not relevant, so it stays out of the project.",
-      default: "The insight could not be brought into the project. Try again.",
-    },
-    lists: {
-      strengths: "Strengths",
-      concerns: "Concerns",
-      unmet_needs: "Unmet needs",
-      accessibility_observations: "Accessibility",
-      trust_concerns: "Trust",
-      questions: "Open questions",
-      suggested_changes: "Suggested changes",
-    },
-    severity: {
-      critical: "Critical",
-      major: "Major",
-      moderate: "Moderate",
-      minor: "Minor",
-      observation: "Note",
-    },
-    criterion: {
-      usefulness: "Usefulness",
-      comprehensibility: "Comprehensibility",
-      actionability: "Actionability",
-      cognitive_load: "Cognitive load",
-      trust: "Trust",
-      accessibility: "Accessibility",
-      task_alignment: "Task alignment",
-    },
-  },
-} as const;
-
 const SEVERITY_STYLES: Record<ObservationSeverity, string> = {
   critical: "bg-fail-on-night/12 text-fail-on-night",
   major: "bg-warn-on-night/12 text-warn-on-night",
@@ -272,7 +153,7 @@ provide(
 const { locale: appLocale } = useI18n({ useScope: "global" });
 
 const lang = computed<Locale>(() => props.locale ?? (appLocale.value === "it" ? "it" : "en"));
-const copy = computed(() => messages[lang.value]);
+const copy = computed(() => observationListCopy[lang.value]);
 const headingId = useId();
 
 const heading = computed(() =>
@@ -346,10 +227,6 @@ const critiqueLists = computed(() => {
 });
 
 const deciding = computed(() => props.validating !== null);
-
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
 
 function named(text: string): string {
   return withScreenNames(text, naming.value);

@@ -1,15 +1,5 @@
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  onUpdated,
-  provide,
-  ref,
-  useId,
-  watch,
-} from "vue";
+import { computed, onBeforeUnmount, onMounted, onUpdated, provide, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { apiClient } from "@/api/client";
@@ -23,7 +13,8 @@ import type {
   RuleEvidenceResponse,
 } from "@/api/team-contracts";
 import type { HumanGateEventResponse } from "@/api/workflow-contracts";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
+import { useStepTargets } from "@/composables/useStepTargets";
 import { useGuidanceStore } from "@/stores/guidance";
 import { type TeamAuthorizedRequest, useTeamStore } from "@/stores/team";
 import UiButton from "./UiButton.vue";
@@ -31,6 +22,9 @@ import UiDecisionBar from "./UiDecisionBar.vue";
 import UiStateBlock from "./UiStateBlock.vue";
 import UiTechnicalDetails from "./UiTechnicalDetails.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
+import { briefFieldLabels } from "./briefFieldLabels";
+import { gateTargets } from "./gateTargets";
+import { formatDateTime } from "./textFormat";
 import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 
 const props = withDefaults(
@@ -47,7 +41,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{ "sections-changed": [] }>();
 
-const auth = useAuthStore();
+const executeAuthorized = useAuthorizedRequest(() => props.authorize);
 const guidance = useGuidanceStore();
 const store = useTeamStore();
 
@@ -302,23 +296,7 @@ const { t, te, locale } = useI18n({
           agent_team_service_unavailable:
             "The service that approves the perspectives is unavailable.",
         },
-        fields: {
-          name: "Name",
-          description: "The idea",
-          problem: "The problem",
-          goals: "Goals",
-          target_users: "For whom",
-          domain: "Context",
-          technical_constraints: "Technical constraints",
-          temporal_constraints: "Timing",
-          budget: "Budget",
-          functional_requirements: "What it must do",
-          non_functional_requirements: "Expected qualities",
-          risks: "Risks",
-          stakeholders: "People involved",
-          available_artifacts: "Available materials",
-          definition_of_done: "When it is done",
-        },
+        fields: briefFieldLabels.en,
       },
     },
     it: {
@@ -564,23 +542,7 @@ const { t, te, locale } = useI18n({
           agent_team_service_unavailable:
             "Il servizio che approva le prospettive non è disponibile.",
         },
-        fields: {
-          name: "Nome",
-          description: "L'idea",
-          problem: "Il problema",
-          goals: "Obiettivi",
-          target_users: "Per chi",
-          domain: "Contesto",
-          technical_constraints: "Vincoli tecnici",
-          temporal_constraints: "Tempi",
-          budget: "Budget",
-          functional_requirements: "Cosa deve fare",
-          non_functional_requirements: "Qualità attese",
-          risks: "Rischi",
-          stakeholders: "Persone coinvolte",
-          available_artifacts: "Materiali disponibili",
-          definition_of_done: "Quando sarà finito",
-        },
+        fields: briefFieldLabels.it,
       },
     },
   },
@@ -605,10 +567,9 @@ const gateReason = ref("");
 const localError = ref<string | null>(null);
 const approving = ref(false);
 const root = ref<HTMLElement | null>(null);
-const barTarget = ref<HTMLElement | null>(null);
-const rowTarget = ref<HTMLElement | null>(null);
+const { barTarget, rowTarget, refreshTargets, refreshAfterRender, trackTargets, untrackTargets } =
+  useStepTargets(root, { firstVisible: true });
 const decisionBar = ref<InstanceType<typeof UiDecisionBar> | null>(null);
-let visibilityObserver: ResizeObserver | null = null;
 
 const perspectives = computed<readonly PerspectiveView[] | null>(
   () => store.currentVersion?.perspectives ?? null,
@@ -644,17 +605,7 @@ const digest = computed(() => {
   };
 });
 
-const gateTargetsCurrentVersion = computed(() => {
-  const version = store.currentVersion;
-  const artifact = store.gate?.artifact;
-  return (
-    version !== null &&
-    artifact !== undefined &&
-    artifact.artifact_id === version.id &&
-    artifact.version === version.version_number &&
-    artifact.content_hash === version.content_hash
-  );
-});
+const gateTargetsCurrentVersion = computed(() => gateTargets(store.gate, store.currentVersion));
 const canSubmitGate = computed(() => {
   if (store.currentVersion === null) return false;
   if (store.gate === null) return true;
@@ -808,14 +759,6 @@ const technicalRows = computed(() => {
   return rows;
 });
 
-function executeAuthorized<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
-  if (props.authorize !== undefined) {
-    return props.authorize(operation);
-  }
-
-  return auth.withAccessToken(apiClient, operation);
-}
-
 async function load(): Promise<void> {
   localError.value = null;
 
@@ -860,51 +803,16 @@ watch(
   },
 );
 
-function visibleTarget(id: string): HTMLElement | null {
-  const candidates = document.querySelectorAll<HTMLElement>(`#${id}`);
-  for (const candidate of candidates) {
-    if (typeof candidate.checkVisibility !== "function" || candidate.checkVisibility()) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-function refreshBarTarget(): void {
-  const element = root.value;
-  const shown =
-    element !== null &&
-    element.isConnected &&
-    (typeof element.checkVisibility !== "function" || element.checkVisibility());
-  const target = shown ? visibleTarget("step-decision-bar") : null;
-  const row = shown ? visibleTarget("step-technical-row") : null;
-  if (barTarget.value !== target) barTarget.value = target;
-  if (rowTarget.value !== row) rowTarget.value = row;
-}
-
-async function refreshAfterRender(): Promise<void> {
-  await nextTick();
-  refreshBarTarget();
-}
-
 onMounted(() => {
   void load();
-  refreshBarTarget();
-  void refreshAfterRender();
-  if (typeof ResizeObserver !== "undefined" && root.value !== null) {
-    visibilityObserver = new ResizeObserver(refreshBarTarget);
-    visibilityObserver.observe(root.value);
-  }
+  trackTargets();
 });
 
-onUpdated(refreshBarTarget);
+onUpdated(refreshTargets);
 
 watch(() => props.active, refreshAfterRender);
 
-onBeforeUnmount(() => {
-  visibilityObserver?.disconnect();
-  visibilityObserver = null;
-});
+onBeforeUnmount(untrackTargets);
 
 function translatedOrFallback(key: string, fallback: string): string {
   const translated = t(key);
@@ -935,13 +843,6 @@ function errorText(detail: string): string {
 
 function fieldText(field: string): string {
   return translatedOrFallback(`flow.fields.${field}`, humanize(field));
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(locale.value, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 function perspectiveText(key: string, part: PerspectivePart): string | null {
@@ -1658,7 +1559,7 @@ function eventLabel(event: HumanGateEventResponse): string {
                       {{ t("flow.version", { number: version.version_number }) }}
                     </span>
                     · {{ revisionText(version.revision_kind) }} ·
-                    {{ formatDate(version.created_at) }}
+                    {{ formatDateTime(version.created_at, locale) }}
                   </p>
                   <code class="font-mono text-xs break-all text-on-night-3">{{
                     version.content_hash
@@ -1677,7 +1578,8 @@ function eventLabel(event: HumanGateEventResponse): string {
                   <p class="m-0">
                     <span class="font-semibold text-on-night">{{ eventLabel(event) }}</span>
                     · {{ statusText(event.previous_status) }} →
-                    {{ statusText(event.resulting_status) }} · {{ formatDate(event.occurred_at) }}
+                    {{ statusText(event.resulting_status) }} ·
+                    {{ formatDateTime(event.occurred_at, locale) }}
                   </p>
                   <p v-if="event.reason" class="m-0 text-on-night-3">{{ event.reason }}</p>
                 </li>

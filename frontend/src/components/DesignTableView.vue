@@ -2,6 +2,8 @@
 import { computed, useId } from "vue";
 
 import ArtifactTable, { type ArtifactTableColumn } from "./ArtifactTable.vue";
+import { designTableCopy } from "./designTableCopy";
+import { compareCodes } from "./textFormat";
 import { useSurface } from "./UiSurface.vue";
 import { choiceLabel, dimensionLabel } from "./visualLanguage";
 import type {
@@ -95,169 +97,8 @@ const palettes = {
 const surface = useSurface(() => undefined);
 const palette = computed(() => palettes[surface.value]);
 
-const messages = {
-  en: {
-    alternatives: {
-      title: "Alternatives side by side",
-      description:
-        "Each column is one design alternative and each row compares the same aspect across them.",
-    },
-    visual: {
-      title: "Visual choices",
-      description:
-        "The look picked from the style catalog for each alternative, one row per choice, named as in the catalog.",
-    },
-    workflows: {
-      title: "Workflows",
-      description: "The steps a person follows in each alternative, one row per step.",
-    },
-    screens: {
-      title: "Screens and elements",
-      description: "What each screen of the mockup contains, one row per element.",
-    },
-    transitions: {
-      title: "Transitions",
-      description: "How a person moves from one screen to the next and what happens then.",
-    },
-    concerns: {
-      title: "Concerns",
-      description: "Weak points found in the design and how to reduce them.",
-    },
-    aspect: "Aspect",
-    choice: "Choice",
-    chosen: "Chosen by you",
-    recommended: "Recommended",
-    summary: "Summary",
-    layout: "Layout",
-    productName: "Product name",
-    why: "Why",
-    advantages: "Advantages",
-    tradeOffs: "Trade-offs",
-    requirementsCovered: "Requirements covered",
-    people: "People",
-    workflowCodes: "Workflows",
-    alternative: "Alternative",
-    flow: "Flow",
-    title: "Title",
-    step: "Step",
-    whatHappens: "What happens",
-    requirements: "Requirements",
-    screen: "Screen",
-    state: "State",
-    element: "Element",
-    kind: "Kind",
-    content: "Content",
-    code: "Code",
-    from: "From",
-    to: "To",
-    through: "Through",
-    result: "Result",
-    concern: "Concern",
-    mitigation: "Mitigation",
-    alternativeCodes: "Alternatives",
-    empty: "Nothing to show yet.",
-    emptyCell: "empty",
-    states: {
-      DEFAULT: "Default",
-      EMPTY: "Empty",
-      ERROR: "Error",
-      SUCCESS: "Success",
-    },
-    kinds: {
-      HEADING: "Heading",
-      TEXT: "Text",
-      TEXT_INPUT: "Text field",
-      SELECT: "Choice",
-      BUTTON: "Button",
-      LINK: "Link",
-      LIST: "List",
-      CARD: "Card",
-      STATUS: "Status",
-    },
-  },
-  it: {
-    alternatives: {
-      title: "Alternative a confronto",
-      description:
-        "Ogni colonna è un'alternativa di design e ogni riga confronta lo stesso aspetto tra le alternative.",
-    },
-    visual: {
-      title: "Scelte visive",
-      description:
-        "L'aspetto scelto dal catalogo degli stili per ogni alternativa, una riga per scelta.",
-    },
-    workflows: {
-      title: "Flussi",
-      description: "I passi che una persona segue in ogni alternativa, una riga per passo.",
-    },
-    screens: {
-      title: "Schermate ed elementi",
-      description: "Cosa contiene ogni schermata del mockup, una riga per elemento.",
-    },
-    transitions: {
-      title: "Passaggi tra schermate",
-      description: "Come si passa da una schermata all'altra e che cosa succede dopo.",
-    },
-    concerns: {
-      title: "Criticità",
-      description: "I punti deboli trovati nel design e come ridurli.",
-    },
-    aspect: "Aspetto",
-    choice: "Scelta",
-    chosen: "Scelta da te",
-    recommended: "Consigliata",
-    summary: "Sintesi",
-    layout: "Impostazione",
-    productName: "Nome del prodotto",
-    why: "Perché",
-    advantages: "Vantaggi",
-    tradeOffs: "Compromessi",
-    requirementsCovered: "Requisiti coperti",
-    people: "Persone",
-    workflowCodes: "Flussi",
-    alternative: "Alternativa",
-    flow: "Flusso",
-    title: "Titolo",
-    step: "Passo",
-    whatHappens: "Cosa succede",
-    requirements: "Requisiti",
-    screen: "Schermata",
-    state: "Stato",
-    element: "Elemento",
-    kind: "Tipo",
-    content: "Contenuto",
-    code: "Codice",
-    from: "Da",
-    to: "A",
-    through: "Tramite",
-    result: "Risultato",
-    concern: "Criticità",
-    mitigation: "Mitigazione",
-    alternativeCodes: "Alternative",
-    empty: "Ancora nulla da mostrare.",
-    emptyCell: "vuoto",
-    states: {
-      DEFAULT: "Predefinito",
-      EMPTY: "Vuoto",
-      ERROR: "Errore",
-      SUCCESS: "Successo",
-    },
-    kinds: {
-      HEADING: "Titolo",
-      TEXT: "Testo",
-      TEXT_INPUT: "Campo di testo",
-      SELECT: "Scelta",
-      BUTTON: "Pulsante",
-      LINK: "Link",
-      LIST: "Elenco",
-      CARD: "Scheda",
-      STATUS: "Stato",
-    },
-  },
-} as const;
-
 const uid = useId();
-const copy = computed(() => messages[props.locale]);
+const copy = computed(() => designTableCopy[props.locale]);
 
 const requirementCodes = computed(
   () => new Map((props.requirements?.requirements ?? []).map((item) => [item.id, item.code])),
@@ -529,12 +370,8 @@ function transitionRows(prototype: DeclarativePrototypePayload): Record<string, 
   });
 }
 
-function compareCodes(left: string, right: string): number {
-  return left.localeCompare(right, props.locale, { numeric: true, sensitivity: "base" });
-}
-
 function sortedCodes(codes: readonly string[]): string[] {
-  return [...new Set(codes)].sort(compareCodes);
+  return [...new Set(codes)].sort((left, right) => compareCodes(left, right, props.locale));
 }
 
 function referenceCodes(ids: readonly string[], lookup: ReadonlyMap<string, string>): string[] {

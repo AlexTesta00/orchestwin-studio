@@ -12,7 +12,9 @@ import {
   watch,
 } from "vue";
 
-import { apiClient } from "@/api/client";
+import { useAuthorizedRequest } from "@/composables/useAuthorizedRequest";
+import { QUOTE_CLASS, useGateState } from "@/composables/useGateState";
+import { useStepTargets } from "@/composables/useStepTargets";
 import AlignmentProposalsNotice from "./AlignmentProposalsNotice.vue";
 import ArtifactViewSwitch, { type ArtifactView } from "./ArtifactViewSwitch.vue";
 import GenerationJobNotice from "./GenerationJobNotice.vue";
@@ -31,20 +33,19 @@ import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import UiTechnicalDetails from "./UiTechnicalDetails.vue";
 import type { DiagramLink } from "./mermaidRenderer";
 import { generationProgress, modelFeedback } from "./modelFeedback";
+import { requirementsFlowCopy } from "./requirementsFlowCopy";
+import { commandParts, fill } from "./textFormat";
 import { type UpstreamValue, watchUpstream } from "./upstreamChange";
-import { workflowStatusLabel } from "./workflowLabels";
 import {
   GENERATION_FAILED,
   isGenerationInterrupted,
   isGenerationLost,
 } from "../api/generationJobs";
 import { RequirementsApiError, requirementsApi, type RequirementsApi } from "../api/requirements";
-import { useAuthStore } from "../stores/auth";
 import { useGuidanceStore } from "../stores/guidance";
 import { type GenerationResumeFailure, useGenerationResume } from "../stores/generationJobs";
 import { type AuthorizedRequest, useRequirementsStore } from "../stores/requirements";
 import type {
-  HumanGateStatus,
   RequirementKind,
   RequirementPayload,
   RequirementPriority,
@@ -67,13 +68,9 @@ interface CheckCard {
   note: string | null;
 }
 
-const BAR_TARGET = "step-decision-bar";
-const ROW_TARGET = "step-technical-row";
 const HIGHLIGHT_DURATION = 4000;
 const LINK_LABEL_LENGTH = 64;
 const ANALYST_AVATAR = "/team/an.webp";
-const QUOTE_CLASS =
-  "m-0 border-l-2 border-on-night/40 pl-3 leading-normal whitespace-pre-line text-on-night-2";
 const CHANGE_OPERATION = "REQUIREMENTS_CHANGE";
 const REVISION_PENDING = "REQUIREMENTS_REVISION_PENDING";
 const UNCHANGED = "REQUIREMENTS_UNCHANGED";
@@ -108,7 +105,7 @@ provide(
   computed<SurfaceContext>(() => "night"),
 );
 
-const auth = useAuthStore();
+const authorizedRequest = useAuthorizedRequest(() => props.authorize);
 const guidance = useGuidanceStore();
 const store = useRequirementsStore();
 const root = ref<HTMLElement | null>(null);
@@ -124,8 +121,8 @@ const checksOpen = ref(false);
 const openRequirementIds = shallowRef<ReadonlySet<string>>(new Set());
 const highlighted = ref<string | null>(null);
 const decisionBar = ref<InstanceType<typeof UiDecisionBar> | null>(null);
-const barTarget = ref<HTMLElement | null>(null);
-const rowTarget = ref<HTMLElement | null>(null);
+const { barTarget, rowTarget, refreshTargets, refreshAfterRender, trackTargets, untrackTargets } =
+  useStepTargets(root);
 const deciding = ref(false);
 const changeSection = ref<HTMLElement | null>(null);
 const changeText = ref<string | null>(null);
@@ -139,388 +136,8 @@ const edit = reactive({
   priority: "MUST" as RequirementPriority,
 });
 let highlightTimer: ReturnType<typeof setTimeout> | undefined;
-let visibility: ResizeObserver | null = null;
 
-const messages = {
-  en: {
-    loading: "Loading the definition…",
-    updating: "Updating the definition…",
-    generating: "The needs analyst is writing the definition…",
-    generate: "Prepare the definition",
-    analyst: "Needs analyst",
-    noSpecification:
-      "I am ready to turn your brief and your twins into requirements: what the app must do, for whom, and how we will check it.",
-    prerequisite:
-      "Approve the profiles of your users first: then the requirements can be prepared.",
-    preparedBy: "Prepared by the Needs analyst",
-    requirementCount: ["requirement", "requirements"],
-    storyCount: ["story", "stories"],
-    criterionCount: ["acceptance criterion", "acceptance criteria"],
-    scenarioCount: ["usage scenario", "usage scenarios"],
-    needCount: ["need", "needs"],
-    functionalGroup: "Functional requirements",
-    nonFunctional: "Non-functional requirements",
-    constraints: "Constraints",
-    viewLabel: "Views of the definition",
-    digestBoth: [
-      "In short: {must} thing the application must do and {should} it should do.",
-      "In short: {must} things the application must do and {should} it should do.",
-    ],
-    digestMust: [
-      "In short: {must} thing the application must do.",
-      "In short: {must} things the application must do.",
-    ],
-    digestShould: [
-      "In short: {should} thing the application should do.",
-      "In short: {should} things the application should do.",
-    ],
-    digestRows: [
-      "The title is below: open the row to read the detail or propose a change.",
-      "The titles are below: open a row to read the detail or propose a change.",
-    ],
-    openAll: "Open every detail",
-    closeAll: "Close every detail",
-    mustGroup: "Must do",
-    shouldGroup: "Should do",
-    askedBy: "Asked by",
-    twinsHypothesis: "(simulated twins: a hypothesis)",
-    verification: "Check",
-    noVerification: "No acceptance criterion",
-    edit: "Propose a change",
-    editIntro: "Your change becomes a proposal: you review it before it is applied.",
-    saveRevision: "Review changes",
-    cancel: "Cancel",
-    titleLabel: "Title",
-    statementLabel: "Description",
-    kindLabel: "Kind",
-    priorityLabel: "Priority",
-    functional: "Feature",
-    quality: "Quality",
-    constraint: "Constraint",
-    must: "Essential",
-    should: "Important",
-    could: "Optional",
-    later: "For later",
-    invalidEdit: "Enter a title and a description before proposing the change.",
-    criterionLabel: "How we check it",
-    riskLabel: "Risk",
-    doneLabel: "When it is finished",
-    mitigation: "Remedy",
-    onlyIf: "Only if {condition}.",
-    checksTitle: "Acceptance criteria, risks and completion conditions ({count})",
-    checksPurpose: "They serve whoever writes the code and the automatic checks of `ut test`.",
-    storiesTitle: "Stories and usage scenarios",
-    benefit: "Why",
-    trigger: "Starts when",
-    outcome: "Expected result",
-    criteriaTitle: [
-      "One requirement has no way to be checked yet",
-      "{count} requirements have no way to be checked yet",
-    ],
-    storiesMissingTitle: [
-      "One requirement is not linked to a story yet",
-      "{count} requirements are not linked to a story yet",
-    ],
-    criteriaDetail: ["{codes} has no acceptance criterion", "{codes} have no acceptance criterion"],
-    storiesDetail: ["{codes} is not linked to a story", "{codes} are not linked to a story"],
-    numbers: [
-      "Zero",
-      "One",
-      "Two",
-      "Three",
-      "Four",
-      "Five",
-      "Six",
-      "Seven",
-      "Eight",
-      "Nine",
-      "Ten",
-    ],
-    pendingTitle: ["A change is waiting for your decision", "Changes waiting for your decision"],
-    before: "Before",
-    after: "After",
-    operations: { ADD: "Added", REPLACE: "Changed", REMOVE: "Removed" },
-    diffReason: "Why you discard it (needed to discard it)",
-    approveDiff: "Apply the change",
-    rejectDiff: "Discard it",
-    applyVersion: "Apply the new version",
-    discardVersion: "Discard",
-    yourRequest: "Your request",
-    rewriting: "I am writing the requirements again with your request.",
-    revisionPending:
-      "A new version is already waiting for your decision: apply it or discard it before you ask for another change.",
-    unchanged:
-      "The analyst found nothing to change with this request. Try to describe the change in another way.",
-    reasonRequired: "A reason is required to reject or to discard.",
-    approveGate: "Approve the definition",
-    barDefault:
-      "When you approve, the designer prepares the design alternatives and the twins try them.",
-    barDefaultSections:
-      "When you approve, the sections that follow are updated with one gesture, without losing their content.",
-    barApproved:
-      "You approved this definition. You can still ask for a change in words: the new version comes back here for your approval.",
-    barPending:
-      "A proposed change is waiting above: if you approve now, it stays out of this version.",
-    barGaps: [
-      "One requirement has no way to be checked yet: if you approve now, it stays unchecked.",
-      "{count} requirements have no way to be checked yet: if you approve now, they stay unchecked.",
-    ],
-    barRewriting:
-      "The analyst is writing the requirements again: when the new version arrives, you decide whether to apply it.",
-    barWaiting: "The new version is waiting above: apply it, then approve the definition here.",
-    barRevision:
-      "To approve, you need a new version: ask the analyst for one or propose the change on a requirement.",
-    submitFailed:
-      "The requirements could not be brought to your approval, so nothing was approved. Try again in a moment.",
-    approveFailed:
-      "The requirements are ready for your approval, but the approval did not go through. Press “Approve the definition” again.",
-    requestFailed:
-      "Your request for changes could not be recorded. Your note is still there: try again in a moment.",
-    requestPlaceholder:
-      "Write what is wrong: the request is recorded with your note. Then you can propose the change on the requirements.",
-    requestJourneys: "Request journeys",
-    journeyCount: ["journey", "journeys"],
-    journeyRequest:
-      "Add user journeys for the existing scenarios, with ordered phases, actions, grounded touchpoints and linked needs. Preserve the rest of the Definition.",
-    changePlaceholder:
-      "Write what to change: the analyst writes the requirements again and you decide whether to apply the new version.",
-    moreActions: "Other choices on the approval",
-    reason: "Reason (needed to reject)",
-    rejectGate: "Reject the requirements",
-    pause: "Pause the approval",
-    cancelGate: "Cancel the approval",
-    pausedText: "The approval of this definition is paused.",
-    resume: "Resume the approval",
-    revisionTitle: "You asked for changes",
-    rejectedTitle: "You rejected these requirements",
-    cancelledTitle: "You cancelled the approval",
-    closedText:
-      "To change them, propose the change on each requirement: the new version comes back here for your approval.",
-    yourNote: "Your note",
-    ready: "Definition approved by you. Next: Design & Evaluation.",
-    version: "Version",
-    statusPending: "waiting for your decision",
-    statusApproved: "approved",
-    statusPaused: "paused",
-    statusRevision: "changes requested",
-    statusRejected: "rejected",
-    statusCancelled: "approval cancelled",
-    contentHash: "Content hash",
-    basedOn: "Based on version",
-    created: "Created",
-    approval: "Approval",
-    decisionCounter: "Decision no. {n}",
-    brief: "Brief",
-    team: "Perspectives",
-    twins: "User Twins",
-    catalog: "Requirements catalogue",
-    none: "None",
-    methodology:
-      "Gate 4 approves the exact specification ID, version, and content hash. A later version requires a new approval.",
-    sources: "Sources of each requirement",
-    sourcesLabel: "Sources",
-    twinsLabel: "User Twins",
-    history: "Changes already decided",
-    applied: "Applied",
-    discarded: "Discarded",
-    openInText: "{code} · {title}: read it in the text",
-    loadError: "The Definition could not be loaded.",
-    genericFailure: "The request could not be completed. You can try again.",
-    unexpectedError: "An unexpected error occurred in the requirements.",
-  },
-  it: {
-    loading: "Carico la definizione…",
-    updating: "Aggiorno la definizione…",
-    generating: "L'analista delle esigenze sta scrivendo la definizione…",
-    generate: "Prepara la definizione",
-    analyst: "Analista delle esigenze",
-    noSpecification:
-      "Sono pronto a trasformare il tuo brief e i tuoi twin in requisiti: cosa deve fare l'app, per chi e come lo verificheremo.",
-    prerequisite: "Approva prima i profili dei tuoi utenti: poi si possono preparare i requisiti.",
-    preparedBy: "Preparati dall'Analista delle esigenze",
-    requirementCount: ["requisito", "requisiti"],
-    storyCount: ["storia", "storie"],
-    criterionCount: ["criterio di verifica", "criteri di verifica"],
-    scenarioCount: ["scenario d'uso", "scenari d'uso"],
-    needCount: ["bisogno", "bisogni"],
-    functionalGroup: "Requisiti funzionali",
-    nonFunctional: "Requisiti non funzionali",
-    constraints: "Vincoli",
-    viewLabel: "Viste della definizione",
-    digestBoth: [
-      "In breve: {must} cosa che l'applicazione deve fare e {should} che dovrebbe fare.",
-      "In breve: {must} cose che l'applicazione deve fare e {should} che dovrebbe fare.",
-    ],
-    digestMust: [
-      "In breve: {must} cosa che l'applicazione deve fare.",
-      "In breve: {must} cose che l'applicazione deve fare.",
-    ],
-    digestShould: [
-      "In breve: {should} cosa che l'applicazione dovrebbe fare.",
-      "In breve: {should} cose che l'applicazione dovrebbe fare.",
-    ],
-    digestRows: [
-      "Qui sotto trovi il titolo: apri la riga per leggere il dettaglio o proporre una modifica.",
-      "Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
-    ],
-    openAll: "Apri tutti i dettagli",
-    closeAll: "Chiudi tutti i dettagli",
-    mustGroup: "Deve fare",
-    shouldGroup: "Dovrebbe fare",
-    askedBy: "Chiesto da",
-    twinsHypothesis: "(twin simulati: un'ipotesi)",
-    verification: "Verifica",
-    noVerification: "Senza criterio di verifica",
-    edit: "Proponi modifica",
-    editIntro: "La modifica diventa una proposta: la controlli prima che venga applicata.",
-    saveRevision: "Controlla le modifiche",
-    cancel: "Annulla",
-    titleLabel: "Titolo",
-    statementLabel: "Descrizione",
-    kindLabel: "Tipo",
-    priorityLabel: "Priorità",
-    functional: "Funzionalità",
-    quality: "Qualità",
-    constraint: "Vincolo",
-    must: "Essenziale",
-    should: "Importante",
-    could: "Facoltativo",
-    later: "Per il futuro",
-    invalidEdit: "Inserisci un titolo e una descrizione prima di proporre la modifica.",
-    criterionLabel: "Come lo verifichiamo",
-    riskLabel: "Rischio",
-    doneLabel: "Quando è finito",
-    mitigation: "Rimedio",
-    onlyIf: "Solo se {condition}.",
-    checksTitle: "Criteri di verifica, rischi e condizioni di fine lavoro ({count})",
-    checksPurpose: "Servono a chi scrive il codice e ai controlli automatici di `ut test`.",
-    storiesTitle: "Storie e scenari d'uso",
-    benefit: "Perché",
-    trigger: "Inizia quando",
-    outcome: "Risultato atteso",
-    criteriaTitle: [
-      "Un requisito non ha ancora un modo per essere verificato",
-      "{count} requisiti non hanno ancora un modo per essere verificati",
-    ],
-    storiesMissingTitle: [
-      "Un requisito non è ancora legato a una storia",
-      "{count} requisiti non sono ancora legati a una storia",
-    ],
-    criteriaDetail: [
-      "{codes} è senza criterio di verifica",
-      "{codes} sono senza criterio di verifica",
-    ],
-    storiesDetail: ["{codes} non è legato a una storia", "{codes} non sono legati a una storia"],
-    numbers: [
-      "Zero",
-      "Un",
-      "Due",
-      "Tre",
-      "Quattro",
-      "Cinque",
-      "Sei",
-      "Sette",
-      "Otto",
-      "Nove",
-      "Dieci",
-    ],
-    pendingTitle: [
-      "Una modifica aspetta la tua decisione",
-      "Modifiche che aspettano la tua decisione",
-    ],
-    before: "Prima",
-    after: "Dopo",
-    operations: { ADD: "Aggiunto", REPLACE: "Modificato", REMOVE: "Rimosso" },
-    diffReason: "Perché la scarti (serve per scartarla)",
-    approveDiff: "Applica la modifica",
-    rejectDiff: "Scartala",
-    applyVersion: "Applica la nuova versione",
-    discardVersion: "Scarta",
-    yourRequest: "La tua richiesta",
-    rewriting: "Sto riscrivendo i requisiti con la tua richiesta.",
-    revisionPending:
-      "C'è già una nuova versione da decidere: applicala o scartala prima di chiedere un'altra modifica.",
-    unchanged:
-      "L'analista non ha trovato nulla da cambiare con questa richiesta. Prova a descrivere la modifica in un altro modo.",
-    reasonRequired: "Per respingere o scartare serve una motivazione.",
-    approveGate: "Approva la definizione",
-    barDefault: "Quando approvi, il designer prepara le alternative di design e i twin le provano.",
-    barDefaultSections:
-      "Quando approvi, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
-    barApproved:
-      "Hai approvato questa definizione. Puoi ancora chiedere una modifica a parole: la nuova versione torna qui per la tua approvazione.",
-    barPending:
-      "Una modifica proposta aspetta qui sopra: se approvi ora, resta fuori da questa versione.",
-    barGaps: [
-      "Un requisito non ha ancora un modo per essere verificato: se approvi ora, resta senza verifica.",
-      "{count} requisiti non hanno ancora un modo per essere verificati: se approvi ora, restano senza verifica.",
-    ],
-    barRewriting:
-      "L'analista sta riscrivendo i requisiti: quando arriva la nuova versione, decidi tu se applicarla.",
-    barWaiting: "La nuova versione aspetta qui sopra: applicala, poi approva qui la definizione.",
-    barRevision:
-      "Per approvare serve una nuova versione: chiedila all'analista o proponi la modifica su un requisito.",
-    submitFailed:
-      "Non è stato possibile portare i requisiti alla tua approvazione: non è stato approvato nulla. Riprova tra poco.",
-    approveFailed:
-      "I requisiti sono pronti per la tua approvazione, ma l'approvazione non è andata a buon fine. Premi di nuovo «Approva la definizione».",
-    requestFailed:
-      "Non è stato possibile registrare la tua richiesta di modifiche. La nota è ancora lì: riprova tra poco.",
-    requestPlaceholder:
-      "Scrivi che cosa non va: la richiesta viene registrata con la tua nota. Poi potrai proporre la modifica sui requisiti.",
-    requestJourneys: "Richiedi journey",
-    journeyCount: ["journey", "journey"],
-    journeyRequest:
-      "Aggiungi journey per gli scenari esistenti, con fasi ordinate, azioni, punti di contatto fondati e bisogni collegati. Conserva il resto della Definizione.",
-    changePlaceholder:
-      "Scrivi che cosa cambiare: l'analista riscrive i requisiti e decidi tu se applicare la nuova versione.",
-    moreActions: "Altre scelte sull'approvazione",
-    reason: "Motivazione (serve per respingere)",
-    rejectGate: "Respingi i requisiti",
-    pause: "Metti in pausa",
-    cancelGate: "Annulla l'approvazione",
-    pausedText: "L'approvazione di questa definizione è in pausa.",
-    resume: "Riprendi l'approvazione",
-    revisionTitle: "Hai chiesto modifiche",
-    rejectedTitle: "Hai respinto questi requisiti",
-    cancelledTitle: "Hai annullato l'approvazione",
-    closedText:
-      "Per cambiarli, proponi la modifica sul requisito: la nuova versione torna qui per la tua approvazione.",
-    yourNote: "La tua nota",
-    ready: "Definizione approvata da te. Ora Design e valutazione.",
-    version: "Versione",
-    statusPending: "in attesa della tua decisione",
-    statusApproved: "approvata",
-    statusPaused: "in pausa",
-    statusRevision: "modifiche richieste",
-    statusRejected: "respinta",
-    statusCancelled: "approvazione annullata",
-    contentHash: "Hash del contenuto",
-    basedOn: "Basata sulla versione",
-    created: "Creata il",
-    approval: "Approvazione",
-    decisionCounter: "Decisione n. {n}",
-    brief: "Brief",
-    team: "Prospettive",
-    twins: "User Twin",
-    catalog: "Catalogo dei requisiti",
-    none: "Nessuno",
-    methodology:
-      "Gate 4 approva ID, versione e hash esatti della specifica. Una versione successiva richiede una nuova approvazione.",
-    sources: "Fonti di ogni requisito",
-    sourcesLabel: "Fonti",
-    twinsLabel: "User Twin",
-    history: "Modifiche già decise",
-    applied: "Applicata",
-    discarded: "Scartata",
-    openInText: "{code} · {title}: leggilo nel testo",
-    loadError: "Non è stato possibile caricare la Definizione.",
-    genericFailure: "Non è stato possibile completare la richiesta. Puoi riprovare.",
-    unexpectedError: "Si è verificato un errore inatteso nei requisiti.",
-  },
-} as const;
-
-const copy = computed(() => messages[props.locale]);
+const copy = computed(() => requirementsFlowCopy[props.locale]);
 const api = computed(() => props.api ?? requirementsApi);
 const current = computed(() => store.current);
 const specification = computed<RequirementsSpecificationPayload | null>(
@@ -709,35 +326,14 @@ const diagramLinks = computed<DiagramLink[]>(() => {
 const diffs = computed(() => store.diffHistory);
 const pendingDiffs = computed(() => diffs.value.filter((diff) => diff.status === "PROPOSED"));
 const decidedDiffs = computed(() => diffs.value.filter((diff) => diff.status !== "PROPOSED"));
-const gateTargetsCurrent = computed(() => {
-  if (store.gate === null || store.current === null) {
-    return false;
-  }
-
-  return (
-    store.gate.artifact.artifact_id === store.current.id &&
-    store.gate.artifact.version === store.current.version_number &&
-    store.gate.artifact.content_hash === store.current.content_hash
-  );
-});
-const canSubmitGate = computed(() => {
-  if (store.current === null) {
-    return false;
-  }
-
-  if (store.gate === null || !gateTargetsCurrent.value) {
-    return true;
-  }
-
-  return store.gate.status === "DRAFT" || store.gate.status === "STALE";
-});
-const gatePending = computed(
-  () => gateTargetsCurrent.value && store.gate?.status === "PENDING_APPROVAL",
-);
-const gatePaused = computed(() => gateTargetsCurrent.value && store.gate?.status === "PAUSED");
-const gateStatus = computed<HumanGateStatus | null>(() =>
-  gateTargetsCurrent.value ? (store.gate?.status ?? null) : null,
-);
+const { canSubmitGate, gatePending, gatePaused, gateStatus, closedTitle, closedNote, versionRows } =
+  useGateState({
+    store,
+    version: current,
+    copy,
+    locale: () => props.locale,
+    revision: () => decisionState.value === "revision",
+  });
 const decisionState = computed<DecisionState>(() => {
   if (store.current === null) {
     return "none";
@@ -762,24 +358,6 @@ const decisionState = computed<DecisionState>(() => {
   }
 
   return status === "REJECTED" || status === "CANCELLED" ? "closed" : "none";
-});
-const closedTitle = computed(() => {
-  if (decisionState.value === "revision") {
-    return copy.value.revisionTitle;
-  }
-
-  return gateStatus.value === "REJECTED" ? copy.value.rejectedTitle : copy.value.cancelledTitle;
-});
-const closedNote = computed(() => {
-  const kind = decisionState.value === "revision" ? "REQUEST_REVISION" : "REJECT";
-  const gateId = store.gate?.id;
-
-  return (
-    store.gateEvents
-      .filter((event) => event.gate_id === gateId && event.kind === kind)
-      .at(-1)
-      ?.reason?.trim() ?? ""
-  );
 });
 const lastRequest = computed(() => {
   if (decisionState.value !== "revision") {
@@ -843,9 +421,6 @@ const barDescription = computed(() => {
 
   return props.sectionsMode ? text.barDefaultSections : text.barDefault;
 });
-const decisionCounter = computed(() =>
-  copy.value.decisionCounter.replace("{n}", String(store.gate?.iteration ?? 1)),
-);
 const statusSummary = computed(() => {
   const text = copy.value;
 
@@ -866,33 +441,16 @@ const technicalSummary = computed(
   () => `${copy.value.version} ${current.value?.version_number ?? ""} · ${statusSummary.value}`,
 );
 const technicalRows = computed(() => {
-  const version = current.value;
   const value = specification.value;
 
-  if (version === null || value === null) {
+  if (value === null) {
     return [];
   }
 
   const text = copy.value;
-  const gate = store.gate;
 
   return [
-    { label: text.contentHash, value: version.content_hash },
-    {
-      label: text.basedOn,
-      value:
-        version.based_on_version_number === null
-          ? text.none
-          : String(version.based_on_version_number),
-    },
-    { label: text.created, value: formatDate(version.created_at) },
-    {
-      label: text.approval,
-      value:
-        gate === null
-          ? workflowStatusLabel(null, props.locale)
-          : `${workflowStatusLabel(gate.status, props.locale)} · ${decisionCounter.value}`,
-    },
+    ...versionRows.value,
     { label: text.brief, value: `v${value.project_brief_reference.version_number}` },
     { label: text.team, value: `v${value.agent_team_reference.version_number}` },
     { label: text.twins, value: `v${value.user_modeling_reference.version_number}` },
@@ -924,17 +482,6 @@ function formOf(count: number, [one, many]: readonly [string, string]): string {
   return count === 1 ? one : many;
 }
 
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
-
-function commandParts(text: string): { key: number; text: string; command: boolean }[] {
-  return text
-    .split("`")
-    .map((part, index) => ({ key: index, text: part, command: index % 2 === 1 }))
-    .filter((part) => part.text.length > 0);
-}
-
 function countSentence(count: number, [one, many]: readonly [string, string]): string {
   return count === 1
     ? one
@@ -951,16 +498,6 @@ function shortened(text: string): string {
   return value.length <= LINK_LABEL_LENGTH
     ? value
     : `${value.slice(0, LINK_LABEL_LENGTH - 1).trimEnd()}…`;
-}
-
-function formatDate(value: string): string {
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(props.locale, { dateStyle: "medium", timeStyle: "short" }).format(
-        date,
-      );
 }
 
 function twinNames(requirement: RequirementPayload): string[] {
@@ -1009,14 +546,6 @@ function toggleAllRequirements(): void {
   openRequirementIds.value = allRequirementsOpen.value
     ? new Set()
     : new Set(requirements.value.map((requirement) => requirement.id));
-}
-
-function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
-  if (props.authorize !== undefined) {
-    return props.authorize(operation);
-  }
-
-  return auth.withAccessToken(apiClient, operation);
 }
 
 async function run(operation: () => Promise<unknown>): Promise<boolean> {
@@ -1523,31 +1052,6 @@ async function openItem(code: string): Promise<void> {
   target.focus({ preventScroll: true });
 }
 
-function rendered(element: Element): boolean {
-  return typeof element.checkVisibility !== "function" || element.checkVisibility();
-}
-
-function refreshBarTarget(): void {
-  const element = root.value;
-  const visible = element !== null && element.isConnected && rendered(element);
-  const target = document.getElementById(BAR_TARGET);
-  const row = document.getElementById(ROW_TARGET);
-  const next = visible && target !== null && rendered(target) ? target : null;
-  const nextRow = visible && row !== null && rendered(row) ? row : null;
-
-  if (barTarget.value !== next) {
-    barTarget.value = next;
-  }
-  if (rowTarget.value !== nextRow) {
-    rowTarget.value = nextRow;
-  }
-}
-
-async function refreshAfterRender(): Promise<void> {
-  await nextTick();
-  refreshBarTarget();
-}
-
 watch(
   () => [props.projectId, props.autoLoad] as const,
   ([projectId, autoLoad]) => {
@@ -1585,24 +1089,14 @@ watch(
   { immediate: true },
 );
 
-onMounted(() => {
-  refreshBarTarget();
-  void refreshAfterRender();
+onMounted(trackTargets);
 
-  if (typeof ResizeObserver === "undefined" || root.value === null) {
-    return;
-  }
-
-  visibility = new ResizeObserver(refreshBarTarget);
-  visibility.observe(root.value);
-});
-
-onUpdated(refreshBarTarget);
+onUpdated(refreshTargets);
 
 watch(() => props.active, refreshAfterRender);
 
 onBeforeUnmount(() => {
-  visibility?.disconnect();
+  untrackTargets();
   clearTimeout(highlightTimer);
 });
 </script>
