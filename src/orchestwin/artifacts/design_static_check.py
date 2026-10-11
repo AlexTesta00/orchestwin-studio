@@ -15,6 +15,7 @@ from orchestwin.artifacts.design_evaluation import (
     ordered_screens,
 )
 from orchestwin.artifacts.design_packages import DesignPackageVersion
+from orchestwin.artifacts.mockup_html import _shorten
 from orchestwin.artifacts.prototypes import PrototypeElementKind, PrototypeScreenState
 from orchestwin.evaluation.artifact_content import MAX_VIEW_BYTES
 from orchestwin.evaluation.artifacts import (
@@ -134,12 +135,6 @@ def static_check_scope(target: StaticCheckTarget) -> str:
         "record evidence gaps and assess the remaining targets. Abstain when none can be "
         "assessed. Evaluate static HTML only; no observed user or runtime behavior."
     )
-
-
-def _shorten(text: str, limit: int | None) -> str:
-    if limit is None or len(text) <= limit:
-        return text
-    return text[: limit - 1].rstrip() + "…"
 
 
 def _element(element, *, selected: dict[str, StaticControl], limit: int | None, leads) -> str:

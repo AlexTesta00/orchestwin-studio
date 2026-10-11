@@ -40,6 +40,21 @@ from orchestwin.artifacts.prototypes import (
     create_prototype_transition,
 )
 from orchestwin.artifacts.references import ArtifactKind, VersionedArtifactReference
+from orchestwin.artifacts.snapshot_values import boolean as _boolean
+from orchestwin.artifacts.snapshot_values import datetime as _datetime
+from orchestwin.artifacts.snapshot_values import integer as _integer
+from orchestwin.artifacts.snapshot_values import mapping as _mapping
+from orchestwin.artifacts.snapshot_values import mapping_sequence as _mapping_sequence
+from orchestwin.artifacts.snapshot_values import number as _number
+from orchestwin.artifacts.snapshot_values import optional_integer as _optional_integer
+from orchestwin.artifacts.snapshot_values import optional_mapping_copy as _optional_mapping_copy
+from orchestwin.artifacts.snapshot_values import optional_string as _optional_string
+from orchestwin.artifacts.snapshot_values import optional_uuid as _optional_uuid
+from orchestwin.artifacts.snapshot_values import sequence as _sequence
+from orchestwin.artifacts.snapshot_values import string as _string
+from orchestwin.artifacts.snapshot_values import string_sequence as _string_sequence
+from orchestwin.artifacts.snapshot_values import uuid as _uuid
+from orchestwin.artifacts.snapshot_values import uuid_sequence as _uuid_sequence
 from orchestwin.artifacts.visual_language import visual_language_from_snapshot
 from orchestwin.projects.requirements_primitives import UserTwinVersionReference
 from orchestwin.twins.epistemics import (
@@ -897,111 +912,6 @@ def _required(values: Mapping[str, object], key: str) -> object:
         raise ValueError(f"missing Design Package field: {key}")
 
     return values[key]
-
-
-def _mapping(value: object, *, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise ValueError(f"{label} must be an object")
-
-    return value
-
-
-def _optional_mapping_copy(
-    value: object,
-    *,
-    label: str,
-) -> dict[str, object] | None:
-    if value is None:
-        return None
-
-    return dict(_mapping(value, label=label))
-
-
-def _sequence(value: object, *, label: str) -> Sequence[object]:
-    if not isinstance(value, Sequence) or isinstance(value, str | bytes):
-        raise ValueError(f"{label} must be a sequence")
-
-    return value
-
-
-def _mapping_sequence(
-    value: object,
-    *,
-    label: str,
-) -> tuple[Mapping[str, object], ...]:
-    return tuple(_mapping(item, label=label) for item in _sequence(value, label=label))
-
-
-def _string(value: object, *, label: str) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{label} must be text")
-
-    return value
-
-
-def _optional_string(value: object, *, label: str) -> str | None:
-    return None if value is None else _string(value, label=label)
-
-
-def _integer(value: object, *, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"{label} must be an integer")
-
-    return value
-
-
-def _optional_integer(value: object, *, label: str) -> int | None:
-    return None if value is None else _integer(value, label=label)
-
-
-def _number(value: object, *, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise ValueError(f"{label} must be a number")
-
-    return float(value)
-
-
-def _boolean(value: object, *, label: str) -> bool:
-    if not isinstance(value, bool):
-        raise ValueError(f"{label} must be a boolean")
-
-    return value
-
-
-def _uuid(value: object, *, label: str) -> UUID:
-    if isinstance(value, UUID):
-        return value
-
-    if isinstance(value, str):
-        return UUID(value)
-
-    raise ValueError(f"{label} must be a UUID")
-
-
-def _optional_uuid(value: object, *, label: str) -> UUID | None:
-    return None if value is None else _uuid(value, label=label)
-
-
-def _datetime(value: object, *, label: str) -> datetime:
-    if isinstance(value, datetime):
-        result = value
-    elif isinstance(value, str):
-        result = datetime.fromisoformat(value)
-    else:
-        raise ValueError(f"{label} must be a timestamp")
-
-    if result.utcoffset() is None:
-        raise ValueError(f"{label} must be timezone-aware")
-
-    return result
-
-
-def _uuid_sequence(value: object, *, label: str) -> tuple[UUID, ...]:
-    return tuple(_uuid(item, label=label) for item in _sequence(value, label=label))
-
-
-def _string_sequence(value: object, *, label: str) -> tuple[str, ...]:
-    return tuple(_string(item, label=label) for item in _sequence(value, label=label))
 
 
 __all__ = [

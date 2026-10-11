@@ -10,6 +10,7 @@ from uuid import UUID
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.references import ArtifactKind, VersionedArtifactReference
 from orchestwin.projects.requirements_primitives import (
+    RequirementsContextReference,
     canonical_json,
     snapshot_content_hash,
     validate_positive_integer,
@@ -73,6 +74,9 @@ class ArtifactGraphLinkKind(StrEnum):
     CONTRADICTS = "CONTRADICTS"
     ADDS = "ADDS"
 
+
+_Kind = ArtifactGraphNodeKind
+_Relation = ArtifactGraphLinkKind
 
 _STAGE_ORDER = {
     ArtifactGraphStage.CONTEXT: 0,
@@ -267,7 +271,7 @@ class CrossStageArtifactGraph:
 
 def _versioned_reference(
     kind: ArtifactGraphNodeKind,
-    reference: VersionedArtifactReference,
+    reference: VersionedArtifactReference | RequirementsContextReference,
 ) -> ArtifactGraphReference:
     """Convert an exact governed reference into a graph reference."""
     return ArtifactGraphReference(
@@ -281,6 +285,15 @@ def _versioned_reference(
 def _plain_reference(kind: ArtifactGraphNodeKind, artifact_id: UUID) -> ArtifactGraphReference:
     """Create one stable non-versioned graph reference."""
     return ArtifactGraphReference(kind=kind, artifact_id=artifact_id)
+
+
+def _twin_reference(twin) -> ArtifactGraphReference:
+    return ArtifactGraphReference(
+        kind=_Kind.USER_TWIN,
+        artifact_id=twin.twin_id,
+        version_number=twin.version_number,
+        content_hash=twin.content_hash,
+    )
 
 
 def _node(
@@ -299,6 +312,15 @@ def _node(
     )
 
 
+def _twin_node(reference: ArtifactGraphReference, name: str) -> ArtifactGraphNode:
+    return _node(
+        reference=reference,
+        stage=ArtifactGraphStage.CONTEXT,
+        display_code=f"UT-{reference.artifact_id.hex[:8].upper()}-v{reference.version_number}",
+        title=name,
+    )
+
+
 def _link(
     kind: ArtifactGraphLinkKind,
     source: ArtifactGraphReference,
@@ -306,6 +328,21 @@ def _link(
 ) -> ArtifactGraphLink:
     """Create one concise graph relationship."""
     return ArtifactGraphLink(kind=kind, source=source, target=target)
+
+
+def _links_to(links, kind, source, target_kind, ids) -> None:
+    links.extend(_link(kind, source, _plain_reference(target_kind, value)) for value in ids)
+
+
+def _links_from(links, kind, source_kind, ids, target) -> None:
+    links.extend(_link(kind, _plain_reference(source_kind, value), target) for value in ids)
+
+
+def _contained(nodes, links, parent, stage, kind, artifact, title) -> ArtifactGraphReference:
+    reference = _plain_reference(kind, artifact.id)
+    nodes.append(_node(reference=reference, stage=stage, display_code=artifact.code, title=title))
+    links.append(_link(_Relation.CONTAINS, parent, reference))
+    return reference
 
 
 def _exact_requirements_reference(
@@ -330,54 +367,19 @@ def _exact_design_reference(version: DesignPackageVersion) -> VersionedArtifactR
     )
 
 
-def _context_reference(
-    kind: ArtifactGraphNodeKind,
-    artifact_id: UUID,
-    version_number: int,
-    content_hash: str,
-) -> ArtifactGraphReference:
-    """Create one exact graph reference from Requirements context metadata."""
-    return ArtifactGraphReference(
-        kind=kind,
-        artifact_id=artifact_id,
-        version_number=version_number,
-        content_hash=content_hash,
-    )
-
-
-def _add_requirement_stage(
-    version: RequirementsSpecificationVersion,
-    nodes: list[ArtifactGraphNode],
-    links: list[ArtifactGraphLink],
+def _add_context_roots(
+    version, nodes, links
 ) -> tuple[ArtifactGraphReference, ArtifactGraphReference, ArtifactGraphReference]:
-    """Add exact context, Requirements artifacts, and internal traceability."""
     specification = version.specification
-    requirements_exact = _exact_requirements_reference(version)
-    requirements_root = _versioned_reference(
-        ArtifactGraphNodeKind.REQUIREMENTS_SPECIFICATION,
-        requirements_exact,
-    )
     brief = specification.project_brief_reference
     team = specification.agent_team_reference
     user_modeling = specification.user_modeling_reference
-    brief_root = _context_reference(
-        ArtifactGraphNodeKind.PROJECT_BRIEF,
-        brief.artifact_id,
-        brief.version_number,
-        brief.content_hash,
+    requirements_root = _versioned_reference(
+        _Kind.REQUIREMENTS_SPECIFICATION, _exact_requirements_reference(version)
     )
-    team_root = _context_reference(
-        ArtifactGraphNodeKind.AGENT_TEAM,
-        team.artifact_id,
-        team.version_number,
-        team.content_hash,
-    )
-    user_modeling_root = _context_reference(
-        ArtifactGraphNodeKind.USER_MODELING,
-        user_modeling.artifact_id,
-        user_modeling.version_number,
-        user_modeling.content_hash,
-    )
+    brief_root = _versioned_reference(_Kind.PROJECT_BRIEF, brief)
+    team_root = _versioned_reference(_Kind.AGENT_TEAM, team)
+    user_modeling_root = _versioned_reference(_Kind.USER_MODELING, user_modeling)
     nodes.extend(
         (
             _node(
@@ -407,241 +409,92 @@ def _add_requirement_stage(
         )
     )
     links.extend(
-        _link(ArtifactGraphLinkKind.GROUNDED_IN, requirements_root, target)
+        _link(_Relation.GROUNDED_IN, requirements_root, target)
         for target in (brief_root, team_root, user_modeling_root)
     )
+    return requirements_root, team_root, user_modeling_root
+
+
+def _add_requirement_stage(
+    version: RequirementsSpecificationVersion,
+    nodes: list[ArtifactGraphNode],
+    links: list[ArtifactGraphLink],
+) -> tuple[ArtifactGraphReference, ArtifactGraphReference, ArtifactGraphReference]:
+    """Add exact context, Requirements artifacts, and internal traceability."""
+    specification = version.specification
+    roots = _add_context_roots(version, nodes, links)
+    root, _, user_modeling_root = roots
+    stage = ArtifactGraphStage.REQUIREMENTS
 
     for journey in specification.journeys:
-        reference = _plain_reference(ArtifactGraphNodeKind.JOURNEY, journey.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.REQUIREMENTS,
-                display_code=journey.code,
-                title=journey.title,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
-        links.append(
-            _link(
-                ArtifactGraphLinkKind.EXPANDS,
-                _plain_reference(ArtifactGraphNodeKind.SCENARIO, journey.scenario_id),
-                reference,
-            )
-        )
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.REVEALS,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.NEED, need_id),
-            )
-            for need_id in {value for phase in journey.phases for value in phase.need_ids}
-        )
+        reference = _contained(nodes, links, root, stage, _Kind.JOURNEY, journey, journey.title)
+        _links_from(links, _Relation.EXPANDS, _Kind.SCENARIO, (journey.scenario_id,), reference)
+        need_ids = {value for phase in journey.phases for value in phase.need_ids}
+        _links_to(links, _Relation.REVEALS, reference, _Kind.NEED, need_ids)
 
     for twin in specification.user_twin_references:
-        twin_reference = ArtifactGraphReference(
-            kind=ArtifactGraphNodeKind.USER_TWIN,
-            artifact_id=twin.twin_id,
-            version_number=twin.version_number,
-            content_hash=twin.content_hash,
-        )
-        nodes.append(
-            _node(
-                reference=twin_reference,
-                stage=ArtifactGraphStage.CONTEXT,
-                display_code=f"UT-{twin.twin_id.hex[:8].upper()}-v{twin.version_number}",
-                title=twin.name,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, user_modeling_root, twin_reference))
+        reference = _twin_reference(twin)
+        nodes.append(_twin_node(reference, twin.name))
+        links.append(_link(_Relation.CONTAINS, user_modeling_root, reference))
 
     for requirement in specification.requirements:
-        reference = _plain_reference(ArtifactGraphNodeKind.REQUIREMENT, requirement.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.REQUIREMENTS,
-                display_code=requirement.code,
-                title=requirement.title,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
+        _contained(nodes, links, root, stage, _Kind.REQUIREMENT, requirement, requirement.title)
 
     if specification.schema_version == 2:
         for need in specification.needs:
-            reference = _plain_reference(ArtifactGraphNodeKind.NEED, need.id)
-            nodes.append(
-                _node(
-                    reference=reference,
-                    stage=ArtifactGraphStage.REQUIREMENTS,
-                    display_code=need.code,
-                    title=need.title,
-                )
-            )
-            links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
-            links.extend(
-                _link(
-                    ArtifactGraphLinkKind.REVEALS,
-                    _plain_reference(ArtifactGraphNodeKind.SCENARIO, scenario_id),
-                    reference,
-                )
-                for scenario_id in need.scenario_ids
-            )
+            reference = _contained(nodes, links, root, stage, _Kind.NEED, need, need.title)
+            _links_from(links, _Relation.REVEALS, _Kind.SCENARIO, need.scenario_ids, reference)
         for kind, artifacts in (
-            (ArtifactGraphNodeKind.REQUIREMENT, specification.requirements),
-            (ArtifactGraphNodeKind.USER_STORY, specification.user_stories),
+            (_Kind.REQUIREMENT, specification.requirements),
+            (_Kind.USER_STORY, specification.user_stories),
         ):
             for artifact in artifacts:
-                links.extend(
-                    _link(
-                        ArtifactGraphLinkKind.MOTIVATES,
-                        _plain_reference(ArtifactGraphNodeKind.NEED, need_id),
-                        _plain_reference(kind, artifact.id),
-                    )
-                    for need_id in artifact.need_ids
-                )
+                target = _plain_reference(kind, artifact.id)
+                _links_from(links, _Relation.MOTIVATES, _Kind.NEED, artifact.need_ids, target)
         links.extend(
             _link(
-                ArtifactGraphLinkKind.PARTICIPATES_IN,
-                ArtifactGraphReference(
-                    kind=ArtifactGraphNodeKind.USER_TWIN,
-                    artifact_id=scenario.actor.twin_id,
-                    version_number=scenario.actor.version_number,
-                    content_hash=scenario.actor.content_hash,
-                ),
-                _plain_reference(ArtifactGraphNodeKind.SCENARIO, scenario.id),
+                _Relation.PARTICIPATES_IN,
+                _twin_reference(scenario.actor),
+                _plain_reference(_Kind.SCENARIO, scenario.id),
             )
             for scenario in specification.scenarios
         )
 
     for story in specification.user_stories:
-        reference = _plain_reference(ArtifactGraphNodeKind.USER_STORY, story.id)
-        twin_reference = ArtifactGraphReference(
-            kind=ArtifactGraphNodeKind.USER_TWIN,
-            artifact_id=story.user_twin_reference.twin_id,
-            version_number=story.user_twin_reference.version_number,
-            content_hash=story.user_twin_reference.content_hash,
-        )
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.REQUIREMENTS,
-                display_code=story.code,
-                title=story.goal,
-            )
-        )
-        links.extend(
-            (
-                _link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference),
-                _link(ArtifactGraphLinkKind.ACTS_AS, twin_reference, reference),
-            )
-        )
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.MOTIVATES,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.REQUIREMENT, requirement_id),
-            )
-            for requirement_id in story.requirement_ids
-        )
+        twin_reference = _twin_reference(story.user_twin_reference)
+        reference = _contained(nodes, links, root, stage, _Kind.USER_STORY, story, story.goal)
+        links.append(_link(_Relation.ACTS_AS, twin_reference, reference))
+        _links_to(links, _Relation.MOTIVATES, reference, _Kind.REQUIREMENT, story.requirement_ids)
 
     for criterion in specification.acceptance_criteria:
-        reference = _plain_reference(ArtifactGraphNodeKind.ACCEPTANCE_CRITERION, criterion.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.REQUIREMENTS,
-                display_code=criterion.code,
-                title=criterion.statement,
-            )
+        reference = _contained(
+            nodes, links, root, stage, _Kind.ACCEPTANCE_CRITERION, criterion, criterion.statement
         )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.VERIFIED_BY,
-                _plain_reference(ArtifactGraphNodeKind.REQUIREMENT, requirement_id),
-                reference,
-            )
-            for requirement_id in criterion.requirement_ids
-        )
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.VERIFIED_BY,
-                _plain_reference(ArtifactGraphNodeKind.USER_STORY, story_id),
-                reference,
-            )
-            for story_id in criterion.user_story_ids
-        )
+        for kind, ids in (
+            (_Kind.REQUIREMENT, criterion.requirement_ids),
+            (_Kind.USER_STORY, criterion.user_story_ids),
+        ):
+            _links_from(links, _Relation.VERIFIED_BY, kind, ids, reference)
 
     for scenario in specification.scenarios:
-        reference = _plain_reference(ArtifactGraphNodeKind.SCENARIO, scenario.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.REQUIREMENTS,
-                display_code=scenario.code,
-                title=scenario.title,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.EXERCISES,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.REQUIREMENT, requirement_id),
-            )
-            for requirement_id in scenario.requirement_ids
-        )
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.EXERCISES,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.ACCEPTANCE_CRITERION, criterion_id),
-            )
-            for criterion_id in scenario.acceptance_criterion_ids
-        )
+        reference = _contained(nodes, links, root, stage, _Kind.SCENARIO, scenario, scenario.title)
+        for kind, ids in (
+            (_Kind.REQUIREMENT, scenario.requirement_ids),
+            (_Kind.ACCEPTANCE_CRITERION, scenario.acceptance_criterion_ids),
+        ):
+            _links_to(links, _Relation.EXERCISES, reference, kind, ids)
 
     for risk in specification.risks:
-        reference = _plain_reference(ArtifactGraphNodeKind.PROJECT_RISK, risk.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.REQUIREMENTS,
-                display_code=risk.code,
-                title=risk.summary,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.AFFECTS,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.REQUIREMENT, requirement_id),
-            )
-            for requirement_id in risk.requirement_ids
-        )
+        reference = _contained(nodes, links, root, stage, _Kind.PROJECT_RISK, risk, risk.summary)
+        _links_to(links, _Relation.AFFECTS, reference, _Kind.REQUIREMENT, risk.requirement_ids)
 
     for item in specification.definition_of_done:
-        reference = _plain_reference(ArtifactGraphNodeKind.DEFINITION_OF_DONE, item.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.REQUIREMENTS,
-                display_code=item.code,
-                title=item.statement,
-            )
+        reference = _contained(
+            nodes, links, root, stage, _Kind.DEFINITION_OF_DONE, item, item.statement
         )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.GOVERNS,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.REQUIREMENT, requirement_id),
-            )
-            for requirement_id in item.requirement_ids
-        )
+        _links_to(links, _Relation.GOVERNS, reference, _Kind.REQUIREMENT, item.requirement_ids)
 
-    return requirements_root, team_root, user_modeling_root
+    return roots
 
 
 def _add_trace_links(
@@ -653,30 +506,12 @@ def _add_trace_links(
     acceptance_criterion_ids: tuple[UUID, ...] = (),
 ) -> None:
     """Add deterministic links from a later artifact to Requirements-stage nodes."""
-    links.extend(
-        _link(
-            ArtifactGraphLinkKind.TRACES_TO,
-            source,
-            _plain_reference(ArtifactGraphNodeKind.REQUIREMENT, value),
-        )
-        for value in requirement_ids
-    )
-    links.extend(
-        _link(
-            ArtifactGraphLinkKind.TRACES_TO,
-            source,
-            _plain_reference(ArtifactGraphNodeKind.USER_STORY, value),
-        )
-        for value in user_story_ids
-    )
-    links.extend(
-        _link(
-            ArtifactGraphLinkKind.TRACES_TO,
-            source,
-            _plain_reference(ArtifactGraphNodeKind.ACCEPTANCE_CRITERION, value),
-        )
-        for value in acceptance_criterion_ids
-    )
+    for kind, ids in (
+        (_Kind.REQUIREMENT, requirement_ids),
+        (_Kind.USER_STORY, user_story_ids),
+        (_Kind.ACCEPTANCE_CRITERION, acceptance_criterion_ids),
+    ):
+        _links_to(links, _Relation.TRACES_TO, source, kind, ids)
 
 
 def _add_design_stage(
@@ -687,35 +522,28 @@ def _add_design_stage(
     user_modeling_root: ArtifactGraphReference,
     nodes: list[ArtifactGraphNode],
     links: list[ArtifactGraphLink],
-) -> ArtifactGraphReference:
+) -> None:
     """Add one exact Design Package and all inspectable design artifacts."""
     package = version.package
-    exact = _exact_design_reference(version)
-    root = _versioned_reference(ArtifactGraphNodeKind.DESIGN_PACKAGE, exact)
+    stage = ArtifactGraphStage.DESIGN
+    root = _versioned_reference(_Kind.DESIGN_PACKAGE, _exact_design_reference(version))
     nodes.append(
         _node(
             reference=root,
-            stage=ArtifactGraphStage.DESIGN,
+            stage=stage,
             display_code=f"DESIGN-v{version.version_number}",
             title="Design Exploration Package",
         )
     )
     links.extend(
-        _link(ArtifactGraphLinkKind.GROUNDED_IN, root, target)
+        _link(_Relation.GROUNDED_IN, root, target)
         for target in (requirements_root, team_root, user_modeling_root)
     )
 
     for alternative in package.alternatives:
-        reference = _plain_reference(ArtifactGraphNodeKind.DESIGN_ALTERNATIVE, alternative.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.DESIGN,
-                display_code=alternative.code,
-                title=alternative.title,
-            )
+        reference = _contained(
+            nodes, links, root, stage, _Kind.DESIGN_ALTERNATIVE, alternative, alternative.title
         )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, root, reference))
         _add_trace_links(
             links,
             reference,
@@ -723,34 +551,14 @@ def _add_design_stage(
             user_story_ids=alternative.user_story_ids,
             acceptance_criterion_ids=alternative.acceptance_criterion_ids,
         )
-        for twin in alternative.user_twin_references:
-            links.append(
-                _link(
-                    ArtifactGraphLinkKind.TRACES_TO,
-                    reference,
-                    ArtifactGraphReference(
-                        kind=ArtifactGraphNodeKind.USER_TWIN,
-                        artifact_id=twin.twin_id,
-                        version_number=twin.version_number,
-                        content_hash=twin.content_hash,
-                    ),
-                )
-            )
-
+        links.extend(
+            _link(_Relation.TRACES_TO, reference, _twin_reference(twin))
+            for twin in alternative.user_twin_references
+        )
         for workflow in alternative.workflows:
-            workflow_reference = _plain_reference(
-                ArtifactGraphNodeKind.DESIGN_WORKFLOW,
-                workflow.id,
+            workflow_reference = _contained(
+                nodes, links, reference, stage, _Kind.DESIGN_WORKFLOW, workflow, workflow.title
             )
-            nodes.append(
-                _node(
-                    reference=workflow_reference,
-                    stage=ArtifactGraphStage.DESIGN,
-                    display_code=workflow.code,
-                    title=workflow.title,
-                )
-            )
-            links.append(_link(ArtifactGraphLinkKind.CONTAINS, reference, workflow_reference))
             _add_trace_links(
                 links,
                 workflow_reference,
@@ -759,105 +567,33 @@ def _add_design_stage(
             )
 
     for critique in package.critiques:
-        reference = _plain_reference(
-            ArtifactGraphNodeKind.SYNTHETIC_DESIGN_CRITIQUE,
-            critique.id,
+        title = f"Synthetic critique for {critique.user_twin_reference.name}"
+        reference = _contained(
+            nodes, links, root, stage, _Kind.SYNTHETIC_DESIGN_CRITIQUE, critique, title
         )
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.DESIGN,
-                display_code=critique.code,
-                title=f"Synthetic critique for {critique.user_twin_reference.name}",
-            )
-        )
-        links.extend(
-            (
-                _link(ArtifactGraphLinkKind.CONTAINS, root, reference),
-                _link(
-                    ArtifactGraphLinkKind.CRITIQUES,
-                    reference,
-                    _plain_reference(
-                        ArtifactGraphNodeKind.DESIGN_ALTERNATIVE,
-                        critique.design_alternative_id,
-                    ),
-                ),
-                _link(
-                    ArtifactGraphLinkKind.TRACES_TO,
-                    reference,
-                    ArtifactGraphReference(
-                        kind=ArtifactGraphNodeKind.USER_TWIN,
-                        artifact_id=critique.user_twin_reference.twin_id,
-                        version_number=critique.user_twin_reference.version_number,
-                        content_hash=critique.user_twin_reference.content_hash,
-                    ),
-                ),
-            )
-        )
+        critiqued = _plain_reference(_Kind.DESIGN_ALTERNATIVE, critique.design_alternative_id)
+        links.append(_link(_Relation.CRITIQUES, reference, critiqued))
+        twin = _twin_reference(critique.user_twin_reference)
+        links.append(_link(_Relation.TRACES_TO, reference, twin))
 
     for concern in package.concerns:
-        reference = _plain_reference(ArtifactGraphNodeKind.DESIGN_CONCERN, concern.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.DESIGN,
-                display_code=concern.code,
-                title=concern.summary,
-            )
+        reference = _contained(
+            nodes, links, root, stage, _Kind.DESIGN_CONCERN, concern, concern.summary
         )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, root, reference))
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.AFFECTS,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.DESIGN_ALTERNATIVE, value),
-            )
-            for value in concern.design_alternative_ids
-        )
+        alternative_ids = concern.design_alternative_ids
+        _links_to(links, _Relation.AFFECTS, reference, _Kind.DESIGN_ALTERNATIVE, alternative_ids)
         _add_trace_links(links, reference, requirement_ids=concern.requirement_ids)
 
     if package.prototype is not None:
         prototype = package.prototype
-        prototype_reference = _plain_reference(
-            ArtifactGraphNodeKind.DECLARATIVE_PROTOTYPE,
-            prototype.id,
+        reference = _contained(
+            nodes, links, root, stage, _Kind.DECLARATIVE_PROTOTYPE, prototype, prototype.title
         )
-        nodes.append(
-            _node(
-                reference=prototype_reference,
-                stage=ArtifactGraphStage.DESIGN,
-                display_code=prototype.code,
-                title=prototype.title,
-            )
-        )
-        links.extend(
-            (
-                _link(ArtifactGraphLinkKind.CONTAINS, root, prototype_reference),
-                _link(
-                    ArtifactGraphLinkKind.REPRESENTS,
-                    prototype_reference,
-                    _plain_reference(
-                        ArtifactGraphNodeKind.DESIGN_ALTERNATIVE,
-                        prototype.design_alternative_id,
-                    ),
-                ),
-            )
-        )
+        represented = _plain_reference(_Kind.DESIGN_ALTERNATIVE, prototype.design_alternative_id)
+        links.append(_link(_Relation.REPRESENTS, reference, represented))
         for screen in prototype.screens:
-            screen_reference = _plain_reference(
-                ArtifactGraphNodeKind.PROTOTYPE_SCREEN,
-                screen.id,
-            )
-            nodes.append(
-                _node(
-                    reference=screen_reference,
-                    stage=ArtifactGraphStage.DESIGN,
-                    display_code=screen.code,
-                    title=screen.title,
-                )
-            )
-            links.append(
-                _link(ArtifactGraphLinkKind.CONTAINS, prototype_reference, screen_reference)
+            screen_reference = _contained(
+                nodes, links, reference, stage, _Kind.PROTOTYPE_SCREEN, screen, screen.title
             )
             _add_trace_links(
                 links,
@@ -866,8 +602,6 @@ def _add_design_stage(
                 user_story_ids=screen.user_story_ids,
                 acceptance_criterion_ids=screen.acceptance_criterion_ids,
             )
-
-    return root
 
 
 def grounded_design(
@@ -933,7 +667,7 @@ def _add_evidence_stage(document, twins, nodes, links) -> None:
     sources = {}
     for source in document.get("evidence", ()):
         reference = ArtifactGraphReference(
-            kind=ArtifactGraphNodeKind.RESEARCH_EVIDENCE,
+            kind=_Kind.RESEARCH_EVIDENCE,
             artifact_id=UUID(source["id"]),
             version_number=source["version"],
             content_hash=source["content_hash"],
@@ -973,22 +707,10 @@ def _add_evidence_stage(document, twins, nodes, links) -> None:
             for entry in observation.provenance.references
         ):
             continue
-        target = ArtifactGraphReference(
-            kind=ArtifactGraphNodeKind.USER_TWIN,
-            artifact_id=twin.twin_id,
-            version_number=twin.version_number,
-            content_hash=twin.content_hash,
-        )
+        target = _twin_reference(twin)
         if not any(node.reference == target for node in nodes):
-            nodes.append(
-                _node(
-                    reference=target,
-                    stage=ArtifactGraphStage.CONTEXT,
-                    display_code=f"UT-{twin.twin_id.hex[:8].upper()}-v{twin.version_number}",
-                    title=twin.profile.name,
-                )
-            )
-        links.append(_link(ArtifactGraphLinkKind(item["effect"]), source, target))
+            nodes.append(_twin_node(target, twin.profile.name))
+        links.append(_link(_Relation(item["effect"]), source, target))
 
 
 __all__ = [

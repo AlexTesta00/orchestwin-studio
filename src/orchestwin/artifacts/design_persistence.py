@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime
 from types import TracebackType
 from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.artifacts.design_packages import (
     DESIGN_PACKAGE_SCHEMA_VERSION,
@@ -28,6 +27,15 @@ from orchestwin.artifacts.design_serialization import (
     design_diff_proposal_snapshot,
     design_package_from_snapshot,
 )
+from orchestwin.artifacts.snapshot_values import datetime as _datetime
+from orchestwin.artifacts.snapshot_values import integer as _integer
+from orchestwin.artifacts.snapshot_values import mapping as _mapping
+from orchestwin.artifacts.snapshot_values import optional_datetime as _optional_datetime
+from orchestwin.artifacts.snapshot_values import optional_integer as _optional_integer
+from orchestwin.artifacts.snapshot_values import optional_string as _optional_string
+from orchestwin.artifacts.snapshot_values import optional_uuid as _optional_uuid
+from orchestwin.artifacts.snapshot_values import string as _string
+from orchestwin.artifacts.snapshot_values import uuid as _uuid
 from orchestwin.projects.design_application import DesignVersionAppendStatus
 
 _UUID = postgresql.UUID(as_uuid=True)
@@ -110,10 +118,9 @@ class SqlAlchemyDesignPackageRepository:
         version_id: UUID,
     ) -> DesignPackageVersion | None:
         """Return one exact owner-scoped Design Package version."""
-        statement = _owned_package_select(
-            project_id=project_id,
-            owner_user_id=self._owner_user_id,
-        ).where(PACKAGE_VERSIONS.c.id == version_id)
+        statement = _owned_select(PACKAGE_VERSIONS, project_id, self._owner_user_id).where(
+            PACKAGE_VERSIONS.c.id == version_id
+        )
         row = (await self._session.execute(statement)).mappings().one_or_none()
 
         return None if row is None else design_package_version_from_record(row)
@@ -124,10 +131,9 @@ class SqlAlchemyDesignPackageRepository:
         project_id: UUID,
     ) -> tuple[DesignPackageVersion, ...]:
         """Return immutable Design Package history in version order."""
-        statement = _owned_package_select(
-            project_id=project_id,
-            owner_user_id=self._owner_user_id,
-        ).order_by(PACKAGE_VERSIONS.c.version_number.asc())
+        statement = _owned_select(PACKAGE_VERSIONS, project_id, self._owner_user_id).order_by(
+            PACKAGE_VERSIONS.c.version_number.asc()
+        )
         rows = (await self._session.execute(statement)).mappings().all()
 
         return tuple(design_package_version_from_record(row) for row in rows)
@@ -179,10 +185,7 @@ class SqlAlchemyDesignPackageRepository:
     ) -> DesignPackageVersion | None:
         """Read the latest Design Package with optional row locking."""
         statement = (
-            _owned_package_select(
-                project_id=project_id,
-                owner_user_id=self._owner_user_id,
-            )
+            _owned_select(PACKAGE_VERSIONS, project_id, self._owner_user_id)
             .order_by(PACKAGE_VERSIONS.c.version_number.desc())
             .limit(1)
         )
@@ -242,10 +245,9 @@ class SqlAlchemyDesignDiffRepository:
         diff_id: UUID,
     ) -> DesignPackageDiff | None:
         """Return one exact owner-scoped Design Package diff."""
-        statement = _owned_diff_select(
-            project_id=project_id,
-            owner_user_id=self._owner_user_id,
-        ).where(PACKAGE_DIFFS.c.id == diff_id)
+        statement = _owned_select(PACKAGE_DIFFS, project_id, self._owner_user_id).where(
+            PACKAGE_DIFFS.c.id == diff_id
+        )
         row = (await self._session.execute(statement)).mappings().one_or_none()
 
         return None if row is None else design_diff_from_record(row)
@@ -258,10 +260,7 @@ class SqlAlchemyDesignDiffRepository:
     ) -> DesignPackageDiff | None:
         """Return the proposed diff for an exact base version."""
         statement = (
-            _owned_diff_select(
-                project_id=project_id,
-                owner_user_id=self._owner_user_id,
-            )
+            _owned_select(PACKAGE_DIFFS, project_id, self._owner_user_id)
             .where(
                 PACKAGE_DIFFS.c.base_version_id == base_version_id,
                 PACKAGE_DIFFS.c.status == DesignPackageDiffStatus.PROPOSED.value,
@@ -278,10 +277,9 @@ class SqlAlchemyDesignDiffRepository:
         project_id: UUID,
     ) -> tuple[DesignPackageDiff, ...]:
         """Return Design Package diff history in creation order."""
-        statement = _owned_diff_select(
-            project_id=project_id,
-            owner_user_id=self._owner_user_id,
-        ).order_by(PACKAGE_DIFFS.c.created_at.asc(), PACKAGE_DIFFS.c.id.asc())
+        statement = _owned_select(PACKAGE_DIFFS, project_id, self._owner_user_id).order_by(
+            PACKAGE_DIFFS.c.created_at.asc(), PACKAGE_DIFFS.c.id.asc()
+        )
         rows = (await self._session.execute(statement)).mappings().all()
 
         return tuple(design_diff_from_record(row) for row in rows)
@@ -372,28 +370,6 @@ class SqlAlchemyDesignUnitOfWork:
         """Rollback the shared SQLAlchemy transaction."""
         await self._session.rollback()
         self._completed = True
-
-
-class SqlAlchemyDesignUnitOfWorkFactory:
-    """Create owner-scoped Design Units of Work."""
-
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        """Store the shared async session factory."""
-        self._session_factory = session_factory
-
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> SqlAlchemyDesignUnitOfWork:
-        """Create one Unit of Work with a fresh async session."""
-        return SqlAlchemyDesignUnitOfWork(
-            self._session_factory(),
-            owner_user_id=owner_user_id,
-        )
 
 
 def design_package_version_to_record(
@@ -580,31 +556,10 @@ def design_diff_from_record(
     return diff
 
 
-def _owned_package_select(
-    *,
-    project_id: UUID,
-    owner_user_id: UUID,
-):
-    return sa.select(PACKAGE_VERSIONS).where(
-        PACKAGE_VERSIONS.c.project_id == project_id,
-        _owned_project_exists(
-            project_id=project_id,
-            owner_user_id=owner_user_id,
-        ),
-    )
-
-
-def _owned_diff_select(
-    *,
-    project_id: UUID,
-    owner_user_id: UUID,
-):
-    return sa.select(PACKAGE_DIFFS).where(
-        PACKAGE_DIFFS.c.project_id == project_id,
-        _owned_project_exists(
-            project_id=project_id,
-            owner_user_id=owner_user_id,
-        ),
+def _owned_select(table: sa.TableClause, project_id: UUID, owner_user_id: UUID):
+    return sa.select(table).where(
+        table.c.project_id == project_id,
+        _owned_project_exists(project_id=project_id, owner_user_id=owner_user_id),
     )
 
 
@@ -662,72 +617,10 @@ def _required(values: Mapping[str, object], key: str) -> object:
     return values[key]
 
 
-def _mapping(value: object, *, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise ValueError(f"{label} must be an object")
-
-    return value
-
-
-def _string(value: object, *, label: str) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{label} must be text")
-
-    return value
-
-
-def _optional_string(value: object, *, label: str) -> str | None:
-    return None if value is None else _string(value, label=label)
-
-
-def _integer(value: object, *, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"{label} must be an integer")
-
-    return value
-
-
-def _optional_integer(value: object, *, label: str) -> int | None:
-    return None if value is None else _integer(value, label=label)
-
-
-def _uuid(value: object, *, label: str) -> UUID:
-    if isinstance(value, UUID):
-        return value
-
-    if isinstance(value, str):
-        return UUID(value)
-
-    raise ValueError(f"{label} must be a UUID")
-
-
-def _optional_uuid(value: object, *, label: str) -> UUID | None:
-    return None if value is None else _uuid(value, label=label)
-
-
-def _datetime(value: object, *, label: str) -> datetime:
-    if isinstance(value, datetime):
-        result = value
-    elif isinstance(value, str):
-        result = datetime.fromisoformat(value)
-    else:
-        raise ValueError(f"{label} must be a timestamp")
-
-    if result.utcoffset() is None:
-        raise ValueError(f"{label} must be timezone-aware")
-
-    return result
-
-
-def _optional_datetime(value: object, *, label: str) -> datetime | None:
-    return None if value is None else _datetime(value, label=label)
-
-
 __all__ = [
     "SqlAlchemyDesignDiffRepository",
     "SqlAlchemyDesignPackageRepository",
     "SqlAlchemyDesignUnitOfWork",
-    "SqlAlchemyDesignUnitOfWorkFactory",
     "design_diff_from_record",
     "design_diff_to_record",
     "design_package_version_from_record",

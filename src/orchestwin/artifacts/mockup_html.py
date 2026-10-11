@@ -398,6 +398,21 @@ def _screen_html(
     )
 
 
+def _screen_order(
+    prototype: Mapping[str, object],
+) -> tuple[dict[str, str], list[Mapping[str, object]]]:
+    screens_by_id = {screen["id"]: screen for screen in prototype["screens"]}
+    targets = {
+        str(transition["trigger_element_id"]): str(
+            screens_by_id[transition["target_screen_id"]]["code"]
+        )
+        for transition in prototype["transitions"]
+    }
+    entry = screens_by_id[prototype["entry_screen_id"]]
+    screens = [entry, *[screen for screen in prototype["screens"] if screen["id"] != entry["id"]]]
+    return targets, screens
+
+
 def _screen_links(screens: Sequence[Mapping[str, object]], *, numbered: bool = False) -> str:
     links = []
     for position, screen in enumerate(screens, 1):
@@ -436,15 +451,7 @@ def render_mockup_html(package: Mapping[str, object], *, language: str = "en") -
         )
     archetype = LayoutArchetype(choices["archetype"])
     navigation = NavigationPattern(choices["navigation"])
-    screens_by_id = {screen["id"]: screen for screen in prototype["screens"]}
-    targets = {
-        str(transition["trigger_element_id"]): str(
-            screens_by_id[transition["target_screen_id"]]["code"]
-        )
-        for transition in prototype["transitions"]
-    }
-    entry = screens_by_id[prototype["entry_screen_id"]]
-    screens = [entry, *[screen for screen in prototype["screens"] if screen["id"] != entry["id"]]]
+    targets, screens = _screen_order(prototype)
     links = _screen_links(screens)
     header_links = (
         f'<nav class="links" aria-label="Screens">{links}</nav>'
@@ -534,15 +541,7 @@ def render_evaluation_document(
     visual = alternative.get("visual_language")
     product = str(prototype["title"]) if visual is None else str(visual["product_name"])
     choices = None if visual is None else visual["choices"]
-    screens_by_id = {screen["id"]: screen for screen in prototype["screens"]}
-    targets = {
-        str(transition["trigger_element_id"]): str(
-            screens_by_id[transition["target_screen_id"]]["code"]
-        )
-        for transition in prototype["transitions"]
-    }
-    entry = screens_by_id[prototype["entry_screen_id"]]
-    screens = [entry, *[screen for screen in prototype["screens"] if screen["id"] != entry["id"]]]
+    targets, screens = _screen_order(prototype)
     parts = [
         f'<!doctype html><html lang="{_attr(language)}"><head><meta charset="utf-8">'
         f"<title>{_text(product)}</title></head><body><header><h1>{_text(product)}</h1>"
