@@ -1,10 +1,10 @@
-import hashlib
-import json
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
+from orchestwin.projects.requirements_primitives import snapshot_content_hash
+from orchestwin.twins.profile_checks import normalized_text, require_timestamp, require_uuid
 from orchestwin.twins.user_twins import UserTwinField
 
 MAX_QUESTION_CHARACTERS = 1000
@@ -27,17 +27,6 @@ class TwinInsightKind(StrEnum):
     OPEN_QUESTION = "OPEN_QUESTION"
 
 
-def normalized_text(value, *, maximum):
-    if not isinstance(value, str):
-        raise ValueError("text is required")
-    normalized = " ".join(value.split())
-    if not normalized:
-        raise ValueError("text must not be empty")
-    if len(normalized) > maximum:
-        raise ValueError(f"text exceeds {maximum} characters")
-    return normalized
-
-
 def normalized_reply(value):
     if not isinstance(value, str):
         raise ValueError("reply is required")
@@ -50,20 +39,6 @@ def normalized_reply(value):
     if len(normalized) > MAX_REPLY_CHARACTERS:
         raise ValueError(f"reply exceeds {MAX_REPLY_CHARACTERS} characters")
     return normalized
-
-
-def _require_uuid(value, label):
-    if not isinstance(value, UUID):
-        raise ValueError(f"{label} must be a UUID")
-
-
-def _require_timestamp(value, label):
-    if not isinstance(value, datetime) or value.tzinfo is None:
-        raise ValueError(f"{label} must be a timezone-aware datetime")
-
-
-def _canonical(snapshot):
-    return json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,9 +84,9 @@ class TwinConversationTurn:
     created_at: datetime
 
     def __post_init__(self):
-        _require_uuid(self.id, "turn id")
-        _require_uuid(self.conversation_id, "conversation id")
-        _require_uuid(self.model_generation_id, "model generation id")
+        require_uuid(self.id, "turn id")
+        require_uuid(self.conversation_id, "conversation id")
+        require_uuid(self.model_generation_id, "model generation id")
         if type(self.ordinal) is not int or not 1 <= self.ordinal <= MAX_TURNS_PER_CONVERSATION:
             raise ValueError(
                 "turn ordinal must be a positive integer within the conversation limit"
@@ -126,7 +101,7 @@ class TwinConversationTurn:
             or any(not isinstance(item, TwinInsight) for item in self.insights)
         ):
             raise ValueError("insights must be a bounded tuple of TwinInsight")
-        _require_timestamp(self.created_at, "turn timestamp")
+        require_timestamp(self.created_at, "turn timestamp")
 
     def to_snapshot(self):
         return {
@@ -144,7 +119,7 @@ class TwinConversationTurn:
 
     @property
     def content_hash(self):
-        return hashlib.sha256(_canonical(self.to_snapshot()).encode("utf-8")).hexdigest()
+        return snapshot_content_hash(self.to_snapshot())
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,14 +143,14 @@ class TwinConversation:
             (self.twin_id, "twin id"),
             (self.twin_version_id, "twin version id"),
         ):
-            _require_uuid(value, label)
+            require_uuid(value, label)
         if type(self.twin_version_number) is not int or self.twin_version_number < 1:
             raise ValueError("twin version number must be a positive integer")
         if not isinstance(self.twin_content_hash, str) or len(self.twin_content_hash) != 64:
             raise ValueError("twin content hash must be a SHA-256 digest")
         if self.twin_name != normalized_text(self.twin_name, maximum=MAX_TWIN_NAME_CHARACTERS):
             raise ValueError("twin name must be normalized")
-        _require_timestamp(self.created_at, "conversation timestamp")
+        require_timestamp(self.created_at, "conversation timestamp")
         if not isinstance(self.turns, tuple) or len(self.turns) > MAX_TURNS_PER_CONVERSATION:
             raise ValueError("turns must be a bounded tuple")
         for ordinal, turn in enumerate(self.turns, 1):
