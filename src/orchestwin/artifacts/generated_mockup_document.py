@@ -17,6 +17,8 @@ from orchestwin.artifacts.generated_mockups import (
     MAX_TITLE_LENGTH,
     GeneratedMockup,
     MarkupElement,
+    _escape_attribute,
+    _escape_text,
     is_placeholder,
     screen_trees,
     serialize_markup,
@@ -92,14 +94,6 @@ _INSIDE: Final = frozenset({"caption", "summary"})
 
 def _fail(code: str, detail: str) -> GeneratedMockupError:
     return GeneratedMockupError(code, f"document: {detail}")
-
-
-def _escape_text(value: str) -> str:
-    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def _escape_attribute(value: str) -> str:
-    return _escape_text(value).replace('"', "&quot;")
 
 
 @dataclass(frozen=True, slots=True)

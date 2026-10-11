@@ -24,6 +24,7 @@ from orchestwin.artifacts.design_revisions import (
     DesignRevisionDecisionStatus,
     DesignRevisionIssueCode,
     DesignRevisionProposalStatus,
+    _matches_base,
     decide_design_revision,
     propose_design_revision,
 )
@@ -274,7 +275,7 @@ class LocalDesignRevisionService:
                     issue=DesignRevisionApplicationIssueCode.PACKAGE_NOT_FOUND,
                 )
 
-            if not _diff_targets_version(current_diff, current):
+            if not _matches_base(current_diff, current):
                 return DesignRevisionResult(
                     status=DesignRevisionStatus.REJECTED,
                     diff=current_diff,
@@ -528,19 +529,6 @@ def _restored_alternative(
                 ),
             )
         ),
-    )
-
-
-def _diff_targets_version(
-    diff: DesignPackageDiff,
-    version: DesignPackageVersion,
-) -> bool:
-    """Return whether a diff still targets the exact current package version."""
-    return (
-        diff.project_id == version.project_id
-        and diff.base_version_id == version.id
-        and diff.base_version_number == version.version_number
-        and diff.base_content_hash == version.content_hash
     )
 
 
