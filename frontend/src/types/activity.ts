@@ -26,19 +26,11 @@ export const JOURNAL_KINDS = {
   UT: ["COMMAND_STARTED", "COMMAND_FINISHED", "GENERATION_WAITED"],
 } as const;
 export type WebJournalKind = (typeof JOURNAL_KINDS.WEB)[number];
-export type UtJournalKind = (typeof JOURNAL_KINDS.UT)[number];
-
-export const SESSION_KINDS = ["SESSION_STARTED", "SESSION_ENDED"] as const;
-export type SessionKind = (typeof SESSION_KINDS)[number];
 
 export const SESSION_CODE_PATTERN = "SES-[A-Z0-9][A-Z0-9-]{0,19}";
 export const TARGET_PATTERN = "[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}";
-export const STATUS_PATTERN = "[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}";
 
 export const MAX_BATCH_EVENTS = 50;
-export const MAX_JOURNAL_EVENTS = 20000;
-export const MAX_DURATION_MS = 86_400_000;
-export const MAX_DWELL_INTERVAL_SECONDS = 14_400;
 
 export const ACTIVITY_KIND = "orchestwin.project-activity";
 export const ACTIVITY_SCHEMA_VERSION = 1;
@@ -46,16 +38,6 @@ export const ACTIVITY_SCHEMA_VERSION = 1;
 export function fullMatch(pattern: string, value: unknown): value is string {
   return typeof value === "string" && new RegExp(`^(?:${pattern})$`).test(value);
 }
-
-export type ActivityErrorCode =
-  | "PROJECT_NOT_FOUND"
-  | "ACTIVITY_SERVICE_UNAVAILABLE"
-  | "ACTIVITY_SESSION_ACTIVE"
-  | "ACTIVITY_SESSION_CODE_USED"
-  | "ACTIVITY_SESSION_NOT_ACTIVE"
-  | "ACTIVITY_JOURNAL_FULL"
-  | "ACTIVITY_INPUT_INVALID"
-  | "ACTIVITY_RECORDS_INVALID";
 
 export interface ActivityEventInput {
   kind: WebJournalKind;

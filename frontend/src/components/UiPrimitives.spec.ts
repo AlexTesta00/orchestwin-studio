@@ -7,7 +7,6 @@ import { createAppI18n } from "@/i18n";
 import { expectAccessible } from "@/test/axe";
 import UiBrandMark from "./UiBrandMark.vue";
 import UiButton from "./UiButton.vue";
-import UiCard from "./UiCard.vue";
 import UiClaimLabel from "./UiClaimLabel.vue";
 import UiStateBlock from "./UiStateBlock.vue";
 import UiStatusChip from "./UiStatusChip.vue";
@@ -134,24 +133,6 @@ describe("design primitives", () => {
     expect(anchor.get("a").attributes("type")).toBeUndefined();
   });
 
-  it("gives cards the tone requested", () => {
-    const wrapper = mount(UiCard, { props: { tone: "hypothesis" }, slots: { default: "text" } });
-    expect(wrapper.classes()).toContain("bg-hypothesis-bg");
-    expect(wrapper.classes()).toContain("border-dashed");
-    expect(wrapper.text()).toBe("text");
-  });
-
-  it("turns cards into dark panels on a dark surface", () => {
-    const wrapper = onNight(() => [
-      h(UiCard, { "data-testid": "plain" }, () => "a"),
-      h(UiCard, { tone: "hypothesis", "data-testid": "guess" }, () => "b"),
-    ]);
-    expect(wrapper.get("[data-testid='plain']").classes()).toEqual(
-      expect.arrayContaining(["bg-night-raised", "border-night-line", "rounded-tile"]),
-    );
-    expect(wrapper.get("[data-testid='guess']").classes()).toContain("border-violet-on-night/70");
-  });
-
   it("pairs every status with a mark and a translated word", () => {
     const approved = mount(UiStatusChip, { props: { status: "approved" }, ...plugins("it") });
     expect(approved.text()).toContain("Approvato");
@@ -225,7 +206,6 @@ describe("design primitives", () => {
           h(UiBrandMark),
           h(UiButton, () => "Go"),
           h(UiButton, { variant: "quiet" }, () => "Quiet"),
-          h(UiCard, () => "Card"),
           h(UiStatusChip, { status: "blocked" }),
           h(UiClaimLabel, { kind: "confirmed" }),
           h(UiStateBlock, { kind: "empty", title: "Nothing yet" }),

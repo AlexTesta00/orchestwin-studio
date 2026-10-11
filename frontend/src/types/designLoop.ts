@@ -1,4 +1,4 @@
-import type { DesignGenerationPayload, UUID } from "./design";
+import type { UUID } from "./design";
 
 export type SyntheticFindingSeverity = "critical" | "major" | "moderate" | "minor" | "observation";
 export type SyntheticFindingCriterion =
@@ -258,5 +258,3 @@ export interface InsightSource {
   text: string;
   mitigation?: string | null;
 }
-
-export type DesignRegenerationPayload = DesignGenerationPayload;

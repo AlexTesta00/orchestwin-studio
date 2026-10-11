@@ -71,8 +71,6 @@ from orchestwin.workflow.persistence.repositories import (
     gate_record_to_domain,
 )
 
-Clock = type[lambda: datetime]
-
 
 def utc_now() -> datetime:
     """Return the current timezone-aware UTC timestamp."""

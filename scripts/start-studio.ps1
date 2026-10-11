@@ -62,7 +62,6 @@ if ($useTunnel) {
     $tunnelPort = [int]$Matches[1]
     if ($tunnelPort -in @(8000, 8080, 8787, 8788)) { throw 'The tunnel port must not collide with Studio ports.' }
 }
-$useModels = (-not $hosted) -or (-not [string]::IsNullOrWhiteSpace($settings.adapter))
 $ports = @(8000, 8080, 8787, 8788)
 if ($null -ne $tunnelPort) { $ports += $tunnelPort }
 foreach ($port in $ports) {
@@ -70,21 +69,13 @@ foreach ($port in $ports) {
         throw "Port $port is already in use. Stop the previous Studio session first."
     }
 }
-function Convert-ToWslPath([string]$value) {
-    $full = [IO.Path]::GetFullPath($value)
-    if ($full -notmatch '^([A-Za-z]):[\\/](.*)$') { throw 'A local Windows drive path is required.' }
-    return '/mnt/' + $Matches[1].ToLowerInvariant() + '/' + $Matches[2].Replace('\', '/')
-}
 function Quote-Argument([string]$value) {
     if ($value.Contains('"')) { throw 'Quotes in paths are unsupported.' }
     return '"' + $value + '"'
 }
 $session = Join-Path $repo ('var/studio/session-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
-# The model server creates the session directory after validating the adapter.
 $logs = Join-Path $repo 'var/studio/logs'
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
-$linuxRepo = Convert-ToWslPath $repo
-$linuxSession = Convert-ToWslPath $session
 $models = Join-Path $session 'models.json'
 $children = @()
 function Start-StudioProcess($executable, $arguments, $name, $workingDirectory) {
@@ -100,30 +91,7 @@ try {
     & $node node_modules/vite/bin/vite.js build
     if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
 } finally { Pop-Location }
-if ($useModels) {
-    $modelArgs = @('--exec', (Quote-Argument "$linuxRepo/environments/training/.venv/bin/python"), (Quote-Argument "$linuxRepo/environments/training/serve_studio_models.py"), '--adapter', (Quote-Argument (Convert-ToWslPath $settings.adapter)), '--weights-sha256', $settings.weights_sha256, '--config-sha256', $settings.config_sha256, '--output', (Quote-Argument $linuxSession))
-    if ($settings.weights_sha256 -notmatch '^[0-9a-f]{64}$' -or $settings.config_sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Expected adapter hashes are required.' }
-    $proposerFields = @($settings.proposer_adapter, $settings.proposer_weights_sha256, $settings.proposer_config_sha256)
-    if (@($proposerFields | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) {
-        if ([string]::IsNullOrWhiteSpace($settings.proposer_adapter) -or $settings.proposer_weights_sha256 -notmatch '^[0-9a-f]{64}$' -or $settings.proposer_config_sha256 -notmatch '^[0-9a-f]{64}$') {
-            throw 'The optional proposer adapter requires an explicit path and both SHA-256 hashes.'
-        }
-        if (-not (Test-Path -LiteralPath $settings.proposer_adapter -PathType Container)) { throw 'The selected proposer adapter directory does not exist.' }
-        $modelArgs += @('--proposer-adapter', (Quote-Argument (Convert-ToWslPath $settings.proposer_adapter)), '--proposer-weights-sha256', $settings.proposer_weights_sha256, '--proposer-config-sha256', $settings.proposer_config_sha256)
-    }
-}
 try {
-    if ($useModels) {
-        $model = Start-StudioProcess 'wsl.exe' $modelArgs 'models' $repo
-        $children += $model
-        Write-Host 'Loading real local models. This can take several minutes; logs: var/studio/logs.'
-        $deadline = (Get-Date).AddMinutes(15)
-        while (-not (Test-Path -LiteralPath $models)) {
-            if ($model.HasExited) { throw 'Model startup failed. See models.stderr.log.' }
-            if ((Get-Date) -gt $deadline) { throw 'Model startup timed out.' }
-            Start-Sleep -Seconds 3
-        }
-    }
     if ($null -ne $tunnelPort) {
         $children += Start-StudioProcess $python @('scripts/cloud_proposer.py', 'tunnel', '--pod', $remotePod) 'tunnel' $repo
         Write-Host "Opening the proposer tunnel on port $tunnelPort."
@@ -146,13 +114,11 @@ try {
     }
     if ($hosted) {
         New-Item -ItemType Directory -Force -Path $session | Out-Null
-        $evaluatorConfig = $null
-        if ($useModels) { $evaluatorConfig = (Get-Content -LiteralPath $models -Raw | ConvertFrom-Json).final_evaluator_config_file }
         $models = Join-Path $session 'models-hosted.json'
         $hostedManifest = [ordered]@{
             schema_version = 2
             providers_config_file = $providersConfig.Replace('\', '/')
-            final_evaluator_config_file = $evaluatorConfig
+            final_evaluator_config_file = $null
         }
         $hostedManifest | ConvertTo-Json | Set-Content -LiteralPath $models -Encoding ascii
         Write-Host 'Hosted model providers selected; no local proposer is required.'
@@ -172,10 +138,6 @@ try {
     if ($access -ceq 'local') { Write-Host 'Local access: the Studio works with the account of this computer, without sign-in.' }
     Write-Host 'Studio ready: http://127.0.0.1:8080. Stop with ./scripts/stop-studio.ps1.'
 } catch {
-    if (Test-Path -LiteralPath $session) {
-        New-Item -ItemType File -Force -Path (Join-Path $session 'stop.request') | Out-Null
-        Start-Sleep -Seconds 3
-    }
     foreach ($child in $children) { if (-not $child.HasExited) { & taskkill.exe /PID $child.Id /T /F | Out-Null } }
     throw
 }

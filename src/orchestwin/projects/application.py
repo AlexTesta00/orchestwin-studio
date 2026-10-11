@@ -76,13 +76,6 @@ class ProjectApplicationService(Protocol):
     ) -> Project:
         """Create a project."""
 
-    async def list_active(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> tuple[Project, ...]:
-        """List active projects."""
-
     async def list_overviews(self, *, owner_user_id: UUID) -> tuple[ProjectOverview, ...]: ...
 
     async def get_overview(
@@ -175,15 +168,6 @@ class LocalProjectApplicationService:
 
         async with self._unit_of_work_factory() as unit:
             return await unit.projects.add(project)
-
-    async def list_active(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> tuple[Project, ...]:
-        """List active projects belonging to one owner."""
-        async with self._unit_of_work_factory() as unit:
-            return await unit.projects.list_active_owned(owner_user_id=owner_user_id)
 
     async def list_overviews(self, *, owner_user_id: UUID) -> tuple[ProjectOverview, ...]:
         async with self._unit_of_work_factory() as unit:
