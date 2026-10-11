@@ -131,7 +131,7 @@ describe("DesignAlternativeComparison with three alternatives", () => {
       "Direction of the Apple Human Interface Guidelines design system.",
     );
     expect(originOf(cards, "DES-002")).toBe(
-      "Proposed by the model among 5 candidates; chosen by the Studio because it is far from the other.",
+      "Proposed by the model among 5 candidates; chosen by the Studio because it is far from the others.",
     );
     expect(card(cards, "DES-003").get('[data-testid="alternative-direction"] p').text()).toBe(
       "Visual direction: Apple Human Interface Guidelines",
@@ -143,7 +143,7 @@ describe("DesignAlternativeComparison with three alternatives", () => {
       "Direzione del sistema di design Apple Human Interface Guidelines.",
     );
     expect(originOf(cards, "DES-001")).toBe(
-      "Proposta dal modello fra 5 candidate; scelta dallo Studio perché lontana dall'altra.",
+      "Proposta dal modello fra 5 candidate; scelta dallo Studio perché lontana dalle altre.",
     );
     expect(cards.text()).not.toContain("fra 2 candidate");
   });
@@ -156,7 +156,7 @@ describe("DesignAlternativeComparison with three alternatives", () => {
       });
       expect(cards.find('[data-testid="alternative-system"]').exists()).toBe(false);
       expect(originOf(cards, "DES-003")).toBe(
-        "Proposed by the model among 2 candidates; chosen by the Studio because it is far from the other.",
+        "Proposed by the model among 2 candidates; chosen by the Studio because it is far from the others.",
       );
     },
   );
@@ -185,7 +185,7 @@ describe("DesignAlternativeComparison with three alternatives", () => {
       "CLOSE",
     ]);
     expect(blocks[2]!.get('[data-testid="design-distance-close"]').text()).toBe(
-      "The two alternatives look alike in drawn style. You can regenerate them.",
+      "Alternatives DES-002 and DES-003 look alike in the drawn style. You can regenerate them.",
     );
   });
 
