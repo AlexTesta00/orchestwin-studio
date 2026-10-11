@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from orchestwin.knowledge.tables import _codes
+
 MERMAID_VERSION: Final = "12.0.0"
 DIAGRAM_LOCALES: Final = ("en", "it")
 DEFAULT_DIAGRAM_LOCALE: Final = "en"
@@ -324,10 +326,6 @@ def _accessibility(title: str, description: str) -> list[str]:
 
 def _source(lines: Iterable[str]) -> str:
     return "\n".join(lines) + "\n"
-
-
-def _codes(items: Iterable[Mapping[str, object]]) -> dict[str, str]:
-    return {str(item["id"]): str(item["code"]) for item in items}
 
 
 def _twins(specification: Mapping[str, object]) -> list[Mapping[str, object]]:

@@ -19,7 +19,6 @@ KNOWLEDGE_SCHEMA_VERSION: Final = 3
 SUPPORTED_SCHEMA_VERSIONS: Final = (2, 3)
 KNOWLEDGE_INDEX: Final = "ORCHESTWIN.md"
 KNOWLEDGE_MANIFEST: Final = "orchestwin.json"
-KNOWLEDGE_FOLDER_NAME: Final = "orchestwin"
 KNOWLEDGE_FOLDER_KIND: Final = "orchestwin.knowledge-folder"
 STAGES: Final = ("brief", "team", "twins", "requirements", "design")
 STAGE_LABELS: Final = {
@@ -41,7 +40,6 @@ SCHEMA_FOLDER: Final = "schema"
 TWIN_FOLDER: Final = "twins"
 FEEDBACK_FOLDER: Final = "twins/feedback"
 TABLE_FOLDER: Final = "tables"
-DIAGRAM_FOLDER: Final = "diagrams"
 TWIN_DOCUMENT_KIND: Final = "orchestwin.user-twin"
 FEEDBACK_REVIEWS: Final = f"{FEEDBACK_FOLDER}/reviews.json"
 FEEDBACK_DISCUSSIONS: Final = f"{FEEDBACK_FOLDER}/discussions.json"
@@ -94,7 +92,6 @@ def present_stages(manifest: Mapping[str, object]) -> tuple[str, ...]:
 
 
 __all__ = [
-    "DIAGRAM_FOLDER",
     "FEEDBACK_CHANGES",
     "FEEDBACK_DISCUSSIONS",
     "FEEDBACK_FOLDER",
@@ -104,7 +101,6 @@ __all__ = [
     "FEEDBACK_TESTS",
     "FEEDBACK_TEXT",
     "KNOWLEDGE_FOLDER_KIND",
-    "KNOWLEDGE_FOLDER_NAME",
     "KNOWLEDGE_INDEX",
     "KNOWLEDGE_MANIFEST",
     "KNOWLEDGE_SCHEMA_VERSION",

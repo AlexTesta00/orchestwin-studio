@@ -29,26 +29,6 @@ DEFAULT_HISTORY_LIMIT: Final = 50
 MAX_HISTORY_LIMIT: Final = 200
 
 
-class KnowledgePackageRepository(Protocol):
-    async def lock_project(self, *, project_id: UUID) -> bool: ...
-
-    async def latest(self, *, project_id: UUID) -> KnowledgePackageVersion | None: ...
-
-    async def list(
-        self, *, project_id: UUID, limit: int = DEFAULT_HISTORY_LIMIT
-    ) -> tuple[KnowledgePackageVersion, ...]: ...
-
-    async def get(
-        self, *, project_id: UUID, version_number: int
-    ) -> KnowledgePackageVersion | None: ...
-
-    async def archive(self, *, project_id: UUID, version_number: int) -> bytes | None: ...
-
-    async def create(
-        self, version: KnowledgePackageVersion, archive: bytes
-    ) -> KnowledgePackageWriteStatus: ...
-
-
 class KnowledgePackageStore(Protocol):
     def transaction(self, *, owner_user_id: UUID): ...
 
@@ -184,7 +164,6 @@ __all__ = [
     "DEFAULT_HISTORY_LIMIT",
     "MAX_HISTORY_LIMIT",
     "KnowledgePackagePublication",
-    "KnowledgePackageRepository",
     "KnowledgePackageService",
     "KnowledgePackageStore",
     "SqlAlchemyKnowledgePackageStore",
