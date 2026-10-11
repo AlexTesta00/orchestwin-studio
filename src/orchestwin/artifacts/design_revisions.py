@@ -12,10 +12,7 @@ from uuid import UUID, uuid5
 
 from orchestwin.artifacts.bound_mockups import BoundGeneratedMockup
 from orchestwin.artifacts.design import SyntheticDesignCritique
-from orchestwin.artifacts.design_packages import (
-    DesignExplorationPackage,
-    DesignPackageVersion,
-)
+from orchestwin.artifacts.design_packages import DesignExplorationPackage, DesignPackageVersion
 from orchestwin.artifacts.generated_mockups import GeneratedScreen
 from orchestwin.projects.requirements_primitives import (
     canonical_json,
@@ -140,11 +137,7 @@ class DesignPackageChange:
     @property
     def sort_key(self) -> tuple[str, str, str]:
         """Return deterministic change ordering metadata."""
-        return (
-            self.artifact_kind.value,
-            self.artifact_id.hex,
-            self.kind.value,
-        )
+        return (self.artifact_kind.value, self.artifact_id.hex, self.kind.value)
 
     def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic Design Package change snapshot."""
@@ -180,18 +173,11 @@ class DesignPackageDiff:
     def __post_init__(self) -> None:
         """Protect proposal identity, chronology, and decision metadata."""
         validate_positive_integer(
-            self.base_version_number,
-            label="Design Package diff base version",
+            self.base_version_number, label="Design Package diff base version"
         )
 
-        validate_sha256(
-            self.base_content_hash,
-            label="Design Package diff base hash",
-        )
-        validate_sha256(
-            self.proposal_hash,
-            label="Design Package diff proposal hash",
-        )
+        validate_sha256(self.base_content_hash, label="Design Package diff base hash")
+        validate_sha256(self.proposal_hash, label="Design Package diff proposal hash")
 
         if self.proposed_package.project_id != self.project_id:
             raise ValueError("Design Package diff must belong to its project")
@@ -351,8 +337,7 @@ def propose_design_revision(
 
     if not changes:
         return DesignRevisionProposalResult(
-            status=DesignRevisionProposalStatus.REJECTED,
-            issue=DesignRevisionIssueCode.NO_CHANGES,
+            status=DesignRevisionProposalStatus.REJECTED, issue=DesignRevisionIssueCode.NO_CHANGES
         )
 
     diff = DesignPackageDiff(
@@ -369,10 +354,7 @@ def propose_design_revision(
         created_at=created_at,
     )
 
-    return DesignRevisionProposalResult(
-        status=DesignRevisionProposalStatus.CREATED,
-        diff=diff,
-    )
+    return DesignRevisionProposalResult(status=DesignRevisionProposalStatus.CREATED, diff=diff)
 
 
 def decide_design_revision(
@@ -419,8 +401,7 @@ def decide_design_revision(
         )
 
         return DesignRevisionDecisionResult(
-            status=DesignRevisionDecisionStatus.APPLIED,
-            diff=rejected_diff,
+            status=DesignRevisionDecisionStatus.APPLIED, diff=rejected_diff
         )
 
     if resulting_version_id is None:
@@ -446,15 +427,11 @@ def decide_design_revision(
     )
 
     return DesignRevisionDecisionResult(
-        status=DesignRevisionDecisionStatus.APPLIED,
-        diff=approved_diff,
-        version=version,
+        status=DesignRevisionDecisionStatus.APPLIED, diff=approved_diff, version=version
     )
 
 
-def _normalize_reason(
-    value: str | None,
-) -> tuple[str | None, DesignRevisionIssueCode | None]:
+def _normalize_reason(value: str | None) -> tuple[str | None, DesignRevisionIssueCode | None]:
     """Normalize optional owner rationale into typed validation outcomes."""
     if value is None:
         return None, None
@@ -471,17 +448,13 @@ def _normalize_reason(
 
 
 def _same_governed_context(
-    base: DesignExplorationPackage,
-    proposed: DesignExplorationPackage,
+    base: DesignExplorationPackage, proposed: DesignExplorationPackage
 ) -> bool:
     """Keep owner revisions inside one exact governed design context."""
     return base.grounding == proposed.grounding
 
 
-def _stable_identifiers(
-    base: DesignExplorationPackage,
-    proposed: DesignExplorationPackage,
-) -> bool:
+def _stable_identifiers(base: DesignExplorationPackage, proposed: DesignExplorationPackage) -> bool:
     """Require shared artifact identities to preserve display codes."""
     for before_values, after_values in (
         (base.alternatives, proposed.alternatives),
@@ -506,8 +479,7 @@ def _stable_identifiers(
 
 
 def _design_package_changes(
-    base: DesignExplorationPackage,
-    proposed: DesignExplorationPackage,
+    base: DesignExplorationPackage, proposed: DesignExplorationPackage
 ) -> tuple[DesignPackageChange, ...]:
     """Compute explicit canonical changes between two Design Packages."""
     changes: list[DesignPackageChange] = []
@@ -519,9 +491,7 @@ def _design_package_changes(
     ):
         changes.extend(
             _collection_changes(
-                artifact_kind=artifact_kind,
-                before_values=before_values,
-                after_values=after_values,
+                artifact_kind=artifact_kind, before_values=before_values, after_values=after_values
             )
         )
 
@@ -599,8 +569,7 @@ def _collection_changes(
 
 
 def _prototype_changes(
-    base: DesignExplorationPackage,
-    proposed: DesignExplorationPackage,
+    base: DesignExplorationPackage, proposed: DesignExplorationPackage
 ) -> list[DesignPackageChange]:
     """Compute add, remove, or replacement for the singleton prototype."""
     before = base.prototype
@@ -652,8 +621,7 @@ def _text_hash(value: str) -> str:
 
 
 def _generated_mockup_changes(
-    base: DesignExplorationPackage,
-    proposed: DesignExplorationPackage,
+    base: DesignExplorationPackage, proposed: DesignExplorationPackage
 ) -> list[DesignPackageChange]:
     before = base.generated_mockup
     after = proposed.generated_mockup
@@ -696,9 +664,7 @@ def _generated_mockup_changes(
 
 
 def _generated_screen_changes(
-    project_id: UUID,
-    before: BoundGeneratedMockup,
-    after: BoundGeneratedMockup,
+    project_id: UUID, before: BoundGeneratedMockup, after: BoundGeneratedMockup
 ) -> list[DesignPackageChange]:
     before_screens = {screen.code: _screen_summary(screen) for screen in before.mockup.screens}
     after_screens = {screen.code: _screen_summary(screen) for screen in after.mockup.screens}
@@ -734,8 +700,7 @@ def _screen_summary(screen: GeneratedScreen) -> dict[str, object]:
 
 
 def _owner_assertion_changes(
-    base: DesignExplorationPackage,
-    proposed: DesignExplorationPackage,
+    base: DesignExplorationPackage, proposed: DesignExplorationPackage
 ) -> list[DesignPackageChange]:
     before = base.owner_assertions
     after = proposed.owner_assertions
@@ -778,8 +743,7 @@ def _owner_assertion_changes(
 
 
 def _critique_verdict_changes(
-    base: DesignExplorationPackage,
-    proposed: DesignExplorationPackage,
+    base: DesignExplorationPackage, proposed: DesignExplorationPackage
 ) -> list[DesignPackageChange]:
     before = {critique.id: critique for critique in base.critiques}
     after = {critique.id: critique for critique in proposed.critiques}
@@ -828,10 +792,7 @@ def _selection_snapshot(package: DesignExplorationPackage) -> dict[str, object]:
     }
 
 
-def _matches_base(
-    diff: DesignPackageDiff,
-    current: DesignPackageVersion,
-) -> bool:
+def _matches_base(diff: DesignPackageDiff, current: DesignPackageVersion) -> bool:
     """Return whether a diff still targets the exact current version."""
     return (
         diff.project_id == current.project_id
@@ -842,14 +803,11 @@ def _matches_base(
 
 
 def _decision_rejected(
-    diff: DesignPackageDiff,
-    issue: DesignRevisionIssueCode,
+    diff: DesignPackageDiff, issue: DesignRevisionIssueCode
 ) -> DesignRevisionDecisionResult:
     """Return a typed rejection without changing the proposed diff."""
     return DesignRevisionDecisionResult(
-        status=DesignRevisionDecisionStatus.REJECTED,
-        diff=diff,
-        issue=issue,
+        status=DesignRevisionDecisionStatus.REJECTED, diff=diff, issue=issue
     )
 
 

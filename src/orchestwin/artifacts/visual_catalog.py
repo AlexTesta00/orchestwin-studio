@@ -470,55 +470,13 @@ MODES: Final = MappingProxyType(
             3.0,
         ),
         ColorMode.DARK: ModeSpec(
-            True,
-            False,
-            0.02,
-            0.21,
-            0.26,
-            0.31,
-            0.40,
-            0.95,
-            0.76,
-            0.74,
-            0.34,
-            0.78,
-            0.76,
-            4.5,
-            3.0,
+            True, False, 0.02, 0.21, 0.26, 0.31, 0.40, 0.95, 0.76, 0.74, 0.34, 0.78, 0.76, 4.5, 3.0
         ),
         ColorMode.HIGH_CONTRAST_LIGHT: ModeSpec(
-            False,
-            True,
-            0.005,
-            1.0,
-            1.0,
-            0.96,
-            0.50,
-            0.15,
-            0.34,
-            0.42,
-            0.93,
-            0.44,
-            0.40,
-            7.0,
-            4.5,
+            False, True, 0.005, 1.0, 1.0, 0.96, 0.50, 0.15, 0.34, 0.42, 0.93, 0.44, 0.40, 7.0, 4.5
         ),
         ColorMode.HIGH_CONTRAST_DARK: ModeSpec(
-            True,
-            True,
-            0.012,
-            0.08,
-            0.14,
-            0.20,
-            0.62,
-            0.99,
-            0.86,
-            0.84,
-            0.28,
-            0.86,
-            0.85,
-            7.0,
-            4.5,
+            True, True, 0.012, 0.08, 0.14, 0.20, 0.62, 0.99, 0.86, 0.84, 0.28, 0.86, 0.85, 7.0, 4.5
         ),
     }
 )
@@ -587,9 +545,7 @@ FONTS: Final = MappingProxyType(
             True,
         ),
         FontFamily.MODERN_SERIF: FontSpec(
-            'Didot, "Bodoni MT", "Bodoni 72", Constantia, Cambria, Georgia, serif',
-            "serif",
-            False,
+            'Didot, "Bodoni MT", "Bodoni 72", Constantia, Cambria, Georgia, serif', "serif", False
         ),
         FontFamily.SLAB_SERIF: FontSpec(
             'Rockwell, "Rockwell Nova", "Roboto Slab", "Zilla Slab", "Sitka Heading", Cambria, '
@@ -866,11 +822,7 @@ def _satisfies(colour: str, references: Iterable[tuple[str, float]]) -> bool:
 
 
 def _solve(
-    start: float,
-    chroma: float,
-    hue: float,
-    references: tuple[tuple[str, float], ...],
-    darker: bool,
+    start: float, chroma: float, hue: float, references: tuple[tuple[str, float], ...], darker: bool
 ) -> str:
     if _satisfies(oklch_to_hex(start, chroma, hue), references):
         return oklch_to_hex(start, chroma, hue)
@@ -939,11 +891,7 @@ def resolve_palette(
         hue, primary_chroma, mode, background, hue_spec.dark_on_primary, mode.primary
     )
     primary_soft = _solve(
-        mode.soft,
-        min(primary_chroma, 0.05),
-        hue,
-        ((text, text_threshold),),
-        mode.dark,
+        mode.soft, min(primary_chroma, 0.05), hue, ((text, text_threshold),), mode.dark
     )
     accent_hue = (hue + SCHEME_ACCENT_OFFSET[color_scheme]) % 360
     accent_chroma = 0.012 if color_scheme is ColorScheme.NEUTRAL_ACCENT else primary_chroma * 0.9
@@ -976,21 +924,12 @@ def resolve_palette(
 
 
 def _solve_emphasis(
-    hue: float,
-    chroma: float,
-    mode: ModeSpec,
-    background: str,
-    dark_on_emphasis: bool,
-    start: float,
+    hue: float, chroma: float, mode: ModeSpec, background: str, dark_on_emphasis: bool, start: float
 ) -> tuple[str, str]:
     if mode.dark:
         ink = oklch_to_hex(0.16, min(chroma, 0.03), hue)
         colour = _solve(
-            start,
-            chroma,
-            hue,
-            ((ink, mode.text_threshold), (background, mode.ui_threshold)),
-            False,
+            start, chroma, hue, ((ink, mode.text_threshold), (background, mode.ui_threshold)), False
         )
         return colour, ink
     if dark_on_emphasis and not mode.high_contrast:
@@ -999,11 +938,7 @@ def _solve_emphasis(
         if contrast_ratio(ink, colour) >= mode.text_threshold:
             return colour, ink
     colour = _solve(
-        start,
-        chroma,
-        hue,
-        ((_WHITE, mode.text_threshold), (background, mode.ui_threshold)),
-        True,
+        start, chroma, hue, ((_WHITE, mode.text_threshold), (background, mode.ui_threshold)), True
     )
     return colour, _WHITE
 
@@ -1282,11 +1217,7 @@ def visual_catalog_snapshot() -> dict[str, object]:
         "saturation_chroma": {key.value: value for key, value in SATURATION_CHROMA.items()},
         "scheme_accent_offset": {key.value: value for key, value in SCHEME_ACCENT_OFFSET.items()},
         "fonts": {
-            key.value: {
-                "stack": spec.stack,
-                "category": spec.category,
-                "body_safe": spec.body_safe,
-            }
+            key.value: {"stack": spec.stack, "category": spec.category, "body_safe": spec.body_safe}
             for key, spec in FONTS.items()
         },
         "type_scales": {key.value: list(value) for key, value in TYPE_SCALES.items()},

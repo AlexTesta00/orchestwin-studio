@@ -59,13 +59,7 @@ def _items(value):
 def _key(kind, identifier, version, digest, context=""):
     return ":".join(
         quote(str(value or ""), safe="._-")
-        for value in (
-            kind,
-            identifier,
-            version,
-            digest,
-            context,
-        )
+        for value in (kind, identifier, version, digest, context)
     )
 
 

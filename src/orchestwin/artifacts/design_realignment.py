@@ -79,31 +79,26 @@ def _twin_ids(references: Iterable[UserTwinVersionReference]) -> tuple[UUID, ...
 
 
 def design_is_aligned(
-    package: DesignExplorationPackage,
-    requirements: RequirementsSpecificationVersion,
+    package: DesignExplorationPackage, requirements: RequirementsSpecificationVersion
 ) -> bool:
     return package.grounding == create_design_grounding(requirements)
 
 
 def missing_item_ids(
-    package: DesignExplorationPackage,
-    requirements: RequirementsSpecificationVersion,
+    package: DesignExplorationPackage, requirements: RequirementsSpecificationVersion
 ) -> frozenset[UUID]:
     return frozenset().union(
         *(
             cited - available
             for cited, available in zip(
-                _cited_items(package),
-                _available_items(requirements.specification),
-                strict=True,
+                _cited_items(package), _available_items(requirements.specification), strict=True
             )
         )
     )
 
 
 def item_codes(
-    specification: RequirementsSpecification,
-    identifiers: Iterable[UUID],
+    specification: RequirementsSpecification, identifiers: Iterable[UUID]
 ) -> tuple[str, ...]:
     wanted = frozenset(identifiers)
     return tuple(
@@ -118,8 +113,7 @@ def item_codes(
 
 
 def uncovered_requirement_codes(
-    package: DesignExplorationPackage,
-    requirements: RequirementsSpecificationVersion,
+    package: DesignExplorationPackage, requirements: RequirementsSpecificationVersion
 ) -> tuple[str, ...]:
     if package.prototype is None:
         return ()
@@ -139,8 +133,7 @@ def uncovered_requirement_codes(
 
 
 def design_realignment_issue(
-    package: DesignExplorationPackage,
-    requirements: RequirementsSpecificationVersion,
+    package: DesignExplorationPackage, requirements: RequirementsSpecificationVersion
 ) -> DesignRealignmentIssue | None:
     if design_is_aligned(package, requirements):
         return DesignRealignmentIssue.ALREADY_ALIGNED
@@ -154,8 +147,7 @@ def design_realignment_issue(
 
 
 def _realigned_language(
-    language: VisualLanguage | None,
-    current: Mapping[UUID, UserTwinVersionReference],
+    language: VisualLanguage | None, current: Mapping[UUID, UserTwinVersionReference]
 ) -> VisualLanguage | None:
     if language is None:
         return None
@@ -169,8 +161,7 @@ def _realigned_language(
 
 
 def _realigned_alternative(
-    alternative: DesignAlternative,
-    current: Mapping[UUID, UserTwinVersionReference],
+    alternative: DesignAlternative, current: Mapping[UUID, UserTwinVersionReference]
 ) -> DesignAlternative:
     return replace(
         alternative,
@@ -183,8 +174,7 @@ def _realigned_alternative(
 
 
 def realign_design(
-    package: DesignExplorationPackage,
-    requirements: RequirementsSpecificationVersion,
+    package: DesignExplorationPackage, requirements: RequirementsSpecificationVersion
 ) -> DesignExplorationPackage:
     if package.project_id != requirements.project_id:
         raise ValueError("the design and the requirements must belong to the same project")

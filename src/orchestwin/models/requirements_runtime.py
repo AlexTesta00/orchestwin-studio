@@ -8,9 +8,7 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from orchestwin.models.fake_requirements import (
-    FakeDeterministicRequirementsAdapter,
-)
+from orchestwin.models.fake_requirements import FakeDeterministicRequirementsAdapter
 from orchestwin.models.requirements import RequirementsProposalPort
 
 
@@ -25,9 +23,7 @@ class RequirementsRuntimeSettings(BaseSettings):
     """Environment-backed requirements provider configuration."""
 
     model_config = SettingsConfigDict(
-        env_prefix="ORCHESTWIN_REQUIREMENTS_",
-        case_sensitive=False,
-        extra="forbid",
+        env_prefix="ORCHESTWIN_REQUIREMENTS_", case_sensitive=False, extra="forbid"
     )
 
     mode: RequirementsRuntimeMode = RequirementsRuntimeMode.FAKE_DETERMINISTIC
@@ -65,8 +61,7 @@ def build_requirements_runtime(
     resolved = settings if settings is not None else RequirementsRuntimeSettings()
 
     return RequirementsRuntime(
-        mode=resolved.mode,
-        proposal_port=build_requirements_proposal_port(resolved),
+        mode=resolved.mode, proposal_port=build_requirements_proposal_port(resolved)
     )
 
 

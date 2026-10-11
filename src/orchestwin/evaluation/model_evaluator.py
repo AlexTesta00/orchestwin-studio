@@ -193,10 +193,7 @@ class ModelGatewayUserTwinEvaluator:
             return payload
         return self._verified_content.enrich(request, payload)
 
-    async def evaluate(
-        self,
-        request: UserTwinEvaluationRequest,
-    ) -> UserTwinEvaluationResponse:
+    async def evaluate(self, request: UserTwinEvaluationRequest) -> UserTwinEvaluationResponse:
         generation_request = create_structured_generation_request(
             request_id=self._request_id_factory(),
             task_id=USER_TWIN_MODEL_EVALUATION_TASK_ID,
@@ -286,11 +283,7 @@ def _response_from_payload(
     findings = tuple(
         sorted(
             (
-                _finding_from_payload(
-                    request=request,
-                    configuration=configuration,
-                    payload=value,
-                )
+                _finding_from_payload(request=request, configuration=configuration, payload=value)
                 for value in findings_value
             ),
             key=lambda item: item.finding_id,
@@ -299,9 +292,7 @@ def _response_from_payload(
     if len({finding.finding_id for finding in findings}) != len(findings):
         raise ValueError("evaluation finding IDs must be unique")
     summary = _required_normalized_string(
-        payload,
-        "overall_summary",
-        maximum_length=_MAX_SUMMARY_LENGTH,
+        payload, "overall_summary", maximum_length=_MAX_SUMMARY_LENGTH
     )
     return UserTwinEvaluationResponse(
         evaluation_run_id=request.evaluation_run_id,
@@ -371,10 +362,7 @@ def _finding_from_payload(
         evidence_refs=tuple(sorted(_string_list(payload, "evidence_refs", 512))),
         confidence=float(confidence),
         recommended_action=_required_string(payload, "recommended_action"),
-        requires_human_validation=_required_boolean(
-            payload,
-            "requires_human_validation",
-        ),
+        requires_human_validation=_required_boolean(payload, "requires_human_validation"),
         model_config_ref=configuration.model_config_ref,
         prompt_version_ref=configuration.prompt_version_ref,
     )
@@ -462,10 +450,7 @@ def _output_schema_payload(*, require_finding_id_pattern: bool = False) -> dict[
                 "items": {"type": "string", "maxLength": _GENERATED_REFERENCE_LENGTH},
             },
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-            "recommended_action": {
-                "type": "string",
-                "maxLength": _GENERATED_RECOMMENDATION_LENGTH,
-            },
+            "recommended_action": {"type": "string", "maxLength": _GENERATED_RECOMMENDATION_LENGTH},
             "requires_human_validation": {"type": "boolean"},
         },
     }
@@ -474,15 +459,8 @@ def _output_schema_payload(*, require_finding_id_pattern: bool = False) -> dict[
         "additionalProperties": False,
         "required": ["overall_summary", "findings", "evidence_gaps", "abstained"],
         "properties": {
-            "overall_summary": {
-                "type": "string",
-                "maxLength": _GENERATED_OVERALL_SUMMARY_LENGTH,
-            },
-            "findings": {
-                "type": "array",
-                "maxItems": _GENERATED_FINDINGS,
-                "items": finding,
-            },
+            "overall_summary": {"type": "string", "maxLength": _GENERATED_OVERALL_SUMMARY_LENGTH},
+            "findings": {"type": "array", "maxItems": _GENERATED_FINDINGS, "items": finding},
             "evidence_gaps": {
                 "type": "array",
                 "maxItems": _GENERATED_GAPS,
@@ -500,17 +478,10 @@ def _required_string(values: dict[str, object], key: str) -> str:
     return value
 
 
-def _required_normalized_string(
-    values: dict[str, object],
-    key: str,
-    *,
-    maximum_length: int,
-) -> str:
+def _required_normalized_string(values: dict[str, object], key: str, *, maximum_length: int) -> str:
     value = _required_string(values, key)
     normalized = normalize_required_text(
-        value,
-        label=f"evaluation output {key}",
-        maximum_length=maximum_length,
+        value, label=f"evaluation output {key}", maximum_length=maximum_length
     )
     if normalized != value:
         raise ValueError(f"evaluation output {key} must be normalized")
@@ -531,20 +502,14 @@ def _required_boolean(values: dict[str, object], key: str) -> bool:
     return value
 
 
-def _string_list(
-    values: dict[str, object],
-    key: str,
-    maximum_length: int,
-) -> tuple[str, ...]:
+def _string_list(values: dict[str, object], key: str, maximum_length: int) -> tuple[str, ...]:
     value = values.get(key)
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         raise ValueError(f"evaluation output {key} must be a string list")
     result: list[str] = []
     for item in value:
         normalized = normalize_required_text(
-            item,
-            label=f"evaluation output {key} item",
-            maximum_length=maximum_length,
+            item, label=f"evaluation output {key} item", maximum_length=maximum_length
         )
         if normalized != item:
             raise ValueError(f"evaluation output {key} items must be normalized")

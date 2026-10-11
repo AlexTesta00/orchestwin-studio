@@ -83,9 +83,7 @@ def team_version_from_document(document: Mapping[str, object]) -> TeamProposalVe
     return _built("team", build)
 
 
-def modeling_version_from_document(
-    document: Mapping[str, object],
-) -> UserModelingSnapshotVersion:
+def modeling_version_from_document(document: Mapping[str, object]) -> UserModelingSnapshotVersion:
     envelope = _envelope("twins", document)
     document = deepcopy(dict(document))
     payload = document.get("snapshot")

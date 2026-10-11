@@ -27,8 +27,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     health = client.health()
     if health.status != HEALTHY:
         raise CliError(
-            "STUDIO_NOT_RECOGNIZED",
-            values={"address": studio.origin, "http_status": health.status},
+            "STUDIO_NOT_RECOGNIZED", values={"address": studio.origin, "http_status": health.status}
         )
     if client.local_access():
         context.console.say("login.local_mode", studio=studio.origin)

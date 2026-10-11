@@ -467,8 +467,7 @@ def _readers(owner_user_id, project_id):
             sa.select(ROUNDS.c.created_at)
             .join(DISCUSSIONS, DISCUSSIONS.c.id == ROUNDS.c.discussion_id)
             .where(
-                DISCUSSIONS.c.project_id == project_id,
-                DISCUSSIONS.c.owner_user_id == owner_user_id,
+                DISCUSSIONS.c.project_id == project_id, DISCUSSIONS.c.owner_user_id == owner_user_id
             ),
             (_when("created_at", "DESIGN", "DISCUSSION_ROUND_COMPLETED", "STUDIO"),),
         ),
@@ -513,11 +512,7 @@ def _readers(owner_user_id, project_id):
             owned(FOLDER_VERSIONS, "created_at", "version_number"),
             (
                 _when(
-                    "created_at",
-                    "PACKAGE",
-                    "PACKAGE_PUBLISHED",
-                    "OWNER",
-                    version="version_number",
+                    "created_at", "PACKAGE", "PACKAGE_PUBLISHED", "OWNER", version="version_number"
                 ),
             ),
         ),
@@ -526,11 +521,7 @@ def _readers(owner_user_id, project_id):
             (
                 _when("recorded_at", "PACKAGE", "CODE_CHANGE_RECORDED", "OWNER"),
                 _when(
-                    "decided_at",
-                    "PACKAGE",
-                    "CODE_CHANGE_DECIDED",
-                    "OWNER",
-                    outcome="decision_kind",
+                    "decided_at", "PACKAGE", "CODE_CHANGE_DECIDED", "OWNER", outcome="decision_kind"
                 ),
             ),
         ),
@@ -576,13 +567,7 @@ def _readers(owner_user_id, project_id):
 
 def _order(item):
     rank, fact = item
-    return (
-        fact["at"],
-        rank,
-        fact["kind"],
-        fact.get("code") or "",
-        fact.get("version_number") or 0,
-    )
+    return (fact["at"], rank, fact["kind"], fact.get("code") or "", fact.get("version_number") or 0)
 
 
 async def _facts(session: AsyncSession, *, owner_user_id: UUID, project_id: UUID) -> list[dict]:

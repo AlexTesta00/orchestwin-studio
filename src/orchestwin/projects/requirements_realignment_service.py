@@ -85,11 +85,7 @@ class RealignmentGateQueries(Protocol):
 
 class RealignmentContextQueries(Protocol):
     async def snapshot_context_is_current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        snapshot: UserModelingSnapshotVersion | None,
+        self, *, owner_user_id: UUID, project_id: UUID, snapshot: UserModelingSnapshotVersion | None
     ) -> bool: ...
 
 
@@ -162,10 +158,7 @@ class RequirementsRealignmentService:
                 and requirements_are_aligned(current.specification, snapshot)
             ),
             issue=_issue(
-                current,
-                snapshot,
-                twins_approved=twins_approved,
-                revision_pending=revision_pending,
+                current, snapshot, twins_approved=twins_approved, revision_pending=revision_pending
             ),
             requirements_version_number=None if current is None else current.version_number,
             snapshot_version_number=None if snapshot is None else snapshot.version_number,

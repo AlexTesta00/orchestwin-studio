@@ -96,12 +96,7 @@ class BriefAssumption:
             raise ValueError("a rejected assumption requires a reason")
 
 
-def normalize_assumption_text(
-    value: str,
-    *,
-    field_name: str,
-    maximum_length: int,
-) -> str:
+def normalize_assumption_text(value: str, *, field_name: str, maximum_length: int) -> str:
     """Normalize and validate an assumption text value."""
     normalized = " ".join(value.split())
 

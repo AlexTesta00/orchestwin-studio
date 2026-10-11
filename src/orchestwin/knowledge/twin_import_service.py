@@ -91,11 +91,7 @@ class TwinImportGateQueries(Protocol):
 
 class TwinImportCandidateQueries(Protocol):
     async def list(
-        self,
-        *,
-        owner_user_id: UUID,
-        exclude_project_id: UUID,
-        limit: int = DEFAULT_CANDIDATE_LIMIT,
+        self, *, owner_user_id: UUID, exclude_project_id: UUID, limit: int = DEFAULT_CANDIDATE_LIMIT
     ) -> tuple[TwinImportCandidate, ...]: ...
 
 
@@ -227,11 +223,7 @@ class TwinImportService:
         )
 
     async def source(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        source_project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID, source_project_id: UUID
     ) -> TwinImportSource:
         context = await self._owned_context(owner_user_id=owner_user_id, project_id=project_id)
         source = await self._approved_source(
@@ -263,12 +255,7 @@ class TwinImportService:
         )
 
     async def import_from_project(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        source_project_id: UUID,
-        twin_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID, source_project_id: UUID, twin_id: UUID
     ) -> TwinImportResult:
         source = await self._approved_source(
             owner_user_id=owner_user_id, source_project_id=source_project_id
@@ -288,11 +275,7 @@ class TwinImportService:
         )
 
     async def import_document(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        document: object,
+        self, *, owner_user_id: UUID, project_id: UUID, document: object
     ) -> TwinImportResult:
         parsed = _parsed(document)
         context = await self._governance.load_current(
@@ -341,10 +324,7 @@ class TwinImportService:
         )
 
     async def _approved_source(
-        self,
-        *,
-        owner_user_id: UUID,
-        source_project_id: UUID,
+        self, *, owner_user_id: UUID, source_project_id: UUID
     ) -> _ApprovedSource:
         brief = await self._project_service.current_brief(
             project_id=source_project_id, owner_user_id=owner_user_id

@@ -31,23 +31,12 @@ class AccessTokenSettings(BaseSettings):
     jwt_secret: SecretStr = Field(repr=False)
     jwt_issuer: str = "orchestwin-studio"
     jwt_audience: str = "orchestwin-api"
-    access_token_lifetime_seconds: int = Field(
-        default=900,
-        ge=60,
-        le=86400,
-    )
-    access_token_leeway_seconds: int = Field(
-        default=5,
-        ge=0,
-        le=300,
-    )
+    access_token_lifetime_seconds: int = Field(default=900, ge=60, le=86400)
+    access_token_leeway_seconds: int = Field(default=5, ge=0, le=300)
 
     @field_validator("jwt_secret")
     @classmethod
-    def validate_jwt_secret(
-        cls,
-        value: SecretStr,
-    ) -> SecretStr:
+    def validate_jwt_secret(cls, value: SecretStr) -> SecretStr:
         """Require a sufficiently long HMAC secret."""
         if len(value.get_secret_value()) < 32:
             raise ValueError("JWT secret must contain at least 32 characters")
@@ -56,10 +45,7 @@ class AccessTokenSettings(BaseSettings):
 
     @field_validator("jwt_issuer", "jwt_audience")
     @classmethod
-    def validate_non_empty_identifier(
-        cls,
-        value: str,
-    ) -> str:
+    def validate_non_empty_identifier(cls, value: str) -> str:
         """Require stable non-empty issuer and audience values."""
         normalized = value.strip()
 
@@ -79,10 +65,7 @@ class AccessTokenSettings(BaseSettings):
         return self.jwt_secret.get_secret_value()
 
 
-def load_access_token_settings(
-    *,
-    env_file: str | Path | None = ".env",
-) -> AccessTokenSettings:
+def load_access_token_settings(*, env_file: str | Path | None = ".env") -> AccessTokenSettings:
     """Load fresh access-token settings."""
     return AccessTokenSettings(_env_file=env_file)
 
@@ -173,11 +156,7 @@ class JwtAccessTokenService:
         self._clock = clock
         self._uuid_factory = uuid_factory
 
-    def issue(
-        self,
-        *,
-        user_id: UUID,
-    ) -> IssuedAccessToken:
+    def issue(self, *, user_id: UUID) -> IssuedAccessToken:
         """Issue a signed access token for one active user."""
         issued_at = self._current_time()
         expires_at = issued_at + self._settings.lifetime
@@ -194,21 +173,11 @@ class JwtAccessTokenService:
             "token_use": self.TOKEN_USE,
         }
 
-        encoded = jwt.encode(
-            payload,
-            self._settings.signing_secret,
-            algorithm=self.ALGORITHM,
-        )
+        encoded = jwt.encode(payload, self._settings.signing_secret, algorithm=self.ALGORITHM)
 
-        return IssuedAccessToken(
-            token=encoded,
-            expires_at=expires_at,
-        )
+        return IssuedAccessToken(token=encoded, expires_at=expires_at)
 
-    def verify(
-        self,
-        token: str,
-    ) -> AccessTokenVerification:
+    def verify(self, token: str) -> AccessTokenVerification:
         """Verify a JWT without exposing library exceptions."""
         if not token:
             return AccessTokenVerification(status=AccessTokenStatus.INVALID)
@@ -221,18 +190,7 @@ class JwtAccessTokenService:
                 audience=self._settings.jwt_audience,
                 issuer=self._settings.jwt_issuer,
                 leeway=(self._settings.access_token_leeway_seconds),
-                options={
-                    "require": [
-                        "aud",
-                        "exp",
-                        "iat",
-                        "iss",
-                        "jti",
-                        "nbf",
-                        "sub",
-                        "token_use",
-                    ],
-                },
+                options={"require": ["aud", "exp", "iat", "iss", "jti", "nbf", "sub", "token_use"]},
             )
         except ExpiredSignatureError:
             return AccessTokenVerification(status=AccessTokenStatus.EXPIRED)
@@ -249,17 +207,10 @@ class JwtAccessTokenService:
                 issued_at=self._timestamp(payload["iat"]),
                 expires_at=self._timestamp(payload["exp"]),
             )
-        except (
-            KeyError,
-            TypeError,
-            ValueError,
-        ):
+        except (KeyError, TypeError, ValueError):
             return AccessTokenVerification(status=AccessTokenStatus.INVALID)
 
-        return AccessTokenVerification(
-            status=AccessTokenStatus.VALID,
-            principal=principal,
-        )
+        return AccessTokenVerification(status=AccessTokenStatus.VALID, principal=principal)
 
     def _current_time(self) -> datetime:
         """Return and validate the injected clock value."""
@@ -279,7 +230,4 @@ class JwtAccessTokenService:
         if not isinstance(value, int | float):
             raise TypeError("JWT timestamp must be numeric")
 
-        return datetime.fromtimestamp(
-            value,
-            tz=UTC,
-        )
+        return datetime.fromtimestamp(value, tz=UTC)

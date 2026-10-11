@@ -8,9 +8,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from orchestwin.agents.persistence.repositories import (
-    SqlAlchemyTeamProposalVersionRepository,
-)
+from orchestwin.agents.persistence.repositories import SqlAlchemyTeamProposalVersionRepository
 from orchestwin.models.proposal_evidence_persistence import (
     SqlAlchemyProposalEvidenceBindings,
     SqlAlchemyProposalEvidenceStore,
@@ -27,22 +25,14 @@ from orchestwin.models.requirements_runtime import (
     RequirementsRuntimeSettings,
     build_requirements_runtime,
 )
-from orchestwin.projects.persistence.briefs import (
-    SqlAlchemyProjectBriefRepository,
-)
-from orchestwin.projects.persistence.repositories import (
-    SqlAlchemyProjectRepository,
-)
+from orchestwin.projects.persistence.briefs import SqlAlchemyProjectBriefRepository
+from orchestwin.projects.persistence.repositories import SqlAlchemyProjectRepository
 from orchestwin.projects.requirements_application import (
     GovernedRequirementsContext,
     LocalRequirementsGenerationService,
 )
-from orchestwin.projects.requirements_change_application import (
-    LocalRequirementsChangeService,
-)
-from orchestwin.projects.requirements_gate import (
-    LocalRequirementsGateService,
-)
+from orchestwin.projects.requirements_change_application import LocalRequirementsChangeService
+from orchestwin.projects.requirements_gate import LocalRequirementsGateService
 from orchestwin.projects.requirements_persistence import (
     SqlAlchemyRequirementsDiffRepository,
     SqlAlchemyRequirementsSpecificationRepository,
@@ -53,41 +43,25 @@ from orchestwin.projects.requirements_primitives import (
     RequirementsContextReference,
     UserTwinVersionReference,
 )
-from orchestwin.projects.requirements_revision_application import (
-    LocalRequirementsRevisionService,
-)
-from orchestwin.projects.requirements_revisions import (
-    RequirementsSpecificationDiff,
-)
-from orchestwin.projects.requirements_specifications import (
-    RequirementsSpecificationVersion,
-)
+from orchestwin.projects.requirements_revision_application import LocalRequirementsRevisionService
+from orchestwin.projects.requirements_revisions import RequirementsSpecificationDiff
+from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
 from orchestwin.twins.persistence.repositories import (
     SqlAlchemyPersonaVersionRepository,
     SqlAlchemyUserModelingSnapshotRepository,
 )
 from orchestwin.twins.representation import snapshot_matches_archetypes
 from orchestwin.workflow.gates import HumanGateType
-from orchestwin.workflow.persistence.repositories import (
-    SqlAlchemyHumanGateRepository,
-)
+from orchestwin.workflow.persistence.repositories import SqlAlchemyHumanGateRepository
 
 
 class ManagedRequirementsUnitOfWork:
     """Close the session owned by the existing requirements Unit of Work."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-        *,
-        owner_user_id: UUID,
-    ) -> None:
+    def __init__(self, session: AsyncSession, *, owner_user_id: UUID) -> None:
         self._session = session
         self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
-        self._inner = SqlAlchemyRequirementsUnitOfWork(
-            session,
-            owner_user_id=owner_user_id,
-        )
+        self._inner = SqlAlchemyRequirementsUnitOfWork(session, owner_user_id=owner_user_id)
         self.specifications = self._inner.specifications
         self.diffs = self._inner.diffs
 
@@ -128,37 +102,21 @@ class ManagedRequirementsUnitOfWork:
 class ManagedRequirementsUnitOfWorkFactory:
     """Create requirements command Units of Work with owned sessions."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> ManagedRequirementsUnitOfWork:
+    def __call__(self, *, owner_user_id: UUID) -> ManagedRequirementsUnitOfWork:
         """Create one command Unit of Work with a fresh session."""
-        return ManagedRequirementsUnitOfWork(
-            self._session_factory(),
-            owner_user_id=owner_user_id,
-        )
+        return ManagedRequirementsUnitOfWork(self._session_factory(), owner_user_id=owner_user_id)
 
 
 class SqlAlchemyRequirementsGateUnitOfWork:
     """Auto-committing transaction boundary for Gate 4 use cases."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-        *,
-        owner_user_id: UUID,
-    ) -> None:
+    def __init__(self, session: AsyncSession, *, owner_user_id: UUID) -> None:
         self._session = session
         self.specifications = SqlAlchemyRequirementsSpecificationRepository(
-            session,
-            owner_user_id=owner_user_id,
+            session, owner_user_id=owner_user_id
         )
         self.gates = SqlAlchemyHumanGateRepository(session)
 
@@ -187,108 +145,67 @@ class SqlAlchemyRequirementsGateUnitOfWork:
 class SqlAlchemyRequirementsGateUnitOfWorkFactory:
     """Create owner-scoped Gate 4 Units of Work."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> SqlAlchemyRequirementsGateUnitOfWork:
+    def __call__(self, *, owner_user_id: UUID) -> SqlAlchemyRequirementsGateUnitOfWork:
         """Create one Gate 4 transaction with a fresh session."""
         return SqlAlchemyRequirementsGateUnitOfWork(
-            self._session_factory(),
-            owner_user_id=owner_user_id,
+            self._session_factory(), owner_user_id=owner_user_id
         )
 
 
 class SqlAlchemyRequirementsQueryService:
     """Short-lived owner-scoped read service for Requirements API queries."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
     async def current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> RequirementsSpecificationVersion | None:
         """Return the current requirements specification."""
         async with self._session_factory() as session:
             repository = SqlAlchemyRequirementsSpecificationRepository(
-                session,
-                owner_user_id=owner_user_id,
+                session, owner_user_id=owner_user_id
             )
             return await repository.current(project_id=project_id)
 
     async def history(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> tuple[RequirementsSpecificationVersion, ...]:
         """Return immutable requirements history."""
         async with self._session_factory() as session:
             repository = SqlAlchemyRequirementsSpecificationRepository(
-                session,
-                owner_user_id=owner_user_id,
+                session, owner_user_id=owner_user_id
             )
             return await repository.history(project_id=project_id)
 
     async def get_diff(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        diff_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID, diff_id: UUID
     ) -> RequirementsSpecificationDiff | None:
         """Return one exact requirements diff."""
         async with self._session_factory() as session:
-            repository = SqlAlchemyRequirementsDiffRepository(
-                session,
-                owner_user_id=owner_user_id,
-            )
-            return await repository.get(
-                project_id=project_id,
-                diff_id=diff_id,
-            )
+            repository = SqlAlchemyRequirementsDiffRepository(session, owner_user_id=owner_user_id)
+            return await repository.get(project_id=project_id, diff_id=diff_id)
 
     async def diff_history(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> tuple[RequirementsSpecificationDiff, ...]:
         """Return reviewable requirements diff history."""
         async with self._session_factory() as session:
-            repository = SqlAlchemyRequirementsDiffRepository(
-                session,
-                owner_user_id=owner_user_id,
-            )
+            repository = SqlAlchemyRequirementsDiffRepository(session, owner_user_id=owner_user_id)
             return await repository.history(project_id=project_id)
 
 
 class SqlAlchemyRequirementsGovernanceAdapter:
     """Load Requirements inputs through current owner-scoped persistence."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
     async def load_current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> GovernedRequirementsContext | None:
         """Load current Brief, Team, User Modeling, and approval gates."""
         async with self._session_factory() as session:
@@ -299,24 +216,20 @@ class SqlAlchemyRequirementsGovernanceAdapter:
     @staticmethod
     async def _load_current(session, *, owner_user_id, project_id):
         project = await SqlAlchemyProjectRepository(session).get_owned(
-            project_id=project_id,
-            owner_user_id=owner_user_id,
+            project_id=project_id, owner_user_id=owner_user_id
         )
 
         if project is None:
             return None
 
         brief_version = await SqlAlchemyProjectBriefRepository(session).get_current_owned(
-            project_id=project_id,
-            owner_user_id=owner_user_id,
+            project_id=project_id, owner_user_id=owner_user_id
         )
         team_version = await SqlAlchemyTeamProposalVersionRepository(session).get_current_owned(
-            project_id=project_id,
-            owner_user_id=owner_user_id,
+            project_id=project_id, owner_user_id=owner_user_id
         )
         user_modeling_version = await SqlAlchemyUserModelingSnapshotRepository(
-            session,
-            owner_user_id=owner_user_id,
+            session, owner_user_id=owner_user_id
         ).current(project_id=project_id)
 
         gate_repository = SqlAlchemyHumanGateRepository(session)
@@ -326,9 +239,7 @@ class SqlAlchemyRequirementsGovernanceAdapter:
             gate_type=HumanGateType.PROJECT_BRIEF,
         )
         team_gate = await gate_repository.get_latest_owned_for_update(
-            project_id=project_id,
-            owner_user_id=owner_user_id,
-            gate_type=HumanGateType.AGENT_TEAM,
+            project_id=project_id, owner_user_id=owner_user_id, gate_type=HumanGateType.AGENT_TEAM
         )
         user_modeling_gate = await gate_repository.get_latest_owned_for_update(
             project_id=project_id,
@@ -475,9 +386,7 @@ def build_requirements_services(
     gate_uow_factory = SqlAlchemyRequirementsGateUnitOfWorkFactory(session_factory)
     evidence_store = SqlAlchemyProposalEvidenceStore(session_factory)
     governance = SqlAlchemyRequirementsGovernanceAdapter(session_factory)
-    revisions = LocalRequirementsRevisionService(
-        uow_factory=command_uow_factory,
-    )
+    revisions = LocalRequirementsRevisionService(uow_factory=command_uow_factory)
 
     return RequirementsServices(
         runtime_mode=runtime.mode,
@@ -489,9 +398,7 @@ def build_requirements_services(
         ),
         revisions=revisions,
         queries=SqlAlchemyRequirementsQueryService(session_factory),
-        gate=LocalRequirementsGateService(
-            unit_of_work_factory=gate_uow_factory,
-        ),
+        gate=LocalRequirementsGateService(unit_of_work_factory=gate_uow_factory),
         changes=LocalRequirementsChangeService(
             proposal_evidence_store=evidence_store,
             governance=governance,

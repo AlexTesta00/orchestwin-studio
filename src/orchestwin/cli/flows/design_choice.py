@@ -71,10 +71,7 @@ def choose(
 
 
 def mockup_result(
-    context: CommandContext,
-    client: StudioClient,
-    state: DesignState,
-    alternative: Alternative,
+    context: CommandContext, client: StudioClient, state: DesignState, alternative: Alternative
 ) -> Mapping[str, object] | None:
     found = stored_result(client, state, alternative.id)
     if found is not None or state.generated:
@@ -118,11 +115,7 @@ def stored_result(
 
 
 def usable(
-    result: object,
-    alternative_id: str,
-    *,
-    generated: bool,
-    content_hash: str | None = None,
+    result: object, alternative_id: str, *, generated: bool, content_hash: str | None = None
 ) -> bool:
     if not isinstance(result, Mapping):
         return False
@@ -197,10 +190,7 @@ def pending_diff(
 
 
 def approve(
-    context: CommandContext,
-    client: StudioClient,
-    project: ProjectFolder,
-    state: DesignState,
+    context: CommandContext, client: StudioClient, project: ProjectFolder, state: DesignState
 ) -> int:
     console = context.console
     chosen = state.chosen
@@ -230,10 +220,7 @@ def approve(
         context.environment.now(),
     )
     console.say(
-        "design.approved",
-        code=chosen.code,
-        title=chosen.title,
-        version=state.version_number or "-",
+        "design.approved", code=chosen.code, title=chosen.title, version=state.version_number or "-"
     )
     try:
         summary = publish_and_pull(context, client, project)

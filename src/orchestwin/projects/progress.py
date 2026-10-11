@@ -69,8 +69,7 @@ class CatalogVersion:
 
 
 CURRENT_CATALOG: Final = CatalogVersion(
-    version=AGENT_CATALOG_VERSION,
-    content_hash=AGENT_CATALOG_CONTENT_HASH,
+    version=AGENT_CATALOG_VERSION, content_hash=AGENT_CATALOG_CONTENT_HASH
 )
 
 

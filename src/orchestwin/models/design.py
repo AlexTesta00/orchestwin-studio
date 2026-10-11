@@ -13,9 +13,7 @@ from orchestwin.agents.catalog import (
     AgentIdentifier,
     all_agent_catalog_entries,
 )
-from orchestwin.artifacts.design_packages import (
-    DesignExplorationPackage,
-)
+from orchestwin.artifacts.design_packages import DesignExplorationPackage
 from orchestwin.artifacts.references import (
     ArtifactKind,
     VersionedArtifactReference,
@@ -32,9 +30,7 @@ from orchestwin.projects.requirements_primitives import (
     validate_positive_integer,
     validate_sha256,
 )
-from orchestwin.projects.requirements_specifications import (
-    RequirementsSpecificationVersion,
-)
+from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
 from orchestwin.twins.epistemics import ProfileObservation
 from orchestwin.twins.limits import MAX_USER_TWINS, MIN_USER_TWINS
 
@@ -99,9 +95,7 @@ class DesignAgentTeamInput:
     def __post_init__(self) -> None:
         """Protect exact Team identity and fixed-catalog order."""
         require_artifact_kind(
-            self.reference,
-            expected=ArtifactKind.AGENT_TEAM,
-            label="design Agent Team input",
+            self.reference, expected=ArtifactKind.AGENT_TEAM, label="design Agent Team input"
         )
 
         expected = _canonical_agent_ids(self.selected_agent_ids)
@@ -155,9 +149,7 @@ class DesignUserModelingInput:
     def __post_init__(self) -> None:
         """Protect context kind, cardinality, and User Twin order."""
         require_artifact_kind(
-            self.reference,
-            expected=ArtifactKind.USER_MODELING,
-            label="design User Modeling input",
+            self.reference, expected=ArtifactKind.USER_MODELING, label="design User Modeling input"
         )
 
         twin_count = len(self.user_twins)
@@ -169,10 +161,7 @@ class DesignUserModelingInput:
             )
 
         references = tuple(user_twin.reference for user_twin in self.user_twins)
-        expected = canonical_user_twin_references(
-            references,
-            require_items=True,
-        )
+        expected = canonical_user_twin_references(references, require_items=True)
 
         if references != expected:
             raise ValueError("design User Modeling twins must use canonical reference order")
@@ -205,14 +194,8 @@ class DesignProposalRequest:
 
     def __post_init__(self) -> None:
         """Protect project scope, catalog metadata, and exact User Twin context."""
-        validate_positive_integer(
-            self.catalog_version,
-            label="design proposal catalog version",
-        )
-        validate_sha256(
-            self.catalog_content_hash,
-            label="design proposal catalog content hash",
-        )
+        validate_positive_integer(self.catalog_version, label="design proposal catalog version")
+        validate_sha256(self.catalog_content_hash, label="design proposal catalog content hash")
 
         if (
             self.catalog_version != AGENT_CATALOG_VERSION
@@ -226,15 +209,11 @@ class DesignProposalRequest:
         if requirements_version.project_id != self.project_id:
             raise ValueError("design proposal Requirements must belong to its project")
 
-        if not _matches_context_reference(
-            self.team.reference,
-            specification.agent_team_reference,
-        ):
+        if not _matches_context_reference(self.team.reference, specification.agent_team_reference):
             raise ValueError("design proposal team must match the Requirements context")
 
         if not _matches_context_reference(
-            self.user_modeling.reference,
-            specification.user_modeling_reference,
+            self.user_modeling.reference, specification.user_modeling_reference
         ):
             raise ValueError("design proposal User Modeling must match the Requirements context")
 
@@ -260,10 +239,7 @@ class DesignProposalRequest:
             "schema_version": DESIGN_PROPOSAL_SCHEMA_VERSION,
             "project_id": str(self.project_id),
             "project_mode": self.project_mode.value,
-            "catalog": {
-                "version": self.catalog_version,
-                "content_hash": self.catalog_content_hash,
-            },
+            "catalog": {"version": self.catalog_version, "content_hash": self.catalog_content_hash},
             "requirements": self.requirements.to_snapshot(),
             "team": self.team.to_snapshot(),
             "user_modeling": self.user_modeling.to_snapshot(),
@@ -305,10 +281,7 @@ class DesignProposalResult:
         if len(self.provider_id) > MAX_DESIGN_PROVIDER_ID_LENGTH:
             raise ValueError("design provider ID exceeds maximum length")
 
-        validate_positive_integer(
-            self.provider_version,
-            label="design provider version",
-        )
+        validate_positive_integer(self.provider_version, label="design provider version")
 
         if self.status is DesignProposalStatus.PROPOSED:
             if self.package is None or self.issue is not None:
@@ -342,16 +315,12 @@ class DesignProposalResult:
 class DesignProposalPort(Protocol):
     """Provider-independent design proposal boundary."""
 
-    async def propose(
-        self,
-        request: DesignProposalRequest,
-    ) -> DesignProposalResult:
+    async def propose(self, request: DesignProposalRequest) -> DesignProposalResult:
         """Produce a typed Design Package proposal or rejection."""
 
 
 def _matches_context_reference(
-    reference: VersionedArtifactReference,
-    expected: RequirementsContextReference,
+    reference: VersionedArtifactReference, expected: RequirementsContextReference
 ) -> bool:
     """Compare exact identity metadata across stage-specific reference types."""
     return (
@@ -366,9 +335,7 @@ def _agent_position(agent_id: AgentIdentifier) -> int:
     return _AGENT_ORDER.index(agent_id)
 
 
-def _canonical_agent_ids(
-    values: tuple[AgentIdentifier, ...],
-) -> tuple[AgentIdentifier, ...]:
+def _canonical_agent_ids(values: tuple[AgentIdentifier, ...]) -> tuple[AgentIdentifier, ...]:
     """Return duplicate-free agents in fixed-catalog order."""
     if not values:
         raise ValueError("design Agent Team input must contain selected agents")

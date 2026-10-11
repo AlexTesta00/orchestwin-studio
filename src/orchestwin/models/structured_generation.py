@@ -100,10 +100,7 @@ class StructuredJsonSchema:
     def __post_init__(self) -> None:
         _require_normalized_identifier(self.schema_id, label="structured schema ID")
         validate_positive_integer(self.version_number, label="structured schema version")
-        _require_canonical_json_object(
-            self.canonical_schema_json,
-            label="structured schema JSON",
-        )
+        _require_canonical_json_object(self.canonical_schema_json, label="structured schema JSON")
         validate_sha256(self.content_hash, label="structured schema content hash")
         expected = snapshot_content_hash(
             {
@@ -226,12 +223,10 @@ class StructuredGenerationRequest:
     def __post_init__(self) -> None:
         _require_normalized_identifier(self.task_id, label="structured generation task ID")
         _require_normalized_text(
-            self.system_instruction,
-            label="structured generation system instruction",
+            self.system_instruction, label="structured generation system instruction"
         )
         _require_canonical_json_object(
-            self.input_payload_json,
-            label="structured generation input payload",
+            self.input_payload_json, label="structured generation input payload"
         )
         normalized_refs = normalize_text_items(
             self.allowed_evidence_refs,
@@ -244,18 +239,15 @@ class StructuredGenerationRequest:
                 "structured generation evidence references must be canonical and unique"
             )
         _require_normalized_identifier(
-            self.prompt_version_ref,
-            label="structured generation prompt version",
+            self.prompt_version_ref, label="structured generation prompt version"
         )
         if isinstance(self.temperature, bool) or not 0.0 <= float(self.temperature) <= 2.0:
             raise ValueError("structured generation temperature must be between zero and two")
         validate_positive_integer(
-            self.max_output_tokens,
-            label="structured generation maximum output tokens",
+            self.max_output_tokens, label="structured generation maximum output tokens"
         )
         validate_positive_integer(
-            self.timeout_seconds,
-            label="structured generation timeout seconds",
+            self.timeout_seconds, label="structured generation timeout seconds"
         )
         if self.schema_version != STRUCTURED_GENERATION_SCHEMA_VERSION:
             raise ValueError("unsupported structured generation schema version")
@@ -318,10 +310,7 @@ class StructuredGenerationUsage:
             (self.latency_milliseconds, "structured generation latency"),
             (self.cache_read_input_tokens, "structured generation cache read tokens"),
             (self.cache_write_input_tokens, "structured generation cache write tokens"),
-            (
-                0 if self.cost_microusd is None else self.cost_microusd,
-                "structured generation cost",
-            ),
+            (0 if self.cost_microusd is None else self.cost_microusd, "structured generation cost"),
             (self.reasoning_tokens, "structured generation reasoning tokens"),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -357,8 +346,7 @@ class StructuredGenerationSuccess:
 
     def __post_init__(self) -> None:
         _require_canonical_json_object(
-            self.payload_json,
-            label="structured generation output payload",
+            self.payload_json, label="structured generation output payload"
         )
         normalized_request_id = normalize_optional_text(
             self.provider_request_id,
@@ -474,25 +462,17 @@ class StructuredGenerationPort(Protocol):
     """Provider-independent asynchronous structured-generation boundary."""
 
     async def generate(
-        self,
-        request: StructuredGenerationRequest,
+        self, request: StructuredGenerationRequest
     ) -> StructuredGenerationResult: ...
 
 
 def create_structured_json_schema(
-    *,
-    schema_id: str,
-    version_number: int,
-    schema_payload: dict[str, object],
+    *, schema_id: str, version_number: int, schema_payload: dict[str, object]
 ) -> StructuredJsonSchema:
     """Canonicalize one repository-owned output schema."""
     canonical_schema_json = canonical_json(schema_payload)
     content_hash = snapshot_content_hash(
-        {
-            "schema_id": schema_id,
-            "version_number": version_number,
-            "schema": schema_payload,
-        }
+        {"schema_id": schema_id, "version_number": version_number, "schema": schema_payload}
     )
     return StructuredJsonSchema(
         schema_id=schema_id,
@@ -687,14 +667,7 @@ def _require_canonical_json_object(value: str, *, label: str) -> None:
 
 
 def _require_normalized_identifier(value: str, *, label: str) -> None:
-    if (
-        normalize_required_text(
-            value,
-            label=label,
-            maximum_length=_MAX_IDENTIFIER_LENGTH,
-        )
-        != value
-    ):
+    if normalize_required_text(value, label=label, maximum_length=_MAX_IDENTIFIER_LENGTH) != value:
         raise ValueError(f"{label} must be normalized")
 
 

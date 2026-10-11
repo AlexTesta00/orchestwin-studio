@@ -17,11 +17,7 @@ ARCHIVE_TYPE: Final = "application/zip"
 
 
 def import_project(
-    client: StudioClient,
-    archive: bytes,
-    *,
-    file_name: str,
-    display_name: str | None = None,
+    client: StudioClient, archive: bytes, *, file_name: str, display_name: str | None = None
 ) -> Mapping[str, object]:
     fields = {} if display_name is None else {NAME_FIELD: display_name}
     form = multipart(fields, {ARCHIVE_FIELD: (file_name, ARCHIVE_TYPE, archive)})

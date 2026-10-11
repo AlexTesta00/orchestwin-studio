@@ -23,13 +23,8 @@ from orchestwin.agents.selection_rules import (
     TeamSelectionIssue,
     TeamSelectionReason,
 )
-from orchestwin.projects.briefs import (
-    BriefField,
-    ProjectBriefVersion,
-)
-from orchestwin.projects.domain import (
-    ProjectMode,
-)
+from orchestwin.projects.briefs import BriefField, ProjectBriefVersion
+from orchestwin.projects.domain import ProjectMode
 
 TEAM_PROPOSAL_SCHEMA_VERSION: Final = 1
 MAX_PROPOSAL_JUSTIFICATION_LENGTH: Final = 2000
@@ -39,25 +34,19 @@ _BRIEF_FIELD_ORDER: Final = tuple(BriefField)
 _AGENT_CATALOG_ORDER: Final = tuple(entry.agent_id for entry in all_agent_catalog_entries())
 
 
-def _is_sha256_digest(
-    value: str,
-) -> bool:
+def _is_sha256_digest(value: str) -> bool:
     """Return whether a value is a lowercase SHA-256 digest."""
     return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
-def _ordered_fields(
-    fields: tuple[BriefField, ...],
-) -> tuple[BriefField, ...]:
+def _ordered_fields(fields: tuple[BriefField, ...]) -> tuple[BriefField, ...]:
     """Return fields in stable Project Brief declaration order."""
     unique_fields = set(fields)
 
     return tuple(field for field in _BRIEF_FIELD_ORDER if field in unique_fields)
 
 
-def _agent_position(
-    agent_id: AgentIdentifier,
-) -> int:
+def _agent_position(agent_id: AgentIdentifier) -> int:
     """Return the stable position of an agent in the fixed catalog."""
     return _AGENT_CATALOG_ORDER.index(agent_id)
 
@@ -98,25 +87,13 @@ class TeamProposalJustification:
 
     kind: TeamProposalJustificationKind
     code: str
-    evidence_fields: tuple[
-        BriefField,
-        ...,
-    ] = ()
-    evidence_terms: tuple[
-        str,
-        ...,
-    ] = ()
+    evidence_fields: tuple[BriefField, ...] = ()
+    evidence_terms: tuple[str, ...] = ()
     statement: str | None = None
 
     def __post_init__(self) -> None:
         """Protect code, evidence, and rationale invariants."""
-        if (
-            re.fullmatch(
-                r"[A-Z][A-Z0-9_]{0,127}",
-                self.code,
-            )
-            is None
-        ):
+        if re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", self.code) is None:
             raise ValueError(
                 "team-proposal justification code must be a stable uppercase identifier"
             )
@@ -165,10 +142,7 @@ class ProposedTeamMember:
 
     agent_id: AgentIdentifier
     source: TeamProposalMemberSource
-    justifications: tuple[
-        TeamProposalJustification,
-        ...,
-    ]
+    justifications: tuple[TeamProposalJustification, ...]
 
     def __post_init__(self) -> None:
         """Protect catalog membership and source invariants."""
@@ -241,10 +215,7 @@ class AgentTeamProposal:
     catalog_version: int
     catalog_content_hash: str
     constraints: DeterministicTeamConstraints = field(repr=False)
-    members: tuple[
-        ProposedTeamMember,
-        ...,
-    ] = ()
+    members: tuple[ProposedTeamMember, ...] = ()
 
     def __post_init__(self) -> None:
         """Protect provenance, coverage, ordering, and role constraints."""
@@ -291,10 +262,7 @@ class AgentTeamProposal:
             raise ValueError("team proposal must not contain duplicate agents")
 
         expected_member_order = tuple(
-            sorted(
-                self.members,
-                key=lambda member: _agent_position(member.agent_id),
-            )
+            sorted(self.members, key=lambda member: _agent_position(member.agent_id))
         )
 
         if self.members != expected_member_order:
@@ -343,16 +311,12 @@ class AgentTeamProposal:
                 raise ValueError("optional roles must preserve a proposer or owner source")
 
     @property
-    def selected_agent_ids(
-        self,
-    ) -> tuple[AgentIdentifier, ...]:
+    def selected_agent_ids(self) -> tuple[AgentIdentifier, ...]:
         """Return selected agents in fixed-catalog order."""
         return tuple(member.agent_id for member in self.members)
 
     @property
-    def mandatory_agent_ids(
-        self,
-    ) -> tuple[AgentIdentifier, ...]:
+    def mandatory_agent_ids(self) -> tuple[AgentIdentifier, ...]:
         """Return members required by deterministic constraints."""
         return tuple(
             member.agent_id
@@ -361,9 +325,7 @@ class AgentTeamProposal:
         )
 
     @property
-    def suggested_agent_ids(
-        self,
-    ) -> tuple[AgentIdentifier, ...]:
+    def suggested_agent_ids(self) -> tuple[AgentIdentifier, ...]:
         """Return optional roles selected by the proposal adapter."""
         return tuple(
             member.agent_id
@@ -372,9 +334,7 @@ class AgentTeamProposal:
         )
 
     @property
-    def owner_added_agent_ids(
-        self,
-    ) -> tuple[AgentIdentifier, ...]:
+    def owner_added_agent_ids(self) -> tuple[AgentIdentifier, ...]:
         """Return optional roles explicitly added by the owner."""
         return tuple(
             member.agent_id
@@ -382,10 +342,7 @@ class AgentTeamProposal:
             if (member.source is TeamProposalMemberSource.OWNER_ADDED)
         )
 
-    def member_for(
-        self,
-        agent_id: AgentIdentifier,
-    ) -> ProposedTeamMember:
+    def member_for(self, agent_id: AgentIdentifier) -> ProposedTeamMember:
         """Return one selected member by stable agent identifier."""
         for member in self.members:
             if member.agent_id is agent_id:
@@ -393,9 +350,7 @@ class AgentTeamProposal:
 
         raise KeyError(agent_id)
 
-    def to_snapshot(
-        self,
-    ) -> dict[str, object]:
+    def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic JSON-serializable proposal snapshot."""
         return {
             "schema_version": self.schema_version,
@@ -438,24 +393,14 @@ class AgentTeamProposal:
             ],
         }
 
-    def canonical_json(
-        self,
-    ) -> str:
+    def canonical_json(self) -> str:
         """Serialize the proposal with deterministic ordering."""
         return json.dumps(
-            self.to_snapshot(),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(
-                ",",
-                ":",
-            ),
+            self.to_snapshot(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
 
     @property
-    def content_hash(
-        self,
-    ) -> str:
+    def content_hash(self) -> str:
         """Return the SHA-256 hash of the complete proposal."""
         return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
 
@@ -466,10 +411,7 @@ class TeamProposalGenerationResult:
 
     status: TeamProposalGenerationStatus
     proposal: AgentTeamProposal | None = None
-    issues: tuple[
-        TeamSelectionIssue,
-        ...,
-    ] = ()
+    issues: tuple[TeamSelectionIssue, ...] = ()
 
     def __post_init__(self) -> None:
         """Protect proposed and blocked result shapes."""
@@ -492,16 +434,11 @@ class TeamProposalGenerationResult:
 class TeamProposalPort(Protocol):
     """Provider-independent asynchronous team-proposal boundary."""
 
-    async def propose(
-        self,
-        request: TeamProposalRequest,
-    ) -> TeamProposalGenerationResult:
+    async def propose(self, request: TeamProposalRequest) -> TeamProposalGenerationResult:
         """Produce a typed team proposal or a blocked result."""
 
 
-def deterministic_justification(
-    reason: TeamSelectionReason,
-) -> TeamProposalJustification:
+def deterministic_justification(reason: TeamSelectionReason) -> TeamProposalJustification:
     """Convert a deterministic rule reason into proposal justification."""
     return TeamProposalJustification(
         kind=(TeamProposalJustificationKind.DETERMINISTIC_RULE),

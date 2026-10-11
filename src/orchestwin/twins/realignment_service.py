@@ -103,8 +103,7 @@ def _utc_now() -> datetime:
 
 
 def _context_issue(
-    context: GovernedUserModelingContext | None,
-    readiness: ProjectWorkflowReadiness,
+    context: GovernedUserModelingContext | None, readiness: ProjectWorkflowReadiness
 ) -> str | None:
     issue = _governance_issue(context)
     if (
@@ -145,9 +144,7 @@ async def _revision_pending(
         return True
     for version in snapshot.snapshot.twin_versions:
         proposed = await uow.diffs.current_proposed(
-            project_id=project_id,
-            base_snapshot_version_id=snapshot.id,
-            twin_id=version.twin_id,
+            project_id=project_id, base_snapshot_version_id=snapshot.id, twin_id=version.twin_id
         )
         if proposed is not None:
             return True
@@ -197,11 +194,7 @@ class UserModelingRealignmentService:
         async with self._uow_factory(owner_user_id=owner_user_id) as uow:
             snapshot = await uow.snapshots.current(project_id=project_id)
             issue = await _issue(
-                uow,
-                project_id=project_id,
-                snapshot=snapshot,
-                context=context,
-                readiness=readiness,
+                uow, project_id=project_id, snapshot=snapshot, context=context, readiness=readiness
             )
         brief = None if context is None else context.brief_version
         team = None if context is None else context.team_reference
@@ -243,11 +236,7 @@ class UserModelingRealignmentService:
                 raise UserModelingRealignmentFailure(PERSISTENCE_REJECTED)
             snapshot = await uow.snapshots.current(project_id=project_id)
             issue = await _issue(
-                uow,
-                project_id=project_id,
-                snapshot=snapshot,
-                context=context,
-                readiness=readiness,
+                uow, project_id=project_id, snapshot=snapshot, context=context, readiness=readiness
             )
             if issue is not None or snapshot is None or context is None:
                 raise UserModelingRealignmentFailure(issue or USER_TWINS_NOT_FOUND)
@@ -275,11 +264,7 @@ class UserModelingRealignmentService:
         return realignment
 
     async def snapshot_context_is_current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        snapshot: UserModelingSnapshotVersion | None,
+        self, *, owner_user_id: UUID, project_id: UUID, snapshot: UserModelingSnapshotVersion | None
     ) -> bool:
         if snapshot is None:
             return False

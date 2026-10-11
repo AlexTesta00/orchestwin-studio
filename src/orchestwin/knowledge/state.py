@@ -140,11 +140,7 @@ MAX_BASIS_LENGTH: Final = 300
 MAX_UPDATE_COMMENT_LENGTH: Final = 600
 MAX_UPDATE_CHANGES: Final = 8
 MAX_UPDATE_TESTS: Final = 4
-REFERENCE_KEYS: Final = (
-    "requirements_version_number",
-    "design_version_number",
-    "alternative_code",
-)
+REFERENCE_KEYS: Final = ("requirements_version_number", "design_version_number", "alternative_code")
 
 
 def review_is_stale(

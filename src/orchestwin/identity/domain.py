@@ -34,10 +34,7 @@ class NormalizedEmail:
             raise InvalidEmailAddress("email address is required")
 
         try:
-            result = validate_email(
-                candidate,
-                check_deliverability=False,
-            )
+            result = validate_email(candidate, check_deliverability=False)
         except EmailNotValidError as error:
             raise InvalidEmailAddress("email address is invalid") from error
 

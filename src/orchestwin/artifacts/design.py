@@ -70,17 +70,11 @@ class DesignWorkflow:
 
     def __post_init__(self) -> None:
         """Protect identity, ordered steps, and traceability."""
-        validate_display_code(
-            self.code,
-            prefix="FLOW",
-            label="design workflow code",
-        )
+        validate_display_code(self.code, prefix="FLOW", label="design workflow code")
 
         if (
             normalize_required_text(
-                self.title,
-                label="design workflow title",
-                maximum_length=_MAX_TITLE_LENGTH,
+                self.title, label="design workflow title", maximum_length=_MAX_TITLE_LENGTH
             )
             != self.title
         ):
@@ -96,16 +90,12 @@ class DesignWorkflow:
             raise ValueError("design workflow steps must be normalized")
 
         if self.requirement_ids != canonical_uuid_tuple(
-            self.requirement_ids,
-            label="design workflow requirement IDs",
-            require_items=True,
+            self.requirement_ids, label="design workflow requirement IDs", require_items=True
         ):
             raise ValueError("design workflow requirement IDs must use canonical order")
 
         if self.user_story_ids != canonical_uuid_tuple(
-            self.user_story_ids,
-            label="design workflow user-story IDs",
-            require_items=True,
+            self.user_story_ids, label="design workflow user-story IDs", require_items=True
         ):
             raise ValueError("design workflow user-story IDs must use canonical order")
 
@@ -147,46 +137,26 @@ class DesignAlternative:
 
     def __post_init__(self) -> None:
         """Protect canonical content and internal traceability."""
-        validate_display_code(
-            self.code,
-            prefix="DES",
-            label="design alternative code",
-        )
+        validate_display_code(self.code, prefix="DES", label="design alternative code")
 
         for value, label, maximum_length in (
             (self.title, "design alternative title", _MAX_TITLE_LENGTH),
             (self.summary, "design alternative summary", _MAX_SUMMARY_LENGTH),
             (self.rationale, "design alternative rationale", _MAX_RATIONALE_LENGTH),
         ):
-            if (
-                normalize_required_text(
-                    value,
-                    label=label,
-                    maximum_length=maximum_length,
-                )
-                != value
-            ):
+            if normalize_required_text(value, label=label, maximum_length=maximum_length) != value:
                 raise ValueError(f"{label} must be normalized")
 
         for values, label, require_items in (
             (self.requirement_ids, "design alternative requirement IDs", True),
             (self.user_story_ids, "design alternative user-story IDs", True),
-            (
-                self.acceptance_criterion_ids,
-                "design alternative acceptance-criterion IDs",
-                True,
-            ),
+            (self.acceptance_criterion_ids, "design alternative acceptance-criterion IDs", True),
         ):
-            if values != canonical_uuid_tuple(
-                values,
-                label=label,
-                require_items=require_items,
-            ):
+            if values != canonical_uuid_tuple(values, label=label, require_items=require_items):
                 raise ValueError(f"{label} must use canonical order")
 
         if self.user_twin_references != canonical_user_twin_references(
-            self.user_twin_references,
-            require_items=True,
+            self.user_twin_references, require_items=True
         ):
             raise ValueError("design alternative User Twin references must use canonical order")
 
@@ -196,24 +166,9 @@ class DesignAlternative:
             raise ValueError("design workflows must use canonical code order")
 
         for values, label, require_items, require_unique in (
-            (
-                self.information_architecture,
-                "design information architecture",
-                True,
-                True,
-            ),
-            (
-                self.accessibility_considerations,
-                "design accessibility considerations",
-                True,
-                True,
-            ),
-            (
-                self.security_considerations,
-                "design security considerations",
-                True,
-                True,
-            ),
+            (self.information_architecture, "design information architecture", True, True),
+            (self.accessibility_considerations, "design accessibility considerations", True, True),
+            (self.security_considerations, "design security considerations", True, True),
             (self.advantages, "design advantages", True, True),
             (self.trade_offs, "design trade-offs", True, True),
             (self.assumptions, "design assumptions", False, True),
@@ -304,21 +259,13 @@ class SyntheticDesignCritique:
 
     def __post_init__(self) -> None:
         """Protect explicit synthetic and review-required semantics."""
-        validate_display_code(
-            self.code,
-            prefix="CRQ",
-            label="design critique code",
-        )
+        validate_display_code(self.code, prefix="CRQ", label="design critique code")
 
         for values, label, require_items in (
             (self.strengths, "design critique strengths", True),
             (self.concerns, "design critique concerns", True),
             (self.unmet_needs, "design critique unmet needs", False),
-            (
-                self.accessibility_observations,
-                "design critique accessibility observations",
-                False,
-            ),
+            (self.accessibility_observations, "design critique accessibility observations", False),
             (self.trust_concerns, "design critique trust concerns", False),
             (self.questions, "design critique questions", False),
             (self.suggested_changes, "design critique suggested changes", False),
@@ -401,9 +348,7 @@ class SyntheticDesignCritique:
         return snapshot_content_hash(self.to_snapshot())
 
 
-def _canonical_workflows(
-    values: Iterable[DesignWorkflow],
-) -> tuple[DesignWorkflow, ...]:
+def _canonical_workflows(values: Iterable[DesignWorkflow]) -> tuple[DesignWorkflow, ...]:
     """Return identity-safe workflows in stable code order."""
     workflows = tuple(values)
 
@@ -436,9 +381,7 @@ def create_design_workflow(
         id=workflow_id,
         code=code,
         title=normalize_required_text(
-            title,
-            label="design workflow title",
-            maximum_length=_MAX_TITLE_LENGTH,
+            title, label="design workflow title", maximum_length=_MAX_TITLE_LENGTH
         ),
         steps=normalize_text_items(
             steps,
@@ -448,14 +391,10 @@ def create_design_workflow(
             require_unique=False,
         ),
         requirement_ids=canonical_uuid_tuple(
-            requirement_ids,
-            label="design workflow requirement IDs",
-            require_items=True,
+            requirement_ids, label="design workflow requirement IDs", require_items=True
         ),
         user_story_ids=canonical_uuid_tuple(
-            user_story_ids,
-            label="design workflow user-story IDs",
-            require_items=True,
+            user_story_ids, label="design workflow user-story IDs", require_items=True
         ),
     )
 
@@ -488,29 +427,19 @@ def create_design_alternative(
         code=code,
         approach=approach,
         title=normalize_required_text(
-            title,
-            label="design alternative title",
-            maximum_length=_MAX_TITLE_LENGTH,
+            title, label="design alternative title", maximum_length=_MAX_TITLE_LENGTH
         ),
         summary=normalize_required_text(
-            summary,
-            label="design alternative summary",
-            maximum_length=_MAX_SUMMARY_LENGTH,
+            summary, label="design alternative summary", maximum_length=_MAX_SUMMARY_LENGTH
         ),
         rationale=normalize_required_text(
-            rationale,
-            label="design alternative rationale",
-            maximum_length=_MAX_RATIONALE_LENGTH,
+            rationale, label="design alternative rationale", maximum_length=_MAX_RATIONALE_LENGTH
         ),
         requirement_ids=canonical_uuid_tuple(
-            requirement_ids,
-            label="design alternative requirement IDs",
-            require_items=True,
+            requirement_ids, label="design alternative requirement IDs", require_items=True
         ),
         user_story_ids=canonical_uuid_tuple(
-            user_story_ids,
-            label="design alternative user-story IDs",
-            require_items=True,
+            user_story_ids, label="design alternative user-story IDs", require_items=True
         ),
         acceptance_criterion_ids=canonical_uuid_tuple(
             acceptance_criterion_ids,
@@ -518,8 +447,7 @@ def create_design_alternative(
             require_items=True,
         ),
         user_twin_references=canonical_user_twin_references(
-            user_twin_references,
-            require_items=True,
+            user_twin_references, require_items=True
         ),
         workflows=_canonical_workflows(workflows),
         information_architecture=normalize_text_items(
@@ -645,14 +573,10 @@ def create_synthetic_design_critique(
             maximum_length=_MAX_CRITIQUE_RATIONALE_LENGTH,
         ),
         verdict=normalize_optional_text(
-            verdict,
-            label="design critique verdict",
-            maximum_length=MAX_CRITIQUE_VERDICT_LENGTH,
+            verdict, label="design critique verdict", maximum_length=MAX_CRITIQUE_VERDICT_LENGTH
         ),
         quote=normalize_optional_text(
-            quote,
-            label="design critique quote",
-            maximum_length=MAX_CRITIQUE_QUOTE_LENGTH,
+            quote, label="design critique quote", maximum_length=MAX_CRITIQUE_QUOTE_LENGTH
         ),
     )
 

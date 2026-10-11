@@ -202,8 +202,7 @@ class _Issues:
     def ordered(self) -> tuple[MockupIssue, ...]:
         return tuple(
             sorted(
-                self.found,
-                key=lambda issue: (issue.screen_code or "", issue.code, issue.detail),
+                self.found, key=lambda issue: (issue.screen_code or "", issue.code, issue.detail)
             )
         )
 

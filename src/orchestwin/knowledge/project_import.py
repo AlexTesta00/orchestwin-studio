@@ -568,10 +568,7 @@ def imported_evidence(
 
 
 def plan_documents(
-    plan: ProjectImportPlan,
-    *,
-    owner_user_id: UUID,
-    created_at: datetime,
+    plan: ProjectImportPlan, *, owner_user_id: UUID, created_at: datetime
 ) -> dict[str, dict[str, object]]:
     def envelope(identity: UUID, content_hash: str, key: str, payload: object, **extra):
         return {

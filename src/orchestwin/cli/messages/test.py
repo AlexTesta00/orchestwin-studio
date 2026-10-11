@@ -316,20 +316,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "test.severity_low": {"it": "Importanza bassa", "en": "Low importance"},
     "test.severity_medium": {"it": "Importanza media", "en": "Medium importance"},
     "test.severity_high": {"it": "Importanza alta", "en": "High importance"},
-    "test.about_criterion": {
-        "it": "criterio {code} «{title}»",
-        "en": 'criterion {code} "{title}"',
-    },
+    "test.about_criterion": {"it": "criterio {code} «{title}»", "en": 'criterion {code} "{title}"'},
     "test.about_criterion_code": {"it": "criterio {code}", "en": "criterion {code}"},
     "test.about_requirement": {
         "it": "requisito {code} «{title}»",
         "en": 'requirement {code} "{title}"',
     },
     "test.about_requirement_code": {"it": "requisito {code}", "en": "requirement {code}"},
-    "test.about_screen": {
-        "it": "schermata {code} «{title}»",
-        "en": 'screen {code} "{title}"',
-    },
+    "test.about_screen": {"it": "schermata {code} «{title}»", "en": 'screen {code} "{title}"'},
     "test.about_screen_code": {"it": "schermata {code}", "en": "screen {code}"},
     "test.finding_about": {
         "it": "{finding} (riguarda: {about})",
@@ -355,10 +349,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Which become tasks? Type their numbers separated by commas or spaces, a for all; "
         "Enter for none:",
     },
-    "test.tasks_created": {
-        "it": "Compiti creati: {count}.",
-        "en": "Tasks created: {count}.",
-    },
+    "test.tasks_created": {"it": "Compiti creati: {count}.", "en": "Tasks created: {count}."},
     "test.tasks_next": {
         "it": "`ut code` affida i compiti aperti all'agente di programmazione; `ut tasks` li "
         "mostra tutti.",
@@ -477,10 +468,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "{target} non è nella pagina",
         "en": "{target} is not on the page",
     },
-    "test.expect_value_is": {
-        "it": "{target} contiene «{text}»",
-        "en": '{target} holds "{text}"',
-    },
+    "test.expect_value_is": {"it": "{target} contiene «{text}»", "en": '{target} holds "{text}"'},
     "test.expect_url_contains": {
         "it": "l'indirizzo contiene «{text}»",
         "en": 'the address contains "{text}"',

@@ -155,11 +155,7 @@ class SessionStore:
         return address if session is None else replace(address, api_prefix=session.api_prefix)
 
     def save(
-        self,
-        studio: StudioAddress,
-        session: StudioSession,
-        *,
-        make_default: bool = False,
+        self, studio: StudioAddress, session: StudioSession, *, make_default: bool = False
     ) -> None:
         with self.locked():
             document = self._document()

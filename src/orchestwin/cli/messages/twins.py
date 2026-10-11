@@ -168,10 +168,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "dalle sue critiche, approvata da te il {date}",
         "en": "from its own critiques, approved by you on {date}",
     },
-    "twins.learned_from_owner": {
-        "it": "scritta da te il {date}",
-        "en": "written by you on {date}",
-    },
+    "twins.learned_from_owner": {"it": "scritta da te il {date}", "en": "written by you on {date}"},
     "twins.learned_on": {"it": "approvata il {date}", "en": "approved on {date}"},
     "twins.learned_contradiction": {
         "it": "{line}. Attenzione, contraddice il profilo: {text}",
@@ -213,10 +210,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "twins.field_frustrations": {"it": "Frustrazioni", "en": "Frustrations"},
     "twins.field_pain_points": {"it": "Difficoltà", "en": "Pain points"},
-    "twins.field_trust_concerns": {
-        "it": "Preoccupazioni sulla fiducia",
-        "en": "Trust concerns",
-    },
+    "twins.field_trust_concerns": {"it": "Preoccupazioni sulla fiducia", "en": "Trust concerns"},
     "twins.field_accessibility_needs": {
         "it": "Esigenze di accessibilità",
         "en": "Accessibility needs",
@@ -229,10 +223,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "twins.field_risk_sensitivity": {"it": "Sensibilità al rischio", "en": "Risk sensitivity"},
     "twins.field_assumptions": {"it": "Assunzioni", "en": "Assumptions"},
     "twins.not_known": {"it": "non noto", "en": "not known"},
-    "twins.abstained": {
-        "it": "il modello non si è pronunciato",
-        "en": "the model gave no answer",
-    },
+    "twins.abstained": {"it": "il modello non si è pronunciato", "en": "the model gave no answer"},
     "twins.value_reason": {"it": "{value} ({reason})", "en": "{value} ({reason})"},
     "twins.status_model_inferred": {"it": "ipotesi del modello", "en": "model suggestion"},
     "twins.status_unsupported_assumption": {
@@ -303,10 +294,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "nella cartella di conoscenza {path}",
         "en": "in the knowledge folder {path}",
     },
-    "twins.source_step": {
-        "it": "nel passo approvato {path}",
-        "en": "in the approved step {path}",
-    },
+    "twins.source_step": {"it": "nel passo approvato {path}", "en": "in the approved step {path}"},
     "twins.simulated": {
         "it": "Le risposte dei twin sono simulate dal modello: sono ipotesi da valutare, non "
         "opinioni di persone reali.",
@@ -485,10 +473,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": 'requirement {code} "{title}"',
     },
     "twins.about_requirement_code": {"it": "requisito {code}", "en": "requirement {code}"},
-    "twins.about_screen": {
-        "it": "schermata {code} «{title}»",
-        "en": 'screen {code} "{title}"',
-    },
+    "twins.about_screen": {"it": "schermata {code} «{title}»", "en": 'screen {code} "{title}"'},
     "twins.about_screen_code": {"it": "schermata {code}", "en": "screen {code}"},
     "twins.update_contradiction": {
         "it": "Attenzione: contraddice il profilo del twin ({text}). Il profilo non cambia qui: "

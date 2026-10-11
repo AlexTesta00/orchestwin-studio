@@ -70,30 +70,20 @@ class RequirementsDiffRepository(Protocol):
     """Persistence boundary for reviewable requirements diffs."""
 
     async def create(
-        self,
-        diff: RequirementsSpecificationDiff,
+        self, diff: RequirementsSpecificationDiff
     ) -> RequirementsDiffPersistenceStatus:
         """Persist one proposed diff."""
 
-    async def get(
-        self,
-        *,
-        project_id: UUID,
-        diff_id: UUID,
-    ) -> RequirementsSpecificationDiff | None:
+    async def get(self, *, project_id: UUID, diff_id: UUID) -> RequirementsSpecificationDiff | None:
         """Return one exact owner-scoped diff."""
 
     async def current_proposed(
-        self,
-        *,
-        project_id: UUID,
-        base_version_id: UUID,
+        self, *, project_id: UUID, base_version_id: UUID
     ) -> RequirementsSpecificationDiff | None:
         """Return the proposed diff for one exact base version."""
 
     async def save_decision(
-        self,
-        diff: RequirementsSpecificationDiff,
+        self, diff: RequirementsSpecificationDiff
     ) -> RequirementsDiffPersistenceStatus:
         """Persist an approved or rejected decision."""
 
@@ -125,11 +115,7 @@ class RequirementsRevisionUnitOfWork(Protocol):
 class RequirementsRevisionUnitOfWorkFactory(Protocol):
     """Create one owner-scoped revision Unit of Work."""
 
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> RequirementsRevisionUnitOfWork:
+    def __call__(self, *, owner_user_id: UUID) -> RequirementsRevisionUnitOfWork:
         """Create one transactional boundary."""
 
 
@@ -179,8 +165,7 @@ class LocalRequirementsRevisionService:
                 )
 
             existing = await unit.diffs.current_proposed(
-                project_id=project_id,
-                base_version_id=current.id,
+                project_id=project_id, base_version_id=current.id
             )
 
             if existing is not None:
@@ -221,8 +206,7 @@ class LocalRequirementsRevisionService:
             await unit.commit()
 
         return RequirementsRevisionResult(
-            status=RequirementsRevisionStatus.CREATED,
-            diff=proposal.diff,
+            status=RequirementsRevisionStatus.CREATED, diff=proposal.diff
         )
 
     async def decide_revision(
@@ -236,10 +220,7 @@ class LocalRequirementsRevisionService:
     ) -> RequirementsRevisionResult:
         """Approve or reject one diff and version approved content atomically."""
         async with self._uow_factory(owner_user_id=owner_user_id) as unit:
-            current_diff = await unit.diffs.get(
-                project_id=project_id,
-                diff_id=diff_id,
-            )
+            current_diff = await unit.diffs.get(project_id=project_id, diff_id=diff_id)
 
             if current_diff is None:
                 return RequirementsRevisionResult(
@@ -267,8 +248,7 @@ class LocalRequirementsRevisionService:
 
             if domain_decision.status is RequirementsDiffDecisionStatus.NO_CHANGE:
                 return RequirementsRevisionResult(
-                    status=RequirementsRevisionStatus.NO_CHANGE,
-                    diff=domain_decision.diff,
+                    status=RequirementsRevisionStatus.NO_CHANGE, diff=domain_decision.diff
                 )
 
             if domain_decision.status is RequirementsDiffDecisionStatus.REJECTED:
@@ -314,8 +294,7 @@ class LocalRequirementsRevisionService:
                 await unit.commit()
 
                 return RequirementsRevisionResult(
-                    status=RequirementsRevisionStatus.APPLIED,
-                    diff=decided_diff,
+                    status=RequirementsRevisionStatus.APPLIED, diff=decided_diff
                 )
 
             next_version = materialize_approved_requirements_diff(
@@ -347,9 +326,7 @@ class LocalRequirementsRevisionService:
             await unit.commit()
 
         return RequirementsRevisionResult(
-            status=RequirementsRevisionStatus.APPLIED,
-            diff=decided_diff,
-            version=next_version,
+            status=RequirementsRevisionStatus.APPLIED, diff=decided_diff, version=next_version
         )
 
 

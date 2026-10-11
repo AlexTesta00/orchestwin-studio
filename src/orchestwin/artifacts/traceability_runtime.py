@@ -28,27 +28,19 @@ from orchestwin.workflow.persistence.repositories import (
 class SqlAlchemyArtifactGraphQueryService:
     """Derive one owner-scoped graph from the current immutable stage versions."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
     async def current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> CrossStageArtifactGraph | None:
         """Return the current graph or no resource when Requirements do not exist."""
         async with self._session_factory() as session:
             requirements_repository = SqlAlchemyRequirementsSpecificationRepository(
-                session,
-                owner_user_id=owner_user_id,
+                session, owner_user_id=owner_user_id
             )
             design_repository = SqlAlchemyDesignPackageRepository(
-                session,
-                owner_user_id=owner_user_id,
+                session, owner_user_id=owner_user_id
             )
             requirements = await requirements_repository.current(project_id=project_id)
 

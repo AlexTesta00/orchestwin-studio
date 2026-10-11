@@ -44,10 +44,7 @@ from orchestwin.artifacts.visual_catalog import (
     require_distinct_primaries,
     require_distinct_visual_choices,
 )
-from orchestwin.artifacts.visual_exploration import (
-    require_explored_choices,
-    visual_exploration,
-)
+from orchestwin.artifacts.visual_exploration import require_explored_choices, visual_exploration
 from orchestwin.artifacts.visual_fonts import BundledFamily
 from orchestwin.artifacts.visual_language import (
     MAX_PRODUCT_NAME_LENGTH,
@@ -602,8 +599,7 @@ def consistent_text(text, owners, chosen):
 
 def schema_minimum(model, field):
     return max(
-        (getattr(item, "min_length", 0) for item in model.model_fields[field].metadata),
-        default=0,
+        (getattr(item, "min_length", 0) for item in model.model_fields[field].metadata), default=0
     )
 
 
@@ -662,14 +658,7 @@ def require_draft_language(draft, language):
 
 
 def bind_design(
-    draft,
-    request,
-    twins,
-    model_reference,
-    *,
-    directions=None,
-    exploration=None,
-    design_system=None,
+    draft, request, twins, model_reference, *, directions=None, exploration=None, design_system=None
 ):
     ids = requirement_code_map(request.requirements.version.specification)
     records = [*draft.alternatives, *draft.critiques, *draft.concerns]
@@ -764,7 +753,7 @@ def bind_design(
                     confidence=ConfidenceScore(x.confidence),
                     rationale=x.rationale,
                     provenance=ObservationProvenance.from_references(
-                        (*references, model_reference(x.code)),
+                        (*references, model_reference(x.code))
                     ),
                     **{
                         CRITIQUE_DOMAIN_FIELDS.get(key, key): getattr(x, key)

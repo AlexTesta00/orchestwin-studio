@@ -145,10 +145,7 @@ class ProposalModelConfiguration(BaseModel):
             raise ValueError("proposal token file must be absolute")
         if not all(
             re.fullmatch(r"[0-9a-f]{40}", value)
-            for value in (
-                self.identity.base_model_revision,
-                self.identity.tokenizer_revision,
-            )
+            for value in (self.identity.base_model_revision, self.identity.tokenizer_revision)
         ):
             raise ValueError("proposal model and tokenizer require immutable revisions")
         return self
@@ -299,9 +296,7 @@ class ProposalGenerator:
             else f"proposal-{task}-v{contract_version}"
         )
         schema = create_structured_json_schema(
-            schema_id=schema_ref,
-            version_number=contract_version,
-            schema_payload=schema_payload,
+            schema_id=schema_ref, version_number=contract_version, schema_payload=schema_payload
         )
 
         def new_request():
@@ -503,9 +498,7 @@ def _forbid_extra_schema(value):
 
 
 def build_proposal_generator(
-    config_file: Path | None = None,
-    *,
-    transport: OpenAICompatibleHttpTransport | None = None,
+    config_file: Path | None = None, *, transport: OpenAICompatibleHttpTransport | None = None
 ) -> ProposalGenerator:
     path = config_file if config_file is not None else _ConfigurationLocation().config_file
     if path is None:

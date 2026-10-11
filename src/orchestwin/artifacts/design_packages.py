@@ -33,9 +33,7 @@ from orchestwin.projects.requirements_primitives import (
     validate_positive_integer,
     validate_sha256,
 )
-from orchestwin.projects.requirements_specifications import (
-    RequirementsSpecificationVersion,
-)
+from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
 
 DESIGN_PACKAGE_SCHEMA_VERSION: Final = 1
 MIN_DESIGN_ALTERNATIVES: Final = 2
@@ -75,11 +73,7 @@ class DesignGrounding:
                 ArtifactKind.REQUIREMENTS_SPECIFICATION,
                 "design Requirements reference",
             ),
-            (
-                self.agent_team_reference,
-                ArtifactKind.AGENT_TEAM,
-                "design Agent Team reference",
-            ),
+            (self.agent_team_reference, ArtifactKind.AGENT_TEAM, "design Agent Team reference"),
             (
                 self.user_modeling_reference,
                 ArtifactKind.USER_MODELING,
@@ -88,33 +82,19 @@ class DesignGrounding:
         ):
             require_artifact_kind(reference, expected=expected, label=label)
 
-        validate_positive_integer(
-            self.catalog_version,
-            label="design grounding catalog version",
-        )
-        validate_sha256(
-            self.catalog_content_hash,
-            label="design grounding catalog content hash",
-        )
+        validate_positive_integer(self.catalog_version, label="design grounding catalog version")
+        validate_sha256(self.catalog_content_hash, label="design grounding catalog content hash")
 
         for values, label in (
             (self.requirement_ids, "design grounding requirement IDs"),
             (self.user_story_ids, "design grounding user-story IDs"),
-            (
-                self.acceptance_criterion_ids,
-                "design grounding acceptance-criterion IDs",
-            ),
+            (self.acceptance_criterion_ids, "design grounding acceptance-criterion IDs"),
         ):
-            if values != canonical_uuid_tuple(
-                values,
-                label=label,
-                require_items=True,
-            ):
+            if values != canonical_uuid_tuple(values, label=label, require_items=True):
                 raise ValueError(f"{label} must use canonical order")
 
         if self.user_twin_references != canonical_user_twin_references(
-            self.user_twin_references,
-            require_items=True,
+            self.user_twin_references, require_items=True
         ):
             raise ValueError("design grounding User Twin references must use canonical order")
 
@@ -124,10 +104,7 @@ class DesignGrounding:
             "requirements_reference": self.requirements_reference.to_snapshot(),
             "agent_team_reference": self.agent_team_reference.to_snapshot(),
             "user_modeling_reference": self.user_modeling_reference.to_snapshot(),
-            "catalog": {
-                "version": self.catalog_version,
-                "content_hash": self.catalog_content_hash,
-            },
+            "catalog": {"version": self.catalog_version, "content_hash": self.catalog_content_hash},
             "requirement_ids": [str(value) for value in self.requirement_ids],
             "user_story_ids": [str(value) for value in self.user_story_ids],
             "acceptance_criterion_ids": [str(value) for value in self.acceptance_criterion_ids],
@@ -150,22 +127,14 @@ class DesignConcern:
 
     def __post_init__(self) -> None:
         """Protect normalized concern content and stable traceability."""
-        validate_display_code(
-            self.code,
-            prefix="DRK",
-            label="design concern code",
-        )
+        validate_display_code(self.code, prefix="DRK", label="design concern code")
 
         for value, label in (
             (self.summary, "design concern summary"),
             (self.mitigation, "design concern mitigation"),
         ):
             if (
-                normalize_required_text(
-                    value,
-                    label=label,
-                    maximum_length=_MAX_CONCERN_TEXT_LENGTH,
-                )
+                normalize_required_text(value, label=label, maximum_length=_MAX_CONCERN_TEXT_LENGTH)
                 != value
             ):
                 raise ValueError(f"{label} must be normalized")
@@ -174,11 +143,7 @@ class DesignConcern:
             (self.requirement_ids, "design concern requirement IDs"),
             (self.design_alternative_ids, "design concern alternative IDs"),
         ):
-            if values != canonical_uuid_tuple(
-                values,
-                label=label,
-                require_items=True,
-            ):
+            if values != canonical_uuid_tuple(values, label=label, require_items=True):
                 raise ValueError(f"{label} must use canonical order")
 
     def to_snapshot(self) -> dict[str, object]:
@@ -212,9 +177,7 @@ class DesignExplorationPackage:
     def __post_init__(self) -> None:
         """Protect diversity, critique coverage, and internal traceability."""
         if self.alternatives != _canonical_artifacts(
-            self.alternatives,
-            label="design alternatives",
-            require_items=True,
+            self.alternatives, label="design alternatives", require_items=True
         ):
             raise ValueError("design alternatives must use canonical code order")
 
@@ -233,16 +196,12 @@ class DesignExplorationPackage:
             raise ValueError("design alternatives must use distinct approaches")
 
         if self.critiques != _canonical_artifacts(
-            self.critiques,
-            label="design critiques",
-            require_items=True,
+            self.critiques, label="design critiques", require_items=True
         ):
             raise ValueError("design critiques must use canonical code order")
 
         if self.concerns != _canonical_artifacts(
-            self.concerns,
-            label="design concerns",
-            require_items=False,
+            self.concerns, label="design concerns", require_items=False
         ):
             raise ValueError("design concerns must use canonical code order")
 
@@ -335,9 +294,7 @@ class DesignExplorationPackage:
 
         for concern in self.concerns:
             _require_subset(
-                concern.requirement_ids,
-                requirement_ids,
-                label="design concern requirement IDs",
+                concern.requirement_ids, requirement_ids, label="design concern requirement IDs"
             )
             _require_subset(
                 concern.design_alternative_ids,
@@ -403,10 +360,7 @@ class DesignPackageVersion:
 
     def __post_init__(self) -> None:
         """Protect project scope, hash, timestamp, and linear lineage."""
-        validate_positive_integer(
-            self.version_number,
-            label="Design Package version number",
-        )
+        validate_positive_integer(self.version_number, label="Design Package version number")
 
         if self.package.project_id != self.project_id:
             raise ValueError("Design Package version must belong to its project")
@@ -414,10 +368,7 @@ class DesignPackageVersion:
         if self.created_at.utcoffset() is None:
             raise ValueError("Design Package timestamp must be timezone-aware")
 
-        validate_sha256(
-            self.content_hash,
-            label="Design Package content hash",
-        )
+        validate_sha256(self.content_hash, label="Design Package content hash")
 
         if self.content_hash != self.package.content_hash:
             raise ValueError("Design Package hash must match its content")
@@ -443,9 +394,7 @@ class DesignPackageVersion:
         }
 
 
-def create_design_grounding(
-    version: RequirementsSpecificationVersion,
-) -> DesignGrounding:
+def create_design_grounding(version: RequirementsSpecificationVersion) -> DesignGrounding:
     """Create exact design grounding from an immutable Requirements version."""
     specification = version.specification
 
@@ -457,12 +406,10 @@ def create_design_grounding(
             content_hash=version.content_hash,
         ),
         agent_team_reference=_context_reference(
-            specification.agent_team_reference,
-            kind=ArtifactKind.AGENT_TEAM,
+            specification.agent_team_reference, kind=ArtifactKind.AGENT_TEAM
         ),
         user_modeling_reference=_context_reference(
-            specification.user_modeling_reference,
-            kind=ArtifactKind.USER_MODELING,
+            specification.user_modeling_reference, kind=ArtifactKind.USER_MODELING
         ),
         catalog_version=specification.catalog_version,
         catalog_content_hash=specification.catalog_content_hash,
@@ -482,8 +429,7 @@ def create_design_grounding(
             require_items=True,
         ),
         user_twin_references=canonical_user_twin_references(
-            specification.user_twin_references,
-            require_items=True,
+            specification.user_twin_references, require_items=True
         ),
     )
 
@@ -502,24 +448,16 @@ def create_design_concern(
         id=concern_id,
         code=code,
         summary=normalize_required_text(
-            summary,
-            label="design concern summary",
-            maximum_length=_MAX_CONCERN_TEXT_LENGTH,
+            summary, label="design concern summary", maximum_length=_MAX_CONCERN_TEXT_LENGTH
         ),
         mitigation=normalize_required_text(
-            mitigation,
-            label="design concern mitigation",
-            maximum_length=_MAX_CONCERN_TEXT_LENGTH,
+            mitigation, label="design concern mitigation", maximum_length=_MAX_CONCERN_TEXT_LENGTH
         ),
         requirement_ids=canonical_uuid_tuple(
-            requirement_ids,
-            label="design concern requirement IDs",
-            require_items=True,
+            requirement_ids, label="design concern requirement IDs", require_items=True
         ),
         design_alternative_ids=canonical_uuid_tuple(
-            design_alternative_ids,
-            label="design concern alternative IDs",
-            require_items=True,
+            design_alternative_ids, label="design concern alternative IDs", require_items=True
         ),
     )
 
@@ -543,23 +481,13 @@ def create_design_exploration_package(
         project_id=project_id,
         grounding=grounding,
         alternatives=_canonical_artifacts(
-            alternatives,
-            label="design alternatives",
-            require_items=True,
+            alternatives, label="design alternatives", require_items=True
         ),
-        critiques=_canonical_artifacts(
-            critiques,
-            label="design critiques",
-            require_items=True,
-        ),
+        critiques=_canonical_artifacts(critiques, label="design critiques", require_items=True),
         recommended_alternative_id=recommended_alternative_id,
         owner_selected_alternative_id=owner_selected_alternative_id,
         prototype=prototype,
-        concerns=_canonical_artifacts(
-            concerns,
-            label="design concerns",
-            require_items=False,
-        ),
+        concerns=_canonical_artifacts(concerns, label="design concerns", require_items=False),
         open_questions=normalize_text_items(
             open_questions,
             label="design package open questions",
@@ -593,9 +521,7 @@ def _validate_owner_assertions(assertions: tuple[str, ...]) -> None:
 
 
 def _validate_generated_mockup(
-    package: DesignExplorationPackage,
-    *,
-    requirement_ids: frozenset[UUID],
+    package: DesignExplorationPackage, *, requirement_ids: frozenset[UUID]
 ) -> None:
     mockup = package.generated_mockup
 
@@ -622,9 +548,7 @@ def _validate_generated_mockup(
         )
 
     _require_subset(
-        mockup.requirement_ids,
-        requirement_ids,
-        label="generated mockup requirement IDs",
+        mockup.requirement_ids, requirement_ids, label="generated mockup requirement IDs"
     )
 
     if package.prototype != mockup.prototype():
@@ -632,9 +556,7 @@ def _validate_generated_mockup(
 
 
 def _context_reference(
-    reference: RequirementsContextReference,
-    *,
-    kind: ArtifactKind,
+    reference: RequirementsContextReference, *, kind: ArtifactKind
 ) -> VersionedArtifactReference:
     """Translate an exact Requirements context reference without losing metadata."""
     return VersionedArtifactReference(
@@ -646,10 +568,7 @@ def _context_reference(
 
 
 def _canonical_artifacts[Artifact: _ArtifactWithIdentity](
-    values: Iterable[Artifact],
-    *,
-    label: str,
-    require_items: bool,
+    values: Iterable[Artifact], *, label: str, require_items: bool
 ) -> tuple[Artifact, ...]:
     """Return identity-safe artifacts in stable code order."""
     artifacts = tuple(values)
@@ -669,12 +588,7 @@ def _canonical_artifacts[Artifact: _ArtifactWithIdentity](
     return tuple(sorted(artifacts, key=lambda artifact: artifact.code))
 
 
-def _require_subset(
-    references: Iterable[UUID],
-    available: Iterable[UUID],
-    *,
-    label: str,
-) -> None:
+def _require_subset(references: Iterable[UUID], available: Iterable[UUID], *, label: str) -> None:
     """Reject references that do not resolve inside the Design Package."""
     if not frozenset(references).issubset(frozenset(available)):
         raise ValueError(f"{label} contain unknown references")
@@ -690,14 +604,10 @@ def _validate_prototype_scope(
     """Require prototype traceability to resolve in the Requirements scope."""
     for screen in prototype.screens:
         _require_subset(
-            screen.requirement_ids,
-            requirement_ids,
-            label="prototype screen requirement IDs",
+            screen.requirement_ids, requirement_ids, label="prototype screen requirement IDs"
         )
         _require_subset(
-            screen.user_story_ids,
-            user_story_ids,
-            label="prototype screen user-story IDs",
+            screen.user_story_ids, user_story_ids, label="prototype screen user-story IDs"
         )
         _require_subset(
             screen.acceptance_criterion_ids,
@@ -707,14 +617,10 @@ def _validate_prototype_scope(
 
         for element in screen.elements:
             _require_subset(
-                element.requirement_ids,
-                requirement_ids,
-                label="prototype element requirement IDs",
+                element.requirement_ids, requirement_ids, label="prototype element requirement IDs"
             )
             _require_subset(
-                element.user_story_ids,
-                user_story_ids,
-                label="prototype element user-story IDs",
+                element.user_story_ids, user_story_ids, label="prototype element user-story IDs"
             )
             _require_subset(
                 element.acceptance_criterion_ids,

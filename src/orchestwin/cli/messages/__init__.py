@@ -105,11 +105,7 @@ def text(key: str, language: str, /, **values: object) -> str:
 
 
 def resolve_language(option: str | None, environment: Environment) -> str:
-    candidates = (
-        option,
-        environment.variables.get(LANGUAGE_VARIABLE),
-        environment.system_language,
-    )
+    candidates = (option, environment.variables.get(LANGUAGE_VARIABLE), environment.system_language)
     for candidate in candidates:
         if candidate and candidate.strip():
             return "it" if candidate.strip().lower().startswith("it") else "en"

@@ -1,8 +1,6 @@
 """SQLAlchemy adapters for Agent Catalog and Team Selection."""
 
-from orchestwin.agents.persistence.models import (
-    TeamProposalVersionRecord,
-)
+from orchestwin.agents.persistence.models import TeamProposalVersionRecord
 from orchestwin.agents.persistence.repositories import (
     SqlAlchemyTeamProposalVersionRepository,
     SqlAlchemyTeamSelectionContextRepository,

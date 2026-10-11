@@ -31,9 +31,7 @@ from orchestwin.twins.epistemics import (
     ObservationValueKind,
     ProfileObservation,
 )
-from orchestwin.twins.persona_candidates import (
-    ProjectPersonaCandidate,
-)
+from orchestwin.twins.persona_candidates import ProjectPersonaCandidate
 from orchestwin.twins.personas import (
     PersonaField,
     PersonaProfile,
@@ -54,10 +52,7 @@ FAKE_USER_MODELING_PROVIDER_VERSION: Final = 1
 class FakeDeterministicUserModelingAdapter:
     """Conservative local adapter with no network or model dependency."""
 
-    async def propose_personas(
-        self,
-        request: PersonaProposalRequest,
-    ) -> PersonaProposalResult:
+    async def propose_personas(self, request: PersonaProposalRequest) -> PersonaProposalResult:
         """Build inspectable proto-personas without behavioral invention."""
         issue = _persona_request_issue(request)
 
@@ -81,10 +76,7 @@ class FakeDeterministicUserModelingAdapter:
             proposals=proposals,
         )
 
-    async def propose_user_twins(
-        self,
-        request: UserTwinProposalRequest,
-    ) -> UserTwinProposalResult:
+    async def propose_user_twins(self, request: UserTwinProposalRequest) -> UserTwinProposalResult:
         """Build project-grounded twins from confirmed personas."""
         issue = _twin_request_issue(request)
 
@@ -96,12 +88,7 @@ class FakeDeterministicUserModelingAdapter:
                 persona_id=(persona_version.persona_id),
                 persona_version_number=(persona_version.version_number),
                 persona_content_hash=(persona_version.content_hash),
-                profile=(
-                    _build_user_twin(
-                        request=request,
-                        persona_version=(persona_version),
-                    )
-                ),
+                profile=(_build_user_twin(request=request, persona_version=(persona_version))),
             )
             for persona_version in request.persona_versions
         )
@@ -115,9 +102,7 @@ class FakeDeterministicUserModelingAdapter:
         )
 
 
-def _persona_request_issue(
-    request: PersonaProposalRequest,
-) -> UserModelingProposalIssueCode | None:
+def _persona_request_issue(request: PersonaProposalRequest) -> UserModelingProposalIssueCode | None:
     """Return the first expected persona-request problem."""
     if not request.candidates:
         return UserModelingProposalIssueCode.CANDIDATES_REQUIRED
@@ -131,9 +116,7 @@ def _persona_request_issue(
     return None
 
 
-def _twin_request_issue(
-    request: UserTwinProposalRequest,
-) -> UserModelingProposalIssueCode | None:
+def _twin_request_issue(request: UserTwinProposalRequest) -> UserModelingProposalIssueCode | None:
     """Return the first expected User Twin request problem."""
     personas = request.persona_versions
 
@@ -157,9 +140,7 @@ def _twin_request_issue(
     return None
 
 
-def _build_proto_persona(
-    candidate: ProjectPersonaCandidate,
-) -> PersonaProfile:
+def _build_proto_persona(candidate: ProjectPersonaCandidate) -> PersonaProfile:
     """Create one complete but conservative proto-persona."""
     return create_proto_persona(
         name=candidate.target_user,
@@ -189,9 +170,7 @@ def _build_proto_persona(
     )
 
 
-def _persona_summary(
-    candidate: ProjectPersonaCandidate,
-) -> ProfileObservation:
+def _persona_summary(candidate: ProjectPersonaCandidate) -> ProfileObservation:
     """Create only a descriptive summary of the supplied role."""
     return ProfileObservation(
         observation_key=(PersonaField.SUMMARY.observation_key),
@@ -202,12 +181,7 @@ def _persona_summary(
         ),
         epistemic_status=(EpistemicStatus.MODEL_INFERRED),
         confidence=ConfidenceScore(1.0),
-        provenance=(
-            _candidate_provenance(
-                candidate,
-                locator=("persona.summary"),
-            )
-        ),
+        provenance=(_candidate_provenance(candidate, locator=("persona.summary"))),
         human_validation=(HumanValidationRequirement.REQUIRED),
         rationale=(
             "The summary only reformulates "
@@ -218,10 +192,7 @@ def _persona_summary(
 
 
 def _persona_abstention(
-    candidate: ProjectPersonaCandidate,
-    *,
-    field: PersonaField,
-    reason: str,
+    candidate: ProjectPersonaCandidate, *, field: PersonaField, reason: str
 ) -> ProfileObservation:
     """Create one explicit proto-persona abstention."""
     return ProfileObservation(
@@ -229,12 +200,7 @@ def _persona_abstention(
         value=(ObservationValue.abstained(reason)),
         epistemic_status=(EpistemicStatus.MODEL_INFERRED),
         confidence=ConfidenceScore(0.0),
-        provenance=(
-            _candidate_provenance(
-                candidate,
-                locator=(f"persona.{field.value}"),
-            )
-        ),
+        provenance=(_candidate_provenance(candidate, locator=(f"persona.{field.value}"))),
         human_validation=(HumanValidationRequirement.REQUIRED),
         rationale=(
             "The deterministic fake adapter "
@@ -245,9 +211,7 @@ def _persona_abstention(
 
 
 def _candidate_provenance(
-    candidate: ProjectPersonaCandidate,
-    *,
-    locator: str,
+    candidate: ProjectPersonaCandidate, *, locator: str
 ) -> ObservationProvenance:
     """Combine exact Project Brief evidence with fake-output provenance."""
     return ObservationProvenance.from_references(
@@ -265,9 +229,7 @@ def _candidate_provenance(
 
 
 def _build_user_twin(
-    *,
-    request: UserTwinProposalRequest,
-    persona_version: PersonaProfileVersion,
+    *, request: UserTwinProposalRequest, persona_version: PersonaProfileVersion
 ) -> UserTwinProfile:
     """Create a grounded twin while abstaining beyond persona evidence."""
     persona = persona_version.profile
@@ -281,30 +243,14 @@ def _build_user_twin(
         raise ValueError("confirmed persona is missing required grounding observations")
 
     transferred = {
-        UserTwinField.ROLE: (
-            _rekey_observation(
-                role,
-                UserTwinField.ROLE,
-            )
-        ),
-        UserTwinField.GOALS: (
-            _rekey_observation(
-                goals,
-                UserTwinField.GOALS,
-            )
-        ),
-        UserTwinField.CONTEXT_OF_USE: (
-            _rekey_observation(
-                context,
-                UserTwinField.CONTEXT_OF_USE,
-            )
-        ),
+        UserTwinField.ROLE: (_rekey_observation(role, UserTwinField.ROLE)),
+        UserTwinField.GOALS: (_rekey_observation(goals, UserTwinField.GOALS)),
+        UserTwinField.CONTEXT_OF_USE: (_rekey_observation(context, UserTwinField.CONTEXT_OF_USE)),
     }
 
     if age_range is not None:
         transferred[UserTwinField.AGE_RANGE] = _rekey_observation(
-            age_range,
-            UserTwinField.AGE_RANGE,
+            age_range, UserTwinField.AGE_RANGE
         )
 
     for field in (
@@ -320,10 +266,7 @@ def _build_user_twin(
     observations = tuple(
         transferred[field]
         if field in transferred
-        else _twin_abstention(
-            persona_version=(persona_version),
-            field=field,
-        )
+        else _twin_abstention(persona_version=(persona_version), field=field)
         for field in UserTwinField
         if (field is not UserTwinField.AGE_RANGE or field in transferred)
     )
@@ -339,15 +282,9 @@ def _build_user_twin(
     )
 
 
-def _rekey_observation(
-    observation: ProfileObservation,
-    field: UserTwinField,
-) -> ProfileObservation:
+def _rekey_observation(observation: ProfileObservation, field: UserTwinField) -> ProfileObservation:
     """Transfer persona evidence without changing its epistemic meaning."""
-    return replace(
-        observation,
-        observation_key=(field.observation_key),
-    )
+    return replace(observation, observation_key=(field.observation_key))
 
 
 def _twin_declaration(*, request, persona_version, field):
@@ -412,9 +349,7 @@ def _twin_declaration(*, request, persona_version, field):
 
 
 def _twin_abstention(
-    *,
-    persona_version: PersonaProfileVersion,
-    field: UserTwinField,
+    *, persona_version: PersonaProfileVersion, field: UserTwinField
 ) -> ProfileObservation:
     """Create one explicit abstention for unsupported twin information."""
     return ProfileObservation(
@@ -459,9 +394,7 @@ def _twin_abstention(
     )
 
 
-def _rejected_personas(
-    issue: UserModelingProposalIssueCode,
-) -> PersonaProposalResult:
+def _rejected_personas(issue: UserModelingProposalIssueCode) -> PersonaProposalResult:
     """Return one rejected persona proposal response."""
     return PersonaProposalResult(
         status=(UserModelingProposalStatus.REJECTED),
@@ -472,9 +405,7 @@ def _rejected_personas(
     )
 
 
-def _rejected_twins(
-    issue: UserModelingProposalIssueCode,
-) -> UserTwinProposalResult:
+def _rejected_twins(issue: UserModelingProposalIssueCode) -> UserTwinProposalResult:
     """Return one rejected User Twin proposal response."""
     return UserTwinProposalResult(
         status=(UserModelingProposalStatus.REJECTED),

@@ -8,19 +8,11 @@ from uuid import UUID
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from orchestwin.projects.domain import (
-    Project,
-    archive_project,
-    rename_project,
-)
-from orchestwin.projects.persistence.models import (
-    ProjectRecord,
-)
+from orchestwin.projects.domain import Project, archive_project, rename_project
+from orchestwin.projects.persistence.models import ProjectRecord
 
 
-def project_record_to_domain(
-    record: ProjectRecord,
-) -> Project:
+def project_record_to_domain(record: ProjectRecord) -> Project:
     """Translate a project record into an immutable aggregate."""
     return Project(
         id=record.id,
@@ -35,15 +27,11 @@ def project_record_to_domain(
 
 
 def owned_project_statement(
-    *,
-    project_id: UUID,
-    owner_user_id: UUID,
-    include_archived: bool = False,
+    *, project_id: UUID, owner_user_id: UUID, include_archived: bool = False
 ) -> Select[tuple[ProjectRecord]]:
     """Build the canonical owner-scoped project query."""
     statement = select(ProjectRecord).where(
-        ProjectRecord.id == project_id,
-        ProjectRecord.owner_user_id == owner_user_id,
+        ProjectRecord.id == project_id, ProjectRecord.owner_user_id == owner_user_id
     )
 
     if not include_archived:
@@ -52,37 +40,22 @@ def owned_project_statement(
     return statement
 
 
-def active_projects_statement(
-    *,
-    owner_user_id: UUID,
-) -> Select[tuple[ProjectRecord]]:
+def active_projects_statement(*, owner_user_id: UUID) -> Select[tuple[ProjectRecord]]:
     """Build the canonical active-project list query."""
     return (
         select(ProjectRecord)
-        .where(
-            ProjectRecord.owner_user_id == owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
-        .order_by(
-            ProjectRecord.created_at.desc(),
-            ProjectRecord.id,
-        )
+        .where(ProjectRecord.owner_user_id == owner_user_id, ProjectRecord.archived_at.is_(None))
+        .order_by(ProjectRecord.created_at.desc(), ProjectRecord.id)
     )
 
 
 class SqlAlchemyProjectRepository:
     """Owner-scoped SQLAlchemy project repository."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-    ) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def add(
-        self,
-        project: Project,
-    ) -> Project:
+    async def add(self, project: Project) -> Project:
         """Add a project to the current transaction."""
         record = ProjectRecord(
             id=project.id,
@@ -101,11 +74,7 @@ class SqlAlchemyProjectRepository:
         return project_record_to_domain(record)
 
     async def get_owned(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        include_archived: bool = False,
+        self, *, project_id: UUID, owner_user_id: UUID, include_archived: bool = False
     ) -> Project | None:
         """Return a project only when the owner matches."""
         record = await self._session.scalar(
@@ -121,28 +90,19 @@ class SqlAlchemyProjectRepository:
 
         return project_record_to_domain(record)
 
-    async def list_active_owned(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> tuple[Project, ...]:
+    async def list_active_owned(self, *, owner_user_id: UUID) -> tuple[Project, ...]:
         """Return active projects belonging to one owner."""
         result = await self._session.scalars(active_projects_statement(owner_user_id=owner_user_id))
 
         return tuple(project_record_to_domain(record) for record in result.all())
 
     async def rename_owned(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        display_name: str,
+        self, *, project_id: UUID, owner_user_id: UUID, display_name: str
     ) -> Project | None:
         """Rename an active project under a row lock."""
         record = await self._session.scalar(
             owned_project_statement(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+                project_id=project_id, owner_user_id=owner_user_id
             ).with_for_update()
         )
 
@@ -161,27 +121,18 @@ class SqlAlchemyProjectRepository:
 
         return project_record_to_domain(record)
 
-    async def archive_owned(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ) -> Project | None:
+    async def archive_owned(self, *, project_id: UUID, owner_user_id: UUID) -> Project | None:
         """Archive an active project under a row lock."""
         record = await self._session.scalar(
             owned_project_statement(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+                project_id=project_id, owner_user_id=owner_user_id
             ).with_for_update()
         )
 
         if record is None:
             return None
 
-        archived = archive_project(
-            project_record_to_domain(record),
-            archived_at=datetime.now(UTC),
-        )
+        archived = archive_project(project_record_to_domain(record), archived_at=datetime.now(UTC))
 
         record.archived_at = archived.archived_at
         record.updated_at = archived.updated_at

@@ -106,10 +106,7 @@ def find_browser(
 
 
 def _places(
-    environment: Environment,
-    name: str,
-    which: Callable[[str], str | None],
-    system_root: Path,
+    environment: Environment, name: str, which: Callable[[str], str | None], system_root: Path
 ) -> list[tuple[str, Path]]:
     if environment.platform == "win32":
         bases = [_variable(environment.variables, folder) for folder in WINDOWS_FOLDERS]

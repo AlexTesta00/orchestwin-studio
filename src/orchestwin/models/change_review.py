@@ -455,9 +455,7 @@ def bind_critique(output, *, twin, context: Mapping[str, object]) -> TwinCritiqu
             screen=item.about_screen if item.about_screen in screen_codes else None,
             file=item.about_file if item.about_file in paths else None,
             action=_in_language(
-                _optional_text(item.suggestion, maximum=MAX_ACTION_LENGTH),
-                locale,
-                "finding action",
+                _optional_text(item.suggestion, maximum=MAX_ACTION_LENGTH), locale, "finding action"
             ),
         )
         for item in output.findings[:MAX_FINDINGS]

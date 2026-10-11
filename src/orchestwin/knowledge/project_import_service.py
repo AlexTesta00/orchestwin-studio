@@ -214,11 +214,7 @@ def _require(stage: str, accepted: bool) -> None:
 
 
 async def _write_import(
-    session: AsyncSession,
-    *,
-    project: Project,
-    plan: ProjectImportPlan,
-    record: ProjectImportRecord,
+    session: AsyncSession, *, project: Project, plan: ProjectImportPlan, record: ProjectImportRecord
 ) -> tuple[Project, ProjectBriefVersion]:
     owner = project.owner_user_id
     imported_at = record.imported_at
@@ -231,10 +227,7 @@ async def _write_import(
     brief = await _attempt(
         "brief",
         briefs.create_owned_version(
-            project_id=project.id,
-            owner_user_id=owner,
-            created_by_user_id=owner,
-            brief=plan.brief,
+            project_id=project.id, owner_user_id=owner, created_by_user_id=owner, brief=plan.brief
         ),
     )
     _require(
@@ -347,8 +340,7 @@ async def _write_import(
             validation.import_records(project_id=project.id, records=plan.validation_records),
         )
     _require(
-        "project",
-        stored is not None and stored.current_brief_version == IMPORTED_VERSION_NUMBER,
+        "project", stored is not None and stored.current_brief_version == IMPORTED_VERSION_NUMBER
     )
     return stored, brief.version
 
@@ -370,11 +362,7 @@ class ProjectImportService:
         self._uuid_factory = uuid_factory
 
     async def import_archive(
-        self,
-        *,
-        owner_user_id: UUID,
-        content: bytes,
-        display_name: str | None = None,
+        self, *, owner_user_id: UUID, content: bytes, display_name: str | None = None
     ) -> ProjectImportResult:
         folder = complete_folder(verified_archive(content))
         source_name = import_source_name(folder)
@@ -492,8 +480,7 @@ async def verify_imported_why(session, *, folder, plan, owner_user_id, created_a
     )
 
     stored_validation = await SqlAlchemyHumanValidationRepository(
-        session,
-        owner_user_id=owner_user_id,
+        session, owner_user_id=owner_user_id
     ).records(project_id=plan.project_id)
     expected_validation = plan.validation_records or {}
     stored_workflow = None

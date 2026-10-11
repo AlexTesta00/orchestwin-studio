@@ -28,13 +28,7 @@ def owner_specification(
     if specification.schema_version != 2:
         raise ValueError("OWNER_SPECIFICATION_SCHEMA_2_REQUIRED")
     updates = {}
-    for collection in (
-        "requirements",
-        "scenarios",
-        "risks",
-        "needs",
-        "journeys",
-    ):
+    for collection in ("requirements", "scenarios", "risks", "needs", "journeys"):
         artifacts = []
         for artifact in getattr(specification, collection):
             source = RequirementSourceReference(

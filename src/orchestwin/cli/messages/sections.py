@@ -131,10 +131,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Aggiorno e confermo queste sezioni?",
         "en": "Update and confirm these sections?",
     },
-    "sections.cancelled": {
-        "it": "Non ho aggiornato nulla.",
-        "en": "Nothing was updated.",
-    },
+    "sections.cancelled": {"it": "Non ho aggiornato nulla.", "en": "Nothing was updated."},
     "sections.nothing": {
         "it": "Nessuna sezione è da aggiornare: non è cambiato nulla.",
         "en": "No section needs an update: nothing changed.",

@@ -228,10 +228,7 @@ def plan_output_type(criteria_codes: Sequence[str]):
     path = create_model(
         "PlanPath",
         __base__=_Output,
-        about_criteria=(
-            list[criterion],
-            Field(max_length=MAX_CRITERIA_PER_PATH if codes else 0),
-        ),
+        about_criteria=(list[criterion], Field(max_length=MAX_CRITERIA_PER_PATH if codes else 0)),
         heading=(_text(MAX_PATH_HEADING_LENGTH), ...),
         steps=(list[step], Field(min_length=1, max_length=MAX_STEPS)),
     )
@@ -320,11 +317,7 @@ def _step(output) -> TestStep:
 
 
 def bind_plan(
-    output,
-    *,
-    context: Mapping[str, object],
-    locale: str,
-    first_number: int = 1,
+    output, *, context: Mapping[str, object], locale: str, first_number: int = 1
 ) -> tuple[tuple[TestPath, ...], tuple[NotCovered, ...]]:
     known = context_criteria(context)
     paths: list[TestPath] = []

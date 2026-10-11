@@ -29,12 +29,8 @@ from orchestwin.projects.requirements_primitives import (
     validate_positive_integer,
     validate_sha256,
 )
-from orchestwin.projects.requirements_specifications import (
-    RequirementsSpecification,
-)
-from orchestwin.twins.epistemics import (
-    ProfileObservation,
-)
+from orchestwin.projects.requirements_specifications import RequirementsSpecification
+from orchestwin.twins.epistemics import ProfileObservation
 from orchestwin.twins.limits import MAX_USER_TWINS, MIN_USER_TWINS
 
 REQUIREMENTS_PROPOSAL_SCHEMA_VERSION: Final = 1
@@ -73,16 +69,12 @@ class RequirementsProposalIssueCode(StrEnum):
     INVALID_PROVIDER_OUTPUT = "INVALID_PROVIDER_OUTPUT"
 
 
-def _agent_position(
-    agent_id: AgentIdentifier,
-) -> int:
+def _agent_position(agent_id: AgentIdentifier) -> int:
     """Return one agent's stable fixed-catalog position."""
     return _AGENT_ORDER.index(agent_id)
 
 
-def _canonical_agent_ids(
-    values: Iterable[AgentIdentifier],
-) -> tuple[AgentIdentifier, ...]:
+def _canonical_agent_ids(values: Iterable[AgentIdentifier]) -> tuple[AgentIdentifier, ...]:
     """Return duplicate-free agent IDs in fixed-catalog order."""
     agent_ids = tuple(values)
 
@@ -92,12 +84,7 @@ def _canonical_agent_ids(
     if len(agent_ids) != len(set(agent_ids)):
         raise ValueError("requirements team agents must be unique")
 
-    return tuple(
-        sorted(
-            agent_ids,
-            key=_agent_position,
-        )
-    )
+    return tuple(sorted(agent_ids, key=_agent_position))
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,91 +116,40 @@ class RequirementsBriefInput:
 
         if (
             normalize_required_text(
-                self.name,
-                label="requirements brief name",
-                maximum_length=_MAX_BRIEF_NAME_LENGTH,
+                self.name, label="requirements brief name", maximum_length=_MAX_BRIEF_NAME_LENGTH
             )
             != self.name
         ):
             raise ValueError("requirements brief name must be normalized")
 
         for value, label in (
-            (
-                self.description,
-                "requirements brief description",
-            ),
-            (
-                self.problem,
-                "requirements brief problem",
-            ),
-            (
-                self.domain,
-                "requirements brief domain",
-            ),
-            (
-                self.temporal_constraints,
-                "requirements brief temporal constraints",
-            ),
-            (
-                self.budget,
-                "requirements brief budget",
-            ),
+            (self.description, "requirements brief description"),
+            (self.problem, "requirements brief problem"),
+            (self.domain, "requirements brief domain"),
+            (self.temporal_constraints, "requirements brief temporal constraints"),
+            (self.budget, "requirements brief budget"),
         ):
             if (
-                normalize_optional_text(
-                    value,
-                    label=label,
-                    maximum_length=_MAX_BRIEF_TEXT_LENGTH,
-                )
+                normalize_optional_text(value, label=label, maximum_length=_MAX_BRIEF_TEXT_LENGTH)
                 != value
             ):
                 raise ValueError(f"{label} must be normalized")
 
         item_fields = (
-            (
-                self.goals,
-                "requirements brief goals",
-            ),
-            (
-                self.target_users,
-                "requirements brief target users",
-            ),
-            (
-                self.technical_constraints,
-                "requirements brief technical constraints",
-            ),
-            (
-                self.functional_requirements,
-                "requirements brief functional requirements",
-            ),
-            (
-                self.non_functional_requirements,
-                "requirements brief non-functional requirements",
-            ),
-            (
-                self.risks,
-                "requirements brief risks",
-            ),
-            (
-                self.stakeholders,
-                "requirements brief stakeholders",
-            ),
-            (
-                self.available_artifacts,
-                "requirements brief available artifacts",
-            ),
-            (
-                self.definition_of_done,
-                "requirements brief Definition of Done",
-            ),
+            (self.goals, "requirements brief goals"),
+            (self.target_users, "requirements brief target users"),
+            (self.technical_constraints, "requirements brief technical constraints"),
+            (self.functional_requirements, "requirements brief functional requirements"),
+            (self.non_functional_requirements, "requirements brief non-functional requirements"),
+            (self.risks, "requirements brief risks"),
+            (self.stakeholders, "requirements brief stakeholders"),
+            (self.available_artifacts, "requirements brief available artifacts"),
+            (self.definition_of_done, "requirements brief Definition of Done"),
         )
 
         for values, label in item_fields:
             if values != normalize_text_items(
-                values,
-                label=label,
-                maximum_item_length=_MAX_BRIEF_ITEM_LENGTH,
-                require_items=False,
+                values, label=label, maximum_item_length=_MAX_BRIEF_ITEM_LENGTH, require_items=False
             ):
                 raise ValueError(f"{label} must be normalized and unique")
 
@@ -268,10 +204,7 @@ class RequirementsUserTwinInput:
     """One exact User Twin profile exposed to providers."""
 
     reference: UserTwinVersionReference
-    observations: tuple[
-        ProfileObservation,
-        ...,
-    ]
+    observations: tuple[ProfileObservation, ...]
 
     def __post_init__(self) -> None:
         """Protect complete and deterministic observations."""
@@ -299,10 +232,7 @@ class RequirementsUserModelingInput:
     """Exact approved User Modeling state exposed to providers."""
 
     reference: RequirementsContextReference
-    user_twins: tuple[
-        RequirementsUserTwinInput,
-        ...,
-    ]
+    user_twins: tuple[RequirementsUserTwinInput, ...]
 
     def __post_init__(self) -> None:
         """Protect context kind, cardinality, and twin order."""
@@ -318,18 +248,13 @@ class RequirementsUserModelingInput:
             )
 
         references = tuple(value.reference for value in self.user_twins)
-        canonical_references = canonical_user_twin_references(
-            references,
-            require_items=True,
-        )
+        canonical_references = canonical_user_twin_references(references, require_items=True)
 
         if references != canonical_references:
             raise ValueError("requirements User Modeling twins must use canonical reference order")
 
     @property
-    def user_twin_references(
-        self,
-    ) -> tuple[UserTwinVersionReference, ...]:
+    def user_twin_references(self) -> tuple[UserTwinVersionReference, ...]:
         """Return exact User Twin references."""
         return tuple(value.reference for value in self.user_twins)
 
@@ -359,12 +284,10 @@ class RequirementsProposalRequest:
     def __post_init__(self) -> None:
         """Protect current fixed-catalog metadata."""
         validate_positive_integer(
-            self.catalog_version,
-            label="requirements proposal catalog version",
+            self.catalog_version, label="requirements proposal catalog version"
         )
         validate_sha256(
-            self.catalog_content_hash,
-            label=("requirements proposal catalog content hash"),
+            self.catalog_content_hash, label=("requirements proposal catalog content hash")
         )
 
         if (
@@ -467,10 +390,7 @@ class RequirementsProposalResult:
         if len(self.provider_id) > MAX_REQUIREMENTS_PROVIDER_ID_LENGTH:
             raise ValueError("requirements provider ID exceeds maximum length")
 
-        validate_positive_integer(
-            self.provider_version,
-            label="requirements provider version",
-        )
+        validate_positive_integer(self.provider_version, label="requirements provider version")
 
         proposed = self.status is RequirementsProposalStatus.PROPOSED
 
@@ -513,10 +433,7 @@ class RequirementsProposalResult:
 class RequirementsProposalPort(Protocol):
     """Provider-independent requirements proposal boundary."""
 
-    async def propose(
-        self,
-        request: RequirementsProposalRequest,
-    ) -> RequirementsProposalResult:
+    async def propose(self, request: RequirementsProposalRequest) -> RequirementsProposalResult:
         """Produce a typed proposal or rejected result."""
 
 

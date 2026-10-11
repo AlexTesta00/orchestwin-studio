@@ -32,11 +32,7 @@ from orchestwin.identity.sessions import (
     RefreshSessionRepository,
     RefreshSessionService,
 )
-from orchestwin.identity.tokens import (
-    AccessTokenStatus,
-    IssuedAccessToken,
-    JwtAccessTokenService,
-)
+from orchestwin.identity.tokens import AccessTokenStatus, IssuedAccessToken, JwtAccessTokenService
 
 
 class AuthenticationStatus(StrEnum):
@@ -111,9 +107,7 @@ class IdentityUnitOfWork(Protocol):
         """Return the user repository."""
 
     @property
-    def refresh_sessions(
-        self,
-    ) -> RefreshSessionRepository:
+    def refresh_sessions(self) -> RefreshSessionRepository:
         """Return the refresh-session repository."""
 
     async def __aenter__(self) -> Self:
@@ -128,67 +122,32 @@ class IdentityUnitOfWork(Protocol):
         """Commit or roll back the transaction."""
 
 
-IdentityUnitOfWorkFactory = Callable[
-    [],
-    IdentityUnitOfWork,
-]
+IdentityUnitOfWorkFactory = Callable[[], IdentityUnitOfWork]
 
 
 class IdentityApplicationService(Protocol):
     """Operations exposed to the HTTP identity adapter."""
 
-    async def register(
-        self,
-        *,
-        email: str,
-        password: str,
-    ) -> AuthenticationResult:
+    async def register(self, *, email: str, password: str) -> AuthenticationResult:
         """Register and authenticate a local user."""
 
-    async def login(
-        self,
-        *,
-        email: str,
-        password: str,
-    ) -> AuthenticationResult:
+    async def login(self, *, email: str, password: str) -> AuthenticationResult:
         """Authenticate an existing local user."""
 
-    async def refresh(
-        self,
-        refresh_token: str,
-    ) -> AuthenticationResult:
+    async def refresh(self, refresh_token: str) -> AuthenticationResult:
         """Rotate a refresh token and issue a new access token."""
 
-    async def logout(
-        self,
-        refresh_token: str,
-    ) -> bool:
+    async def logout(self, refresh_token: str) -> bool:
         """Revoke the current refresh session."""
 
-    async def current_user(
-        self,
-        access_token: str,
-    ) -> UserAccount | None:
+    async def current_user(self, access_token: str) -> UserAccount | None:
         """Resolve an active user from an access token."""
 
-    async def choose_guidance_mode(
-        self,
-        *,
-        user_id: UUID,
-        mode: str,
-    ) -> GuidanceChoiceResult: ...
+    async def choose_guidance_mode(self, *, user_id: UUID, mode: str) -> GuidanceChoiceResult: ...
 
-    async def local_owner(
-        self,
-        *,
-        email: str,
-    ) -> UserAccount: ...
+    async def local_owner(self, *, email: str) -> UserAccount: ...
 
-    async def issue_local_owner_session(
-        self,
-        *,
-        email: str,
-    ) -> AuthenticatedSession: ...
+    async def issue_local_owner_session(self, *, email: str) -> AuthenticatedSession: ...
 
 
 class LocalIdentityApplicationService:
@@ -209,12 +168,7 @@ class LocalIdentityApplicationService:
         self._access_token_service = access_token_service
         self._dummy_password_hash = password_service.hash(self.DUMMY_PASSWORD)
 
-    async def register(
-        self,
-        *,
-        email: str,
-        password: str,
-    ) -> AuthenticationResult:
+    async def register(self, *, email: str, password: str) -> AuthenticationResult:
         """Create an account and its initial session."""
         try:
             normalized_email = NormalizedEmail.parse(email)
@@ -223,8 +177,7 @@ class LocalIdentityApplicationService:
             return AuthenticationResult(status=(AuthenticationStatus.INVALID_REGISTRATION))
         except PasswordPolicyError as error:
             return AuthenticationResult(
-                status=AuthenticationStatus.INVALID_REGISTRATION,
-                password_violation=error.violation,
+                status=AuthenticationStatus.INVALID_REGISTRATION, password_violation=error.violation
             )
 
         try:
@@ -236,29 +189,17 @@ class LocalIdentityApplicationService:
                         status=(AuthenticationStatus.EMAIL_ALREADY_REGISTERED)
                     )
 
-                user = create_user_account(
-                    email=normalized_email,
-                    password_hash=password_hash,
-                )
+                user = create_user_account(email=normalized_email, password_hash=password_hash)
                 persisted = await unit.users.add(user)
-                authenticated = await self._issue_session(
-                    unit=unit,
-                    user=persisted,
-                )
+                authenticated = await self._issue_session(unit=unit, user=persisted)
         except IntegrityError:
             return AuthenticationResult(status=(AuthenticationStatus.EMAIL_ALREADY_REGISTERED))
 
         return AuthenticationResult(
-            status=AuthenticationStatus.AUTHENTICATED,
-            authenticated=authenticated,
+            status=AuthenticationStatus.AUTHENTICATED, authenticated=authenticated
         )
 
-    async def login(
-        self,
-        *,
-        email: str,
-        password: str,
-    ) -> AuthenticationResult:
+    async def login(self, *, email: str, password: str) -> AuthenticationResult:
         """Verify local credentials and create a session."""
         try:
             normalized_email = NormalizedEmail.parse(email)
@@ -273,34 +214,23 @@ class LocalIdentityApplicationService:
             )
 
             encoded_hash = user.password_hash if user is not None else self._dummy_password_hash
-            verification = self._password_service.verify(
-                password,
-                encoded_hash,
-            )
+            verification = self._password_service.verify(password, encoded_hash)
 
             if user is None or not user.is_active or not verification.valid:
                 return AuthenticationResult(status=(AuthenticationStatus.INVALID_CREDENTIALS))
 
             if verification.replacement_hash is not None:
                 await unit.users.update_password_hash(
-                    user_id=user.id,
-                    password_hash=(verification.replacement_hash),
+                    user_id=user.id, password_hash=(verification.replacement_hash)
                 )
 
-            authenticated = await self._issue_session(
-                unit=unit,
-                user=user,
-            )
+            authenticated = await self._issue_session(unit=unit, user=user)
 
         return AuthenticationResult(
-            status=AuthenticationStatus.AUTHENTICATED,
-            authenticated=authenticated,
+            status=AuthenticationStatus.AUTHENTICATED, authenticated=authenticated
         )
 
-    async def refresh(
-        self,
-        refresh_token: str,
-    ) -> AuthenticationResult:
+    async def refresh(self, refresh_token: str) -> AuthenticationResult:
         """Rotate a refresh token and issue new credentials."""
         async with self._unit_of_work_factory() as unit:
             refresh_service = RefreshSessionService(unit.refresh_sessions)
@@ -323,38 +253,26 @@ class LocalIdentityApplicationService:
             user = await unit.users.get_by_id(rotation.issued_token.session.user_id)
 
             if user is None or not user.is_active:
-                await refresh_service.revoke(
-                    rotation.issued_token.token,
-                    reason="user_unavailable",
-                )
+                await refresh_service.revoke(rotation.issued_token.token, reason="user_unavailable")
                 return AuthenticationResult(status=(AuthenticationStatus.INVALID_REFRESH_TOKEN))
 
             access_token = self._access_token_service.issue(user_id=user.id)
 
             authenticated = AuthenticatedSession(
-                user=user,
-                access_token=access_token,
-                refresh_token=(rotation.issued_token),
+                user=user, access_token=access_token, refresh_token=(rotation.issued_token)
             )
 
         return AuthenticationResult(
-            status=AuthenticationStatus.AUTHENTICATED,
-            authenticated=authenticated,
+            status=AuthenticationStatus.AUTHENTICATED, authenticated=authenticated
         )
 
-    async def logout(
-        self,
-        refresh_token: str,
-    ) -> bool:
+    async def logout(self, refresh_token: str) -> bool:
         """Revoke one current refresh session."""
         async with self._unit_of_work_factory() as unit:
             refresh_service = RefreshSessionService(unit.refresh_sessions)
             return await refresh_service.revoke(refresh_token)
 
-    async def current_user(
-        self,
-        access_token: str,
-    ) -> UserAccount | None:
+    async def current_user(self, access_token: str) -> UserAccount | None:
         """Resolve an active account from a verified JWT."""
         verification = self._access_token_service.verify(access_token)
 
@@ -369,12 +287,7 @@ class LocalIdentityApplicationService:
 
         return user
 
-    async def choose_guidance_mode(
-        self,
-        *,
-        user_id: UUID,
-        mode: str,
-    ) -> GuidanceChoiceResult:
+    async def choose_guidance_mode(self, *, user_id: UUID, mode: str) -> GuidanceChoiceResult:
         try:
             choice = GuidanceMode(mode)
         except ValueError:
@@ -391,23 +304,16 @@ class LocalIdentityApplicationService:
                     return GuidanceChoiceResult(status=GuidanceChoiceStatus.ALREADY_CHOSEN)
 
                 await unit.users.add_guidance_choice(
-                    user_id=user.id,
-                    mode=choice,
-                    chosen_at=datetime.now(UTC),
+                    user_id=user.id, mode=choice, chosen_at=datetime.now(UTC)
                 )
         except IntegrityError:
             return GuidanceChoiceResult(status=GuidanceChoiceStatus.ALREADY_CHOSEN)
 
         return GuidanceChoiceResult(
-            status=GuidanceChoiceStatus.CHOSEN,
-            user=replace(user, guidance_mode=choice),
+            status=GuidanceChoiceStatus.CHOSEN, user=replace(user, guidance_mode=choice)
         )
 
-    async def local_owner(
-        self,
-        *,
-        email: str,
-    ) -> UserAccount:
+    async def local_owner(self, *, email: str) -> UserAccount:
         normalized_email = NormalizedEmail.parse(email)
 
         try:
@@ -417,11 +323,7 @@ class LocalIdentityApplicationService:
             async with self._unit_of_work_factory() as unit:
                 return await self._local_owner_account(unit=unit, email=normalized_email)
 
-    async def issue_local_owner_session(
-        self,
-        *,
-        email: str,
-    ) -> AuthenticatedSession:
+    async def issue_local_owner_session(self, *, email: str) -> AuthenticatedSession:
         normalized_email = NormalizedEmail.parse(email)
 
         try:
@@ -434,10 +336,7 @@ class LocalIdentityApplicationService:
                 return await self._issue_session(unit=unit, user=user)
 
     async def _local_owner_account(
-        self,
-        *,
-        unit: IdentityUnitOfWork,
-        email: NormalizedEmail,
+        self, *, unit: IdentityUnitOfWork, email: NormalizedEmail
     ) -> UserAccount:
         user = await unit.users.get_by_email(email)
 
@@ -457,17 +356,12 @@ class LocalIdentityApplicationService:
         return user
 
     async def _issue_session(
-        self,
-        *,
-        unit: IdentityUnitOfWork,
-        user: UserAccount,
+        self, *, unit: IdentityUnitOfWork, user: UserAccount
     ) -> AuthenticatedSession:
         """Issue access and refresh credentials."""
         refresh_token = await RefreshSessionService(unit.refresh_sessions).issue(user_id=user.id)
         access_token = self._access_token_service.issue(user_id=user.id)
 
         return AuthenticatedSession(
-            user=user,
-            access_token=access_token,
-            refresh_token=refresh_token,
+            user=user, access_token=access_token, refresh_token=refresh_token
         )

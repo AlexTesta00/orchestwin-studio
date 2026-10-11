@@ -9,10 +9,7 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from orchestwin.agents.catalog import (
-    AGENT_CATALOG_CONTENT_HASH,
-    AGENT_CATALOG_VERSION,
-)
+from orchestwin.agents.catalog import AGENT_CATALOG_CONTENT_HASH, AGENT_CATALOG_VERSION
 from orchestwin.models.proposal_evidence import bind_model_artifacts, evidence_application
 from orchestwin.models.user_modeling import (
     PersonaProposalRequest,
@@ -24,18 +21,10 @@ from orchestwin.models.user_modeling import (
     UserModelingProposalStatus,
     UserTwinProposalRequest,
 )
-from orchestwin.projects.brief_gate import (
-    project_brief_gate_is_currently_approved,
-)
-from orchestwin.projects.briefs import (
-    ProjectBriefVersion,
-)
-from orchestwin.twins.persistence.repositories import (
-    VersionAppendStatus,
-)
-from orchestwin.twins.persistence.uow import (
-    UserModelingUnitOfWork,
-)
+from orchestwin.projects.brief_gate import project_brief_gate_is_currently_approved
+from orchestwin.projects.briefs import ProjectBriefVersion
+from orchestwin.twins.persistence.repositories import VersionAppendStatus
+from orchestwin.twins.persistence.uow import UserModelingUnitOfWork
 from orchestwin.twins.persona_candidates import (
     PersonaCandidateDerivationStatus,
     PersonaCandidateIssueCode,
@@ -59,9 +48,7 @@ from orchestwin.twins.user_twins import (
     VersionedArtifactReference,
     create_user_modeling_snapshot,
 )
-from orchestwin.workflow.gates import (
-    HumanGate,
-)
+from orchestwin.workflow.gates import HumanGate
 
 
 class UserModelingApplicationStatus(StrEnum):
@@ -104,10 +91,7 @@ class PersonaOwnerDecision(StrEnum):
     REJECT = "REJECT"
 
 
-@dataclass(
-    frozen=True,
-    slots=True,
-)
+@dataclass(frozen=True, slots=True)
 class UserModelingContextFingerprint:
     """Stable fingerprint of the governed inputs used for generation."""
 
@@ -122,10 +106,7 @@ class UserModelingContextFingerprint:
     catalog_content_hash: str | None
 
 
-@dataclass(
-    frozen=True,
-    slots=True,
-)
+@dataclass(frozen=True, slots=True)
 class GovernedUserModelingContext:
     """Current governed inputs required by User Modeling."""
 
@@ -158,22 +139,14 @@ class GovernedUserModelingContext:
         if self.catalog_version is None or self.catalog_content_hash is None:
             raise ValueError("team context requires catalog version and hash")
 
-        if (
-            isinstance(
-                self.catalog_version,
-                bool,
-            )
-            or self.catalog_version < 1
-        ):
+        if isinstance(self.catalog_version, bool) or self.catalog_version < 1:
             raise ValueError("catalog version must be positive")
 
         if not _is_sha256_digest(self.catalog_content_hash):
             raise ValueError("catalog content hash must be a lowercase SHA-256 digest")
 
     @property
-    def brief_reference(
-        self,
-    ) -> VersionedArtifactReference:
+    def brief_reference(self) -> VersionedArtifactReference:
         """Return the exact Project Brief reference."""
         if self.brief_version is None:
             raise ValueError("User Modeling context has no current Project Brief")
@@ -184,9 +157,7 @@ class GovernedUserModelingContext:
         )
 
     @property
-    def fingerprint(
-        self,
-    ) -> UserModelingContextFingerprint:
+    def fingerprint(self) -> UserModelingContextFingerprint:
         """Return the context identity used for stale-result checks."""
         if self.brief_version is None:
             raise ValueError("User Modeling context has no current Project Brief")
@@ -205,10 +176,7 @@ class UserModelingGovernancePort(Protocol):
     """Owner-scoped boundary exposing the current governed project state."""
 
     async def load_current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> GovernedUserModelingContext | None:
         """Load the latest Brief, Gate 1, team, Gate 2, and catalog."""
 
@@ -216,27 +184,17 @@ class UserModelingGovernancePort(Protocol):
 class UserModelingUnitOfWorkFactory(Protocol):
     """Create one owner-scoped User Modeling Unit of Work."""
 
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> UserModelingUnitOfWork:
+    def __call__(self, *, owner_user_id: UUID) -> UserModelingUnitOfWork:
         """Create a transactional boundary."""
 
 
-@dataclass(
-    frozen=True,
-    slots=True,
-)
+@dataclass(frozen=True, slots=True)
 class PersonaProposalApplicationResult:
     """Result of generating and persisting initial proto-personas."""
 
     status: UserModelingApplicationStatus
 
-    versions: tuple[
-        PersonaProfileVersion,
-        ...,
-    ] = ()
+    versions: tuple[PersonaProfileVersion, ...] = ()
 
     issue: UserModelingApplicationIssueCode | None = None
 
@@ -247,10 +205,7 @@ class PersonaProposalApplicationResult:
     persistence_status: VersionAppendStatus | None = None
 
 
-@dataclass(
-    frozen=True,
-    slots=True,
-)
+@dataclass(frozen=True, slots=True)
 class PersonaDecisionApplicationResult:
     """Result of applying an initial owner persona decision."""
 
@@ -265,10 +220,7 @@ class PersonaDecisionApplicationResult:
     persistence_status: VersionAppendStatus | None = None
 
 
-@dataclass(
-    frozen=True,
-    slots=True,
-)
+@dataclass(frozen=True, slots=True)
 class GroundedSnapshotGenerationResult:
     """Result of creating project-grounded User Twins and their snapshot."""
 
@@ -276,10 +228,7 @@ class GroundedSnapshotGenerationResult:
 
     snapshot_version: UserModelingSnapshotVersion | None = None
 
-    twin_versions: tuple[
-        UserTwinProfileVersion,
-        ...,
-    ] = ()
+    twin_versions: tuple[UserTwinProfileVersion, ...] = ()
 
     issue: UserModelingApplicationIssueCode | None = None
 
@@ -298,15 +247,8 @@ class LocalUserModelingApplicationService:
         governance: UserModelingGovernancePort,
         proposals: UserModelingProposalPort,
         uow_factory: UserModelingUnitOfWorkFactory,
-        uuid_factory: Callable[
-            [],
-            UUID,
-        ] = uuid4,
-        clock: Callable[
-            [],
-            datetime,
-        ]
-        | None = None,
+        uuid_factory: Callable[[], UUID] = uuid4,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         """Configure explicit application dependencies."""
         self._governance = governance
@@ -318,40 +260,31 @@ class LocalUserModelingApplicationService:
 
     @evidence_application
     async def propose_personas(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> PersonaProposalApplicationResult:
         """Generate initial proto-personas from the current governed Brief."""
         context = await self._governance.load_current(
-            owner_user_id=(owner_user_id),
-            project_id=project_id,
+            owner_user_id=(owner_user_id), project_id=project_id
         )
 
         governance_issue = _governance_issue(context)
 
         if governance_issue is not None:
             return PersonaProposalApplicationResult(
-                status=(UserModelingApplicationStatus.REJECTED),
-                issue=governance_issue,
+                status=(UserModelingApplicationStatus.REJECTED), issue=governance_issue
             )
 
         if context is None:
             raise RuntimeError("ready governance context cannot be None")
 
-        if await self._project_has_personas(
-            owner_user_id=(owner_user_id),
-            project_id=project_id,
-        ):
+        if await self._project_has_personas(owner_user_id=(owner_user_id), project_id=project_id):
             return PersonaProposalApplicationResult(
                 status=(UserModelingApplicationStatus.REJECTED),
                 issue=(UserModelingApplicationIssueCode.PERSONAS_ALREADY_EXIST),
             )
 
         candidate_result = derive_project_persona_candidates(
-            brief_version=(context.brief_version),
-            brief_gate=(context.brief_gate),
+            brief_version=(context.brief_version), brief_gate=(context.brief_gate)
         )
 
         if candidate_result.status is not PersonaCandidateDerivationStatus.DERIVED:
@@ -377,8 +310,7 @@ class LocalUserModelingApplicationService:
             )
 
         if not _persona_proposals_match_candidates(
-            candidates=(candidate_result.candidates),
-            proposals=(proposal_result.proposals),
+            candidates=(candidate_result.candidates), proposals=(proposal_result.proposals)
         ):
             return PersonaProposalApplicationResult(
                 status=(UserModelingApplicationStatus.REJECTED),
@@ -386,9 +318,7 @@ class LocalUserModelingApplicationService:
             )
 
         if not await self._context_is_unchanged(
-            owner_user_id=(owner_user_id),
-            project_id=project_id,
-            previous=context,
+            owner_user_id=(owner_user_id), project_id=project_id, previous=context
         ):
             return PersonaProposalApplicationResult(
                 status=(UserModelingApplicationStatus.REJECTED),
@@ -442,8 +372,7 @@ class LocalUserModelingApplicationService:
             await uow.commit()
 
         return PersonaProposalApplicationResult(
-            status=(UserModelingApplicationStatus.CREATED),
-            versions=versions,
+            status=(UserModelingApplicationStatus.CREATED), versions=versions
         )
 
     async def decide_persona(
@@ -457,16 +386,14 @@ class LocalUserModelingApplicationService:
     ) -> PersonaDecisionApplicationResult:
         """Confirm or reject one pending proto-persona immutably."""
         context = await self._governance.load_current(
-            owner_user_id=(owner_user_id),
-            project_id=project_id,
+            owner_user_id=(owner_user_id), project_id=project_id
         )
 
         governance_issue = _governance_issue(context)
 
         if governance_issue is not None:
             return PersonaDecisionApplicationResult(
-                status=(UserModelingApplicationStatus.REJECTED),
-                issue=governance_issue,
+                status=(UserModelingApplicationStatus.REJECTED), issue=governance_issue
             )
 
         async with self._uow_factory(owner_user_id=(owner_user_id)) as uow:
@@ -475,10 +402,7 @@ class LocalUserModelingApplicationService:
                     status=UserModelingApplicationStatus.REJECTED,
                     issue=UserModelingApplicationIssueCode.PROJECT_NOT_FOUND,
                 )
-            current = await uow.personas.current(
-                project_id=project_id,
-                persona_id=persona_id,
-            )
+            current = await uow.personas.current(project_id=project_id, persona_id=persona_id)
 
             if current is None or current.profile.archived:
                 return PersonaDecisionApplicationResult(
@@ -490,8 +414,7 @@ class LocalUserModelingApplicationService:
                 domain_result = confirm_proto_persona(current.profile)
             else:
                 domain_result = reject_proto_persona(
-                    current.profile,
-                    reason=(reason if reason is not None else ""),
+                    current.profile, reason=(reason if reason is not None else "")
                 )
 
             if domain_result.status is PersonaDecisionStatus.REJECTED:
@@ -504,8 +427,7 @@ class LocalUserModelingApplicationService:
 
             if domain_result.status is PersonaDecisionStatus.NO_CHANGE:
                 return PersonaDecisionApplicationResult(
-                    status=(UserModelingApplicationStatus.NO_CHANGE),
-                    version=current,
+                    status=(UserModelingApplicationStatus.NO_CHANGE), version=current
                 )
 
             next_version = PersonaProfileVersion(
@@ -532,14 +454,12 @@ class LocalUserModelingApplicationService:
             await uow.commit()
 
         return PersonaDecisionApplicationResult(
-            status=(UserModelingApplicationStatus.APPLIED),
-            version=next_version,
+            status=(UserModelingApplicationStatus.APPLIED), version=next_version
         )
 
     async def snapshot_context_is_current(self, *, owner_user_id, project_id, snapshot):
         context = await self._governance.load_current(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
+            owner_user_id=owner_user_id, project_id=project_id
         )
         if snapshot is None or not snapshot_matches_context(snapshot, context):
             return False
@@ -549,23 +469,18 @@ class LocalUserModelingApplicationService:
 
     @evidence_application
     async def generate_grounded_snapshot(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> GroundedSnapshotGenerationResult:
         """Generate User Twins only from decided personas and current Gate 2."""
         context = await self._governance.load_current(
-            owner_user_id=(owner_user_id),
-            project_id=project_id,
+            owner_user_id=(owner_user_id), project_id=project_id
         )
 
         governance_issue = _governance_issue(context)
 
         if governance_issue is not None:
             return GroundedSnapshotGenerationResult(
-                status=(UserModelingApplicationStatus.REJECTED),
-                issue=governance_issue,
+                status=(UserModelingApplicationStatus.REJECTED), issue=governance_issue
             )
 
         if context is None:
@@ -596,15 +511,11 @@ class LocalUserModelingApplicationService:
             base_version = None if current_snapshot is None else current_snapshot.version_number
             base_content_hash = None if current_snapshot is None else current_snapshot.content_hash
 
-        (
-            persona_issue,
-            confirmed_personas,
-        ) = _select_confirmed_personas(persona_versions)
+        (persona_issue, confirmed_personas) = _select_confirmed_personas(persona_versions)
 
         if persona_issue is not None:
             return GroundedSnapshotGenerationResult(
-                status=(UserModelingApplicationStatus.REJECTED),
-                issue=persona_issue,
+                status=(UserModelingApplicationStatus.REJECTED), issue=persona_issue
             )
 
         persona_fingerprint = _persona_set_fingerprint(persona_versions)
@@ -629,9 +540,7 @@ class LocalUserModelingApplicationService:
             )
 
         if not _twin_proposals_match_personas(
-            personas=(confirmed_personas),
-            proposals=(proposal_result.proposals),
-            context=context,
+            personas=(confirmed_personas), proposals=(proposal_result.proposals), context=context
         ):
             return GroundedSnapshotGenerationResult(
                 status=(UserModelingApplicationStatus.REJECTED),
@@ -639,9 +548,7 @@ class LocalUserModelingApplicationService:
             )
 
         if not await self._context_is_unchanged(
-            owner_user_id=(owner_user_id),
-            project_id=project_id,
-            previous=context,
+            owner_user_id=(owner_user_id), project_id=project_id, previous=context
         ):
             return GroundedSnapshotGenerationResult(
                 status=(UserModelingApplicationStatus.REJECTED),
@@ -688,10 +595,7 @@ class LocalUserModelingApplicationService:
                     issue=(UserModelingApplicationIssueCode.CONTEXT_CHANGED),
                 )
 
-            (
-                refreshed_issue,
-                refreshed_confirmed,
-            ) = _select_confirmed_personas(refreshed_personas)
+            (refreshed_issue, refreshed_confirmed) = _select_confirmed_personas(refreshed_personas)
 
             if refreshed_issue is not None:
                 return GroundedSnapshotGenerationResult(
@@ -772,12 +676,7 @@ class LocalUserModelingApplicationService:
             twin_versions=(twin_versions),
         )
 
-    async def _project_has_personas(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-    ) -> bool:
+    async def _project_has_personas(self, *, owner_user_id: UUID, project_id: UUID) -> bool:
         """Check persona existence without holding a provider-call transaction."""
         async with self._uow_factory(owner_user_id=(owner_user_id)) as uow:
             versions = await uow.personas.list_current(project_id=project_id)
@@ -785,16 +684,11 @@ class LocalUserModelingApplicationService:
         return bool(versions)
 
     async def _context_is_unchanged(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        previous: GovernedUserModelingContext,
+        self, *, owner_user_id: UUID, project_id: UUID, previous: GovernedUserModelingContext
     ) -> bool:
         """Reject provider output when governed inputs changed in flight."""
         current = await self._governance.load_current(
-            owner_user_id=(owner_user_id),
-            project_id=project_id,
+            owner_user_id=(owner_user_id), project_id=project_id
         )
 
         return (
@@ -860,12 +754,7 @@ def _governance_issue(
     if context.brief_version is None or context.brief_gate is None:
         return UserModelingApplicationIssueCode.BRIEF_APPROVAL_REQUIRED
 
-    if not (
-        project_brief_gate_is_currently_approved(
-            context.brief_gate,
-            context.brief_version,
-        )
-    ):
+    if not (project_brief_gate_is_currently_approved(context.brief_gate, context.brief_version)):
         return UserModelingApplicationIssueCode.BRIEF_APPROVAL_REQUIRED
 
     if context.team_reference is None:
@@ -885,27 +774,14 @@ def _governance_issue(
 
 def _persona_proposals_match_candidates(
     *,
-    candidates: tuple[
-        ProjectPersonaCandidate,
-        ...,
-    ],
-    proposals: tuple[
-        ProposedPersonaProfile,
-        ...,
-    ],
+    candidates: tuple[ProjectPersonaCandidate, ...],
+    proposals: tuple[ProposedPersonaProfile, ...],
 ) -> bool:
     """Validate exact candidate coverage without trusting provider output."""
     if len(candidates) != len(proposals):
         return False
 
-    for (
-        candidate,
-        proposal,
-    ) in zip(
-        candidates,
-        proposals,
-        strict=True,
-    ):
+    for candidate, proposal in zip(candidates, proposals, strict=True):
         if (
             proposal.candidate_ordinal != candidate.ordinal
             or proposal.candidate_content_hash != candidate.content_hash
@@ -922,14 +798,8 @@ def _persona_proposals_match_candidates(
 
 def _twin_proposals_match_personas(
     *,
-    personas: tuple[
-        PersonaProfileVersion,
-        ...,
-    ],
-    proposals: tuple[
-        ProposedUserTwinProfile,
-        ...,
-    ],
+    personas: tuple[PersonaProfileVersion, ...],
+    proposals: tuple[ProposedUserTwinProfile, ...],
     context: GovernedUserModelingContext,
 ) -> bool:
     """Validate complete one-to-one twin coverage and exact grounding."""
@@ -942,11 +812,7 @@ def _twin_proposals_match_personas(
         return False
 
     expected = {
-        persona.persona_id: (
-            persona.version_number,
-            persona.content_hash,
-        )
-        for persona in personas
+        persona.persona_id: (persona.version_number, persona.content_hash) for persona in personas
     }
 
     seen: set[UUID] = set()
@@ -960,10 +826,7 @@ def _twin_proposals_match_personas(
         if expected_persona is None:
             return False
 
-        if expected_persona != (
-            proposal.persona_version_number,
-            proposal.persona_content_hash,
-        ):
+        if expected_persona != (proposal.persona_version_number, proposal.persona_content_hash):
             return False
 
         profile = proposal.profile
@@ -983,33 +846,18 @@ def _twin_proposals_match_personas(
 
 
 def _select_confirmed_personas(
-    versions: tuple[
-        PersonaProfileVersion,
-        ...,
-    ],
-) -> tuple[
-    UserModelingApplicationIssueCode | None,
-    tuple[
-        PersonaProfileVersion,
-        ...,
-    ],
-]:
+    versions: tuple[PersonaProfileVersion, ...],
+) -> tuple[UserModelingApplicationIssueCode | None, tuple[PersonaProfileVersion, ...]]:
     """Exclude rejected personas while requiring decisions on all others."""
     versions = tuple(version for version in versions if not version.profile.archived)
     if not versions:
-        return (
-            UserModelingApplicationIssueCode.PERSONAS_REQUIRED,
-            (),
-        )
+        return (UserModelingApplicationIssueCode.PERSONAS_REQUIRED, ())
 
     if any(
         version.profile.confirmation_status is PersonaConfirmationStatus.PENDING_CONFIRMATION
         for version in versions
     ):
-        return (
-            UserModelingApplicationIssueCode.PERSONA_CONFIRMATION_REQUIRED,
-            (),
-        )
+        return (UserModelingApplicationIssueCode.PERSONA_CONFIRMATION_REQUIRED, ())
 
     confirmed = tuple(
         version
@@ -1018,46 +866,22 @@ def _select_confirmed_personas(
     )
 
     if not confirmed:
-        return (
-            UserModelingApplicationIssueCode.PERSONAS_REQUIRED,
-            (),
-        )
+        return (UserModelingApplicationIssueCode.PERSONAS_REQUIRED, ())
 
-    return (
-        None,
-        confirmed,
-    )
+    return (None, confirmed)
 
 
 def _persona_set_fingerprint(
-    versions: tuple[
-        PersonaProfileVersion,
-        ...,
-    ],
-) -> tuple[
-    tuple[
-        UUID,
-        UUID,
-        int,
-        str,
-    ],
-    ...,
-]:
+    versions: tuple[PersonaProfileVersion, ...],
+) -> tuple[tuple[UUID, UUID, int, str], ...]:
     """Fingerprint current persona revisions for provider stale checks."""
     return tuple(
-        (
-            version.id,
-            version.persona_id,
-            version.version_number,
-            version.content_hash,
-        )
+        (version.id, version.persona_id, version.version_number, version.content_hash)
         for version in versions
     )
 
 
-def _require_team_reference(
-    context: GovernedUserModelingContext,
-) -> VersionedArtifactReference:
+def _require_team_reference(context: GovernedUserModelingContext) -> VersionedArtifactReference:
     """Return a ready team reference or expose an internal contract breach."""
     if context.team_reference is None:
         raise RuntimeError("ready User Modeling context requires a team reference")
@@ -1065,9 +889,7 @@ def _require_team_reference(
     return context.team_reference
 
 
-def _require_catalog_version(
-    context: GovernedUserModelingContext,
-) -> int:
+def _require_catalog_version(context: GovernedUserModelingContext) -> int:
     """Return ready catalog version metadata."""
     if context.catalog_version is None:
         raise RuntimeError("ready User Modeling context requires a catalog version")
@@ -1075,9 +897,7 @@ def _require_catalog_version(
     return context.catalog_version
 
 
-def _require_catalog_hash(
-    context: GovernedUserModelingContext,
-) -> str:
+def _require_catalog_hash(context: GovernedUserModelingContext) -> str:
     """Return ready catalog hash metadata."""
     if context.catalog_content_hash is None:
         raise RuntimeError("ready User Modeling context requires a catalog hash")
@@ -1085,9 +905,7 @@ def _require_catalog_hash(
     return context.catalog_content_hash
 
 
-def _aware_timestamp(
-    value: datetime,
-) -> datetime:
+def _aware_timestamp(value: datetime) -> datetime:
     """Require application clocks to return timezone-aware values."""
     if value.utcoffset() is None:
         raise ValueError("User Modeling clock must return timezone-aware timestamps")
@@ -1095,9 +913,7 @@ def _aware_timestamp(
     return value
 
 
-def _is_sha256_digest(
-    value: str,
-) -> bool:
+def _is_sha256_digest(value: str) -> bool:
     """Return whether text is a lowercase SHA-256 digest."""
     return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
