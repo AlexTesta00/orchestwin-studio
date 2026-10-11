@@ -26,6 +26,7 @@ BUSY_SECONDS: Final = 15.0
 LIMIT_SECONDS: Final = 1800.0
 ACCEPTED: Final = 202
 MOCKUPS_AT_ONCE: Final = 3
+FIRST_DESIGN_MOCKUPS: Final = 2
 SUCCEEDED: Final = "SUCCEEDED"
 REJECTED: Final = "REJECTED"
 FAILED: Final = "FAILED"
@@ -314,13 +315,10 @@ def start_design(
     generated = state.generated
     if generated:
         console.say("design.about_design_and_mockups")
-        minutes = costs.ESTIMATES["DESIGN_PROPOSAL"].minutes + costs.ESTIMATES["MOCKUP"].minutes
-        costs.confirm_spending(
-            context, client, ["DESIGN_PROPOSAL", "MOCKUP", "MOCKUP"], minutes=minutes
-        )
     else:
         console.say("design.about_design")
-        costs.confirm_spending(context, client, ["DESIGN_PROPOSAL"])
+    operations, minutes = proposal_spending(state)
+    costs.confirm_spending(context, client, operations, minutes=minutes)
     result = generate(
         context,
         client,
@@ -357,6 +355,14 @@ def start_design(
         return False
     draw(context, client, fresh, pair(fresh.alternatives), prices)
     return True
+
+
+def proposal_spending(state: DesignState) -> tuple[list[str], float | None]:
+    if not state.generated:
+        return ["DESIGN_PROPOSAL"], None
+    drawn = len(pair(state.alternatives)) or FIRST_DESIGN_MOCKUPS
+    minutes = costs.ESTIMATES["DESIGN_PROPOSAL"].minutes + costs.ESTIMATES["MOCKUP"].minutes
+    return ["DESIGN_PROPOSAL", *["MOCKUP"] * drawn], minutes
 
 
 def pair(alternatives: Sequence[Alternative]) -> tuple[Alternative, ...]:
