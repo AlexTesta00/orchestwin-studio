@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -8,45 +7,39 @@ from functools import partial
 from typing import Annotated, Final, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.api.code_changes import (
-    CODE_CHANGE_AMBIGUOUS,
-    CODE_CHANGE_NOT_FOUND,
-    COMMIT_REQUEST_PATTERN,
-    DESIGN_APPROVAL_REQUIRED,
-    PROJECT_NOT_FOUND,
-    REQUIREMENTS_APPROVAL_REQUIRED,
-    CodeChangeApplication,
-)
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.code_changes import COMMIT_REQUEST_PATTERN, recorded_change
 from orchestwin.api.design import design_change_payload
+from orchestwin.api.generation_evidence import (
+    accept_generation,
+    attempt_generation,
+    current_generation_ids,
+)
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
+from orchestwin.api.refusals import refusal
 from orchestwin.api.requirements import RequirementsRevisionPayload, _changed_revision
+from orchestwin.api.runtime_access import (
+    PROJECT_NOT_FOUND,
+    current_brief,
+    database_sessions,
+    generation_cost,
+    require_approved,
+    require_project,
+    runtime_service,
+)
 from orchestwin.artifacts.design_evaluation import DesignEvaluationError
-from orchestwin.identity.domain import UserAccount
-from orchestwin.models.generation_budget import provider_result_cost_microusd
 from orchestwin.models.knowledge_alignment import (
     PURPOSE,
     alignment_context,
     bind_alignment,
     propose_alignment,
 )
-from orchestwin.models.proposal_evidence import (
-    ProposalEvidenceError,
-    current_proposal_evidence,
-    evidence_application,
-    retain_adapter_result,
-)
-from orchestwin.models.proposal_generation import ProposalGenerationError
-from orchestwin.projects.code_changes import (
-    LOCALE_PATTERN,
-    MAX_LOCALE_LENGTH,
-    CodeChange,
-    CodeChangeAmbiguous,
-)
+from orchestwin.models.proposal_evidence import evidence_application
+from orchestwin.projects.code_changes import LOCALE_PATTERN, MAX_LOCALE_LENGTH
 from orchestwin.projects.knowledge_alignment import (
     MAX_ANY_REQUEST_LENGTH,
     MAX_COMMITS,
@@ -64,14 +57,12 @@ from orchestwin.projects.persistence.code_changes import SqlAlchemyCodeChangeRep
 from orchestwin.projects.persistence.knowledge_alignment import (
     SqlAlchemyKnowledgeAlignmentRepository,
 )
-from orchestwin.projects.requirements_primitives import snapshot_content_hash
 
 KNOWLEDGE_ALIGNMENT_API_PREFIX: Final = "/projects/{project_id}"
 KNOWLEDGE_ALIGNMENT_MODEL_NOT_CONFIGURED: Final = "KNOWLEDGE_ALIGNMENT_MODEL_NOT_CONFIGURED"
 KNOWLEDGE_ALIGNMENT_RUN_NOT_FOUND: Final = "KNOWLEDGE_ALIGNMENT_RUN_NOT_FOUND"
 ALIGNMENT_PROPOSAL_NOT_FOUND: Final = "ALIGNMENT_PROPOSAL_NOT_FOUND"
 ALIGNMENT_PROPOSAL_DECIDED: Final = "ALIGNMENT_PROPOSAL_DECIDED"
-INVALID_PROVIDER_OUTPUT: Final = "INVALID_PROVIDER_OUTPUT"
 INVALID_REQUEST: Final = "invalid_request"
 ALIGNMENT_ROLE: Final = "KNOWLEDGE_ALIGNMENT"
 ALIGNMENT_REJECTED: Final = "ALIGNMENT_REJECTED"
@@ -85,10 +76,6 @@ LATEST_RUN_KEYS: Final = (
     "design_version_number",
     "alternative_code",
     "summary",
-)
-GENERATION_ATTEMPTS: Final = 2
-RETRYABLE_CODES: Final = frozenset(
-    {INVALID_PROVIDER_OUTPUT, "INCOMPLETE_OUTPUT", "RESPONSE_SCHEMA_ERROR"}
 )
 _OPERATIONS: Final = {
     ProposalSection.REQUIREMENTS: GenerationOperation.REQUIREMENTS_CHANGE,
@@ -176,68 +163,6 @@ class KnowledgeAlignmentResult:
     run: KnowledgeAlignmentRun
 
 
-def _refusal(status_code: int, code: str, **extra: object) -> HTTPException:
-    return HTTPException(status_code, detail={"code": code, **extra})
-
-
-async def _retire(role: str, code: str, run_id: UUID) -> None:
-    scope = current_proposal_evidence()
-    if scope is None or scope.request is None:
-        return
-    await scope.event("APPLICATION_RESULT", {"status": code, "alignment_run_id": str(run_id)})
-    scope.retire(role=role, code=code)
-
-
-async def _accept(kind: str, snapshot: dict[str, object]) -> None:
-    scope = current_proposal_evidence()
-    if scope is None or scope.request is None:
-        return
-    await scope.event(
-        "ADAPTER_ACCEPTED",
-        {
-            "result": snapshot,
-            "generated_content_hashes": {kind: [snapshot_content_hash(snapshot)]},
-            **(
-                {"related_generations": list(scope.related_generations)}
-                if scope.related_generations
-                else {}
-            ),
-        },
-    )
-
-
-async def _attempt(
-    generation: Callable[[], Awaitable[object]],
-    bind: Callable[[object], object],
-    *,
-    role: str,
-    run_id: UUID,
-):
-    for attempt in range(1, GENERATION_ATTEMPTS + 1):
-        try:
-            output = await generation()
-            try:
-                return bind(output)
-            except (TypeError, ValueError) as error:
-                await retain_adapter_result(error=error, reason=str(error))
-                raise ProposalGenerationError(INVALID_PROVIDER_OUTPUT) from error
-        except ProposalGenerationError as error:
-            if attempt == GENERATION_ATTEMPTS or error.code not in RETRYABLE_CODES:
-                raise
-            await _retire(role, ALIGNMENT_REJECTED, run_id)
-    raise RuntimeError("knowledge alignment attempts are exhausted")
-
-
-def _generation_ids() -> tuple[UUID, ...]:
-    scope = current_proposal_evidence()
-    if scope is None:
-        return ()
-    identifiers = [UUID(str(item["generation_id"])) for item in scope.related_generations]
-    if scope.request is not None:
-        identifiers.append(scope.request.request_id)
-    return tuple(dict.fromkeys(identifiers))
-
-
 def _run_item(run: KnowledgeAlignmentRun) -> dict[str, object]:
     snapshot = run.to_snapshot()
     return {
@@ -265,19 +190,6 @@ class KnowledgeAlignmentApplication:
     def __init__(self, runtime):
         self.runtime = runtime
         self._proposal_evidence_store = getattr(runtime, "proposal_evidence_store", None)
-        self._changes = CodeChangeApplication(runtime)
-
-    def _sessions(self):
-        database = getattr(self.runtime, "database_runtime", None)
-        if database is None:
-            raise _refusal(503, "DATABASE_UNAVAILABLE")
-        return database.session_factory
-
-    def _service(self, name: str, code: str):
-        service = getattr(self.runtime, name, None)
-        if service is None:
-            raise _refusal(503, code)
-        return service
 
     @staticmethod
     def _repository(session, owner_user_id: UUID):
@@ -291,89 +203,34 @@ class KnowledgeAlignmentApplication:
 
     def _generator(self):
         if not self.alignment_available():
-            raise _refusal(503, KNOWLEDGE_ALIGNMENT_MODEL_NOT_CONFIGURED)
+            raise refusal(503, KNOWLEDGE_ALIGNMENT_MODEL_NOT_CONFIGURED)
         return self.runtime.real_model_runtime.user_modeling.proposal_port.generator
-
-    @staticmethod
-    async def _owned(repository, project_id: UUID) -> None:
-        if not await repository.project_exists(project_id):
-            raise _refusal(404, PROJECT_NOT_FOUND)
-
-    @staticmethod
-    async def _recorded(repository, project_id: UUID, commit: str) -> CodeChange:
-        try:
-            change = await repository.get(project_id, commit)
-        except CodeChangeAmbiguous as error:
-            raise _refusal(409, CODE_CHANGE_AMBIGUOUS) from error
-        if change is None:
-            raise _refusal(404, CODE_CHANGE_NOT_FOUND)
-        return change
 
     @staticmethod
     async def _proposal(repository, project_id: UUID, code: str) -> AlignmentProposal:
         proposal = await repository.proposal(project_id, code)
         if proposal is None:
-            raise _refusal(404, ALIGNMENT_PROPOSAL_NOT_FOUND)
+            raise refusal(404, ALIGNMENT_PROPOSAL_NOT_FOUND)
         return proposal
-
-    async def _brief(self, owner_user_id: UUID, project_id: UUID):
-        version = await self._service("project_service", "PROJECT_QUERY_UNAVAILABLE").current_brief(
-            project_id=project_id, owner_user_id=owner_user_id
-        )
-        if version is None:
-            raise _refusal(404, PROJECT_NOT_FOUND)
-        return version.brief
-
-    async def _cost(
-        self, owner_user_id: UUID, project_id: UUID, generation_ids: Sequence[UUID]
-    ) -> int:
-        reader = getattr(self._proposal_evidence_store, "get_owned", None)
-        if reader is None:
-            return 0
-        total = 0
-        for generation_id in generation_ids:
-            try:
-                record = await reader(
-                    owner_user_id=owner_user_id,
-                    project_id=project_id,
-                    generation_id=generation_id,
-                )
-            except ProposalEvidenceError:
-                continue
-            if record is None:
-                continue
-            total += sum(
-                provider_result_cost_microusd(item["payload"])
-                for item in record["observations"]
-                if item.get("kind") == "PROVIDER_RESULT"
-                and isinstance(item.get("payload"), Mapping)
-            )
-        return total
 
     @evidence_application
     async def run(
         self, *, owner_user_id: UUID, project_id: UUID, body: KnowledgeAlignmentRequest
     ) -> KnowledgeAlignmentResult:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             recorded = SqlAlchemyCodeChangeRepository(session, owner_user_id=owner_user_id)
             changes = [
-                await self._recorded(recorded, project_id, commit) for commit in body.commits
+                await recorded_change(recorded, project_id, commit) for commit in body.commits
             ]
             plans = await SqlAlchemyAcceptanceTestRepository(
                 session, owner_user_id=owner_user_id
             ).plans(project_id, limit=1)
-        reference = await self._changes.reference(
-            owner_user_id=owner_user_id, project_id=project_id
-        )
-        if reference.requirements is None:
-            raise _refusal(409, REQUIREMENTS_APPROVAL_REQUIRED)
-        if reference.design is None:
-            raise _refusal(409, DESIGN_APPROVAL_REQUIRED)
+        reference = await require_approved(self.runtime, owner_user_id, project_id)
         generator = self._generator()
-        brief = await self._brief(owner_user_id, project_id)
+        brief = await current_brief(self.runtime, owner_user_id, project_id)
         try:
             context = alignment_context(
                 project_id=project_id,
@@ -385,15 +242,17 @@ class KnowledgeAlignmentApplication:
                 test_plan=plans[0] if plans else None,
             )
         except DesignEvaluationError as error:
-            raise _refusal(409, error.code) from error
+            raise refusal(409, error.code) from error
         run_id = uuid4()
-        draft = await _attempt(
+        draft = await attempt_generation(
             partial(propose_alignment, generator, context),
             partial(bind_alignment, context=context),
             role=ALIGNMENT_ROLE,
-            run_id=run_id,
+            rejected=ALIGNMENT_REJECTED,
+            reference={"alignment_run_id": str(run_id)},
+            exhausted="knowledge alignment attempts are exhausted",
         )
-        generation_ids = _generation_ids()
+        generation_ids = current_generation_ids()
         requirements_version, design_version = reference.version_numbers
         try:
             run = create_run(
@@ -408,7 +267,9 @@ class KnowledgeAlignmentApplication:
                 alternative_code=reference.alternative_code,
                 summary=draft.summary,
                 created_at=datetime.now(UTC),
-                cost_microusd=await self._cost(owner_user_id, project_id, generation_ids),
+                cost_microusd=await generation_cost(
+                    self._proposal_evidence_store, owner_user_id, project_id, generation_ids
+                ),
                 generation_ids=generation_ids,
                 proposals=draft.proposals,
             )
@@ -418,38 +279,38 @@ class KnowledgeAlignmentApplication:
             try:
                 stored = await self._repository(session, owner_user_id).create_run(run)
             except ValueError as error:
-                raise _refusal(404, PROJECT_NOT_FOUND) from error
-        await _accept(PURPOSE, stored.to_snapshot())
+                raise refusal(404, PROJECT_NOT_FOUND) from error
+        await accept_generation(PURPOSE, stored.to_snapshot())
         return KnowledgeAlignmentResult(status=KnowledgeAlignmentStatus.RECORDED, run=stored)
 
     async def runs(
         self, *, owner_user_id: UUID, project_id: UUID
     ) -> tuple[KnowledgeAlignmentRun, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             return await repository.runs(project_id)
 
     async def run_of(
         self, *, owner_user_id: UUID, project_id: UUID, run_id: UUID
     ) -> KnowledgeAlignmentRun:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             run = await repository.run(project_id, run_id)
         if run is None:
-            raise _refusal(404, KNOWLEDGE_ALIGNMENT_RUN_NOT_FOUND)
+            raise refusal(404, KNOWLEDGE_ALIGNMENT_RUN_NOT_FOUND)
         return run
 
     async def proposals(
         self, *, owner_user_id: UUID, project_id: UUID, waiting_only: bool
     ) -> tuple[tuple[AlignmentProposal, ...], KnowledgeAlignmentRun | None]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             items = await repository.proposals(project_id, waiting_only=waiting_only)
             latest = await repository.latest_run(project_id)
         return items, latest
@@ -457,10 +318,10 @@ class KnowledgeAlignmentApplication:
     async def proposal_of(
         self, *, owner_user_id: UUID, project_id: UUID, code: str
     ) -> AlignmentProposal:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             return await self._proposal(repository, project_id, code)
 
     async def _decide(
@@ -474,10 +335,10 @@ class KnowledgeAlignmentApplication:
         applied_text: str | None = None,
         applied_diff_id: UUID | None = None,
     ) -> AlignmentProposal:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             try:
                 decided = await repository.decide(
                     project_id,
@@ -489,9 +350,9 @@ class KnowledgeAlignmentApplication:
                     applied_diff_id=applied_diff_id,
                 )
             except ProposalAlreadyDecided as error:
-                raise _refusal(409, ALIGNMENT_PROPOSAL_DECIDED) from error
+                raise refusal(409, ALIGNMENT_PROPOSAL_DECIDED) from error
         if decided is None:
-            raise _refusal(404, ALIGNMENT_PROPOSAL_NOT_FOUND)
+            raise refusal(404, ALIGNMENT_PROPOSAL_NOT_FOUND)
         return decided
 
     async def apply(
@@ -501,13 +362,13 @@ class KnowledgeAlignmentApplication:
             owner_user_id=owner_user_id, project_id=project_id, code=code
         )
         if proposal.status is not ProposalStatus.PROPOSED:
-            raise _refusal(409, ALIGNMENT_PROPOSAL_DECIDED)
+            raise refusal(409, ALIGNMENT_PROPOSAL_DECIDED)
         text = _applied_text(proposal, body.text)
         revision = None
         diff_id = None
         if proposal.section is ProposalSection.REQUIREMENTS:
-            service = self._service(
-                "requirements_change_service", "REQUIREMENTS_CHANGE_UNAVAILABLE"
+            service = runtime_service(
+                self.runtime, "requirements_change_service", "REQUIREMENTS_CHANGE_UNAVAILABLE"
             )
             result = await service.request_change(
                 owner_user_id=owner_user_id, project_id=project_id, owner_request=text
@@ -516,7 +377,9 @@ class KnowledgeAlignmentApplication:
             revision = RequirementsRevisionPayload.from_domain(changed).model_dump(mode="json")
             diff_id = changed.diff.id
         elif proposal.section is ProposalSection.DESIGN:
-            service = self._service("design_change_service", "DESIGN_CHANGE_UNAVAILABLE")
+            service = runtime_service(
+                self.runtime, "design_change_service", "DESIGN_CHANGE_UNAVAILABLE"
+            )
             result = await service.request_change(
                 owner_user_id=owner_user_id,
                 project_id=project_id,
@@ -558,7 +421,7 @@ def create_knowledge_alignment_router() -> APIRouter:
         project_id: UUID,
         body: KnowledgeAlignmentRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         async def aligning():
             result = await application(request).run(
@@ -579,7 +442,7 @@ def create_knowledge_alignment_router() -> APIRouter:
     async def runs(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await application(request).runs(owner_user_id=user.id, project_id=project_id)
         return {"items": [_run_item(item) for item in items]}
@@ -589,7 +452,7 @@ def create_knowledge_alignment_router() -> APIRouter:
         project_id: UUID,
         run_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         item = await application(request).run_of(
             owner_user_id=user.id, project_id=project_id, run_id=run_id
@@ -600,7 +463,7 @@ def create_knowledge_alignment_router() -> APIRouter:
     async def proposals(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         status: Literal[PROPOSAL_STATUS_FILTERS] = "waiting",
     ):
         items, latest = await application(request).proposals(
@@ -614,7 +477,7 @@ def create_knowledge_alignment_router() -> APIRouter:
         code: str,
         body: ProposalApplyRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         studio = application(request)
         proposal = await studio.proposal_of(owner_user_id=user.id, project_id=project_id, code=code)
@@ -638,7 +501,7 @@ def create_knowledge_alignment_router() -> APIRouter:
         code: str,
         body: ProposalSkipRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         decided = await application(request).skip(
             owner_user_id=user.id, project_id=project_id, code=code, body=body

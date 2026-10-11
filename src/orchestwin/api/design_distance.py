@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
 from orchestwin.api.design import DESIGN_API_PREFIX
 from orchestwin.api.design_mockups import ModelMockupApplication
 from orchestwin.artifacts.design_distance import (
@@ -18,7 +17,6 @@ from orchestwin.artifacts.design_distance import (
 )
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.generated_mockups import GeneratedMockup
-from orchestwin.identity.domain import UserAccount
 from orchestwin.models.generated_mockup_instructions import GENERATED_MOCKUP_PURPOSES
 
 
@@ -107,7 +105,7 @@ def create_design_distance_router() -> APIRouter:
     async def design_distance_endpoint(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         application = ModelMockupApplication(request.app.state.application_runtime)
         version = await application.current(user.id, project_id)

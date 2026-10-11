@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Annotated, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.why import WhyError, explain_why
 
 
@@ -14,11 +14,7 @@ class WhyQueryService(Protocol):
     async def current(self, *, owner_user_id: UUID, project_id: UUID) -> dict | None: ...
 
 
-def why_query_service_dependency(request: Request) -> WhyQueryService:
-    service = getattr(request.app.state, "why_query_service", None)
-    if service is None:
-        raise HTTPException(status_code=503, detail={"code": "WHY_SERVICE_UNAVAILABLE"})
-    return service
+why_query_service_dependency = app_service("why_query_service", {"code": "WHY_SERVICE_UNAVAILABLE"})
 
 
 def create_artifact_why_router() -> APIRouter:
@@ -33,7 +29,7 @@ def create_artifact_why_router() -> APIRouter:
     @router.get("/document", operation_id="getWhyDocument")
     async def document_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[WhyQueryService, Depends(why_query_service_dependency)],
     ) -> dict:
         return await document(project_id, user, service)
@@ -42,7 +38,7 @@ def create_artifact_why_router() -> APIRouter:
     async def explain_endpoint(
         project_id: UUID,
         code: str,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[WhyQueryService, Depends(why_query_service_dependency)],
     ) -> dict:
         result = await document(project_id, user, service)

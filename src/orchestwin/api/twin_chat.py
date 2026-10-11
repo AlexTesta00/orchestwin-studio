@@ -1,14 +1,13 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.generation_evidence import record_accepted
 from orchestwin.models.proposal_evidence import (
     current_proposal_evidence,
     evidence_application,
@@ -153,18 +152,7 @@ class TwinChatApplication:
             )
             if status is not TwinConversationAppendStatus.APPENDED:
                 raise HTTPException(409, detail={"code": "TWIN_CONVERSATION_CHANGED"})
-        await scope.event(
-            "ADAPTER_ACCEPTED",
-            {
-                "result": recorded.to_snapshot(),
-                "generated_content_hashes": {"TWIN_CHAT_TURN": [turn.content_hash]},
-                **(
-                    {"related_generations": list(scope.related_generations)}
-                    if scope.related_generations
-                    else {}
-                ),
-            },
-        )
+        await record_accepted(scope, recorded.to_snapshot(), "TWIN_CHAT_TURN", turn.content_hash)
         return TwinChatResult(status=TwinChatStatus.TURN_RECORDED, conversation=recorded)
 
 
@@ -178,7 +166,7 @@ def create_twin_chat_router():
         project_id: UUID,
         twin_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         result = await TwinChatApplication(request.app.state.application_runtime).conversation(
             owner_user_id=user.id, project_id=project_id, twin_id=twin_id
@@ -191,7 +179,7 @@ def create_twin_chat_router():
         twin_id: UUID,
         body: AskTwinRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         result = await TwinChatApplication(request.app.state.application_runtime).ask(
             owner_user_id=user.id, project_id=project_id, twin_id=twin_id, body=body

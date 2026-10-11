@@ -19,8 +19,8 @@ from fastapi import (
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, model_serializer
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.knowledge.archive import MAX_ARCHIVE_SIZE
 from orchestwin.knowledge.layout import STAGES
 from orchestwin.knowledge.project_import import FolderOrigin
@@ -173,15 +173,9 @@ def project_import_failure(error: ProjectImportError) -> HTTPException:
     return project_import_problem(project_import_status(error.code), error.code, error.detail)
 
 
-def project_import_service_dependency(request: Request) -> ProjectImportService:
-    service = getattr(request.app.state, "project_import_service", None)
-
-    if service is None:
-        raise project_import_problem(
-            status.HTTP_503_SERVICE_UNAVAILABLE, PROJECT_IMPORT_SERVICE_UNAVAILABLE
-        )
-
-    return service
+project_import_service_dependency = app_service(
+    "project_import_service", {"code": PROJECT_IMPORT_SERVICE_UNAVAILABLE, "location": None}
+)
 
 
 class BoundedImportRoute(APIRoute):
@@ -209,7 +203,7 @@ def create_project_import_router() -> APIRouter:
         operation_id="importProjectFromKnowledgeFolder",
     )
     async def import_endpoint(
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[ProjectImportService, Depends(project_import_service_dependency)],
         archive: Annotated[UploadFile, File()],
         display_name: Annotated[str | None, Form()] = None,
@@ -235,7 +229,7 @@ def create_project_import_router() -> APIRouter:
     )
     async def origin_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[ProjectImportService, Depends(project_import_service_dependency)],
     ) -> ProjectImportOriginPayload:
         record = await service.origin(owner_user_id=user.id, project_id=project_id)

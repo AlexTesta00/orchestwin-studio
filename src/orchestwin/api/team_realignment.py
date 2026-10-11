@@ -3,12 +3,13 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 
 from orchestwin.agents.realignment_service import TeamRealignmentFailure, TeamRealignmentService
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
+from orchestwin.api.refusals import refusal
 
 TEAM_REALIGNMENT_API_PREFIX = "/projects/{project_id}/team/context-alignment"
 
@@ -30,13 +31,9 @@ class TeamRealignmentPayload(BaseModel):
     gate_approval_required: bool
 
 
-def team_realignment_service_dependency(request: Request) -> TeamRealignmentService:
-    service = getattr(request.app.state, "team_realignment_service", None)
-    if service is None:
-        raise HTTPException(
-            status_code=503, detail={"code": "TEAM_REALIGNMENT_SERVICE_UNAVAILABLE"}
-        )
-    return service
+team_realignment_service_dependency = app_service(
+    "team_realignment_service", {"code": "TEAM_REALIGNMENT_SERVICE_UNAVAILABLE"}
+)
 
 
 def create_team_realignment_router() -> APIRouter:
@@ -45,7 +42,7 @@ def create_team_realignment_router() -> APIRouter:
     @router.get("", response_model=TeamAlignmentPayload, operation_id="getTeamContextAlignment")
     async def status_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[TeamRealignmentService, Depends(team_realignment_service_dependency)],
     ) -> TeamAlignmentPayload:
         result = await service.status(owner_user_id=user.id, project_id=project_id)
@@ -59,16 +56,13 @@ def create_team_realignment_router() -> APIRouter:
     @router.post("", response_model=TeamRealignmentPayload, operation_id="realignTeamContext")
     async def realign_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[TeamRealignmentService, Depends(team_realignment_service_dependency)],
     ) -> TeamRealignmentPayload:
         try:
             version = await service.realign(owner_user_id=user.id, project_id=project_id)
         except TeamRealignmentFailure as error:
-            raise HTTPException(
-                status_code=404 if error.code == "TEAM_NOT_FOUND" else 409,
-                detail={"code": error.code},
-            ) from None
+            raise refusal(404 if error.code == "TEAM_NOT_FOUND" else 409, error.code) from None
         return TeamRealignmentPayload(
             version_id=version.id,
             version_number=version.version_number,

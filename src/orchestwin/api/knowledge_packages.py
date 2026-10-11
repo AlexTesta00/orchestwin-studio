@@ -5,11 +5,11 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.knowledge.export import KnowledgeExportError
 from orchestwin.knowledge.layout import STAGES, present_stages
 from orchestwin.knowledge.package_service import (
@@ -181,16 +181,9 @@ class KnowledgePackageHistoryPayload(ApiModel):
     versions: tuple[KnowledgePackageVersionPayload, ...]
 
 
-def knowledge_package_service_dependency(request: Request) -> KnowledgePackageService:
-    service = getattr(request.app.state, "knowledge_package_service", None)
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "KNOWLEDGE_PACKAGE_SERVICE_UNAVAILABLE"},
-        )
-
-    return service
+knowledge_package_service_dependency = app_service(
+    "knowledge_package_service", {"code": "KNOWLEDGE_PACKAGE_SERVICE_UNAVAILABLE"}
+)
 
 
 def knowledge_export_failure(error: KnowledgeExportError) -> HTTPException:
@@ -214,7 +207,7 @@ def create_knowledge_package_router() -> APIRouter:
     async def publish_endpoint(
         project_id: UUID,
         response: Response,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[KnowledgePackageService, Depends(knowledge_package_service_dependency)],
     ) -> KnowledgePackagePublicationPayload:
         try:
@@ -235,7 +228,7 @@ def create_knowledge_package_router() -> APIRouter:
     )
     async def history_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[KnowledgePackageService, Depends(knowledge_package_service_dependency)],
         limit: Annotated[int, Query(ge=1, le=MAX_HISTORY_LIMIT)] = DEFAULT_HISTORY_LIMIT,
     ) -> KnowledgePackageHistoryPayload:
@@ -259,7 +252,7 @@ def create_knowledge_package_router() -> APIRouter:
     async def archive_endpoint(
         project_id: UUID,
         version_number: Annotated[int, Path(ge=1)],
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[KnowledgePackageService, Depends(knowledge_package_service_dependency)],
     ) -> Response:
         try:

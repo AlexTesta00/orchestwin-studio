@@ -4,16 +4,18 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from functools import partial
-from typing import Annotated, Final
+from typing import Final
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
 from orchestwin.api.design_loop import DesignLoopApplication
+from orchestwin.api.generation_evidence import record_accepted, retire_generation
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
+from orchestwin.api.runtime_access import database_sessions, proposal_generator
 from orchestwin.artifacts.design_discussion import (
     LOCALE_PATTERN,
     MAX_DISCUSSION_ROUNDS,
@@ -28,7 +30,6 @@ from orchestwin.artifacts.design_discussion_persistence import (
     SqlAlchemyDesignDiscussionRepository,
 )
 from orchestwin.artifacts.design_evaluation import DesignEvaluationError, design_review_view
-from orchestwin.identity.domain import UserAccount
 from orchestwin.models.hosted_configuration import HOSTED_PROVIDER_KINDS
 from orchestwin.models.proposal_evidence import (
     current_proposal_evidence,
@@ -140,35 +141,14 @@ async def _rejection(error: Exception) -> ProposalGenerationError:
     return ProposalGenerationError(INVALID_TWIN_DISCUSSION_OUTPUT)
 
 
-async def _retire(scope, status: str, discussion_id: UUID) -> None:
-    await scope.event("APPLICATION_RESULT", {"status": status, "discussion_id": str(discussion_id)})
-    scope.retire(role=DISCUSSION_ROLE, code=status)
-
-
 async def _record_statement(statement, discussion_id: UUID) -> None:
     scope = current_proposal_evidence()
     if scope is None or scope.request is None:
         return
-    await scope.event(
-        "ADAPTER_ACCEPTED",
-        {
-            "result": statement.to_snapshot(),
-            "generated_content_hashes": {"TWIN_STATEMENT": [statement.content_hash]},
-            **(
-                {"related_generations": list(scope.related_generations)}
-                if scope.related_generations
-                else {}
-            ),
-        },
+    await record_accepted(scope, statement.to_snapshot(), "TWIN_STATEMENT", statement.content_hash)
+    await retire_generation(
+        DISCUSSION_ROLE, STATEMENT_RECORDED, {"discussion_id": str(discussion_id)}
     )
-    await _retire(scope, STATEMENT_RECORDED, discussion_id)
-
-
-async def _reject(status: str, discussion_id: UUID) -> None:
-    scope = current_proposal_evidence()
-    if scope is None or scope.request is None:
-        return
-    await _retire(scope, status, discussion_id)
 
 
 async def _attempt(generation, *, rejected: str, discussion_id: UUID):
@@ -178,7 +158,9 @@ async def _attempt(generation, *, rejected: str, discussion_id: UUID):
         except ProposalGenerationError as error:
             if attempt == GENERATION_ATTEMPTS or error.code not in RETRYABLE_CODES:
                 raise
-            await _reject(rejected, discussion_id)
+            await retire_generation(
+                DISCUSSION_ROLE, rejected, {"discussion_id": str(discussion_id)}
+            )
     raise RuntimeError("discussion generation attempts are exhausted")
 
 
@@ -246,7 +228,7 @@ class DesignDiscussionApplication:
         return SqlAlchemyDesignDiscussionRepository(session, owner_user_id=owner_user_id)
 
     def _generator(self):
-        generator = self._loop._generator()
+        generator = proposal_generator(self.runtime, self._proposal_evidence_store)
         if generator is None:
             raise HTTPException(503, detail={"code": "DESIGN_DISCUSSION_NOT_CONFIGURED"})
         return generator
@@ -365,7 +347,7 @@ class DesignDiscussionApplication:
         return discussion
 
     async def discussions(self, *, owner_user_id, project_id) -> tuple[DesignDiscussion, ...]:
-        sessions = self._loop._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             return await self._repository(session, owner_user_id).list(project_id=project_id)
 
@@ -382,7 +364,7 @@ class DesignDiscussionApplication:
             locale=body.locale,
         )
         twins = await self._loop._twins(owner_user_id, project_id, version)
-        sessions = self._loop._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             existing = await self._repository(session, owner_user_id).open_for_version(
                 project_id=project_id, design_version_id=version.id
@@ -444,7 +426,7 @@ class DesignDiscussionApplication:
     ) -> DesignDiscussionResult:
         note = self._note(body.owner_note)
         generator = self._generator()
-        sessions = self._loop._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             current = await self._repository(session, owner_user_id).get(
                 project_id=project_id, discussion_id=discussion_id
@@ -500,7 +482,7 @@ class DesignDiscussionApplication:
             if body.action is DiscussionAction.APPROVE
             else DiscussionStatus.CLOSED
         )
-        sessions = self._loop._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             repository = self._repository(session, owner_user_id)
             written = await repository.decide(
@@ -521,7 +503,7 @@ def create_design_discussion_router():
     async def discussions(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await DesignDiscussionApplication(
             request.app.state.application_runtime
@@ -533,7 +515,7 @@ def create_design_discussion_router():
         project_id: UUID,
         body: DesignDiscussionRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         async def opening():
             result = await DesignDiscussionApplication(request.app.state.application_runtime).start(
@@ -556,7 +538,7 @@ def create_design_discussion_router():
         discussion_id: UUID,
         body: DiscussionRoundRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         async def continuation():
             result = await DesignDiscussionApplication(
@@ -581,7 +563,7 @@ def create_design_discussion_router():
         discussion_id: UUID,
         body: DiscussionDecisionRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         discussion = await DesignDiscussionApplication(
             request.app.state.application_runtime

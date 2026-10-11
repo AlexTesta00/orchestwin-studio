@@ -8,8 +8,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.knowledge.archive import within_depth
 from orchestwin.knowledge.twin_import import TwinImportError
 from orchestwin.knowledge.twin_import_service import (
@@ -205,16 +205,9 @@ _REQUEST_BODY: Final = {
 }
 
 
-def twin_import_service_dependency(request: Request) -> TwinImportService:
-    service = getattr(request.app.state, "twin_import_service", None)
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "TWIN_IMPORT_SERVICE_UNAVAILABLE"},
-        )
-
-    return service
+twin_import_service_dependency = app_service(
+    "twin_import_service", {"code": "TWIN_IMPORT_SERVICE_UNAVAILABLE"}
+)
 
 
 def twin_import_failure(error: TwinImportError) -> HTTPException:
@@ -277,7 +270,7 @@ def create_twin_import_router() -> APIRouter:
     )
     async def sources_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[TwinImportService, Depends(twin_import_service_dependency)],
     ) -> TwinImportSourcesPayload:
         try:
@@ -295,7 +288,7 @@ def create_twin_import_router() -> APIRouter:
     async def source_endpoint(
         project_id: UUID,
         source_project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[TwinImportService, Depends(twin_import_service_dependency)],
     ) -> TwinImportSourcePayload:
         try:
@@ -319,7 +312,7 @@ def create_twin_import_router() -> APIRouter:
     async def import_endpoint(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[TwinImportService, Depends(twin_import_service_dependency)],
     ) -> TwinImportPayload:
         command = await twin_import_request(request)

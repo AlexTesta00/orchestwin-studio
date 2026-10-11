@@ -11,7 +11,6 @@ from fastapi import (
     Body,
     Depends,
     HTTPException,
-    Request,
     Response,
     status,
 )
@@ -22,14 +21,10 @@ from pydantic import (
     field_validator,
 )
 
-from orchestwin.api.auth import (
-    current_user_dependency,
-)
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.api.projects import (
     ProjectBriefVersionResponse,
-)
-from orchestwin.identity.domain import (
-    UserAccount,
 )
 from orchestwin.projects.brief_gate import (
     ProjectBriefGateDecisionResult,
@@ -344,42 +339,10 @@ class ProjectBriefGateDecisionResponse(BaseModel):
     issue: HumanGateIssueCode | None
 
 
-def clarification_service_dependency(
-    request: Request,
-) -> ProjectClarificationApplicationService:
-    """Return the configured clarification application service."""
-    service = getattr(
-        request.app.state,
-        "clarification_service",
-        None,
-    )
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="clarification_service_unavailable",
-        )
-
-    return service
-
-
-def brief_gate_service_dependency(
-    request: Request,
-) -> ProjectBriefGateService:
-    """Return the configured Project Brief gate service."""
-    service = getattr(
-        request.app.state,
-        "brief_gate_service",
-        None,
-    )
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="brief_gate_service_unavailable",
-        )
-
-    return service
+clarification_service_dependency = app_service(
+    "clarification_service", "clarification_service_unavailable"
+)
+brief_gate_service_dependency = app_service("brief_gate_service", "brief_gate_service_unavailable")
 
 
 def _assumption_response(
@@ -402,24 +365,14 @@ def _brief_version_response(
     return ProjectBriefVersionResponse.from_domain(version)
 
 
-def _gate_response(
-    gate: HumanGate | None,
-) -> HumanGateResponse | None:
+def gate_response(gate: HumanGate | None) -> HumanGateResponse | None:
     """Map an optional human gate."""
-    if gate is None:
-        return None
-
-    return HumanGateResponse.from_domain(gate)
+    return None if gate is None else HumanGateResponse.from_domain(gate)
 
 
-def _gate_event_response(
-    event: HumanGateEvent | None,
-) -> HumanGateEventResponse | None:
+def gate_event_response(event: HumanGateEvent | None) -> HumanGateEventResponse | None:
     """Map an optional gate event."""
-    if event is None:
-        return None
-
-    return HumanGateEventResponse.from_domain(event)
+    return None if event is None else HumanGateEventResponse.from_domain(event)
 
 
 def _assumption_creation_response(
@@ -464,7 +417,7 @@ def _brief_gate_submission_response(
     """Map a Gate 1 submission result."""
     return ProjectBriefGateSubmissionResponse(
         status=result.status,
-        gate=_gate_response(result.gate),
+        gate=gate_response(result.gate),
         events=tuple(HumanGateEventResponse.from_domain(event) for event in result.events),
         missing_fields=result.missing_fields,
         issue=result.issue,
@@ -477,8 +430,8 @@ def _brief_gate_decision_response(
     """Map a Gate 1 decision result."""
     return ProjectBriefGateDecisionResponse(
         status=result.status,
-        gate=_gate_response(result.gate),
-        event=_gate_event_response(result.event),
+        gate=gate_response(result.gate),
+        event=gate_event_response(result.event),
         issue=result.issue,
     )
 
@@ -499,10 +452,7 @@ def create_clarification_router() -> APIRouter:
     )
     async def list_assumptions_endpoint(
         project_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectClarificationApplicationService,
             Depends(clarification_service_dependency),
@@ -525,10 +475,7 @@ def create_clarification_router() -> APIRouter:
         project_id: UUID,
         payload: BriefAssumptionCreateRequest,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectClarificationApplicationService,
             Depends(clarification_service_dependency),
@@ -566,10 +513,7 @@ def create_clarification_router() -> APIRouter:
     async def accept_all_assumptions_endpoint(
         project_id: UUID,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectClarificationApplicationService,
             Depends(clarification_service_dependency),
@@ -612,10 +556,7 @@ def create_clarification_router() -> APIRouter:
         assumption_id: UUID,
         payload: BriefAssumptionDecisionRequest,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectClarificationApplicationService,
             Depends(clarification_service_dependency),
@@ -655,10 +596,7 @@ def create_clarification_router() -> APIRouter:
         assumption_id: UUID,
         payload: BriefAssumptionRejectRequest,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectClarificationApplicationService,
             Depends(clarification_service_dependency),
@@ -697,10 +635,7 @@ def create_clarification_router() -> APIRouter:
     async def submit_brief_gate_endpoint(
         project_id: UUID,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectBriefGateService,
             Depends(brief_gate_service_dependency),
@@ -741,10 +676,7 @@ def create_clarification_router() -> APIRouter:
     )
     async def current_brief_gate_endpoint(
         project_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectBriefGateService,
             Depends(brief_gate_service_dependency),
@@ -771,10 +703,7 @@ def create_clarification_router() -> APIRouter:
     async def brief_gate_events_endpoint(
         project_id: UUID,
         gate_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectBriefGateService,
             Depends(brief_gate_service_dependency),
@@ -797,10 +726,7 @@ def create_clarification_router() -> APIRouter:
         project_id: UUID,
         payload: ProjectBriefGateDecisionRequest,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectBriefGateService,
             Depends(brief_gate_service_dependency),

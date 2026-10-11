@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -8,16 +8,32 @@ from functools import partial
 from typing import Annotated, Final, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.generation_evidence import (
+    accept_generation,
+    attempt_generation,
+    current_generation_ids,
+    retire_generation,
+)
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
+from orchestwin.api.refusals import refusal
+from orchestwin.api.runtime_access import (
+    PROJECT_NOT_FOUND,
+    ChangeReference,
+    approved_reference,
+    current_brief,
+    database_sessions,
+    generation_cost,
+    require_approved,
+    require_project,
+    runtime_service,
+)
 from orchestwin.artifacts.design_evaluation import DesignEvaluationError
-from orchestwin.artifacts.design_gate import design_gate_is_currently_approved
-from orchestwin.identity.domain import UserAccount
 from orchestwin.knowledge.state import (
     MAX_AUTHOR_LENGTH,
     MAX_DIFF_LENGTH,
@@ -43,14 +59,7 @@ from orchestwin.models.change_review import (
     judge_alignment,
     review_material,
 )
-from orchestwin.models.generation_budget import provider_result_cost_microusd
-from orchestwin.models.proposal_evidence import (
-    ProposalEvidenceError,
-    current_proposal_evidence,
-    evidence_application,
-    retain_adapter_result,
-)
-from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.proposal_evidence import evidence_application
 from orchestwin.projects.code_changes import (
     LOCALE_PATTERN,
     MAX_LOCALE_LENGTH,
@@ -84,21 +93,16 @@ from orchestwin.projects.persistence.code_changes import (
     SqlAlchemyCodeChangeRepository,
 )
 from orchestwin.projects.persistence.twin_learning import SqlAlchemyTwinLearningRepository
-from orchestwin.projects.requirements_gate import requirements_gate_is_currently_approved
-from orchestwin.projects.requirements_primitives import snapshot_content_hash
 from orchestwin.projects.twin_learning import learned_view
 from orchestwin.twins.user_modeling_gate import user_modeling_gate_is_currently_approved
 
 CODE_CHANGES_API_PREFIX: Final = "/projects/{project_id}"
 COMMIT_REQUEST_PATTERN: Final = r"^[0-9a-fA-F]{7,64}$"
 TASK_STATUS_FILTERS: Final = ("open", "all")
-RECORDED: Final = "RECORDED"
-ALREADY_RECORDED: Final = "ALREADY_RECORDED"
 REVIEWED: Final = "REVIEWED"
 DECIDED: Final = "DECIDED"
 CREATED: Final = "CREATED"
 UPDATED: Final = "UPDATED"
-PROJECT_NOT_FOUND: Final = "PROJECT_NOT_FOUND"
 CODE_CHANGE_NOT_FOUND: Final = "CODE_CHANGE_NOT_FOUND"
 CODE_CHANGE_AMBIGUOUS: Final = "CODE_CHANGE_AMBIGUOUS"
 CODE_CHANGE_REVIEW_EXISTS: Final = "CODE_CHANGE_REVIEW_EXISTS"
@@ -106,18 +110,12 @@ TEST_RUN_NOT_FOUND: Final = "TEST_RUN_NOT_FOUND"
 CODE_TASK_NOT_FOUND: Final = "CODE_TASK_NOT_FOUND"
 TASK_SOURCE_INVALID: Final = "TASK_SOURCE_INVALID"
 CHANGE_REVIEW_MODEL_NOT_CONFIGURED: Final = "CHANGE_REVIEW_MODEL_NOT_CONFIGURED"
-REQUIREMENTS_APPROVAL_REQUIRED: Final = "REQUIREMENTS_APPROVAL_REQUIRED"
-DESIGN_APPROVAL_REQUIRED: Final = "DESIGN_APPROVAL_REQUIRED"
 USER_MODELING_APPROVAL_REQUIRED: Final = "USER_MODELING_APPROVAL_REQUIRED"
-INVALID_PROVIDER_OUTPUT: Final = "INVALID_PROVIDER_OUTPUT"
 CRITIQUE_ROLE: Final = "CHANGE_CRITIQUE"
 ALIGNMENT_ROLE: Final = "CHANGE_ALIGNMENT"
 TWIN_CRITIQUED: Final = "TWIN_CRITIQUED"
 CRITIQUE_REJECTED: Final = "CRITIQUE_REJECTED"
-GENERATION_ATTEMPTS: Final = 2
-RETRYABLE_CODES: Final = frozenset(
-    {INVALID_PROVIDER_OUTPUT, "INCOMPLETE_OUTPUT", "RESPONSE_SCHEMA_ERROR"}
-)
+ATTEMPTS_EXHAUSTED: Final = "change review attempts are exhausted"
 
 
 class ChangedFileRequest(BaseModel):
@@ -302,65 +300,14 @@ class ChangeReviewResult:
     run: ChangeReviewRun
 
 
-@dataclass(frozen=True)
-class ChangeReference:
-    requirements: object | None = None
-    design: object | None = None
-
-    @property
-    def alternative_code(self) -> str | None:
-        if self.design is None:
-            return None
-        package = self.design.package
-        return next(
-            (
-                item.code
-                for item in package.alternatives
-                if item.id == package.owner_selected_alternative_id
-            ),
-            None,
-        )
-
-    @property
-    def version_numbers(self) -> tuple[int | None, int | None]:
-        return (
-            None if self.requirements is None else self.requirements.version_number,
-            None if self.design is None else self.design.version_number,
-        )
-
-    def current_versions(self) -> dict[str, object] | None:
-        if self.requirements is None or self.design is None:
-            return None
-        return {
-            "requirements_version_number": self.requirements.version_number,
-            "design_version_number": self.design.version_number,
-            "alternative_code": self.alternative_code,
-        }
-
-    def to_snapshot(self) -> dict[str, object]:
-        requirements = self.requirements
-        design = self.design
-        return {
-            "requirements": None
-            if requirements is None
-            else {
-                "version_id": str(requirements.id),
-                "version_number": requirements.version_number,
-                "content_hash": requirements.content_hash,
-            },
-            "design": None
-            if design is None
-            else {
-                "version_id": str(design.id),
-                "version_number": design.version_number,
-                "content_hash": design.content_hash,
-                "alternative_code": self.alternative_code,
-            },
-        }
-
-
-def _refusal(status_code: int, code: str, **extra: object) -> HTTPException:
-    return HTTPException(status_code, detail={"code": code, **extra})
+async def recorded_change(repository, project_id: UUID, commit: str) -> CodeChange:
+    try:
+        change = await repository.get(project_id, commit)
+    except CodeChangeAmbiguous as error:
+        raise refusal(409, CODE_CHANGE_AMBIGUOUS) from error
+    if change is None:
+        raise refusal(404, CODE_CHANGE_NOT_FOUND)
+    return change
 
 
 def _finding_source(
@@ -410,85 +357,15 @@ def _decision_sources(
     for index, item in enumerate(body.findings):
         source = _finding_source(critiques, item.twin_id, item.finding, None, change=change)
         if source is None:
-            raise _refusal(422, TASK_SOURCE_INVALID, index=index)
+            raise refusal(422, TASK_SOURCE_INVALID, index=index)
         sources.append(source)
     return sources
-
-
-async def _retire(role: str, code: str, run_id: UUID) -> None:
-    scope = current_proposal_evidence()
-    if scope is None or scope.request is None:
-        return
-    await scope.event("APPLICATION_RESULT", {"status": code, "review_run_id": str(run_id)})
-    scope.retire(role=role, code=code)
-
-
-async def _accept(kind: str, snapshot: dict[str, object]) -> None:
-    scope = current_proposal_evidence()
-    if scope is None or scope.request is None:
-        return
-    await scope.event(
-        "ADAPTER_ACCEPTED",
-        {
-            "result": snapshot,
-            "generated_content_hashes": {kind: [snapshot_content_hash(snapshot)]},
-            **(
-                {"related_generations": list(scope.related_generations)}
-                if scope.related_generations
-                else {}
-            ),
-        },
-    )
-
-
-async def _attempt(
-    generation: Callable[[], Awaitable[object]],
-    bind: Callable[[object], object],
-    *,
-    role: str,
-    run_id: UUID,
-):
-    for attempt in range(1, GENERATION_ATTEMPTS + 1):
-        try:
-            output = await generation()
-            try:
-                return bind(output)
-            except (TypeError, ValueError) as error:
-                await retain_adapter_result(error=error, reason=str(error))
-                raise ProposalGenerationError(INVALID_PROVIDER_OUTPUT) from error
-        except ProposalGenerationError as error:
-            if attempt == GENERATION_ATTEMPTS or error.code not in RETRYABLE_CODES:
-                raise
-            await _retire(role, CRITIQUE_REJECTED, run_id)
-    raise RuntimeError("change review attempts are exhausted")
-
-
-def _generation_ids() -> tuple[UUID, ...]:
-    scope = current_proposal_evidence()
-    if scope is None:
-        return ()
-    identifiers = [UUID(str(item["generation_id"])) for item in scope.related_generations]
-    if scope.request is not None:
-        identifiers.append(scope.request.request_id)
-    return tuple(dict.fromkeys(identifiers))
 
 
 class CodeChangeApplication:
     def __init__(self, runtime):
         self.runtime = runtime
         self._proposal_evidence_store = getattr(runtime, "proposal_evidence_store", None)
-
-    def _sessions(self):
-        database = getattr(self.runtime, "database_runtime", None)
-        if database is None:
-            raise _refusal(503, "DATABASE_UNAVAILABLE")
-        return database.session_factory
-
-    def _service(self, name: str, code: str):
-        service = getattr(self.runtime, name, None)
-        if service is None:
-            raise _refusal(503, code)
-        return service
 
     @staticmethod
     def _repository(session, owner_user_id: UUID):
@@ -502,87 +379,19 @@ class CodeChangeApplication:
 
     def _generator(self):
         if not self.review_available():
-            raise _refusal(503, CHANGE_REVIEW_MODEL_NOT_CONFIGURED)
+            raise refusal(503, CHANGE_REVIEW_MODEL_NOT_CONFIGURED)
         return self.runtime.real_model_runtime.user_modeling.proposal_port.generator
 
-    @staticmethod
-    async def _owned(repository, project_id: UUID) -> None:
-        if not await repository.project_exists(project_id):
-            raise _refusal(404, PROJECT_NOT_FOUND)
-
-    @staticmethod
-    async def _change(repository, project_id: UUID, commit: str) -> CodeChange:
-        try:
-            change = await repository.get(project_id, commit)
-        except CodeChangeAmbiguous as error:
-            raise _refusal(409, CODE_CHANGE_AMBIGUOUS) from error
-        if change is None:
-            raise _refusal(404, CODE_CHANGE_NOT_FOUND)
-        return change
-
-    async def reference(self, *, owner_user_id: UUID, project_id: UUID) -> ChangeReference:
-        scope = {"owner_user_id": owner_user_id, "project_id": project_id}
-        requirements = await self._service(
-            "requirements_query_service", "REQUIREMENTS_QUERY_UNAVAILABLE"
-        ).current(**scope)
-        requirements_gate = await self._service(
-            "requirements_gate_service", "REQUIREMENTS_GATE_UNAVAILABLE"
-        ).current_gate(**scope)
-        design = await self._service("design_query_service", "DESIGN_QUERY_UNAVAILABLE").current(
-            **scope
-        )
-        design_gate = await self._service(
-            "design_gate_service", "DESIGN_GATE_UNAVAILABLE"
-        ).current_gate(**scope)
-        return ChangeReference(
-            requirements=requirements
-            if requirements_gate_is_currently_approved(requirements_gate, requirements)
-            else None,
-            design=design if design_gate_is_currently_approved(design_gate, design) else None,
-        )
-
     async def _twins(self, owner_user_id: UUID, project_id: UUID) -> tuple[object, ...]:
-        services = self._service("user_modeling_services", "USER_MODELING_UNAVAILABLE")
+        services = runtime_service(
+            self.runtime, "user_modeling_services", "USER_MODELING_UNAVAILABLE"
+        )
         scope = {"owner_user_id": owner_user_id, "project_id": project_id}
         snapshot = await services.queries.current_snapshot(**scope)
         gate = await services.gates.current_gate(**scope)
         if snapshot is None or not user_modeling_gate_is_currently_approved(gate, snapshot):
-            raise _refusal(409, USER_MODELING_APPROVAL_REQUIRED)
+            raise refusal(409, USER_MODELING_APPROVAL_REQUIRED)
         return tuple(snapshot.snapshot.twin_versions)
-
-    async def _brief(self, owner_user_id: UUID, project_id: UUID):
-        version = await self._service("project_service", "PROJECT_QUERY_UNAVAILABLE").current_brief(
-            project_id=project_id, owner_user_id=owner_user_id
-        )
-        if version is None:
-            raise _refusal(404, PROJECT_NOT_FOUND)
-        return version.brief
-
-    async def _cost(
-        self, owner_user_id: UUID, project_id: UUID, generation_ids: Sequence[UUID]
-    ) -> int:
-        reader = getattr(self._proposal_evidence_store, "get_owned", None)
-        if reader is None:
-            return 0
-        total = 0
-        for generation_id in generation_ids:
-            try:
-                record = await reader(
-                    owner_user_id=owner_user_id,
-                    project_id=project_id,
-                    generation_id=generation_id,
-                )
-            except ProposalEvidenceError:
-                continue
-            if record is None:
-                continue
-            total += sum(
-                provider_result_cost_microusd(item["payload"])
-                for item in record["observations"]
-                if item.get("kind") == "PROVIDER_RESULT"
-                and isinstance(item.get("payload"), Mapping)
-            )
-        return total
 
     @staticmethod
     def _findings_by_twin(run: ChangeReviewRun) -> dict[UUID, tuple[str, ...]]:
@@ -610,7 +419,7 @@ class CodeChangeApplication:
     async def current_versions(
         self, *, owner_user_id: UUID, project_id: UUID
     ) -> dict[str, object] | None:
-        reference = await self.reference(owner_user_id=owner_user_id, project_id=project_id)
+        reference = await approved_reference(self.runtime, owner_user_id, project_id)
         return reference.current_versions()
 
     async def record(self, *, owner_user_id: UUID, project_id: UUID, body) -> CodeChangeWriteResult:
@@ -629,49 +438,49 @@ class CodeChangeApplication:
             )
         except ValueError as error:
             raise HTTPException(422, detail="invalid_request") from error
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             result = await self._repository(session, owner_user_id).record(change)
         if result.status is CodeChangeWriteStatus.PROJECT_NOT_FOUND:
-            raise _refusal(404, PROJECT_NOT_FOUND)
+            raise refusal(404, PROJECT_NOT_FOUND)
         return result
 
     async def changes(
         self, *, owner_user_id: UUID, project_id: UUID, pending: bool = False
     ) -> tuple[CodeChange, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             return await repository.list(project_id, pending_only=pending)
 
     async def change(self, *, owner_user_id: UUID, project_id: UUID, commit: str) -> CodeChange:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
-            return await self._change(repository, project_id, commit)
+            await require_project(repository, project_id)
+            return await recorded_change(repository, project_id, commit)
 
     async def reviews(
         self, *, owner_user_id: UUID, project_id: UUID, commit: str
     ) -> tuple[ChangeReviewRun, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
-            change = await self._change(repository, project_id, commit)
+            await require_project(repository, project_id)
+            change = await recorded_change(repository, project_id, commit)
             return await repository.runs(change.id)
 
     async def alignment(self, *, owner_user_id: UUID, project_id: UUID) -> dict[str, object]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             aligned = await repository.aligned_point(project_id)
             pending = await repository.list(project_id, pending_only=True, limit=None)
             latest = await repository.list(project_id, limit=1)
             tasks = await repository.tasks(project_id, open_only=True)
-        reference = await self.reference(owner_user_id=owner_user_id, project_id=project_id)
+        reference = await approved_reference(self.runtime, owner_user_id, project_id)
         current = reference.current_versions()
         return {
             "project_id": str(project_id),
@@ -692,14 +501,14 @@ class CodeChangeApplication:
     async def review(
         self, *, owner_user_id: UUID, project_id: UUID, commit: str, body
     ) -> ChangeReviewResult:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
-            change = await self._change(repository, project_id, commit)
+            await require_project(repository, project_id)
+            change = await recorded_change(repository, project_id, commit)
             latest = await repository.latest_run(change.id)
             if latest is not None and not body.again:
-                raise _refusal(409, CODE_CHANGE_REVIEW_EXISTS)
+                raise refusal(409, CODE_CHANGE_REVIEW_EXISTS)
             earlier, earlier_source = await self._earlier_findings(
                 repository, project_id, change, latest
             )
@@ -707,14 +516,10 @@ class CodeChangeApplication:
             learned = await SqlAlchemyTwinLearningRepository(
                 session, owner_user_id=owner_user_id
             ).active(project_id)
-        reference = await self.reference(owner_user_id=owner_user_id, project_id=project_id)
-        if reference.requirements is None:
-            raise _refusal(409, REQUIREMENTS_APPROVAL_REQUIRED)
-        if reference.design is None:
-            raise _refusal(409, DESIGN_APPROVAL_REQUIRED)
+        reference = await require_approved(self.runtime, owner_user_id, project_id)
         twins = await self._twins(owner_user_id, project_id)
         generator = self._generator()
-        brief = await self._brief(owner_user_id, project_id)
+        brief = await current_brief(self.runtime, owner_user_id, project_id)
         try:
             material = review_material(
                 brief=brief,
@@ -724,8 +529,9 @@ class CodeChangeApplication:
                 language=body.locale.split("-")[0],
             )
         except DesignEvaluationError as error:
-            raise _refusal(409, error.code) from error
+            raise refusal(409, error.code) from error
         run_id = uuid4()
+        identifiers = {"review_run_id": str(run_id)}
         critiques = []
         for twin in twins:
             context = critique_context(
@@ -737,14 +543,16 @@ class CodeChangeApplication:
                 earlier_source=earlier_source,
                 learned=learned_view(learned.get(twin.twin_id, ())),
             )
-            critique = await _attempt(
+            critique = await attempt_generation(
                 partial(critique_change, generator, context),
                 partial(bind_critique, twin=twin, context=context),
                 role=CRITIQUE_ROLE,
-                run_id=run_id,
+                rejected=CRITIQUE_REJECTED,
+                reference=identifiers,
+                exhausted=ATTEMPTS_EXHAUSTED,
             )
-            await _accept(CRITIQUE_PURPOSE, critique.to_snapshot())
-            await _retire(CRITIQUE_ROLE, TWIN_CRITIQUED, run_id)
+            await accept_generation(CRITIQUE_PURPOSE, critique.to_snapshot())
+            await retire_generation(CRITIQUE_ROLE, TWIN_CRITIQUED, identifiers)
             critiques.append(critique)
         context = alignment_context(
             project_id=project_id,
@@ -753,14 +561,16 @@ class CodeChangeApplication:
             critiques=critiques,
             open_tasks=open_tasks,
         )
-        verdict = await _attempt(
+        verdict = await attempt_generation(
             partial(judge_alignment, generator, context),
             partial(bind_alignment, context=context),
             role=ALIGNMENT_ROLE,
-            run_id=run_id,
+            rejected=CRITIQUE_REJECTED,
+            reference=identifiers,
+            exhausted=ATTEMPTS_EXHAUSTED,
         )
-        await _accept(ALIGNMENT_PURPOSE, verdict.to_snapshot())
-        generation_ids = _generation_ids()
+        await accept_generation(ALIGNMENT_PURPOSE, verdict.to_snapshot())
+        generation_ids = current_generation_ids()
         requirements_version, design_version = reference.version_numbers
         run = ChangeReviewRun(
             id=run_id,
@@ -776,27 +586,29 @@ class CodeChangeApplication:
             critiques=tuple(critiques),
             alignment=verdict,
             generation_ids=generation_ids,
-            cost_microusd=await self._cost(owner_user_id, project_id, generation_ids),
+            cost_microusd=await generation_cost(
+                self._proposal_evidence_store, owner_user_id, project_id, generation_ids
+            ),
         )
         async with sessions() as session, session.begin():
             status = await self._repository(session, owner_user_id).create_run(run)
         if status is CodeChangeWriteStatus.PROJECT_NOT_FOUND:
-            raise _refusal(404, PROJECT_NOT_FOUND)
+            raise refusal(404, PROJECT_NOT_FOUND)
         if status is not CodeChangeWriteStatus.RECORDED:
-            raise _refusal(404, CODE_CHANGE_NOT_FOUND)
+            raise refusal(404, CODE_CHANGE_NOT_FOUND)
         return ChangeReviewResult(status=ChangeReviewStatus.REVIEWED, run=run)
 
     async def decide(
         self, *, owner_user_id: UUID, project_id: UUID, commit: str, body
     ) -> tuple[CodeChange, dict[str, object]]:
-        reference = await self.reference(owner_user_id=owner_user_id, project_id=project_id)
+        reference = await approved_reference(self.runtime, owner_user_id, project_id)
         decided_at = datetime.now(UTC)
         decision = ChangeDecision(kind=body.kind, decided_at=decided_at, note=body.note)
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
-            change = await self._change(repository, project_id, commit)
+            await require_project(repository, project_id)
+            change = await recorded_change(repository, project_id, commit)
             sources = []
             if decision.kind is DecisionKind.CODE_TASKS:
                 latest = await repository.latest_run(change.id)
@@ -805,7 +617,7 @@ class CodeChangeApplication:
                 change.id, decision, aligned_versions=reference.version_numbers
             )
             if decided is None:
-                raise _refusal(404, CODE_CHANGE_NOT_FOUND)
+                raise refusal(404, CODE_CHANGE_NOT_FOUND)
             if decision.kind is DecisionKind.ALIGNED:
                 await repository.close_open_tasks(project_id, change.id, decided_at)
             elif decision.kind is DecisionKind.CODE_TASKS:
@@ -816,10 +628,10 @@ class CodeChangeApplication:
     async def tasks(
         self, *, owner_user_id: UUID, project_id: UUID, every: bool = False
     ) -> tuple[CodeTask, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             return await repository.tasks(project_id, open_only=not every)
 
     @staticmethod
@@ -840,11 +652,11 @@ class CodeChangeApplication:
                     changes[source.commit] = None
                     ambiguous.add(source.commit)
         if any(run is None for run in runs.values()):
-            raise _refusal(404, TEST_RUN_NOT_FOUND)
+            raise refusal(404, TEST_RUN_NOT_FOUND)
         if any(value is None and key not in ambiguous for key, value in changes.items()):
-            raise _refusal(404, CODE_CHANGE_NOT_FOUND)
+            raise refusal(404, CODE_CHANGE_NOT_FOUND)
         if ambiguous:
-            raise _refusal(409, CODE_CHANGE_AMBIGUOUS)
+            raise refusal(409, CODE_CHANGE_AMBIGUOUS)
         latest = {}
         sources = []
         for index, item in enumerate(items):
@@ -868,17 +680,17 @@ class CodeChangeApplication:
                     critiques, source.twin_id, source.finding, item.text, change=change
                 )
             if found is None:
-                raise _refusal(422, TASK_SOURCE_INVALID, index=index)
+                raise refusal(422, TASK_SOURCE_INVALID, index=index)
             sources.append(found)
         return sources
 
     async def create_tasks(
         self, *, owner_user_id: UUID, project_id: UUID, body: CodeTasksRequest
     ) -> tuple[CreatedTasks, dict[str, object]]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             tests = SqlAlchemyAcceptanceTestRepository(session, owner_user_id=owner_user_id)
             sources = await self._sources(repository, tests, project_id, body.tasks)
             created = await repository.create_tasks(
@@ -890,10 +702,10 @@ class CodeChangeApplication:
     async def set_task_status(
         self, *, owner_user_id: UUID, project_id: UUID, code: str, body: TaskStatusRequest
     ) -> tuple[CodeTask, dict[str, object]]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             number = task_number(code)
             task = (
                 None
@@ -903,7 +715,7 @@ class CodeChangeApplication:
                 )
             )
             if task is None:
-                raise _refusal(404, CODE_TASK_NOT_FOUND)
+                raise refusal(404, CODE_TASK_NOT_FOUND)
         alignment = await self.alignment(owner_user_id=owner_user_id, project_id=project_id)
         return task, alignment
 
@@ -918,7 +730,7 @@ def create_code_change_router() -> APIRouter:
     async def alignment(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return await application(request).alignment(owner_user_id=user.id, project_id=project_id)
 
@@ -927,7 +739,7 @@ def create_code_change_router() -> APIRouter:
         project_id: UUID,
         body: CodeChangeRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         studio = application(request)
         result = await studio.record(owner_user_id=user.id, project_id=project_id, body=body)
@@ -945,7 +757,7 @@ def create_code_change_router() -> APIRouter:
     async def changes(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         pending: bool = False,
     ):
         studio = application(request)
@@ -958,7 +770,7 @@ def create_code_change_router() -> APIRouter:
         project_id: UUID,
         commit: str,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         studio = application(request)
         item = await studio.change(owner_user_id=user.id, project_id=project_id, commit=commit)
@@ -971,7 +783,7 @@ def create_code_change_router() -> APIRouter:
         commit: str,
         body: ChangeReviewRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         async def reviewing():
             result = await application(request).review(
@@ -993,7 +805,7 @@ def create_code_change_router() -> APIRouter:
         project_id: UUID,
         commit: str,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await application(request).reviews(
             owner_user_id=user.id, project_id=project_id, commit=commit
@@ -1006,7 +818,7 @@ def create_code_change_router() -> APIRouter:
         commit: str,
         body: ChangeDecisionRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         studio = application(request)
         decided, alignment = await studio.decide(
@@ -1019,7 +831,7 @@ def create_code_change_router() -> APIRouter:
     async def code_tasks(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         status: Literal[TASK_STATUS_FILTERS] = "open",
     ):
         items = await application(request).tasks(
@@ -1032,7 +844,7 @@ def create_code_change_router() -> APIRouter:
         project_id: UUID,
         body: CodeTasksRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         created, alignment = await application(request).create_tasks(
             owner_user_id=user.id, project_id=project_id, body=body
@@ -1050,7 +862,7 @@ def create_code_change_router() -> APIRouter:
         code: str,
         body: TaskStatusRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         task, alignment = await application(request).set_task_status(
             owner_user_id=user.id, project_id=project_id, code=code, body=body
@@ -1062,7 +874,6 @@ def create_code_change_router() -> APIRouter:
 
 __all__ = [
     "ALIGNMENT_ROLE",
-    "ALREADY_RECORDED",
     "CHANGE_REVIEW_MODEL_NOT_CONFIGURED",
     "CODE_CHANGES_API_PREFIX",
     "CODE_CHANGE_AMBIGUOUS",
@@ -1073,7 +884,6 @@ __all__ = [
     "CRITIQUE_REJECTED",
     "CRITIQUE_ROLE",
     "DECIDED",
-    "RECORDED",
     "REVIEWED",
     "TASK_SOURCE_INVALID",
     "TASK_STATUS_FILTERS",
@@ -1096,4 +906,5 @@ __all__ = [
     "TaskItemRequest",
     "TaskStatusRequest",
     "create_code_change_router",
+    "recorded_change",
 ]

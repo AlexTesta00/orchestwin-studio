@@ -1,38 +1,44 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from functools import partial
-from typing import Annotated, Final
+from typing import Final
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.api.code_changes import ChangeReference
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.generation_evidence import (
+    INVALID_PROVIDER_OUTPUT,
+    accept_generation,
+    attempt_generation,
+)
+from orchestwin.api.generation_evidence import current_generation_ids as _generation_ids
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
+from orchestwin.api.refusals import refusal as _refusal
 from orchestwin.api.research_evidence import research_evidence_refusal
+from orchestwin.api.runtime_access import (
+    DESIGN_APPROVAL_REQUIRED,
+    PROJECT_NOT_FOUND,
+    REQUIREMENTS_APPROVAL_REQUIRED,
+    current_brief,
+    database_sessions,
+    generation_cost,
+    require_approved,
+    runtime_service,
+)
 from orchestwin.artifacts.design_evaluation import DesignEvaluationError
-from orchestwin.artifacts.design_gate import design_gate_is_currently_approved
-from orchestwin.identity.domain import UserAccount
 from orchestwin.knowledge.state import MAX_OBSERVATION_LENGTH, MAX_UPDATE_OBSERVATIONS
 from orchestwin.models.evidence_update import (
     bind_evidence_update,
     evidence_update_context,
     propose_evidence_update,
 )
-from orchestwin.models.generation_budget import provider_result_cost_microusd
-from orchestwin.models.proposal_evidence import (
-    ProposalEvidenceError,
-    current_proposal_evidence,
-    evidence_application,
-    retain_adapter_result,
-)
-from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.proposal_evidence import evidence_application
 from orchestwin.models.twin_update import (
     UPDATE_PURPOSE,
     bind_update,
@@ -51,8 +57,6 @@ from orchestwin.projects.persistence.twin_learning import (
     TwinLearningWriteResult,
     TwinLearningWriteStatus,
 )
-from orchestwin.projects.requirements_gate import requirements_gate_is_currently_approved
-from orchestwin.projects.requirements_primitives import snapshot_content_hash
 from orchestwin.projects.research_evidence import EvidenceUpdateSource, ResearchEvidenceError
 from orchestwin.projects.twin_learning import (
     MAX_LEARNING_REASON_LENGTH,
@@ -78,11 +82,8 @@ DECIDED: Final = "DECIDED"
 LEARNED: Final = "LEARNED"
 RETIRED: Final = "RETIRED"
 INVALID_REQUEST: Final = "invalid_request"
-PROJECT_NOT_FOUND: Final = "PROJECT_NOT_FOUND"
 USER_MODELING_APPROVAL_REQUIRED: Final = "USER_MODELING_APPROVAL_REQUIRED"
 USER_TWIN_NOT_FOUND: Final = "USER_TWIN_NOT_FOUND"
-REQUIREMENTS_APPROVAL_REQUIRED: Final = "REQUIREMENTS_APPROVAL_REQUIRED"
-DESIGN_APPROVAL_REQUIRED: Final = "DESIGN_APPROVAL_REQUIRED"
 TWIN_UPDATE_PENDING: Final = "TWIN_UPDATE_PENDING"
 TWIN_UPDATE_NOTHING_NEW: Final = "TWIN_UPDATE_NOTHING_NEW"
 TWIN_UPDATE_MODEL_NOT_CONFIGURED: Final = "TWIN_UPDATE_MODEL_NOT_CONFIGURED"
@@ -91,14 +92,9 @@ TWIN_UPDATE_ALREADY_DECIDED: Final = "TWIN_UPDATE_ALREADY_DECIDED"
 TWIN_UPDATE_CONTEXT_CHANGED: Final = "TWIN_UPDATE_CONTEXT_CHANGED"
 TWIN_OBSERVATIONS_LIMIT: Final = "TWIN_OBSERVATIONS_LIMIT"
 TWIN_OBSERVATION_NOT_FOUND: Final = "TWIN_OBSERVATION_NOT_FOUND"
-INVALID_PROVIDER_OUTPUT: Final = "INVALID_PROVIDER_OUTPUT"
 LEARNER_ROLE: Final = "TWIN_LEARNER"
 UPDATE_REJECTED: Final = "UPDATE_REJECTED"
 UNKNOWN_INDEX: Final = "the proposal has no observation at this index"
-GENERATION_ATTEMPTS: Final = 2
-RETRYABLE_CODES: Final = frozenset(
-    {INVALID_PROVIDER_OUTPUT, "INCOMPLETE_OUTPUT", "RESPONSE_SCHEMA_ERROR"}
-)
 
 
 class _Body(BaseModel):
@@ -196,10 +192,6 @@ class TwinUpdateResult:
     update: TwinUpdate
 
 
-def _refusal(status_code: int, code: str, **extra: object) -> HTTPException:
-    return HTTPException(status_code, detail={"code": code, **extra})
-
-
 def _pending(update: TwinUpdate | None) -> HTTPException:
     return _refusal(409, TWIN_UPDATE_PENDING, update_id=None if update is None else str(update.id))
 
@@ -245,79 +237,21 @@ def _written(result: TwinLearningWriteResult) -> TwinLearningWriteResult:
     return result
 
 
-async def _retire(reference: Mapping[str, str]) -> None:
-    scope = current_proposal_evidence()
-    if scope is None or scope.request is None:
-        return
-    await scope.event("APPLICATION_RESULT", {"status": UPDATE_REJECTED, **reference})
-    scope.retire(role=LEARNER_ROLE, code=UPDATE_REJECTED)
-
-
-async def _accept(snapshot: dict[str, object]) -> None:
-    scope = current_proposal_evidence()
-    if scope is None or scope.request is None:
-        return
-    await scope.event(
-        "ADAPTER_ACCEPTED",
-        {
-            "result": snapshot,
-            "generated_content_hashes": {UPDATE_PURPOSE: [snapshot_content_hash(snapshot)]},
-            **(
-                {"related_generations": list(scope.related_generations)}
-                if scope.related_generations
-                else {}
-            ),
-        },
-    )
-
-
-async def _attempt(
-    generation: Callable[[], Awaitable[object]],
-    bind: Callable[[object], object],
-    *,
-    reference: Mapping[str, str],
-):
-    for attempt in range(1, GENERATION_ATTEMPTS + 1):
-        try:
-            output = await generation()
-            try:
-                return bind(output)
-            except (TypeError, ValueError) as error:
-                await retain_adapter_result(error=error, reason=str(error))
-                raise ProposalGenerationError(INVALID_PROVIDER_OUTPUT) from error
-        except ProposalGenerationError as error:
-            if attempt == GENERATION_ATTEMPTS or error.code not in RETRYABLE_CODES:
-                raise
-            await _retire(reference)
-    raise RuntimeError("twin update attempts are exhausted")
-
-
-def _generation_ids() -> tuple[UUID, ...]:
-    scope = current_proposal_evidence()
-    if scope is None:
-        return ()
-    identifiers = [UUID(str(item["generation_id"])) for item in scope.related_generations]
-    if scope.request is not None:
-        identifiers.append(scope.request.request_id)
-    return tuple(dict.fromkeys(identifiers))
+_accept = partial(accept_generation, UPDATE_PURPOSE)
+_attempt = partial(
+    attempt_generation,
+    role=LEARNER_ROLE,
+    rejected=UPDATE_REJECTED,
+    exhausted="twin update attempts are exhausted",
+)
 
 
 class TwinLearningApplication:
     def __init__(self, runtime):
         self.runtime = runtime
         self._proposal_evidence_store = getattr(runtime, "proposal_evidence_store", None)
-
-    def _sessions(self):
-        database = getattr(self.runtime, "database_runtime", None)
-        if database is None:
-            raise _refusal(503, "DATABASE_UNAVAILABLE")
-        return database.session_factory
-
-    def _service(self, name: str, code: str):
-        service = getattr(self.runtime, name, None)
-        if service is None:
-            raise _refusal(503, code)
-        return service
+        self._sessions = partial(database_sessions, runtime)
+        self._cost = partial(generation_cost, self._proposal_evidence_store)
 
     @staticmethod
     def _repository(session, owner_user_id: UUID):
@@ -340,37 +274,10 @@ class TwinLearningApplication:
         if not exists:
             raise _refusal(404, PROJECT_NOT_FOUND)
 
-    async def reference(self, *, owner_user_id: UUID, project_id: UUID) -> ChangeReference:
-        scope = {"owner_user_id": owner_user_id, "project_id": project_id}
-        requirements = await self._service(
-            "requirements_query_service", "REQUIREMENTS_QUERY_UNAVAILABLE"
-        ).current(**scope)
-        requirements_gate = await self._service(
-            "requirements_gate_service", "REQUIREMENTS_GATE_UNAVAILABLE"
-        ).current_gate(**scope)
-        design = await self._service("design_query_service", "DESIGN_QUERY_UNAVAILABLE").current(
-            **scope
-        )
-        design_gate = await self._service(
-            "design_gate_service", "DESIGN_GATE_UNAVAILABLE"
-        ).current_gate(**scope)
-        return ChangeReference(
-            requirements=requirements
-            if requirements_gate_is_currently_approved(requirements_gate, requirements)
-            else None,
-            design=design if design_gate_is_currently_approved(design_gate, design) else None,
-        )
-
-    async def _approved(self, owner_user_id: UUID, project_id: UUID) -> ChangeReference:
-        reference = await self.reference(owner_user_id=owner_user_id, project_id=project_id)
-        if reference.requirements is None:
-            raise _refusal(409, REQUIREMENTS_APPROVAL_REQUIRED)
-        if reference.design is None:
-            raise _refusal(409, DESIGN_APPROVAL_REQUIRED)
-        return reference
-
     async def approved_twins(self, *, owner_user_id: UUID, project_id: UUID) -> tuple[object, ...]:
-        services = self._service("user_modeling_services", "USER_MODELING_UNAVAILABLE")
+        services = runtime_service(
+            self.runtime, "user_modeling_services", "USER_MODELING_UNAVAILABLE"
+        )
         scope = {"owner_user_id": owner_user_id, "project_id": project_id}
         snapshot = await services.queries.current_snapshot(**scope)
         gate = await services.gates.current_gate(**scope)
@@ -396,6 +303,16 @@ class TwinLearningApplication:
             records=records,
         )
 
+    def _learning(self, update: TwinUpdate, twin, records) -> TwinLearning:
+        if twin is not None:
+            return self._entry(twin, records)
+        return build_twin_learning(
+            twin_id=update.twin_id,
+            twin_name=update.twin_name,
+            profile_version_number=update.base_profile_version,
+            records=records,
+        )
+
     @staticmethod
     async def _sources(session, owner_user_id: UUID, project_id: UUID) -> dict[str, tuple]:
         changes = SqlAlchemyCodeChangeRepository(session, owner_user_id=owner_user_id)
@@ -410,40 +327,6 @@ class TwinLearningApplication:
             "test_runs": tuple(item.to_snapshot() for item in test_runs),
             "tasks": tuple(item.to_snapshot() for item in tasks),
         }
-
-    async def _brief(self, owner_user_id: UUID, project_id: UUID):
-        version = await self._service("project_service", "PROJECT_QUERY_UNAVAILABLE").current_brief(
-            project_id=project_id, owner_user_id=owner_user_id
-        )
-        if version is None:
-            raise _refusal(404, PROJECT_NOT_FOUND)
-        return version.brief
-
-    async def _cost(
-        self, owner_user_id: UUID, project_id: UUID, generation_ids: Sequence[UUID]
-    ) -> int:
-        reader = getattr(self._proposal_evidence_store, "get_owned", None)
-        if reader is None:
-            return 0
-        total = 0
-        for generation_id in generation_ids:
-            try:
-                record = await reader(
-                    owner_user_id=owner_user_id,
-                    project_id=project_id,
-                    generation_id=generation_id,
-                )
-            except ProposalEvidenceError:
-                continue
-            if record is None:
-                continue
-            total += sum(
-                provider_result_cost_microusd(item["payload"])
-                for item in record["observations"]
-                if item.get("kind") == "PROVIDER_RESULT"
-                and isinstance(item.get("payload"), Mapping)
-            )
-        return total
 
     async def overview(self, *, owner_user_id: UUID, project_id: UUID) -> dict[str, object]:
         await self._owned(owner_user_id, project_id)
@@ -485,7 +368,7 @@ class TwinLearningApplication:
                 owner_user_id=owner_user_id, project_id=project_id, twin_id=twin_id, body=body
             )
         twin = await self._twin(owner_user_id, project_id, twin_id)
-        reference = await self._approved(owner_user_id, project_id)
+        reference = await require_approved(self.runtime, owner_user_id, project_id)
         created_at = datetime.now(UTC)
         sessions = self._sessions()
         async with sessions() as session:
@@ -502,7 +385,7 @@ class TwinLearningApplication:
         if material.empty:
             raise _refusal(409, TWIN_UPDATE_NOTHING_NEW)
         generator = self._generator()
-        brief = await self._brief(owner_user_id, project_id)
+        brief = await current_brief(self.runtime, owner_user_id, project_id)
         try:
             views = learning_material(
                 brief=brief,
@@ -701,14 +584,7 @@ class TwinLearningApplication:
             update = result.update
             records = await repository.observations(project_id, update.twin_id)
         twin = next((item for item in twins if item.twin_id == update.twin_id), None)
-        if twin is not None:
-            return update, self._entry(twin, records)
-        return update, build_twin_learning(
-            twin_id=update.twin_id,
-            twin_name=update.twin_name,
-            profile_version_number=update.base_profile_version,
-            records=records,
-        )
+        return update, self._learning(update, twin, records)
 
     async def _decide_evidence(
         self, *, owner_user_id: UUID, project_id: UUID, update_id: UUID, body
@@ -771,14 +647,7 @@ class TwinLearningApplication:
                         )
                     )
                 records = await repository.observations(project_id, update.twin_id)
-            if twin is not None:
-                return update, self._entry(twin, records)
-            return update, build_twin_learning(
-                twin_id=update.twin_id,
-                twin_name=update.twin_name,
-                profile_version_number=update.base_profile_version,
-                records=records,
-            )
+            return update, self._learning(update, twin, records)
         except ResearchEvidenceError as error:
             raise research_evidence_refusal(error) from error
 
@@ -830,7 +699,7 @@ def create_twin_learning_router() -> APIRouter:
     async def overview(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return await application(request).overview(owner_user_id=user.id, project_id=project_id)
 
@@ -840,7 +709,7 @@ def create_twin_learning_router() -> APIRouter:
         twin_id: UUID,
         body: TwinUpdateRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         async def proposing():
             result = await application(request).propose(
@@ -862,7 +731,7 @@ def create_twin_learning_router() -> APIRouter:
         project_id: UUID,
         update_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         update = await application(request).update_of(
             owner_user_id=user.id, project_id=project_id, update_id=update_id
@@ -875,7 +744,7 @@ def create_twin_learning_router() -> APIRouter:
         update_id: UUID,
         body: TwinUpdateDecisionRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         update, twin = await application(request).decide(
             owner_user_id=user.id, project_id=project_id, update_id=update_id, body=body
@@ -888,7 +757,7 @@ def create_twin_learning_router() -> APIRouter:
         twin_id: UUID,
         body: LearnedObservationRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         twin = await application(request).learn(
             owner_user_id=user.id, project_id=project_id, twin_id=twin_id, body=body
@@ -902,7 +771,7 @@ def create_twin_learning_router() -> APIRouter:
         code: str,
         body: RetireObservationRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         twin = await application(request).retire(
             owner_user_id=user.id, project_id=project_id, twin_id=twin_id, code=code, body=body

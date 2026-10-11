@@ -3,13 +3,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from enum import StrEnum
-from typing import Annotated, Final
+from typing import Final
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
 from orchestwin.api.design import DesignChangeTargetRequest
 from orchestwin.api.design_mockups import (
     DISCARDED_ANSWER_CODES,
@@ -20,10 +20,10 @@ from orchestwin.api.design_mockups import (
     job_payload,
 )
 from orchestwin.api.generation_jobs import (
-    GENERATION_JOB_NOT_FOUND,
     GenerationJobKind,
     GenerationJobProgress,
     generation_jobs,
+    owned_job,
 )
 from orchestwin.artifacts.design import contains_control_character
 from orchestwin.artifacts.design_critique import (
@@ -36,7 +36,6 @@ from orchestwin.artifacts.design_critique import (
 from orchestwin.artifacts.design_critique_persistence import SqlAlchemyDesignCritiqueRepository
 from orchestwin.artifacts.design_packages import MAX_OWNER_ASSERTION_LENGTH, MAX_OWNER_ASSERTIONS
 from orchestwin.artifacts.visual_icons import mockup_resources
-from orchestwin.identity.domain import UserAccount
 from orchestwin.models.design_change import with_targeted_change
 from orchestwin.models.design_drafts import requirements_language, requirements_view
 from orchestwin.models.generated_mockup_drafts import GeneratedIterationDraft
@@ -325,7 +324,7 @@ def create_design_iteration_router():
         project_id: UUID,
         body: IterationRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         jobs = generation_jobs(request)
         application = DesignIterationApplication(request.app.state.application_runtime)
@@ -347,18 +346,16 @@ def create_design_iteration_router():
         project_id: UUID,
         job_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
-        job = generation_jobs(request).get(user.id, project_id, job_id, GenerationJobKind.ITERATION)
-        if job is None:
-            raise HTTPException(404, detail={"code": GENERATION_JOB_NOT_FOUND})
+        job = owned_job(request, user.id, project_id, job_id, GenerationJobKind.ITERATION)
         return job.to_payload()
 
     @router.get("")
     async def iterations(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return await DesignIterationApplication(request.app.state.application_runtime).iterations(
             owner_user_id=user.id, project_id=project_id

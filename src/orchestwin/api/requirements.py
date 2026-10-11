@@ -9,24 +9,23 @@ from uuid import UUID
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Request,
     status,
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
 from orchestwin.api.clarification import (
     HumanGateEventResponse,
     HumanGateResponse,
+    gate_event_response,
+    gate_response,
 )
+from orchestwin.api.dependencies import app_service
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
-from orchestwin.identity.domain import UserAccount
-from orchestwin.models.requirements import (
-    MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH,
-    RequirementsProposalIssueCode,
-)
+from orchestwin.api.refusals import conflict, refusal
+from orchestwin.models.requirements import MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH
 from orchestwin.projects.owner_requirements import OwnerRequirementsService
 from orchestwin.projects.requirements import (
     Requirement,
@@ -1176,7 +1175,7 @@ class RequirementsGateSubmissionPayload(ApiModel):
         """Map one Gate 4 submission result."""
         return cls(
             status=result.status,
-            gate=_gate_response(result.gate),
+            gate=gate_response(result.gate),
             events=tuple(HumanGateEventResponse.from_domain(event) for event in result.events),
             issue=result.issue,
         )
@@ -1198,8 +1197,8 @@ class RequirementsGateDecisionPayload(ApiModel):
         """Map one Gate 4 decision result."""
         return cls(
             status=result.status,
-            gate=_gate_response(result.gate),
-            event=_event_response(result.event),
+            gate=gate_response(result.gate),
+            event=gate_event_response(result.event),
             issue=result.issue,
         )
 
@@ -1225,7 +1224,7 @@ class RequirementsReadinessPayload(ApiModel):
                 if result.version is None
                 else RequirementsSpecificationVersionPayload.from_domain(result.version)
             ),
-            gate=_gate_response(result.gate),
+            gate=gate_response(result.gate),
             approved_current_specification=(
                 result.status is RequirementsWorkflowReadiness.READY_FOR_DESIGN_EXPLORATION
             ),
@@ -1363,88 +1362,22 @@ class RequirementsGateService(Protocol):
         """Return Gate 4 event history."""
 
 
-def _state_service[Service](
-    request: Request,
-    *,
-    attribute: str,
-    unavailable_detail: str,
-) -> Service:
-    """Read one explicitly configured application service."""
-    service = getattr(
-        request.app.state,
-        attribute,
-        None,
-    )
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=unavailable_detail,
-        )
-
-    return service
-
-
-def requirements_generation_service_dependency(
-    request: Request,
-) -> RequirementsGenerationService:
-    """Return the configured requirements generation service."""
-    return _state_service(
-        request,
-        attribute="requirements_generation_service",
-        unavailable_detail="requirements_generation_service_unavailable",
-    )
-
-
-def owner_requirements_dependency(request: Request) -> OwnerRequirementsService:
-    return _state_service(
-        request,
-        attribute="owner_requirements",
-        unavailable_detail="OWNER_REQUIREMENTS_UNAVAILABLE",
-    )
-
-
-def requirements_revision_service_dependency(
-    request: Request,
-) -> RequirementsRevisionService:
-    """Return the configured requirements revision service."""
-    return _state_service(
-        request,
-        attribute="requirements_revision_service",
-        unavailable_detail="requirements_revision_service_unavailable",
-    )
-
-
-def requirements_change_service_dependency(
-    request: Request,
-) -> RequirementsChangeService:
-    return _state_service(
-        request,
-        attribute="requirements_change_service",
-        unavailable_detail="requirements_change_service_unavailable",
-    )
-
-
-def requirements_query_service_dependency(
-    request: Request,
-) -> RequirementsQueryService:
-    """Return the configured requirements query service."""
-    return _state_service(
-        request,
-        attribute="requirements_query_service",
-        unavailable_detail="requirements_query_service_unavailable",
-    )
-
-
-def requirements_gate_service_dependency(
-    request: Request,
-) -> RequirementsGateService:
-    """Return the configured requirements Gate 4 service."""
-    return _state_service(
-        request,
-        attribute="requirements_gate_service",
-        unavailable_detail="requirements_gate_service_unavailable",
-    )
+requirements_generation_service_dependency = app_service(
+    "requirements_generation_service", "requirements_generation_service_unavailable"
+)
+owner_requirements_dependency = app_service("owner_requirements", "OWNER_REQUIREMENTS_UNAVAILABLE")
+requirements_revision_service_dependency = app_service(
+    "requirements_revision_service", "requirements_revision_service_unavailable"
+)
+requirements_change_service_dependency = app_service(
+    "requirements_change_service", "requirements_change_service_unavailable"
+)
+requirements_query_service_dependency = app_service(
+    "requirements_query_service", "requirements_query_service_unavailable"
+)
+requirements_gate_service_dependency = app_service(
+    "requirements_gate_service", "requirements_gate_service_unavailable"
+)
 
 
 def create_requirements_router() -> APIRouter:
@@ -1463,20 +1396,20 @@ def create_requirements_router() -> APIRouter:
     async def create_owner_specification_endpoint(
         project_id: UUID,
         payload: RequirementsRevisionRequest,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[OwnerRequirementsService, Depends(owner_requirements_dependency)],
     ) -> RequirementsGenerationPayload:
         if payload.specification.project_id != project_id:
-            raise _unprocessable("REQUIREMENTS_PROJECT_MISMATCH")
+            raise refusal(422, "REQUIREMENTS_PROJECT_MISMATCH")
         if payload.specification.schema_version != 2:
-            raise _unprocessable("OWNER_SPECIFICATION_SCHEMA_2_REQUIRED")
+            raise refusal(422, "OWNER_SPECIFICATION_SCHEMA_2_REQUIRED")
         try:
             specification = payload.specification.to_domain()
             result = await service.create(
                 owner_user_id=user.id, project_id=project_id, specification=specification
             )
         except (TypeError, ValueError) as error:
-            raise _unprocessable("INVALID_REQUIREMENTS_SPECIFICATION") from error
+            raise refusal(422, "INVALID_REQUIREMENTS_SPECIFICATION") from error
         _raise_generation_failure(result)
         return RequirementsGenerationPayload.from_domain(result)
 
@@ -1489,7 +1422,7 @@ def create_requirements_router() -> APIRouter:
     async def generate_requirements_endpoint(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsGenerationService,
             Depends(requirements_generation_service_dependency),
@@ -1519,7 +1452,7 @@ def create_requirements_router() -> APIRouter:
     )
     async def current_requirements_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsQueryService,
             Depends(requirements_query_service_dependency),
@@ -1531,7 +1464,7 @@ def create_requirements_router() -> APIRouter:
         )
 
         if version is None:
-            raise _not_found("REQUIREMENTS_SPECIFICATION_NOT_FOUND")
+            raise refusal(404, "REQUIREMENTS_SPECIFICATION_NOT_FOUND")
 
         return RequirementsSpecificationVersionPayload.from_domain(version)
 
@@ -1542,7 +1475,7 @@ def create_requirements_router() -> APIRouter:
     )
     async def requirements_history_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsQueryService,
             Depends(requirements_query_service_dependency),
@@ -1566,19 +1499,19 @@ def create_requirements_router() -> APIRouter:
     async def propose_revision_endpoint(
         project_id: UUID,
         payload: RequirementsRevisionRequest,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsRevisionService,
             Depends(requirements_revision_service_dependency),
         ],
     ) -> RequirementsRevisionPayload:
         if payload.specification.project_id != project_id:
-            raise _unprocessable("REQUIREMENTS_PROJECT_MISMATCH")
+            raise refusal(422, "REQUIREMENTS_PROJECT_MISMATCH")
 
         try:
             proposed = payload.specification.to_domain()
         except (TypeError, ValueError) as error:
-            raise _unprocessable("INVALID_REQUIREMENTS_SPECIFICATION") from error
+            raise refusal(422, "INVALID_REQUIREMENTS_SPECIFICATION") from error
 
         result = await service.propose_revision(
             owner_user_id=user.id,
@@ -1599,7 +1532,7 @@ def create_requirements_router() -> APIRouter:
         project_id: UUID,
         payload: RequirementsChangeRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ) -> RequirementsRevisionPayload:
         service = requirements_change_service_dependency(request)
 
@@ -1636,7 +1569,7 @@ def create_requirements_router() -> APIRouter:
     )
     async def revision_history_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsQueryService,
             Depends(requirements_query_service_dependency),
@@ -1657,7 +1590,7 @@ def create_requirements_router() -> APIRouter:
     async def get_revision_endpoint(
         project_id: UUID,
         diff_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsQueryService,
             Depends(requirements_query_service_dependency),
@@ -1670,7 +1603,7 @@ def create_requirements_router() -> APIRouter:
         )
 
         if diff is None:
-            raise _not_found("REQUIREMENTS_DIFF_NOT_FOUND")
+            raise refusal(404, "REQUIREMENTS_DIFF_NOT_FOUND")
 
         return RequirementsSpecificationDiffPayload.from_domain(diff)
 
@@ -1683,7 +1616,7 @@ def create_requirements_router() -> APIRouter:
         project_id: UUID,
         diff_id: UUID,
         payload: RequirementsRevisionDecisionRequest,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsRevisionService,
             Depends(requirements_revision_service_dependency),
@@ -1707,7 +1640,7 @@ def create_requirements_router() -> APIRouter:
     )
     async def traceability_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsQueryService,
             Depends(requirements_query_service_dependency),
@@ -1719,7 +1652,7 @@ def create_requirements_router() -> APIRouter:
         )
 
         if version is None:
-            raise _not_found("REQUIREMENTS_SPECIFICATION_NOT_FOUND")
+            raise refusal(404, "REQUIREMENTS_SPECIFICATION_NOT_FOUND")
 
         return RequirementsTraceabilityPayload.from_domain(build_requirements_traceability(version))
 
@@ -1730,7 +1663,7 @@ def create_requirements_router() -> APIRouter:
     )
     async def coverage_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsQueryService,
             Depends(requirements_query_service_dependency),
@@ -1742,7 +1675,7 @@ def create_requirements_router() -> APIRouter:
         )
 
         if version is None:
-            raise _not_found("REQUIREMENTS_SPECIFICATION_NOT_FOUND")
+            raise refusal(404, "REQUIREMENTS_SPECIFICATION_NOT_FOUND")
 
         return RequirementsCoveragePayload.from_domain(summarize_requirements_coverage(version))
 
@@ -1753,7 +1686,7 @@ def create_requirements_router() -> APIRouter:
     )
     async def submit_gate_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsGateService,
             Depends(requirements_gate_service_dependency),
@@ -1775,7 +1708,7 @@ def create_requirements_router() -> APIRouter:
     async def decide_gate_endpoint(
         project_id: UUID,
         payload: RequirementsGateDecisionRequest,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsGateService,
             Depends(requirements_gate_service_dependency),
@@ -1798,7 +1731,7 @@ def create_requirements_router() -> APIRouter:
     )
     async def current_gate_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsGateService,
             Depends(requirements_gate_service_dependency),
@@ -1810,7 +1743,7 @@ def create_requirements_router() -> APIRouter:
         )
 
         if gate is None:
-            raise _not_found("REQUIREMENTS_GATE_NOT_FOUND")
+            raise refusal(404, "REQUIREMENTS_GATE_NOT_FOUND")
 
         return HumanGateResponse.from_domain(gate)
 
@@ -1821,7 +1754,7 @@ def create_requirements_router() -> APIRouter:
     )
     async def gate_events_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsGateService,
             Depends(requirements_gate_service_dependency),
@@ -1833,7 +1766,7 @@ def create_requirements_router() -> APIRouter:
         )
 
         if gate is None:
-            raise _not_found("REQUIREMENTS_GATE_NOT_FOUND")
+            raise refusal(404, "REQUIREMENTS_GATE_NOT_FOUND")
 
         events = await service.gate_events(
             project_id=project_id,
@@ -1850,7 +1783,7 @@ def create_requirements_router() -> APIRouter:
     )
     async def readiness_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsGateService,
             Depends(requirements_gate_service_dependency),
@@ -1866,27 +1799,15 @@ def create_requirements_router() -> APIRouter:
     return router
 
 
-def _gate_response(gate: HumanGate | None) -> HumanGateResponse | None:
-    """Map an optional human gate."""
-    return None if gate is None else HumanGateResponse.from_domain(gate)
-
-
-def _event_response(
-    event: HumanGateEvent | None,
-) -> HumanGateEventResponse | None:
-    """Map an optional human gate event."""
-    return None if event is None else HumanGateEventResponse.from_domain(event)
-
-
 def _raise_generation_failure(result: RequirementsGenerationResult) -> None:
     """Translate expected generation failures into HTTP semantics."""
     if result.status is RequirementsGenerationStatus.CREATED:
         return
 
     if result.issue is RequirementsGenerationIssueCode.PROJECT_NOT_FOUND:
-        raise _not_found("PROJECT_NOT_FOUND")
+        raise refusal(404, "PROJECT_NOT_FOUND")
 
-    raise _conflict(
+    raise conflict(
         result.issue.value if result.issue is not None else "REQUIREMENTS_GENERATION_REJECTED",
         proposal_issue=result.proposal_issue,
     )
@@ -1905,11 +1826,11 @@ def _raise_revision_failure(result: RequirementsRevisionResult) -> None:
         RequirementsRevisionIssueCode.SPECIFICATION_NOT_FOUND,
         RequirementsRevisionIssueCode.DIFF_NOT_FOUND,
     }:
-        raise _not_found(
-            result.issue.value if result.issue is not None else "REQUIREMENTS_NOT_FOUND"
+        raise refusal(
+            404, result.issue.value if result.issue is not None else "REQUIREMENTS_NOT_FOUND"
         )
 
-    raise _conflict(
+    raise conflict(
         result.issue.value if result.issue is not None else "REQUIREMENTS_REVISION_REJECTED"
     )
 
@@ -1924,9 +1845,9 @@ def _changed_revision(result: RequirementsChangeResult) -> RequirementsRevisionR
         RequirementsChangeIssueCode.PROJECT_NOT_FOUND,
         RequirementsChangeIssueCode.SPECIFICATION_NOT_FOUND,
     }:
-        raise _not_found(code)
+        raise refusal(404, code)
 
-    raise _conflict(code, proposal_issue=result.proposal_issue)
+    raise conflict(code, proposal_issue=result.proposal_issue)
 
 
 def _raise_gate_submission_failure(
@@ -1941,9 +1862,9 @@ def _raise_gate_submission_failure(
         return
 
     if result.status is RequirementsGateSubmissionStatus.SPECIFICATION_NOT_FOUND:
-        raise _not_found("REQUIREMENTS_SPECIFICATION_NOT_FOUND")
+        raise refusal(404, "REQUIREMENTS_SPECIFICATION_NOT_FOUND")
 
-    raise _conflict(result.status.value)
+    raise conflict(result.status.value)
 
 
 def _raise_gate_decision_failure(
@@ -1957,42 +1878,9 @@ def _raise_gate_decision_failure(
         RequirementsGateDecisionStatus.GATE_NOT_FOUND,
         RequirementsGateDecisionStatus.SPECIFICATION_NOT_FOUND,
     }:
-        raise _not_found(result.status.value)
+        raise refusal(404, result.status.value)
 
-    raise _conflict(result.issue.value if result.issue is not None else result.status.value)
-
-
-def _not_found(code: str) -> HTTPException:
-    """Return one non-disclosing owner-scoped lookup error."""
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail={"code": code},
-    )
-
-
-def _conflict(
-    code: str,
-    *,
-    proposal_issue: RequirementsProposalIssueCode | None = None,
-) -> HTTPException:
-    """Return one typed state or governance conflict."""
-    detail = {"code": code}
-
-    if proposal_issue is not None:
-        detail["proposal_issue"] = proposal_issue.value
-
-    return HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail=detail,
-    )
-
-
-def _unprocessable(code: str) -> HTTPException:
-    """Return one typed invalid-input response."""
-    return HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        detail={"code": code},
-    )
+    raise conflict(result.issue.value if result.issue is not None else result.status.value)
 
 
 __all__ = [

@@ -1,8 +1,8 @@
-from fastapi import HTTPException
-
+from orchestwin.api.refusals import refusal
+from orchestwin.api.sections import sections_failure
 from orchestwin.projects.progress import ProjectStage
 from orchestwin.projects.sections import SectionState
-from orchestwin.projects.sections_service import PROJECT_NOT_FOUND, SectionsFailure
+from orchestwin.projects.sections_service import SectionsFailure
 
 DESIGN_CONTEXT_CHANGED = "DESIGN_CONTEXT_CHANGED"
 
@@ -14,9 +14,7 @@ async def require_current_design_context(runtime, *, owner_user_id, project_id) 
     try:
         sections = await service.current(owner_user_id=owner_user_id, project_id=project_id)
     except SectionsFailure as error:
-        raise HTTPException(
-            404 if error.code == PROJECT_NOT_FOUND else 409, detail={"code": error.code}
-        ) from None
+        raise sections_failure(error) from None
     ready = {SectionState.FINE, SectionState.UPDATE_AVAILABLE}
     if any(
         sections.section(key).state not in ready
@@ -27,4 +25,4 @@ async def require_current_design_context(runtime, *, owner_user_id, project_id) 
             ProjectStage.REQUIREMENTS,
         )
     ) or sections.section(ProjectStage.DESIGN).state not in ready | {SectionState.IN_PROGRESS}:
-        raise HTTPException(409, detail={"code": DESIGN_CONTEXT_CHANGED})
+        raise refusal(409, DESIGN_CONTEXT_CHANGED)

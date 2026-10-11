@@ -4,10 +4,10 @@ from collections.abc import Mapping
 from typing import Annotated, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.validation import ValidationError
 
 
@@ -35,14 +35,9 @@ class HumanValidationService(Protocol):
     ) -> dict: ...
 
 
-def human_validation_service_dependency(request: Request) -> HumanValidationService:
-    service = getattr(request.app.state, "human_validation_service", None)
-    if service is None:
-        raise HTTPException(status_code=503, detail={"code": "VALIDATION_SERVICE_UNAVAILABLE"})
-    return service
-
-
-CurrentUser = Annotated[UserAccount, Depends(current_user_dependency)]
+human_validation_service_dependency = app_service(
+    "human_validation_service", {"code": "VALIDATION_SERVICE_UNAVAILABLE"}
+)
 ValidationService = Annotated[HumanValidationService, Depends(human_validation_service_dependency)]
 
 

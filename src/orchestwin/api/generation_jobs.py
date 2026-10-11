@@ -349,6 +349,19 @@ def generation_jobs(request: Request) -> GenerationJobRegistry:
     return registry
 
 
+def owned_job(
+    request: Request,
+    owner_user_id: UUID,
+    project_id: UUID,
+    job_id: UUID,
+    kind: GenerationJobKind | None = None,
+) -> GenerationJob:
+    job = generation_jobs(request).get(owner_user_id, project_id, job_id, kind)
+    if job is None:
+        raise HTTPException(404, detail={"code": GENERATION_JOB_NOT_FOUND})
+    return job
+
+
 __all__ = [
     "FINISHED_JOB_RETENTION",
     "GENERATION_JOBS_UNAVAILABLE",
@@ -368,4 +381,5 @@ __all__ = [
     "GenerationJobStatus",
     "GenerationOperation",
     "generation_jobs",
+    "owned_job",
 ]
