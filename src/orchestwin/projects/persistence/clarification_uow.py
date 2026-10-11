@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-from types import TracebackType
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-)
-
+from orchestwin.persistence.unit_of_work import SqlAlchemyUnitOfWork, SqlAlchemyUnitOfWorkFactory
 from orchestwin.projects.persistence.brief_gate import (
     SqlAlchemyCurrentProjectBriefRepository,
 )
@@ -20,18 +16,8 @@ from orchestwin.projects.persistence.clarification import (
 )
 
 
-class SqlAlchemyProjectClarificationUnitOfWork:
+class SqlAlchemyProjectClarificationUnitOfWork(SqlAlchemyUnitOfWork):
     """One SQLAlchemy transaction for clarification use cases."""
-
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        self._session_factory = session_factory
-        self._session: AsyncSession | None = None
-        self._current_briefs: SqlAlchemyCurrentProjectBriefRepository | None = None
-        self._briefs: SqlAlchemyProjectBriefRepository | None = None
-        self._assumptions: SqlAlchemyBriefAssumptionRepository | None = None
 
     @property
     def current_briefs(
@@ -63,53 +49,18 @@ class SqlAlchemyProjectClarificationUnitOfWork:
 
         return self._assumptions
 
-    async def __aenter__(
-        self,
-    ) -> SqlAlchemyProjectClarificationUnitOfWork:
-        """Open a SQLAlchemy session and transaction."""
-        self._session = self._session_factory()
-        await self._session.begin()
+    def _bind(self, session: AsyncSession) -> None:
+        self._current_briefs = SqlAlchemyCurrentProjectBriefRepository(session)
+        self._briefs = SqlAlchemyProjectBriefRepository(session)
+        self._assumptions = SqlAlchemyBriefAssumptionRepository(session)
 
-        self._current_briefs = SqlAlchemyCurrentProjectBriefRepository(self._session)
-        self._briefs = SqlAlchemyProjectBriefRepository(self._session)
-        self._assumptions = SqlAlchemyBriefAssumptionRepository(self._session)
-
-        return self
-
-    async def __aexit__(
-        self,
-        exception_type: type[BaseException] | None,
-        exception: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Commit successful work or roll back failures."""
-        if self._session is None:
-            return
-
-        try:
-            if exception_type is None:
-                await self._session.commit()
-            else:
-                await self._session.rollback()
-        finally:
-            await self._session.close()
-            self._session = None
-            self._current_briefs = None
-            self._briefs = None
-            self._assumptions = None
+    def _release(self) -> None:
+        self._current_briefs = None
+        self._briefs = None
+        self._assumptions = None
 
 
-class SqlAlchemyProjectClarificationUnitOfWorkFactory:
+class SqlAlchemyProjectClarificationUnitOfWorkFactory(SqlAlchemyUnitOfWorkFactory):
     """Create a fresh clarification unit of work per use case."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        self._session_factory = session_factory
-
-    def __call__(
-        self,
-    ) -> SqlAlchemyProjectClarificationUnitOfWork:
-        """Return one unopened clarification unit of work."""
-        return SqlAlchemyProjectClarificationUnitOfWork(self._session_factory)
+    unit_of_work = SqlAlchemyProjectClarificationUnitOfWork
