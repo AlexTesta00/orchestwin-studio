@@ -1,3 +1,5 @@
+import { isRecord } from "./http";
+
 import type {
   AccessModeResponse,
   AuthenticationApi,
@@ -40,10 +42,6 @@ import type {
 const DEFAULT_API_BASE_URL = "/api/v1";
 
 type FetchImplementation = typeof fetch;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 async function errorDetail(response: Response): Promise<string> {
   try {

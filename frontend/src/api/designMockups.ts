@@ -1,3 +1,4 @@
+import { accessTokenOf, basePathOf, detailCode, responseBody } from "./http";
 import { ApiRequestError } from "./requestError";
 
 import type {
@@ -46,60 +47,6 @@ export interface DesignMockupsApi {
   ): Promise<MockupDocumentPayload>;
 }
 
-function normalizedBasePath(value: string): string {
-  const normalized = value.trim().replace(/\/+$/, "");
-
-  if (normalized.length === 0) {
-    throw new Error("Design Mockups API base path must not be empty");
-  }
-
-  return normalized;
-}
-
-function requiredAccessToken(value: string): string {
-  const normalized = value.trim();
-
-  if (normalized.length === 0) {
-    throw new DesignMockupsApiError("Authentication is required", {
-      status: 0,
-      code: "ACCESS_TOKEN_REQUIRED",
-      payload: null,
-    });
-  }
-
-  return normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorCode(payload: unknown): string | null {
-  if (!isRecord(payload) || !isRecord(payload.detail)) {
-    return null;
-  }
-
-  return typeof payload.detail.code === "string" ? payload.detail.code : null;
-}
-
-async function responsePayload(response: Response): Promise<unknown> {
-  const text = await response.text();
-
-  if (text.trim().length === 0) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new DesignMockupsApiError("The Design Mockups API returned invalid JSON", {
-      status: response.status,
-      code: "INVALID_API_RESPONSE",
-      payload: text,
-    });
-  }
-}
-
 function mockupsPath(basePath: string, projectId: string): string {
   return `${basePath}/projects/${encodeURIComponent(projectId)}/design/mockups`;
 }
@@ -117,10 +64,10 @@ function withQuery(path: string, query: Record<string, string | undefined>): str
 }
 
 export function createDesignMockupsApi(options: DesignMockupsApiOptions = {}): DesignMockupsApi {
-  const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
+  const basePath = basePathOf(options.basePath ?? DEFAULT_API_BASE_PATH, "Design Mockups");
 
   async function request<T>(path: string, optionsValue: RequestOptions): Promise<T> {
-    const accessToken = requiredAccessToken(optionsValue.accessToken);
+    const accessToken = accessTokenOf(optionsValue.accessToken, DesignMockupsApiError);
     const headers: Record<string, string> = {
       Accept: "application/json",
       Authorization: `Bearer ${accessToken}`,
@@ -138,10 +85,10 @@ export function createDesignMockupsApi(options: DesignMockupsApiOptions = {}): D
 
     const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     const response = await fetchImpl(path, init);
-    const payload = await responsePayload(response);
+    const payload = await responseBody(response, DesignMockupsApiError, "Design Mockups");
 
     if (!response.ok) {
-      const code = errorCode(payload);
+      const code = detailCode(payload);
 
       throw new DesignMockupsApiError(
         code ?? `Design Mockups API request failed with status ${response.status}`,

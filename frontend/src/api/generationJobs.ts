@@ -1,3 +1,4 @@
+import { accessTokenOf, basePathOf, detailCode, isRecord } from "./http";
 import { ApiRequestError } from "./requestError";
 
 import type {
@@ -115,10 +116,6 @@ type Reading =
 const followed = new Map<string, FollowedGeneration>();
 const listeners = new Set<GenerationJobListener>();
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function oneOf<T extends string>(values: readonly T[], value: unknown): T | null {
   return values.find((candidate) => candidate === value) ?? null;
 }
@@ -224,18 +221,8 @@ export function isTransientStatus(status: number | null): boolean {
   return status === null || status === 0 || status === 408 || status === 429 || status >= 500;
 }
 
-function normalizedBasePath(value: string): string {
-  const normalized = value.trim().replace(/\/+$/, "");
-
-  if (normalized.length === 0) {
-    throw new Error("Generation Jobs API base path must not be empty");
-  }
-
-  return normalized;
-}
-
 export function generationJobsPath(basePath: string, projectId: string): string {
-  return `${normalizedBasePath(basePath)}/projects/${encodeURIComponent(projectId)}/generation-jobs`;
+  return `${basePathOf(basePath, "Generation Jobs")}/projects/${encodeURIComponent(projectId)}/generation-jobs`;
 }
 
 function requestKey(url: string, init: RequestInit): string {
@@ -532,31 +519,9 @@ export function clearFollowedGenerations(): void {
 }
 
 function errorCode(payload: unknown): string | null {
-  if (!isRecord(payload)) {
-    return null;
-  }
-
-  if (typeof payload.detail === "string") {
-    return payload.detail;
-  }
-
-  return isRecord(payload.detail) && typeof payload.detail.code === "string"
-    ? payload.detail.code
-    : null;
-}
-
-function requiredAccessToken(value: string): string {
-  const normalized = value.trim();
-
-  if (normalized.length === 0) {
-    throw new GenerationJobsApiError("Authentication is required", {
-      status: 0,
-      code: "ACCESS_TOKEN_REQUIRED",
-      payload: null,
-    });
-  }
-
-  return normalized;
+  return isRecord(payload) && typeof payload.detail === "string"
+    ? payload.detail
+    : detailCode(payload);
 }
 
 function invalidResponse(status: number, payload: unknown): GenerationJobsApiError {
@@ -568,10 +533,10 @@ function invalidResponse(status: number, payload: unknown): GenerationJobsApiErr
 }
 
 export function createGenerationJobsApi(options: GenerationJobsApiOptions = {}): GenerationJobsApi {
-  const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
+  const basePath = basePathOf(options.basePath ?? DEFAULT_API_BASE_PATH, "Generation Jobs");
 
   async function read(path: string, accessToken: string): Promise<unknown> {
-    const token = requiredAccessToken(accessToken);
+    const token = accessTokenOf(accessToken, GenerationJobsApiError);
     const fetchImpl = options.fetchImpl ?? globalThis.fetch;
     const response = await fetchImpl(path, {
       method: "GET",

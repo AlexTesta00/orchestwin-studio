@@ -1,3 +1,4 @@
+import { accessTokenOf, basePathOf, detailCode, isRecord } from "./http";
 import { ApiRequestError } from "./requestError";
 import {
   ACTIVITY_KIND,
@@ -25,10 +26,6 @@ export interface ActivityApi {
   ): Promise<ActivityEventsRecorded>;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isSession(value: unknown): boolean {
   return isRecord(value) && typeof value.code === "string" && typeof value.started_at === "string";
 }
@@ -41,8 +38,7 @@ function hasStatus(expected: string): (payload: unknown) => boolean {
 export function createActivityApi(
   options: { basePath?: string; fetchImpl?: typeof fetch } = {},
 ): ActivityApi {
-  const base = (options.basePath ?? "/api/v1").trim().replace(/\/+$/, "");
-  if (base.length === 0) throw new Error("Activity API base path must not be empty");
+  const base = basePathOf(options.basePath ?? "/api/v1", "Activity");
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const path = (project: string) => `${base}/projects/${encodeURIComponent(project)}/activity`;
 
@@ -52,19 +48,12 @@ export function createActivityApi(
     accepted: (payload: unknown) => boolean,
     init: { method?: "GET" | "POST"; body?: unknown; keepalive?: boolean } = {},
   ): Promise<T> {
-    if (token.trim().length === 0) {
-      throw new ActivityApiError("Authentication is required", {
-        status: 0,
-        code: "ACCESS_TOKEN_REQUIRED",
-        payload: null,
-      });
-    }
     const response = await fetchImpl(url, {
       method: init.method ?? "GET",
       credentials: "include",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${token.trim()}`,
+        Authorization: `Bearer ${accessTokenOf(token, ActivityApiError)}`,
         ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
@@ -77,13 +66,9 @@ export function createActivityApi(
       payload = null;
     }
     if (!response.ok) {
-      const code =
-        isRecord(payload) && isRecord(payload.detail) && typeof payload.detail.code === "string"
-          ? payload.detail.code
-          : null;
       throw new ActivityApiError("The activity request failed", {
         status: response.status,
-        code,
+        code: detailCode(payload),
         payload: null,
       });
     }

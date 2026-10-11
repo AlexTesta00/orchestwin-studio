@@ -1,3 +1,4 @@
+import { accessTokenOf, basePathOf, detailCode, isRecord } from "./http";
 import { ApiRequestError } from "./requestError";
 import type { WhyAnswer, WhyDocument } from "../types/why";
 
@@ -8,30 +9,19 @@ export interface WhyApi {
   document(projectId: string, token: string): Promise<WhyDocument>;
 }
 
-function record(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function createWhyApi(
   options: { basePath?: string; fetchImpl?: typeof fetch } = {},
 ): WhyApi {
-  const base = (options.basePath ?? "/api/v1").trim().replace(/\/+$/, "");
-  if (base.length === 0) throw new Error("Why API base path must not be empty");
+  const base = basePathOf(options.basePath ?? "/api/v1", "Why");
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const path = (project: string) => `${base}/projects/${encodeURIComponent(project)}/artifacts/why`;
 
   async function request<T>(url: string, token: string, kind: string): Promise<T> {
-    if (token.trim().length === 0) {
-      throw new WhyApiError("Authentication is required", {
-        status: 0,
-        code: "ACCESS_TOKEN_REQUIRED",
-        payload: null,
-      });
-    }
+    const accessToken = accessTokenOf(token, WhyApiError);
     const response = await fetchImpl(url, {
       method: "GET",
       credentials: "include",
-      headers: { Accept: "application/json", Authorization: `Bearer ${token.trim()}` },
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
     });
     let payload: unknown;
     try {
@@ -40,13 +30,10 @@ export function createWhyApi(
       payload = null;
     }
     if (!response.ok) {
-      const code =
-        record(payload) && record(payload.detail) && typeof payload.detail.code === "string"
-          ? payload.detail.code
-          : null;
+      const code = detailCode(payload);
       throw new WhyApiError("The Why request failed", { status: response.status, code, payload });
     }
-    if (!record(payload) || payload.kind !== kind || payload.schema_version !== 1) {
+    if (!isRecord(payload) || payload.kind !== kind || payload.schema_version !== 1) {
       throw new WhyApiError("Why API returned an invalid response", {
         status: response.status,
         code: "INVALID_API_RESPONSE",

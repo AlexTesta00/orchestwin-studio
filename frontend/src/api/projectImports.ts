@@ -1,3 +1,4 @@
+import { accessTokenOf, basePathOf, isRecord, responseBody } from "./http";
 import { ApiRequestError } from "./requestError";
 
 import type { ProjectImportOriginPayload, ProjectImportPayload } from "../types/projectImports";
@@ -32,34 +33,6 @@ export interface ProjectImportsApi {
   origin(projectId: string, accessToken: string): Promise<ProjectImportOriginPayload | null>;
 }
 
-function normalizedBasePath(value: string): string {
-  const normalized = value.trim().replace(/\/+$/, "");
-
-  if (normalized.length === 0) {
-    throw new Error("Project Imports API base path must not be empty");
-  }
-
-  return normalized;
-}
-
-function requiredAccessToken(value: string): string {
-  const normalized = value.trim();
-
-  if (normalized.length === 0) {
-    throw new ProjectImportsApiError("Authentication is required", {
-      status: 0,
-      code: "ACCESS_TOKEN_REQUIRED",
-      payload: null,
-    });
-  }
-
-  return normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function errorDetail(payload: unknown, key: "code" | "location"): string | null {
   if (!isRecord(payload) || !isRecord(payload.detail)) {
     return null;
@@ -67,20 +40,6 @@ function errorDetail(payload: unknown, key: "code" | "location"): string | null 
 
   const value = payload.detail[key];
   return typeof value === "string" ? value : null;
-}
-
-async function responsePayload(response: Response): Promise<unknown> {
-  const text = await response.text();
-
-  if (text.trim().length === 0) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
 }
 
 function importsPath(basePath: string): string {
@@ -103,7 +62,7 @@ function archiveForm(file: Blob, fileName: string, displayName: string | null): 
 }
 
 export function createProjectImportsApi(options: ProjectImportsApiOptions = {}): ProjectImportsApi {
-  const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
+  const basePath = basePathOf(options.basePath ?? DEFAULT_API_BASE_PATH, "Project Imports");
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
   async function request(
@@ -117,7 +76,7 @@ export function createProjectImportsApi(options: ProjectImportsApiOptions = {}):
       credentials: "include",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${requiredAccessToken(accessToken)}`,
+        Authorization: `Bearer ${accessTokenOf(accessToken, ProjectImportsApiError)}`,
       },
     };
 
@@ -126,7 +85,7 @@ export function createProjectImportsApi(options: ProjectImportsApiOptions = {}):
     }
 
     const response = await fetchImpl(path, init);
-    return { response, payload: await responsePayload(response) };
+    return { response, payload: await responseBody(response) };
   }
 
   function failure(response: Response, payload: unknown): ProjectImportsApiError {

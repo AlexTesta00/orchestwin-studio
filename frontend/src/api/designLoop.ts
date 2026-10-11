@@ -1,4 +1,5 @@
 import { sendGeneration } from "./generationJobs";
+import { absoluteBasePathOf, accessTokenOf, detailCode, responseBody } from "./http";
 import { ApiRequestError } from "./requestError";
 
 import type { DesignGenerationPayload } from "../types/design";
@@ -87,53 +88,10 @@ export interface InsightBatchApi {
 
 export class DesignLoopApiError extends ApiRequestError {}
 
-function normalizedBasePath(value: string): string {
-  const normalized = value.trim().replace(/\/+$/u, "");
-  if (normalized.length === 0 || !normalized.startsWith("/") || normalized.startsWith("//")) {
-    throw new Error("Design loop API base path must be an absolute application path");
-  }
-  return normalized;
-}
-
-function requiredAccessToken(value: string): string {
-  const normalized = value.trim();
-  if (normalized.length === 0) {
-    throw new DesignLoopApiError("Authentication is required", {
-      status: 0,
-      code: "ACCESS_TOKEN_REQUIRED",
-      payload: null,
-    });
-  }
-  return normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorCode(payload: unknown): string | null {
-  if (!isRecord(payload) || !isRecord(payload.detail)) {
-    return null;
-  }
-  return typeof payload.detail.code === "string" ? payload.detail.code : null;
-}
-
-async function responsePayload(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (text.trim().length === 0) {
-    return null;
-  }
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
-}
-
 export function createDesignLoopApi(
   options: DesignLoopApiOptions = {},
 ): DesignLoopApi & InsightBatchApi {
-  const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
+  const basePath = absoluteBasePathOf(options.basePath ?? DEFAULT_API_BASE_PATH, "Design loop");
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
   function projectPath(projectId: string): string {
@@ -149,7 +107,7 @@ export function createDesignLoopApi(
   ): Promise<unknown> {
     const headers = new Headers();
     headers.set("Accept", "application/json");
-    headers.set("Authorization", `Bearer ${requiredAccessToken(accessToken)}`);
+    headers.set("Authorization", `Bearer ${accessTokenOf(accessToken, DesignLoopApiError)}`);
     const init: RequestInit = { credentials: "include", headers, method };
     if (body !== undefined) {
       headers.set("Content-Type", "application/json");
@@ -163,11 +121,11 @@ export function createDesignLoopApi(
             basePath,
             projectId: generationProjectId,
           });
-    const payload = await responsePayload(response);
+    const payload = await responseBody(response);
     if (!response.ok) {
       throw new DesignLoopApiError("The design loop request failed", {
         status: response.status,
-        code: errorCode(payload),
+        code: detailCode(payload),
         payload,
       });
     }
