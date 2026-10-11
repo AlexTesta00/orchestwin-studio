@@ -1,4 +1,5 @@
 import { sendGeneration } from "./generationJobs";
+import { accessTokenOf, detailCode, isRecord, responseBody } from "./http";
 import { ApiRequestError } from "./requestError";
 
 import type {
@@ -130,58 +131,10 @@ function normalizeBasePath(value: string): string {
   return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 }
 
-function requireAccessToken(accessToken: string): string {
-  const normalized = accessToken.trim();
-
-  if (normalized.length === 0) {
-    throw new UserModelingApiError("Authentication is required", {
-      status: 0,
-      code: "ACCESS_TOKEN_REQUIRED",
-      payload: null,
-    });
-  }
-
-  return normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function extractErrorCode(payload: unknown): string | null {
-  if (!isRecord(payload)) {
-    return null;
-  }
-
-  const detail = payload.detail;
-
-  if (typeof detail === "string") return detail;
-
-  if (!isRecord(detail)) {
-    return null;
-  }
-
-  const code = detail.code;
-
-  return typeof code === "string" ? code : null;
-}
-
-async function readJson(response: Response): Promise<unknown> {
-  const text = await response.text();
-
-  if (text.trim().length === 0) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new UserModelingApiError("The User Modeling API returned invalid JSON", {
-      status: response.status,
-      code: "INVALID_API_RESPONSE",
-      payload: text,
-    });
-  }
+  return isRecord(payload) && typeof payload.detail === "string"
+    ? payload.detail
+    : detailCode(payload);
 }
 
 function projectPath(basePath: string, projectId: string): string {
@@ -192,7 +145,7 @@ function createUserModelingApi(options: UserModelingApiOptions = {}): UserModeli
   const basePath = normalizeBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
 
   async function requestJson<T>(path: string, requestOptions: RequestOptions): Promise<T> {
-    const accessToken = requireAccessToken(requestOptions.accessToken);
+    const accessToken = accessTokenOf(requestOptions.accessToken, UserModelingApiError);
 
     const headers: Record<string, string> = {
       Accept: "application/json",
@@ -222,7 +175,7 @@ function createUserModelingApi(options: UserModelingApiOptions = {}): UserModeli
             projectId: requestOptions.generationProjectId,
           });
 
-    const payload = await readJson(response);
+    const payload = await responseBody(response, UserModelingApiError, "User Modeling");
 
     if (!response.ok) {
       const code = extractErrorCode(payload);
@@ -237,14 +190,8 @@ function createUserModelingApi(options: UserModelingApiOptions = {}): UserModeli
       );
     }
 
-    if (
-      typeof payload === "object" &&
-      payload !== null &&
-      "status" in payload &&
-      payload.status === "REJECTED"
-    ) {
-      const result = payload as Record<string, unknown>;
-      const code = [result.proposal_issue, result.candidate_issue, result.issue].find(
+    if (isRecord(payload) && payload.status === "REJECTED") {
+      const code = [payload.proposal_issue, payload.candidate_issue, payload.issue].find(
         (value) => typeof value === "string",
       ) as string | undefined;
       throw new UserModelingApiError(code ?? "USER_MODELING_REJECTED", {

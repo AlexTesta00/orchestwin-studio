@@ -1,3 +1,4 @@
+import { accessTokenOf, basePathOf, detailCode, responseBody } from "./http";
 import { ApiRequestError } from "./requestError";
 
 import type { MockupDocumentPayload, ReviewPinsPayload } from "../types/designMockups";
@@ -21,60 +22,6 @@ export interface DesignReviewPinsApi {
   ): Promise<MockupDocumentPayload>;
 }
 
-function normalizedBasePath(value: string): string {
-  const normalized = value.trim().replace(/\/+$/, "");
-
-  if (normalized.length === 0) {
-    throw new Error("Design Review Pins API base path must not be empty");
-  }
-
-  return normalized;
-}
-
-function requiredAccessToken(value: string): string {
-  const normalized = value.trim();
-
-  if (normalized.length === 0) {
-    throw new DesignReviewPinsApiError("Authentication is required", {
-      status: 0,
-      code: "ACCESS_TOKEN_REQUIRED",
-      payload: null,
-    });
-  }
-
-  return normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorCode(payload: unknown): string | null {
-  if (!isRecord(payload) || !isRecord(payload.detail)) {
-    return null;
-  }
-
-  return typeof payload.detail.code === "string" ? payload.detail.code : null;
-}
-
-async function responsePayload(response: Response): Promise<unknown> {
-  const text = await response.text();
-
-  if (text.trim().length === 0) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new DesignReviewPinsApiError("The Design Review Pins API returned invalid JSON", {
-      status: response.status,
-      code: "INVALID_API_RESPONSE",
-      payload: text,
-    });
-  }
-}
-
 function evaluationPath(basePath: string, projectId: string, runId: string): string {
   return `${basePath}/projects/${encodeURIComponent(projectId)}/design/evaluations/${encodeURIComponent(runId)}`;
 }
@@ -82,10 +29,10 @@ function evaluationPath(basePath: string, projectId: string, runId: string): str
 export function createDesignReviewPinsApi(
   options: DesignReviewPinsApiOptions = {},
 ): DesignReviewPinsApi {
-  const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
+  const basePath = basePathOf(options.basePath ?? DEFAULT_API_BASE_PATH, "Design Review Pins");
 
   async function request<T>(path: string, accessTokenValue: string): Promise<T> {
-    const accessToken = requiredAccessToken(accessTokenValue);
+    const accessToken = accessTokenOf(accessTokenValue, DesignReviewPinsApiError);
     const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     const response = await fetchImpl(path, {
       method: "GET",
@@ -95,10 +42,10 @@ export function createDesignReviewPinsApi(
       },
       credentials: "include",
     });
-    const payload = await responsePayload(response);
+    const payload = await responseBody(response, DesignReviewPinsApiError, "Design Review Pins");
 
     if (!response.ok) {
-      const code = errorCode(payload);
+      const code = detailCode(payload);
 
       throw new DesignReviewPinsApiError(
         code ?? `Design Review Pins API request failed with status ${response.status}`,

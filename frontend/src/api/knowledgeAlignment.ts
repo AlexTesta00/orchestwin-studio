@@ -1,4 +1,5 @@
 import { sendGeneration } from "./generationJobs";
+import { accessTokenOf, basePathOf, detailCode, isRecord, responseBody } from "./http";
 import { ApiRequestError } from "./requestError";
 
 import type {
@@ -50,60 +51,11 @@ export interface KnowledgeAlignmentApi {
   runs(projectId: string, accessToken: string): Promise<KnowledgeAlignmentRunListPayload>;
 }
 
-function normalizedBasePath(value: string): string {
-  const normalized = value.trim().replace(/\/+$/, "");
-
-  if (normalized.length === 0) {
-    throw new Error("Knowledge Alignment API base path must not be empty");
-  }
-
-  return normalized;
-}
-
-function requiredAccessToken(value: string): string {
-  const normalized = value.trim();
-
-  if (normalized.length === 0) {
-    throw new KnowledgeAlignmentApiError("Authentication is required", {
-      status: 0,
-      code: "ACCESS_TOKEN_REQUIRED",
-      payload: null,
-    });
-  }
-
-  return normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function errorCode(payload: unknown): string | null {
-  if (!isRecord(payload) || !isRecord(payload.detail)) {
-    return null;
-  }
+  const reason =
+    isRecord(payload) && isRecord(payload.detail) ? payload.detail.proposal_issue : null;
 
-  const reason = payload.detail.proposal_issue;
-
-  if (typeof reason === "string" && reason.length > 0) {
-    return reason;
-  }
-
-  return typeof payload.detail.code === "string" ? payload.detail.code : null;
-}
-
-async function responsePayload(response: Response): Promise<unknown> {
-  const text = await response.text();
-
-  if (text.trim().length === 0) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
+  return typeof reason === "string" && reason.length > 0 ? reason : detailCode(payload);
 }
 
 function invalidResponse(status: number, payload: unknown): KnowledgeAlignmentApiError {
@@ -140,7 +92,7 @@ function runsPath(basePath: string, projectId: string): string {
 export function createKnowledgeAlignmentApi(
   options: KnowledgeAlignmentApiOptions = {},
 ): KnowledgeAlignmentApi {
-  const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
+  const basePath = basePathOf(options.basePath ?? DEFAULT_API_BASE_PATH, "Knowledge Alignment");
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
   async function request(
@@ -149,7 +101,7 @@ export function createKnowledgeAlignmentApi(
   ): Promise<Record<string, unknown>> {
     const headers: Record<string, string> = {
       Accept: "application/json",
-      Authorization: `Bearer ${requiredAccessToken(optionsValue.accessToken)}`,
+      Authorization: `Bearer ${accessTokenOf(optionsValue.accessToken, KnowledgeAlignmentApiError)}`,
     };
     const init: RequestInit = {
       method: optionsValue.method,
@@ -170,7 +122,7 @@ export function createKnowledgeAlignmentApi(
             basePath,
             projectId: optionsValue.generationProjectId,
           });
-    const payload = await responsePayload(response);
+    const payload = await responseBody(response);
 
     if (!response.ok) {
       const code = errorCode(payload);

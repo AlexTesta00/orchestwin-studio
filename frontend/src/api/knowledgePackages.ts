@@ -1,3 +1,4 @@
+import { accessTokenOf, basePathOf, detailCode, isRecord, responseBody } from "./http";
 import { ApiRequestError } from "./requestError";
 
 import type {
@@ -27,56 +28,6 @@ export interface KnowledgePackagesApi {
     versionNumber: number,
     accessToken: string,
   ): Promise<KnowledgePackageDownload>;
-}
-
-function normalizedBasePath(value: string): string {
-  const normalized = value.trim().replace(/\/+$/, "");
-
-  if (normalized.length === 0) {
-    throw new Error("Knowledge Packages API base path must not be empty");
-  }
-
-  return normalized;
-}
-
-function requiredAccessToken(value: string): string {
-  const normalized = value.trim();
-
-  if (normalized.length === 0) {
-    throw new KnowledgePackagesApiError("Authentication is required", {
-      status: 0,
-      code: "ACCESS_TOKEN_REQUIRED",
-      payload: null,
-    });
-  }
-
-  return normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorCode(payload: unknown): string | null {
-  if (!isRecord(payload) || !isRecord(payload.detail)) {
-    return null;
-  }
-
-  return typeof payload.detail.code === "string" ? payload.detail.code : null;
-}
-
-async function responsePayload(response: Response): Promise<unknown> {
-  const text = await response.text();
-
-  if (text.trim().length === 0) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
 }
 
 export function knowledgePackageFileName(projectId: string, versionNumber: number): string {
@@ -111,7 +62,7 @@ function archivePath(basePath: string, projectId: string, versionNumber: number)
 export function createKnowledgePackagesApi(
   options: KnowledgePackagesApiOptions = {},
 ): KnowledgePackagesApi {
-  const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
+  const basePath = basePathOf(options.basePath ?? DEFAULT_API_BASE_PATH, "Knowledge Packages");
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
   async function authenticatedFetch(
@@ -125,15 +76,15 @@ export function createKnowledgePackagesApi(
       credentials: "include",
       headers: {
         Accept: accept,
-        Authorization: `Bearer ${requiredAccessToken(accessToken)}`,
+        Authorization: `Bearer ${accessTokenOf(accessToken, KnowledgePackagesApiError)}`,
       },
     });
 
     if (!response.ok) {
-      const payload = await responsePayload(response);
+      const payload = await responseBody(response);
       throw new KnowledgePackagesApiError("The knowledge package request failed", {
         status: response.status,
-        code: errorCode(payload),
+        code: detailCode(payload),
         payload,
       });
     }
@@ -142,7 +93,7 @@ export function createKnowledgePackagesApi(
   }
 
   async function jsonPayload<T>(response: Response): Promise<T> {
-    const payload = await responsePayload(response);
+    const payload = await responseBody(response);
 
     if (!isRecord(payload)) {
       throw new KnowledgePackagesApiError("The Knowledge Packages API returned invalid JSON", {
