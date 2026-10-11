@@ -10,13 +10,23 @@ from pathlib import Path
 from shutil import which
 from typing import TYPE_CHECKING, Final
 
+from orchestwin.cli import costs
+from orchestwin.cli.console import format_elapsed
 from orchestwin.cli.errors import INTERRUPTED_STATUS, USAGE_STATUS, CliError
 from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows import code_agents
 from orchestwin.cli.flows.code_agents import AGENTS, CLAUDE, CUSTOM
 from orchestwin.cli.mcp.configs import server_arguments
 from orchestwin.cli.mcp.protocol import SERVER_NAME
-from orchestwin.cli.project import LOCAL_FOLDER, json_bytes, read_json, write_atomically
+from orchestwin.cli.project import (
+    LATEST_NAME,
+    LOCAL_FOLDER,
+    ignored_folder,
+    read_json,
+    stamped_folder,
+    write_atomically,
+    write_json,
+)
 
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
@@ -29,11 +39,7 @@ CODE_FOLDER: Final = "code"
 PROMPT_NAME: Final = "prompt.md"
 MCP_NAME: Final = "mcp.json"
 OUTCOME_NAME: Final = "outcome.json"
-LATEST_NAME: Final = "latest.json"
 DESIGN_POINT_NAME: Final = "design.json"
-IGNORE_NAME: Final = ".gitignore"
-IGNORE_CONTENT: Final = b"*\n"
-FOLDER_FORMAT: Final = "%Y%m%d-%H%M%S"
 PYTHON_MODULE: Final = ("-m", "orchestwin.cli")
 STATUS_ARGUMENTS: Final = ("status", "--porcelain", "-z", "--untracked-files=normal")
 NO_REPOSITORY: Final = "NO_REPOSITORY"
@@ -42,6 +48,7 @@ DESIGN_KIND: Final = "design"
 CODE_RUN_REASON: Final = "CODE_RUN"
 DESIGN_RUN_REASON: Final = "DESIGN_RUN"
 NO_CODE_CHANGES_REASON: Final = "NO_CODE_CHANGES"
+LISTED_FILES: Final = 40
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,9 +174,7 @@ def read_settings(project: ProjectFolder) -> CodeSettings | None:
 
 
 def write_settings(project: ProjectFolder, settings: CodeSettings) -> Path:
-    path = settings_path(project)
-    write_atomically(path, json_bytes(settings.document()))
-    return path
+    return write_json(settings_path(project), settings.document())
 
 
 def settings_from(document: object) -> CodeSettings | None:
@@ -236,27 +241,11 @@ def code_folder(project: ProjectFolder) -> Path:
 
 
 def ensure_code_folder(project: ProjectFolder) -> Path:
-    code = code_folder(project)
-    code.mkdir(parents=True, exist_ok=True)
-    ignore = code / IGNORE_NAME
-    if not ignore.exists():
-        write_atomically(ignore, IGNORE_CONTENT)
-    return code
+    return ignored_folder(code_folder(project))
 
 
 def run_folder(project: ProjectFolder, moment: datetime) -> Path:
-    code = ensure_code_folder(project)
-    stem = moment.astimezone(UTC).strftime(FOLDER_FORMAT)
-    candidate = code / stem
-    number = 1
-    while True:
-        try:
-            candidate.mkdir()
-        except FileExistsError:
-            number += 1
-            candidate = code / f"{stem}-{number}"
-            continue
-        return candidate
+    return stamped_folder(code_folder(project), moment)
 
 
 def mcp_document(root: Path, *, spend: bool, python: str) -> dict[str, object]:
@@ -277,7 +266,7 @@ def write_run_files(
     folder = run_folder(project, moment)
     files = RunFiles(folder=folder, prompt=folder / PROMPT_NAME, mcp=folder / MCP_NAME)
     write_atomically(files.prompt, order.encode("utf-8"))
-    write_atomically(files.mcp, json_bytes(mcp_document(project.root, spend=spend, python=python)))
+    write_json(files.mcp, mcp_document(project.root, spend=spend, python=python))
     return files
 
 
@@ -379,8 +368,8 @@ def outcome_of(
 
 
 def write_outcome(files: RunFiles, outcome: Outcome) -> None:
-    write_atomically(files.folder / OUTCOME_NAME, json_bytes(outcome.document()))
-    write_atomically(files.folder.parent / LATEST_NAME, json_bytes(outcome.latest(files.name)))
+    write_json(files.folder / OUTCOME_NAME, outcome.document())
+    write_json(files.folder.parent / LATEST_NAME, outcome.latest(files.name))
 
 
 def write_design_point(
@@ -394,8 +383,7 @@ def write_design_point(
         "folder": folder,
         "reason": reason,
     }
-    write_atomically(path, json_bytes(document))
-    return path
+    return write_json(path, document)
 
 
 def read_design_point(project: ProjectFolder) -> Mapping[str, object] | None:
@@ -450,6 +438,68 @@ def local_prefixes(project: ProjectFolder, root: Path) -> tuple[str, ...]:
     except CliError:
         return (local,)
     return (local, f"{base}{folder}/")
+
+
+def say_agent(context: CommandContext, launch: Launch, *, max_usd: float | None) -> None:
+    console = context.console
+    settings = launch.settings
+    agent_key = "code.agent_claude" if settings.agent == CLAUDE else "code.agent_custom"
+    console.say(agent_key, program=launch.arguments[0])
+    console.say(mode_key(settings))
+    if settings.agent == CLAUDE and settings.model:
+        console.say("code.model", model=settings.model)
+    if max_usd is not None:
+        console.say("code.budget", usd=costs.usd_text(max_usd, context.language))
+
+
+def mode_key(settings: CodeSettings) -> str:
+    if not settings.headless:
+        return "code.mode_interactive"
+    return "code.mode_headless_claude" if settings.agent == CLAUDE else "code.mode_headless"
+
+
+def show_words(context: CommandContext, launch: Launch) -> None:
+    console = context.console
+    console.say("code.words")
+    for word in launch.arguments:
+        console.write(f"  {word}")
+    console.say("code.dry_run", folder=str(launch.files.folder))
+
+
+def say_ended(context: CommandContext, launch: Launch, finished: Finished, *, folder: str) -> None:
+    console = context.console
+    outcome = finished.outcome
+    elapsed = format_elapsed(outcome.seconds)
+    console.write()
+    if outcome.exit_status == 0:
+        console.say("code.ended", elapsed=elapsed)
+    else:
+        console.say("code.ended_status", status=outcome.exit_status, elapsed=elapsed)
+    show_changes(context, launch, finished.changes)
+    if finished.touched:
+        console.say("code.knowledge_touched", folder=folder)
+
+
+def show_changes(context: CommandContext, launch: Launch, changes: Changes) -> None:
+    console = context.console
+    if changes.files is None:
+        if changes.problem == NO_REPOSITORY:
+            console.say("code.changes_no_git")
+        else:
+            console.say("code.changes_failed", detail=changes.problem or "-")
+        return
+    if not changes.files:
+        console.say("code.changed_none")
+        return
+    console.say("code.changed", count=len(changes.files))
+    for path in changes.files[:LISTED_FILES]:
+        console.write(f"- {git.visible(path)}")
+    if len(changes.files) > LISTED_FILES:
+        console.say(
+            "code.changed_more",
+            count=len(changes.files) - LISTED_FILES,
+            path=str(launch.files.folder / OUTCOME_NAME),
+        )
 
 
 def fingerprint(folder: Path) -> str | None:

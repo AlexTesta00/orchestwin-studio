@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Final
@@ -11,12 +10,24 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import tasks as tasks_api
 from orchestwin.cli.api import tests as tests_api
+from orchestwin.cli.api.replies import route_missing_or_down
+from orchestwin.cli.arguments import CODE_SEPARATORS, bounded_text, nested_parser
 from orchestwin.cli.client import ensure_access
-from orchestwin.cli.errors import SIGN_IN_STATUS, USAGE_STATUS, ApiFailure, CliError
+from orchestwin.cli.errors import (
+    NOT_SIGNED_IN,
+    SESSION_EXPIRED,
+    SIGN_IN_STATUS,
+    UNREACHABLE,
+    USAGE_STATUS,
+    ApiFailure,
+    CliError,
+    signed_out_reason,
+)
 from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows import task_selection
-from orchestwin.cli.flows.publish import publish_and_pull
+from orchestwin.cli.flows.publish import publish_and_report
 from orchestwin.cli.flows.test_report import moment_text
+from orchestwin.cli.folder import STATE_DOCUMENT
 from orchestwin.cli.project import json_default, read_json
 
 if TYPE_CHECKING:
@@ -26,7 +37,6 @@ if TYPE_CHECKING:
     from orchestwin.cli.project import ProjectFolder
 
 NAME = "tasks"
-NESTED_OPTIONS: Final[dict[str, object]] = {"color": False} if sys.version_info >= (3, 14) else {}
 ADD: Final = "add"
 DONE: Final = "done"
 DROP: Final = "drop"
@@ -48,9 +58,6 @@ STATUS_KEYS: Final[Mapping[str, str]] = {
     tasks_api.DONE: "tasks.status_done",
     tasks_api.DROPPED: "tasks.status_dropped",
 }
-UNREACHABLE: Final = "unreachable"
-NOT_SIGNED_IN: Final = "not_signed_in"
-SESSION_EXPIRED: Final = "session_expired"
 MISSING: Final = "missing"
 OFFLINE_KEYS: Final[Mapping[str, str]] = {
     UNREACHABLE: "tasks.offline_unreachable",
@@ -58,30 +65,26 @@ OFFLINE_KEYS: Final[Mapping[str, str]] = {
     SESSION_EXPIRED: "tasks.offline_session_expired",
     MISSING: "tasks.offline_missing",
 }
-MISSING_ROUTE: Final = frozenset({404, 405})
-SERVER_ERROR: Final = 500
-CODE_SEPARATORS: Final = re.compile(r"[\s,;]+")
 COMMIT_PATTERN: Final = re.compile(r"[0-9a-fA-F]{7,64}")
-STATE_DOCUMENT: Final = ("state", "state.json")
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--all", action="store_true", help="tasks.option_all")
     parser.add_argument("--json", action="store_true", help="tasks.option_json")
     actions = parser.add_subparsers(dest="action", metavar="ACTION", help="tasks.option_action")
-    added = _action(actions, parser, ADD, help="tasks.help_add")
+    added = nested_parser(actions, parser, ADD, help="tasks.help_add")
     added.add_argument("text", metavar="TEXT", nargs="+", help="tasks.option_text")
-    done = _action(actions, parser, DONE, help="tasks.help_done")
+    done = nested_parser(actions, parser, DONE, help="tasks.help_done")
     done.add_argument("codes", metavar="CODE", nargs="+", help="tasks.option_codes")
     done.add_argument("--note", metavar="TEXT", help="tasks.option_note")
-    dropped = _action(actions, parser, DROP, help="tasks.help_drop")
+    dropped = nested_parser(actions, parser, DROP, help="tasks.help_drop")
     dropped.add_argument("codes", metavar="CODE", nargs="+", help="tasks.option_codes")
     dropped.add_argument("--note", metavar="TEXT", help="tasks.option_note")
-    reopened = _action(actions, parser, REOPEN, help="tasks.help_reopen")
+    reopened = nested_parser(actions, parser, REOPEN, help="tasks.help_reopen")
     reopened.add_argument("codes", metavar="CODE", nargs="+", help="tasks.option_codes")
-    tested = _action(actions, parser, FROM_TEST, help="tasks.help_from_test")
+    tested = nested_parser(actions, parser, FROM_TEST, help="tasks.help_from_test")
     tested.add_argument("--run", metavar="RUN_ID", help="tasks.option_run")
-    committed = _action(actions, parser, FROM_COMMIT, help="tasks.help_from_commit")
+    committed = nested_parser(actions, parser, FROM_COMMIT, help="tasks.help_from_commit")
     committed.add_argument("commit", metavar="COMMIT", nargs="?", help="tasks.option_commit")
 
 
@@ -318,16 +321,15 @@ def newest_reviewed(client: StudioClient, project_id: str) -> Mapping[str, objec
 
 
 def publish(context: CommandContext, client: StudioClient, project: ProjectFolder) -> None:
-    console = context.console
-    label = f"{project.link().knowledge_folder}/"
-    try:
-        found = publish_and_pull(context, client, project)
-    except CliError as error:
-        inner = error.values.get("code")
-        code = inner if isinstance(inner, str) and inner else error.code
-        console.say("tasks.folder_not_updated", code=code)
-        return
-    console.say("tasks.folder_updated", path=label, version=found.version_number)
+    publish_and_report(
+        context,
+        client,
+        project,
+        updated_key="tasks.folder_updated",
+        failed_key="tasks.folder_not_updated",
+        blank_line=False,
+        path=f"{project.link().knowledge_folder}/",
+    )
 
 
 def task_row(context: CommandContext, task: Mapping[str, object]) -> list[str]:
@@ -347,7 +349,7 @@ def task_line(task: Mapping[str, object]) -> str:
 
 
 def local_tasks(project: ProjectFolder) -> list[Mapping[str, object]] | None:
-    document = read_json(project.knowledge.joinpath(*STATE_DOCUMENT))
+    document = read_json(project.knowledge / STATE_DOCUMENT)
     items = document.get("tasks") if isinstance(document, Mapping) else None
     if not isinstance(items, list):
         return None
@@ -355,27 +357,16 @@ def local_tasks(project: ProjectFolder) -> list[Mapping[str, object]] | None:
 
 
 def offline_reason(error: CliError) -> str | None:
-    if error.code == "STUDIO_UNREACHABLE":
-        return UNREACHABLE
-    if error.code == "NOT_SIGNED_IN":
-        return NOT_SIGNED_IN
-    if error.status == SIGN_IN_STATUS:
-        return SESSION_EXPIRED
-    if isinstance(error, ApiFailure) and (
-        error.http_status in MISSING_ROUTE or error.http_status >= SERVER_ERROR
-    ):
+    reason = signed_out_reason(error)
+    if reason is None and isinstance(error, ApiFailure) and route_missing_or_down(error):
         return MISSING
-    return None
+    return reason
 
 
 def text_of(words: Sequence[str]) -> str:
-    text = " ".join(" ".join(words).split())
+    text = bounded_text(" ".join(words), tasks_api.MAX_TASK_LENGTH, "TASKS_TEXT_TOO_LONG")
     if not text:
         raise CliError("TASKS_TEXT_EMPTY", status=USAGE_STATUS)
-    if len(text) > tasks_api.MAX_TASK_LENGTH:
-        raise CliError(
-            "TASKS_TEXT_TOO_LONG", status=USAGE_STATUS, values={"limit": tasks_api.MAX_TASK_LENGTH}
-        )
     return text
 
 
@@ -398,14 +389,7 @@ def codes_of(values: Sequence[str]) -> list[str]:
 def note_of(value: str | None) -> str | None:
     if value is None:
         return None
-    text = " ".join(value.split())
-    if len(text) > tasks_api.MAX_TASK_NOTE_LENGTH:
-        raise CliError(
-            "TASKS_NOTE_TOO_LONG",
-            status=USAGE_STATUS,
-            values={"limit": tasks_api.MAX_TASK_NOTE_LENGTH},
-        )
-    return text or None
+    return bounded_text(value, tasks_api.MAX_TASK_NOTE_LENGTH, "TASKS_NOTE_TOO_LONG") or None
 
 
 def run_of(value: str | None) -> str | None:
@@ -427,22 +411,3 @@ def commit_of(value: str | None) -> str | None:
     if COMMIT_PATTERN.fullmatch(text) is None:
         raise CliError("TASKS_COMMIT_INVALID", status=USAGE_STATUS, values={"value": text or "-"})
     return text.lower()
-
-
-def _action(
-    actions: argparse._SubParsersAction,
-    parser: argparse.ArgumentParser,
-    name: str,
-    *,
-    help: str,
-) -> argparse.ArgumentParser:
-    child = actions.add_parser(
-        name,
-        help=help,
-        formatter_class=parser.formatter_class,
-        add_help=False,
-        allow_abbrev=False,
-        **NESTED_OPTIONS,
-    )
-    child.add_argument("-h", "--help", action="help", help="common.option_help")
-    return child

@@ -5,7 +5,7 @@ import json
 from typing import TYPE_CHECKING
 
 from orchestwin.cli.api import why
-from orchestwin.cli.errors import SIGN_IN_STATUS, CliError
+from orchestwin.cli.errors import CliError, signed_out_reason
 from orchestwin.cli.mcp.knowledge import FolderProblem, load
 from orchestwin.cli.views.why import show
 
@@ -64,9 +64,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
 
 
 def run_answer(context: CommandContext, arguments: argparse.Namespace) -> int:
-    project = context.project()
-    if project is None:
-        raise CliError("PROJECT_NOT_LINKED")
+    project = context.linked_project()
     if arguments.offline:
         answer = local_answer(project, arguments.code)
         context.console.error("why.offline", reason="--offline")
@@ -74,10 +72,7 @@ def run_answer(context: CommandContext, arguments: argparse.Namespace) -> int:
         try:
             answer = why.explain(context.client(), project.link().project_id, arguments.code)
         except CliError as error:
-            if (
-                error.code not in {"STUDIO_UNREACHABLE", "NOT_SIGNED_IN"}
-                and error.status != SIGN_IN_STATUS
-            ):
+            if signed_out_reason(error) is None:
                 raise
             answer = local_answer(project, arguments.code)
             context.console.error("why.offline", reason=error.code)

@@ -50,6 +50,28 @@ def publish_and_pull(
     return _download(context, client, project, link.project_id, number)
 
 
+def publish_and_report(
+    context: CommandContext,
+    client: StudioClient,
+    project: ProjectFolder,
+    *,
+    updated_key: str,
+    failed_key: str,
+    blank_line: bool,
+    **values: object,
+) -> None:
+    console = context.console
+    if blank_line:
+        console.write()
+    try:
+        found = publish_and_pull(context, client, project)
+    except CliError as error:
+        inner = error.values.get("code")
+        console.say(failed_key, code=inner if isinstance(inner, str) and inner else error.code)
+        return
+    console.say(updated_key, version=found.version_number, **values)
+
+
 def pull(
     context: CommandContext,
     client: StudioClient,

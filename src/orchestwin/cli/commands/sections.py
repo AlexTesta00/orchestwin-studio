@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api import projects as project_api
 from orchestwin.cli.api import sections as sections_api
+from orchestwin.cli.arguments import nested_parser
 from orchestwin.cli.errors import (
     INTERRUPTED_STATUS,
     SIGN_IN_STATUS,
@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from orchestwin.cli.project import ProjectFolder
 
 NAME = "sections"
-NESTED_OPTIONS: Final[dict[str, object]] = {"color": False} if sys.version_info >= (3, 14) else {}
 UPDATE: Final = "update"
 UNSUPPORTED: Final = "SECTIONS_UNSUPPORTED"
 JSON_ALONE: Final = "SECTIONS_JSON_ALONE"
@@ -41,23 +40,13 @@ SOLVE_WEB: Final = "sections.solve_web"
 def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="sections.option_json")
     actions = parser.add_subparsers(dest="action", metavar="ACTION", help="sections.option_action")
-    child = actions.add_parser(
-        UPDATE,
-        help="sections.help_update",
-        formatter_class=parser.formatter_class,
-        add_help=False,
-        allow_abbrev=False,
-        **NESTED_OPTIONS,
-    )
-    child.add_argument("-h", "--help", action="help", help="common.option_help")
+    nested_parser(actions, parser, UPDATE, help="sections.help_update")
 
 
 def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     if arguments.action == UPDATE and arguments.json:
         raise CliError(JSON_ALONE, status=USAGE_STATUS)
-    project = context.project()
-    if project is None:
-        raise CliError("PROJECT_NOT_LINKED")
+    project = context.linked_project()
     client = context.client()
     found = current(client, project)
     if arguments.action == UPDATE:
@@ -120,7 +109,7 @@ def update(
         console.say("sections.uncovered", codes=joined(alignment.uncovered_codes))
     for line in blocked_lines(context, found):
         console.write(line)
-    if not context.assume_yes and not console.confirm("sections.confirm", default=True):
+    if not context.confirm("sections.confirm", default=True):
         console.say("sections.cancelled")
         return 1
     gesture = sections_api.align(client, project.link().project_id)

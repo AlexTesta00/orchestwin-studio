@@ -1,15 +1,23 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import folder as knowledge
 from orchestwin.cli.api import packages
+from orchestwin.cli.arguments import nested_parser
 from orchestwin.cli.client import ensure_access
-from orchestwin.cli.errors import NOT_VERIFIED_STATUS, SIGN_IN_STATUS, ApiFailure, CliError
+from orchestwin.cli.errors import (
+    NOT_SIGNED_IN,
+    NOT_VERIFIED_STATUS,
+    SESSION_EXPIRED,
+    UNREACHABLE,
+    ApiFailure,
+    CliError,
+    signed_out_reason,
+)
 from orchestwin.cli.flows import package_import
 from orchestwin.cli.flows import publish as publish_flow
 from orchestwin.cli.flows.package_import import (
@@ -26,16 +34,12 @@ if TYPE_CHECKING:
     from orchestwin.cli.project import ProjectFolder, ProjectLink
 
 NAME = "package"
-NESTED_OPTIONS: Final[dict[str, object]] = {"color": False} if sys.version_info >= (3, 14) else {}
 PUBLISH: Final = "publish"
 PULL: Final = "pull"
 VERIFY: Final = "verify"
 HISTORY: Final = "history"
 IMPORT: Final = "import"
 SHORT_HASH: Final = 12
-UNREACHABLE: Final = "unreachable"
-NOT_SIGNED_IN: Final = "not_signed_in"
-SESSION_EXPIRED: Final = "session_expired"
 PROJECT_MISSING: Final = "project_missing"
 STUDIO_KEYS: Final[Mapping[str, str]] = {
     UNREACHABLE: "package.studio_unreachable",
@@ -55,12 +59,12 @@ VERSION_MISSING: Final = "KNOWLEDGE_PACKAGE_NOT_FOUND"
 
 def configure(parser: argparse.ArgumentParser) -> None:
     actions = parser.add_subparsers(dest="action", metavar="ACTION", help="package.option_action")
-    _action(actions, parser, PUBLISH, help="package.help_publish")
-    pull = _action(actions, parser, PULL, help="package.help_pull")
+    nested_parser(actions, parser, PUBLISH, help="package.help_publish")
+    pull = nested_parser(actions, parser, PULL, help="package.help_pull")
     pull.add_argument("--version", metavar="N", type=int, help="package.option_version")
-    _action(actions, parser, VERIFY, help="package.help_verify")
-    _action(actions, parser, HISTORY, help="package.help_history")
-    imported = _action(actions, parser, IMPORT, help="package.help_import")
+    nested_parser(actions, parser, VERIFY, help="package.help_verify")
+    nested_parser(actions, parser, HISTORY, help="package.help_history")
+    imported = nested_parser(actions, parser, IMPORT, help="package.help_import")
     imported.add_argument("path", metavar="PATH", help="package.option_path")
     imported.add_argument("--name", metavar="NAME", help="package.option_name")
 
@@ -267,25 +271,6 @@ def moment_text(value: object) -> str:
     return moment.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
-def _action(
-    actions: argparse._SubParsersAction,
-    parser: argparse.ArgumentParser,
-    name: str,
-    *,
-    help: str,
-) -> argparse.ArgumentParser:
-    child = actions.add_parser(
-        name,
-        help=help,
-        formatter_class=parser.formatter_class,
-        add_help=False,
-        allow_abbrev=False,
-        **NESTED_OPTIONS,
-    )
-    child.add_argument("-h", "--help", action="help", help="common.option_help")
-    return child
-
-
 def _local_line(context: CommandContext, local: LocalFolder, label: str) -> None:
     console = context.console
     if not local.exists:
@@ -338,15 +323,10 @@ def _studio_latest(
 
 
 def _offline_reason(error: CliError) -> str | None:
-    if error.code == "STUDIO_UNREACHABLE":
-        return UNREACHABLE
-    if error.code == "NOT_SIGNED_IN":
-        return NOT_SIGNED_IN
-    if error.status == SIGN_IN_STATUS:
-        return SESSION_EXPIRED
-    if isinstance(error, ApiFailure) and error.http_status == 404:
+    reason = signed_out_reason(error)
+    if reason is None and isinstance(error, ApiFailure) and error.http_status == 404:
         return PROJECT_MISSING
-    return None
+    return reason
 
 
 def _advice(

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api.tests import APPLICATION_KINDS, BROWSER_NAMES
-from orchestwin.cli.project import json_bytes, read_json, write_atomically
+from orchestwin.cli.project import read_json, write_json
 
 if TYPE_CHECKING:
     from orchestwin.cli.project import ProjectFolder
@@ -41,9 +41,7 @@ def read_settings(project: ProjectFolder) -> TestSettings | None:
 
 
 def write_settings(project: ProjectFolder, settings: TestSettings) -> Path:
-    path = settings_path(project)
-    write_atomically(path, json_bytes(settings.document()))
-    return path
+    return write_json(settings_path(project), settings.document())
 
 
 def settings_from(document: object) -> TestSettings | None:

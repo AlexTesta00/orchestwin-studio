@@ -9,11 +9,11 @@ from orchestwin.cli import costs, jobs
 from orchestwin.cli import folder as knowledge
 from orchestwin.cli.api import alignment as alignment_api
 from orchestwin.cli.api import changes as changes_api
-from orchestwin.cli.errors import BUDGET_CODES, USAGE_STATUS, ApiFailure, CliError
+from orchestwin.cli.errors import USAGE_STATUS, CliError
 from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows import verify_review
 from orchestwin.cli.flows.design_state import bullets, wrapped
-from orchestwin.cli.project import json_bytes, read_json, write_atomically
+from orchestwin.cli.project import LATEST_NAME, read_json, write_json
 
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
@@ -21,11 +21,9 @@ if TYPE_CHECKING:
     from orchestwin.cli.project import ProjectFolder
 
 ALIGN_FOLDER: Final = "align"
-LATEST_NAME: Final = "latest.json"
 SCHEMA_VERSION: Final = 1
 EXCERPT_LINES: Final = 8
 LIMIT_SECONDS: Final = 1800.0
-PAYMENT_REQUIRED: Final = 402
 SECTION_KEYS: Final[Mapping[str, str]] = {
     alignment_api.REQUIREMENTS: "align.section_requirements",
     alignment_api.DESIGN: "align.section_design",
@@ -86,9 +84,7 @@ def latest_file(project: ProjectFolder) -> Path:
 
 
 def write_run(project: ProjectFolder, run: Mapping[str, object]) -> Path:
-    path = run_file(project, str(run.get("id")))
-    write_atomically(path, json_bytes(dict(run)))
-    return path
+    return write_json(run_file(project, str(run.get("id"))), dict(run))
 
 
 def latest_document(
@@ -112,11 +108,8 @@ def latest_document(
 def write_latest(
     project: ProjectFolder, run: Mapping[str, object], *, waiting: int, finished_at: str
 ) -> Path:
-    path = latest_file(project)
-    write_atomically(
-        path, json_bytes(latest_document(run, waiting=waiting, finished_at=finished_at))
-    )
-    return path
+    document = latest_document(run, waiting=waiting, finished_at=finished_at)
+    return write_json(latest_file(project), document)
 
 
 def read_latest(project: ProjectFolder) -> Mapping[str, object] | None:
@@ -165,19 +158,12 @@ def list_commits(context: CommandContext, commits: Sequence[git.Commit]) -> None
 
 def dry_run(context: CommandContext, workspace: Workspace, commits: Sequence[git.Commit]) -> None:
     context.console.say("align.dry_run", count=len(commits))
-    say_estimate(context, workspace)
-
-
-def say_estimate(context: CommandContext, workspace: Workspace) -> None:
-    total = costs.estimate([alignment_api.OPERATION])
-    minutes = costs.minutes_text(total.minutes)
-    if costs.uses_subscription(workspace.client):
-        context.console.say("align.dry_run_subscription", minutes=minutes)
-        return
-    context.console.say(
-        "align.dry_run_estimate",
-        amount=costs.amount_text(total, context.language),
-        minutes=minutes,
+    costs.say_estimate(
+        context,
+        workspace.client,
+        [alignment_api.OPERATION],
+        subscription_key="align.dry_run_subscription",
+        estimate_key="align.dry_run_estimate",
     )
 
 
@@ -200,33 +186,18 @@ def start_run(
         label=context.text("align.run_label"),
         limit_seconds=LIMIT_SECONDS,
     )
-    body = result.body
     if result.status_code < 400:
-        run = body.get("run") if isinstance(body, Mapping) else None
-        if not isinstance(run, Mapping):
-            raise ApiFailure("API_FAILURE", http_status=result.status_code)
-        return run
-    raise refusal(context, workspace, result.status_code, body, alignment_api.OPERATION)
+        return jobs.answer_member(result, "run")
+    raise refusal(context, workspace, result.status_code, result.body, alignment_api.OPERATION)
 
 
 def refusal(
     context: CommandContext, workspace: Workspace, status: int, body: object, operation: str
 ) -> CliError:
     failure = verify_review.failure_of(status, body)
-    if status == PAYMENT_REQUIRED or failure.code in BUDGET_CODES:
-        return budget_error(context, workspace, failure.code, operation)
-    return failure
-
-
-def budget_error(
-    context: CommandContext, workspace: Workspace, code: str, operation: str
-) -> CliError:
-    from orchestwin.cli.commands.init import Journey
-
-    journey = Journey(
-        context, workspace.client, workspace.project, script=None, until=None, idea=None
+    return costs.budget_or_failure(
+        context, workspace.client, workspace.project_id, failure, operation
     )
-    return journey.budget_error(code, operation)
 
 
 def show_run(

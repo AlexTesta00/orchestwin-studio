@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from orchestwin.cli.errors import ApiFailure
+from orchestwin.cli.shapes import dict_list as _dict_list
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -31,10 +32,7 @@ def history(
     if limit is not None:
         path = f"{path}?limit={int(limit)}"
     document = client.get(path)
-    versions = document.get("versions") if isinstance(document, dict) else None
-    if not isinstance(versions, list):
-        return []
-    return [item for item in versions if isinstance(item, dict)]
+    return _dict_list(document.get("versions") if isinstance(document, dict) else None)
 
 
 def latest(client: StudioClient, project_id: str) -> Mapping[str, object] | None:

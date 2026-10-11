@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.api import packages
 from orchestwin.cli.errors import ApiFailure
+from orchestwin.cli.shapes import dict_list as _dict_list
+from orchestwin.cli.shapes import mapping_or_empty as _mapping
+from orchestwin.cli.shapes import whole as _integer
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -74,10 +77,7 @@ def next_command(action: str, *, folder_current: bool = False) -> str | None:
 
 
 def list_projects(client: StudioClient) -> list[Mapping[str, object]]:
-    document = client.get("/projects")
-    if not isinstance(document, list):
-        return []
-    return [item for item in document if isinstance(item, dict)]
+    return _dict_list(client.get("/projects"))
 
 
 def get_project(client: StudioClient, project_id: str) -> Mapping[str, object]:
@@ -198,11 +198,3 @@ def version_number(document: Mapping[str, object]) -> int | None:
 
 def _read(client: StudioClient, path: str) -> Mapping[str, object]:
     return _mapping(client.get(path, optional=True))
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _integer(value: object) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) else None

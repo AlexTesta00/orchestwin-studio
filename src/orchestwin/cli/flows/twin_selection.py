@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.console import Choice
+from orchestwin.cli.shapes import whole as _integer
 
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
@@ -121,7 +122,3 @@ def choice_label(twin: Twin) -> str:
     if role is None or folded(role) == folded(twin.name):
         return twin.name
     return f"{twin.name} - {role}"
-
-
-def _integer(value: object) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) else None

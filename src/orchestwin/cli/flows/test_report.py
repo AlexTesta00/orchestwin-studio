@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -9,9 +8,19 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import costs
 from orchestwin.cli.api import tests as tests_api
+from orchestwin.cli.api.usage import MICRO_USD
 from orchestwin.cli.flows import test_plan, verify_review
 from orchestwin.cli.flows.design_state import bullets, wrapped
-from orchestwin.cli.project import json_bytes, read_json, write_atomically
+from orchestwin.cli.flows.previews import escape as _escape
+from orchestwin.cli.folder import REQUIREMENTS_DOCUMENT
+from orchestwin.cli.project import (
+    LATEST_NAME,
+    read_json,
+    stamped_folder,
+    write_atomically,
+    write_json,
+)
+from orchestwin.cli.shapes import squeezed as _text
 
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
@@ -19,15 +28,9 @@ if TYPE_CHECKING:
 
 RUN_NAME: Final = "run.json"
 REPORT_NAME: Final = "report.html"
-LATEST_NAME: Final = "latest.json"
-IGNORE_NAME: Final = ".gitignore"
-IGNORE_CONTENT: Final = b"*\n"
 LATEST_SCHEMA_VERSION: Final = 1
-FOLDER_FORMAT: Final = "%Y%m%d-%H%M%S"
 SCREENSHOT_WIDTH: Final = 480
 STATEMENT_LIMIT: Final = 90
-MICRO_USD: Final = 1_000_000
-REQUIREMENTS_DOCUMENT: Final = ("requirements", "requirements.json")
 STATUS_KEYS: Final[Mapping[str, str]] = {
     tests_api.PASSED: "test.status_passed",
     tests_api.FAILED: "test.status_failed",
@@ -132,7 +135,7 @@ def names(project: ProjectFolder) -> Names:
 
 
 def statements(project: ProjectFolder) -> dict[str, str]:
-    document = read_json(project.knowledge.joinpath(*REQUIREMENTS_DOCUMENT))
+    document = read_json(project.knowledge / REQUIREMENTS_DOCUMENT)
     specification = document.get("specification") if isinstance(document, Mapping) else None
     items = specification.get("acceptance_criteria") if isinstance(specification, Mapping) else None
     found: dict[str, str] = {}
@@ -156,22 +159,7 @@ def moment_text(value: object) -> str:
     return moment.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
-def run_folder(tests: Path, moment: datetime) -> Path:
-    tests.mkdir(parents=True, exist_ok=True)
-    ignore = tests / IGNORE_NAME
-    if not ignore.exists():
-        write_atomically(ignore, IGNORE_CONTENT)
-    stem = moment.astimezone(UTC).strftime(FOLDER_FORMAT)
-    candidate = tests / stem
-    number = 1
-    while True:
-        try:
-            candidate.mkdir()
-        except FileExistsError:
-            number += 1
-            candidate = tests / f"{stem}-{number}"
-            continue
-        return candidate
+run_folder = stamped_folder
 
 
 def write_run(
@@ -183,9 +171,7 @@ def write_run(
     document = dict(run)
     if first_attempt:
         document["first_attempt"] = [dict(item) for item in first_attempt]
-    path = folder / RUN_NAME
-    write_atomically(path, json_bytes(document))
-    return path
+    return write_json(folder / RUN_NAME, document)
 
 
 def write_latest(tests: Path, folder: Path, run: Mapping[str, object]) -> Path:
@@ -196,9 +182,7 @@ def write_latest(tests: Path, folder: Path, run: Mapping[str, object]) -> Path:
         "report": f"{folder.name}/{REPORT_NAME}",
         "finished_at": run.get("finished_at"),
     }
-    path = tests / LATEST_NAME
-    write_atomically(path, json_bytes(document))
-    return path
+    return write_json(tests / LATEST_NAME, document)
 
 
 def write_report(
@@ -687,11 +671,3 @@ def _chip(context: CommandContext, status: object, *, step: bool = False) -> str
 def _path(result: Mapping[str, object]) -> Mapping[str, object]:
     path = result.get("path")
     return path if isinstance(path, Mapping) else {}
-
-
-def _text(value: object) -> str:
-    return " ".join(value.split()) if isinstance(value, str) else ""
-
-
-def _escape(value: object) -> str:
-    return html.escape(str(value), quote=True)

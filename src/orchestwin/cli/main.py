@@ -10,8 +10,9 @@ from types import ModuleType
 from typing import Final, TextIO
 
 from orchestwin import __version__
+from orchestwin.cli.arguments import PARSER_OPTIONS, nested_parser
 from orchestwin.cli.commands import COMMANDS, activity
-from orchestwin.cli.console import Console, plain, stream_encoding, terminal_width
+from orchestwin.cli.console import Console, plain, safe_text, stream_encoding, terminal_width
 from orchestwin.cli.context import CommandContext
 from orchestwin.cli.environment import Environment, real_environment
 from orchestwin.cli.errors import INTERRUPTED_STATUS, USAGE_STATUS, ApiFailure, CliError
@@ -33,7 +34,6 @@ MINIMUM_HELP_WIDTH: Final = 40
 UNEXPECTED_KEY: Final = "errors.UNEXPECTED"
 INTERRUPTED_KEY: Final = "common.interrupted"
 BARE_UNEXPECTED: Final = "{kind}: {detail}"
-PARSER_OPTIONS: Final[dict[str, object]] = {"color": False} if sys.version_info >= (3, 14) else {}
 
 
 class ParserExit(Exception):
@@ -161,13 +161,6 @@ def traceback_text(failure: BaseException) -> str:
         return type(failure).__name__
 
 
-def safe_text(value: object) -> str:
-    try:
-        return str(value)
-    except Exception:
-        return type(value).__name__
-
-
 def write_plainly(stream: object, text: str) -> None:
     try:
         line = plain(text, stream_encoding(stream))
@@ -218,17 +211,11 @@ def build_parser(environment: Environment, language: str, width: int) -> argpars
     )
     for module in COMMANDS:
         summary = text(command_help_key(module.NAME), language)
-        subparser = commands.add_parser(
-            module.NAME,
-            help=summary.replace("%", "%%"),
-            description=summary,
-            formatter_class=formatter,
-            add_help=False,
-            allow_abbrev=False,
-            **PARSER_OPTIONS,
+        module.configure(
+            nested_parser(
+                commands, parser, module.NAME, help=summary.replace("%", "%%"), description=summary
+            )
         )
-        subparser.add_argument("-h", "--help", action="help", help="common.option_help")
-        module.configure(subparser)
     return parser
 
 

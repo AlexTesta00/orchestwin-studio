@@ -10,18 +10,27 @@ from typing import Final
 
 from orchestwin.cli.api import twin_chat
 from orchestwin.cli.flows.twin_selection import Twin, twins_from
-from orchestwin.cli.folder import IGNORED_NAMES
+from orchestwin.cli.folder import FOLDER_STAGES as STAGES
+from orchestwin.cli.folder import (
+    IGNORED_NAMES,
+    STATE_DOCUMENT,
+    TESTS_DOCUMENT,
+    UNSAFE_CHARACTERS,
+    UNSAFE_PARTS,
+)
+from orchestwin.cli.folder import MANIFEST_NAME as MANIFEST
+from orchestwin.cli.mcp.protocol import refuse_constant
+from orchestwin.cli.shapes import is_whole as _integer
+from orchestwin.cli.shapes import mapping_or_empty as _mapping
+from orchestwin.cli.shapes import mappings
+from orchestwin.cli.shapes import whole as _number
 
-MANIFEST: Final = "orchestwin.json"
 FOLDER_KIND: Final = "orchestwin.knowledge-folder"
 STATE_KIND: Final = "orchestwin.project-state"
 SCHEMA_VERSIONS: Final = (2, 3)
 STATE_SCHEMA: Final = 3
-STAGES: Final = ("brief", "team", "twins", "requirements", "design")
-STATE_DOCUMENT: Final = "state/state.json"
 CHANGES_DOCUMENT: Final = "twins/feedback/changes.json"
 REVIEWS_DOCUMENT: Final = "twins/feedback/reviews.json"
-TESTS_DOCUMENT: Final = "twins/feedback/tests.json"
 TESTS_KIND: Final = "orchestwin.test-reviews"
 LEARNING_DOCUMENT: Final = "twins/feedback/learned.json"
 LEARNING_KIND: Final = "orchestwin.twin-learning"
@@ -34,8 +43,6 @@ MARKDOWN_SUFFIX: Final = ".md"
 FOLDER_MISSING: Final = "FOLDER_MISSING"
 FOLDER_UNREADABLE: Final = "FOLDER_UNREADABLE"
 FOLDER_SCHEMA_UNSUPPORTED: Final = "FOLDER_SCHEMA_UNSUPPORTED"
-UNSAFE_CHARACTERS: Final = ("\\", ":", "\0")
-UNSAFE_PARTS: Final = frozenset({"", ".", ".."})
 
 
 class FolderProblem(Exception):
@@ -682,12 +689,6 @@ def inside(root: Path, relative: str) -> Path | None:
     return candidate if resolved.is_relative_to(base) else None
 
 
-def mappings(value: object) -> list[Mapping[str, object]]:
-    if not isinstance(value, list | tuple):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
-
-
 def first_line(value: object) -> str | None:
     if not isinstance(value, str):
         return None
@@ -750,7 +751,7 @@ def _transitions(prototype: Mapping[str, object]) -> tuple[Transition, ...]:
 
 def _json(path: Path, relative: str) -> object:
     try:
-        return json.loads(path.read_bytes().decode("utf-8"), parse_constant=_refuse_constant)
+        return json.loads(path.read_bytes().decode("utf-8"), parse_constant=refuse_constant)
     except (OSError, UnicodeDecodeError, ValueError, RecursionError):
         raise FolderProblem(FOLDER_UNREADABLE, path=relative) from None
 
@@ -761,21 +762,5 @@ def _codes(value: object, codes: Mapping[str, str]) -> list[str]:
     return [codes[str(item)] for item in value if str(item) in codes]
 
 
-def _mapping(value: object) -> Mapping[str, object]:
-    return value if isinstance(value, Mapping) else {}
-
-
 def _text(value: object) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
-
-
-def _number(value: object) -> int | None:
-    return value if _integer(value) else None
-
-
-def _integer(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)
-
-
-def _refuse_constant(value: str) -> object:
-    raise ValueError(f"{value} is not JSON")

@@ -4,21 +4,19 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from orchestwin.cli.api.replies import route_missing_or_down
 from orchestwin.cli.client import payload
 from orchestwin.cli.errors import ApiFailure
 from orchestwin.cli.folder import StateSummary
+from orchestwin.cli.shapes import mapping_list as _mapping_list
+from orchestwin.cli.shapes import required_mapping as _mapping_of
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
 
 NO_REVIEW_MODEL: Final = "CHANGE_REVIEW_MODEL_NOT_CONFIGURED"
 REVIEW_EXISTS: Final = "CODE_CHANGE_REVIEW_EXISTS"
-CHANGE_NOT_FOUND: Final = "CODE_CHANGE_NOT_FOUND"
-TASK_SOURCE_INVALID: Final = "TASK_SOURCE_INVALID"
-RECORDED: Final = "RECORDED"
 ALREADY_RECORDED: Final = "ALREADY_RECORDED"
-REVIEWED: Final = "REVIEWED"
-DECIDED: Final = "DECIDED"
 ALIGNED: Final = "ALIGNED"
 CODE_DRIFT: Final = "CODE_DRIFT"
 DESIGN_OUTDATED: Final = "DESIGN_OUTDATED"
@@ -42,7 +40,6 @@ MAX_TASK_LENGTH: Final = 300
 MAX_NOTE_LENGTH: Final = 2000
 MAX_DESIGN_REQUEST: Final = 1000
 MAX_REQUIREMENTS_REQUEST: Final = 2000
-MISSING_ROUTE: Final = frozenset({404, 405})
 REFERENCE_KEYS: Final = (
     "requirements_version_number",
     "design_version_number",
@@ -141,7 +138,7 @@ def development(client: StudioClient, project_id: str) -> Development | None:
         document = alignment(client, project_id)
         items = changes(client, project_id)
     except ApiFailure as failure:
-        if failure.http_status in MISSING_ROUTE or failure.http_status >= 500:
+        if route_missing_or_down(failure):
             return None
         raise
     return Development(
@@ -253,13 +250,4 @@ def failure(status: int, document: object) -> ApiFailure:
 
 
 def _items(document: object) -> list[Mapping[str, object]]:
-    items = document.get("items") if isinstance(document, Mapping) else None
-    if not isinstance(items, list):
-        return []
-    return [item for item in items if isinstance(item, Mapping)]
-
-
-def _mapping_of(document: object, status: int = 200) -> Mapping[str, object]:
-    if not isinstance(document, Mapping):
-        raise ApiFailure("API_FAILURE", http_status=status)
-    return document
+    return _mapping_list(document.get("items") if isinstance(document, Mapping) else None)

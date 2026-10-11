@@ -4,16 +4,16 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from orchestwin.cli.api.replies import code_of, route_missing_or_down, send
 from orchestwin.cli.client import payload
 from orchestwin.cli.errors import ApiFailure
-from orchestwin.cli.jobs import reply_body
+from orchestwin.cli.shapes import is_whole as _integer
+from orchestwin.cli.shapes import mappings
+from orchestwin.cli.shapes import required_mapping as _mapping_of
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
 
-PLANNED: Final = "PLANNED"
-RECORDED: Final = "RECORDED"
-REVIEWED: Final = "REVIEWED"
 URL: Final = "URL"
 STATIC: Final = "STATIC"
 APPLICATION_KINDS: Final = (URL, STATIC)
@@ -61,13 +61,7 @@ BROWSER_NAMES: Final = ("chrome", "firefox")
 PLAN_OPERATION: Final = "TEST_PLAN"
 REVIEW_OPERATION: Final = "TEST_REVIEW"
 NO_TEST_MODEL: Final = "TEST_MODEL_NOT_CONFIGURED"
-PLAN_NOT_FOUND: Final = "TEST_PLAN_NOT_FOUND"
-RUN_NOT_FOUND: Final = "TEST_RUN_NOT_FOUND"
 REVIEW_EXISTS: Final = "TEST_REVIEW_EXISTS"
-CRITERION_UNKNOWN: Final = "ACCEPTANCE_CRITERION_UNKNOWN"
-REQUIREMENTS_APPROVAL_REQUIRED: Final = "REQUIREMENTS_APPROVAL_REQUIRED"
-DESIGN_APPROVAL_REQUIRED: Final = "DESIGN_APPROVAL_REQUIRED"
-USER_MODELING_APPROVAL_REQUIRED: Final = "USER_MODELING_APPROVAL_REQUIRED"
 INVALID_REQUEST: Final = "invalid_request"
 MAX_PATHS: Final = 20
 MAX_STEPS: Final = 12
@@ -83,7 +77,6 @@ MAX_REASON_LENGTH: Final = 300
 MAX_FOLDER_TEST_RUNS: Final = 20
 MAX_REPLANS: Final = 5
 SUMMARY_KEYS: Final = ("passed", "failed", "blocked", "not_covered", "not_run")
-MISSING_ROUTE: Final = frozenset({404, 405})
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,8 +134,7 @@ def overview(client: StudioClient, project_id: str) -> Mapping[str, object]:
 
 
 def plan(client: StudioClient, project_id: str, body: Mapping[str, object]) -> tuple[int, object]:
-    reply = client.request("POST", plans_path(project_id), body=dict(body))
-    return reply.status, reply_body(reply)
+    return send(client, "POST", plans_path(project_id), dict(body))
 
 
 def plans(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
@@ -178,7 +170,7 @@ def summary(client: StudioClient, project_id: str) -> AcceptanceSummary | None:
     try:
         document = overview(client, project_id)
     except ApiFailure as failure:
-        if failure.http_status in MISSING_ROUTE or failure.http_status >= 500:
+        if route_missing_or_down(failure):
             return None
         raise
     return summary_of(document)
@@ -255,19 +247,6 @@ def failing(run: Mapping[str, object]) -> bool:
     return any(item.get("status") in FAILING_STATUSES for item in criteria_of(run))
 
 
-def code_of(document: object) -> str | None:
-    if not isinstance(document, Mapping):
-        return None
-    detail = document.get("detail")
-    if isinstance(detail, Mapping) and isinstance(detail.get("code"), str) and detail["code"]:
-        return str(detail["code"])
-    if isinstance(detail, str) and detail:
-        return detail
-    job_failure = document.get("failure")
-    found = job_failure.get("code") if isinstance(job_failure, Mapping) else None
-    return found if isinstance(found, str) and found else None
-
-
 def failure(status: int, document: object) -> ApiFailure:
     detail = document.get("detail") if isinstance(document, Mapping) else document
     values: dict[str, object] = {}
@@ -277,12 +256,6 @@ def failure(status: int, document: object) -> ApiFailure:
     return ApiFailure(
         code_of(document) or "API_FAILURE", http_status=status, detail=detail, values=values
     )
-
-
-def mappings(value: object) -> list[Mapping[str, object]]:
-    if not isinstance(value, list | tuple):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
 
 
 def texts(value: object) -> list[str]:
@@ -298,13 +271,3 @@ def ordered(values: Sequence[str]) -> list[str]:
 def _items(document: object) -> list[Mapping[str, object]]:
     items = document.get("items") if isinstance(document, Mapping) else None
     return mappings(items)
-
-
-def _mapping_of(document: object, status: int = 200) -> Mapping[str, object]:
-    if not isinstance(document, Mapping):
-        raise ApiFailure("API_FAILURE", http_status=status)
-    return document
-
-
-def _integer(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)

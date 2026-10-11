@@ -9,11 +9,13 @@ from orchestwin.cli import costs
 from orchestwin.cli.api import design as design_api
 from orchestwin.cli.errors import USAGE_STATUS, ApiFailure, CliError
 from orchestwin.cli.flows import design_choice, design_generate, design_state, previews, review
+from orchestwin.cli.shapes import sequence as _list
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
-    from orchestwin.cli.flows.design_state import DesignState, MockupScreen
+    from orchestwin.cli.flows.design_state import DesignState
+    from orchestwin.cli.flows.mockup_screens import MockupScreen
     from orchestwin.cli.jobs import JobResult
     from orchestwin.cli.project import ProjectFolder
 
@@ -202,7 +204,7 @@ def change(
         client,
         project,
         state,
-        _result(result),
+        iteration_result(result),
         request=request.text,
         before=before,
         reviewing=reviewing,
@@ -334,7 +336,7 @@ def apply_pending(
     )
 
 
-def _result(result: JobResult) -> Mapping[str, object]:
+def iteration_result(result: JobResult) -> Mapping[str, object]:
     body = result.body
     job = body if isinstance(body, Mapping) and isinstance(body.get("job_id"), str) else None
     if job is not None and result.status_code < 400:
@@ -366,10 +368,6 @@ def _control(text: str) -> bool:
 
 def _short(text: str) -> str:
     return text if len(text) <= PREVIEW_LIMIT else text[: PREVIEW_LIMIT - 1] + "…"
-
-
-def _list(value: object) -> list[object]:
-    return list(value) if isinstance(value, list | tuple) else []
 
 
 def _not_found(

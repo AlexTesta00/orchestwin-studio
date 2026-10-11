@@ -185,7 +185,7 @@ def run_import(context: CommandContext, source_text: str, name: str | None) -> i
             project_name=new_name,
             mode=IMPORT_MODE,
             language=folder_language(verified),
-            created_at=context.environment.now().isoformat(timespec="seconds"),
+            created_at=context.now_text(),
         ),
     )
     try:

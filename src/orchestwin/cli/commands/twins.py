@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
@@ -10,7 +9,16 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli import folder as knowledge
 from orchestwin.cli.api import modeling, research_evidence, twin_chat
 from orchestwin.cli.api import twin_learning as learning_api
-from orchestwin.cli.errors import SIGN_IN_STATUS, USAGE_STATUS, ApiFailure, CliError
+from orchestwin.cli.arguments import bounded_text, nested_parser
+from orchestwin.cli.errors import (
+    NOT_SIGNED_IN,
+    SESSION_EXPIRED,
+    UNREACHABLE,
+    USAGE_STATUS,
+    ApiFailure,
+    CliError,
+    signed_out_reason,
+)
 from orchestwin.cli.flows import review, twin_conversation, twin_update
 from orchestwin.cli.flows.twin_selection import (
     OBSERVATION_PREFIX,
@@ -20,7 +28,10 @@ from orchestwin.cli.flows.twin_selection import (
     select,
     twins_from,
 )
+from orchestwin.cli.folder import UNSAFE_CHARACTERS, UNSAFE_PARTS
 from orchestwin.cli.project import LOCAL_FOLDER, STEPS_FOLDER, read_json
+from orchestwin.cli.shapes import mapping_or_none as _mapping
+from orchestwin.cli.shapes import squeezed as _text
 from orchestwin.cli.views import personas
 
 if TYPE_CHECKING:
@@ -31,7 +42,6 @@ if TYPE_CHECKING:
     from orchestwin.cli.project import ProjectFolder, ProjectLink
 
 NAME = "twins"
-NESTED_OPTIONS: Final[dict[str, object]] = {"color": False} if sys.version_info >= (3, 14) else {}
 LIST: Final = "list"
 SHOW: Final = "show"
 PERSONA: Final = "persona"
@@ -41,9 +51,6 @@ UPDATE: Final = "update"
 LEARN: Final = "learn"
 FORGET: Final = "forget"
 TWINS_STAGE: Final = "twins"
-UNREACHABLE: Final = "unreachable"
-NOT_SIGNED_IN: Final = "not_signed_in"
-SESSION_EXPIRED: Final = "session_expired"
 OFFLINE_KEYS: Final[Mapping[str, str]] = {
     UNREACHABLE: "twins.offline_unreachable",
     NOT_SIGNED_IN: "twins.offline_not_signed_in",
@@ -95,30 +102,28 @@ SOURCE_KINDS: Final = (
 )
 ABSTAINED_VALUE: Final = "ABSTAINED"
 REVIEW_REQUIRED: Final = "REQUIRED"
-UNSAFE_PARTS: Final = frozenset({"", ".", ".."})
-UNSAFE_CHARACTERS: Final = ("\\", ":", "\0")
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
     actions = parser.add_subparsers(dest="action", metavar="ACTION", help="twins.option_action")
-    _action(actions, parser, LIST, help="twins.help_list")
-    show = _action(actions, parser, SHOW, help="twins.help_show")
+    nested_parser(actions, parser, LIST, help="twins.help_list")
+    show = nested_parser(actions, parser, SHOW, help="twins.help_show")
     show.add_argument("twin", metavar="TWIN", help="twins.option_twin")
-    persona = _action(actions, parser, PERSONA, help="twins.help_persona")
+    persona = nested_parser(actions, parser, PERSONA, help="twins.help_persona")
     persona.add_argument("twin", metavar="TWIN", help="twins.option_twin")
     persona.add_argument("--why", choices=tuple(personas.PERSONA_FIELDS), help="twins.option_why")
     persona.add_argument("--json", action="store_true", help="twins.option_json")
-    ask = _action(actions, parser, ASK, help="twins.help_ask")
+    ask = nested_parser(actions, parser, ASK, help="twins.help_ask")
     ask.add_argument("twin", metavar="TWIN", help="twins.option_twin")
     ask.add_argument("question", metavar="QUESTION", nargs="*", help="twins.option_question")
-    _action(actions, parser, REVIEW, help="twins.help_review")
-    update = _action(actions, parser, UPDATE, help="twins.help_update")
+    nested_parser(actions, parser, REVIEW, help="twins.help_review")
+    update = nested_parser(actions, parser, UPDATE, help="twins.help_update")
     update.add_argument("twin", metavar="TWIN", nargs="?", help="twins.option_update_twin")
     update.add_argument("--evidence", metavar="CODE", help="twins.option_evidence")
-    learn = _action(actions, parser, LEARN, help="twins.help_learn")
+    learn = nested_parser(actions, parser, LEARN, help="twins.help_learn")
     learn.add_argument("twin", metavar="TWIN", help="twins.option_twin")
     learn.add_argument("text", metavar="TEXT", nargs="*", help="twins.option_text")
-    forget = _action(actions, parser, FORGET, help="twins.help_forget")
+    forget = nested_parser(actions, parser, FORGET, help="twins.help_forget")
     forget.add_argument("twin", metavar="TWIN", help="twins.option_twin")
     forget.add_argument("code", metavar="CODE", help="twins.option_code")
     forget.add_argument("--reason", metavar="TEXT", help="twins.option_reason")
@@ -169,7 +174,7 @@ def show_persona(
     try:
         snapshot = modeling.snapshot(context.client(), link.project_id)
     except CliError as error:
-        if _offline_reason(error) is None:
+        if signed_out_reason(error) is None:
             raise
         from orchestwin.knowledge.layout import stage_document
 
@@ -323,15 +328,11 @@ def forget_observation(context: CommandContext, value: str, code: str, reason: s
 
 
 def statement_of(words: Sequence[str]) -> str:
-    statement = " ".join(" ".join(words).split())
+    statement = bounded_text(
+        " ".join(words), learning_api.MAX_OBSERVATION_LENGTH, "TWINS_TEXT_TOO_LONG"
+    )
     if not statement:
         raise CliError("TWINS_TEXT_EMPTY", status=USAGE_STATUS)
-    if len(statement) > learning_api.MAX_OBSERVATION_LENGTH:
-        raise CliError(
-            "TWINS_TEXT_TOO_LONG",
-            status=USAGE_STATUS,
-            values={"limit": learning_api.MAX_OBSERVATION_LENGTH},
-        )
     return statement
 
 
@@ -347,14 +348,7 @@ def observation_code_of(value: str) -> str:
 def reason_of(value: str | None) -> str | None:
     if value is None:
         return None
-    reason = " ".join(value.split())
-    if len(reason) > learning_api.MAX_REASON_LENGTH:
-        raise CliError(
-            "TWINS_REASON_TOO_LONG",
-            status=USAGE_STATUS,
-            values={"limit": learning_api.MAX_REASON_LENGTH},
-        )
-    return reason or None
+    return bounded_text(value, learning_api.MAX_REASON_LENGTH, "TWINS_REASON_TOO_LONG") or None
 
 
 def about_twin(failure: ApiFailure, twin: Twin, **values: object) -> ApiFailure:
@@ -571,25 +565,6 @@ def origin_text(context: CommandContext, observation: Mapping[str, object]) -> s
     return context.text("twins.origin_sources", status=status, sources=", ".join(sources))
 
 
-def _action(
-    actions: argparse._SubParsersAction,
-    parser: argparse.ArgumentParser,
-    name: str,
-    *,
-    help: str,
-) -> argparse.ArgumentParser:
-    child = actions.add_parser(
-        name,
-        help=help,
-        formatter_class=parser.formatter_class,
-        add_help=False,
-        allow_abbrev=False,
-        **NESTED_OPTIONS,
-    )
-    child.add_argument("-h", "--help", action="help", help="common.option_help")
-    return child
-
-
 def _selected(
     context: CommandContext,
     link: ProjectLink,
@@ -622,7 +597,7 @@ def _readable_twins(
         views = personas.views_of(snapshot)
         document = learning_api.overview(client, link.project_id)
     except CliError as error:
-        reason = _offline_reason(error)
+        reason = signed_out_reason(error)
         local = None if reason is None else _local_twins(context, project, link)
         if reason is None or local is None:
             raise
@@ -640,16 +615,6 @@ def _readable_twins(
 
 def _fallback_view(twin: Twin) -> Mapping[str, object]:
     return personas.view_of({"profile": {"observations": twin.observations}})
-
-
-def _offline_reason(error: CliError) -> str | None:
-    if error.code == "STUDIO_UNREACHABLE":
-        return UNREACHABLE
-    if error.code == "NOT_SIGNED_IN":
-        return NOT_SIGNED_IN
-    if error.status == SIGN_IN_STATUS:
-        return SESSION_EXPIRED
-    return None
 
 
 def _local_twins(
@@ -701,11 +666,3 @@ def _folder_version(folder: Path) -> int | None:
 
 def _entry(learning: learning_api.Learning | None, twin: Twin) -> Mapping[str, object] | None:
     return None if learning is None else learning.entry(twin.twin_id)
-
-
-def _mapping(value: object) -> Mapping[str, object] | None:
-    return value if isinstance(value, Mapping) else None
-
-
-def _text(value: object) -> str:
-    return " ".join(value.split()) if isinstance(value, str) else ""

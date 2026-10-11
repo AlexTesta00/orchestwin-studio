@@ -3,12 +3,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 from orchestwin.cli.api import research_evidence as api
+from orchestwin.cli.arguments import PARSER_OPTIONS
 from orchestwin.cli.errors import SIGN_IN_STATUS, USAGE_STATUS, CliError
 from orchestwin.cli.project import read_json
 
@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
 
 NAME = "evidence"
-NESTED_OPTIONS: Final = {"color": False} if sys.version_info >= (3, 14) else {}
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -24,7 +23,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="evidence.option_json")
     actions = parser.add_subparsers(dest="action", metavar="ACTION")
     for name in ("add", "revise"):
-        child = actions.add_parser(name, help=f"evidence.help_{name}", **NESTED_OPTIONS)
+        child = actions.add_parser(name, help=f"evidence.help_{name}", **PARSER_OPTIONS)
         if name == "revise":
             child.add_argument("code", metavar="CODE")
         child.add_argument("file", metavar="FILE")
@@ -36,17 +35,17 @@ def configure(parser: argparse.ArgumentParser) -> None:
         child.add_argument("--limitations", default="")
         child.add_argument("--collected-at")
         child.add_argument("--empirical", action="store_true")
-    show = actions.add_parser("show", help="evidence.help_show", **NESTED_OPTIONS)
+    show = actions.add_parser("show", help="evidence.help_show", **PARSER_OPTIONS)
     show.add_argument("code", metavar="CODE")
     show.add_argument("--text", action="store_true", help="evidence.option_text")
     show.add_argument("--json", action="store_true", help="evidence.option_json")
-    retire = actions.add_parser("retire", help="evidence.help_retire", **NESTED_OPTIONS)
+    retire = actions.add_parser("retire", help="evidence.help_retire", **PARSER_OPTIONS)
     retire.add_argument("code", metavar="CODE")
     retire.add_argument("--reason", required=True)
-    deleted = actions.add_parser("delete-text", help="evidence.help_delete-text", **NESTED_OPTIONS)
+    deleted = actions.add_parser("delete-text", help="evidence.help_delete-text", **PARSER_OPTIONS)
     deleted.add_argument("code", metavar="CODE")
     associated = actions.add_parser(
-        "reassociate", help="evidence.help_reassociate", **NESTED_OPTIONS
+        "reassociate", help="evidence.help_reassociate", **PARSER_OPTIONS
     )
     associated.add_argument("code", metavar="CODE")
     associated.add_argument("file", metavar="FILE")
@@ -68,9 +67,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         if hashlib.sha256(normalized.encode("utf-8")).hexdigest() != found["content_hash"]:
             raise CliError("EVIDENCE_CONTEXT_CHANGED", status=USAGE_STATUS)
         context.console.say("evidence.privacy")
-        if not context.assume_yes and not context.console.confirm(
-            "evidence.confirm_add", default=False
-        ):
+        if not context.confirm("evidence.confirm_add", default=False):
             return 0
         result = api.request(
             client,
@@ -83,9 +80,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     if action in ("add", "revise"):
         text = file_text(context.directory / arguments.file)
         context.console.say("evidence.privacy")
-        if not context.assume_yes and not context.console.confirm(
-            "evidence.confirm_add", default=False
-        ):
+        if not context.confirm("evidence.confirm_add", default=False):
             return 0
         route = api.path(link.project_id)
         if action == "revise":
@@ -164,9 +159,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         return 0
     if action == "retire":
         context.console.say("evidence.retire_warning")
-        if not context.assume_yes and not context.console.confirm(
-            "evidence.confirm_retire", default=False
-        ):
+        if not context.confirm("evidence.confirm_retire", default=False):
             return 0
         result = api.request(client, "POST", f"{route}/retire", body={"reason": arguments.reason})
         context.console.say("evidence.retired", code=found["code"])
@@ -174,9 +167,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
             context.console.say("evidence.review_required")
         return 0
     context.console.say("evidence.delete_warning")
-    if not context.assume_yes and not context.console.confirm(
-        "evidence.confirm_delete", default=False
-    ):
+    if not context.confirm("evidence.confirm_delete", default=False):
         return 0
     api.request(client, "DELETE", f"{route}/text", body={"acknowledged": True})
     context.console.say("evidence.deleted", code=found["code"])

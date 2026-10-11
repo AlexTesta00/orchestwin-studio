@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 
 from orchestwin.cli import costs
 from orchestwin.cli.api import requirements
-from orchestwin.cli.commands.init import Journey
-from orchestwin.cli.errors import SIGN_IN_STATUS, CliError
+from orchestwin.cli.errors import CliError, signed_out_reason
 from orchestwin.cli.flows import init_requirements
+from orchestwin.cli.flows.journey import Journey
 from orchestwin.cli.flows.publish import publish_and_pull
 from orchestwin.cli.project import read_json
 from orchestwin.cli.views.definition import show
@@ -33,9 +33,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
 
 
 def run(context: CommandContext, arguments: argparse.Namespace) -> int:
-    project = context.project()
-    if project is None:
-        raise CliError("PROJECT_NOT_LINKED")
+    project = context.linked_project()
     if arguments.action == "journeys":
         if arguments.all or arguments.json:
             raise CliError("DEFINITION_JOURNEYS_OPTIONS", status=2)
@@ -43,10 +41,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     try:
         version = requirements.current(context.client(), project.link().project_id)
     except CliError as error:
-        if (
-            error.code not in {"STUDIO_UNREACHABLE", "NOT_SIGNED_IN"}
-            and error.status != SIGN_IN_STATUS
-        ):
+        if signed_out_reason(error) is None:
             raise
         local = local_version(project)
         if local is None:

@@ -3,17 +3,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Final
 
+from orchestwin.cli.api.modeling import modeling_path
 from orchestwin.cli.errors import ApiFailure
+from orchestwin.cli.shapes import mapping_list as _mapping_list
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
 
 QUESTION_LIMIT: Final = 1000
 TURN_STATUS: Final = "TWIN_TURN_RECORDED"
-
-
-def modeling_path(project_id: str) -> str:
-    return f"/projects/{project_id}/user-modeling"
 
 
 def conversation_path(project_id: str, twin_id: str) -> str:
@@ -44,10 +42,7 @@ def current_snapshot(client: StudioClient, project_id: str) -> Mapping[str, obje
 
 def twin_versions(document: Mapping[str, object] | None) -> list[Mapping[str, object]]:
     body = document.get("snapshot") if isinstance(document, Mapping) else None
-    versions = body.get("twin_versions") if isinstance(body, Mapping) else None
-    if not isinstance(versions, list):
-        return []
-    return [item for item in versions if isinstance(item, Mapping)]
+    return _mapping_list(body.get("twin_versions") if isinstance(body, Mapping) else None)
 
 
 def conversation(
@@ -83,10 +78,7 @@ def turns(
         return []
     if twin_version_id is not None and str(snapshot.get("twin_version_id")) != twin_version_id:
         return []
-    items = snapshot.get("turns")
-    if not isinstance(items, list):
-        return []
-    return [item for item in items if isinstance(item, Mapping)]
+    return _mapping_list(snapshot.get("turns"))
 
 
 def turn_reply(turn: Mapping[str, object]) -> str:

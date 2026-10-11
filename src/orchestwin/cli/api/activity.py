@@ -4,9 +4,9 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Final
 from urllib.parse import quote
 
+from orchestwin.cli.api.replies import mapping_answer
 from orchestwin.cli.client import DEFAULT_TIMEOUT
 from orchestwin.cli.errors import ApiFailure
-from orchestwin.cli.jobs import reply_body
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -28,15 +28,7 @@ def request(
     body: Mapping[str, object] | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> Mapping[str, object]:
-    reply = client.request(method, route, body=body, timeout=timeout)
-    document = reply_body(reply)
-    if reply.status >= 400:
-        detail = document.get("detail") if isinstance(document, Mapping) else None
-        code = detail.get("code") if isinstance(detail, Mapping) else detail
-        raise ApiFailure(code if isinstance(code, str) else "API_FAILURE", http_status=reply.status)
-    if not isinstance(document, Mapping):
-        raise ApiFailure("API_FAILURE", http_status=reply.status)
-    return document
+    return mapping_answer(client.request(method, route, body=body, timeout=timeout))
 
 
 def overview(client: StudioClient, project_id: str) -> Mapping[str, object]:

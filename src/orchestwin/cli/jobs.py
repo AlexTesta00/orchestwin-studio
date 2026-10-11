@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.console import ProgressOutcome
 from orchestwin.cli.errors import INTERRUPTED_STATUS, ApiFailure, CliError
+from orchestwin.cli.shapes import dict_list as _dict_list
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
@@ -120,10 +121,14 @@ def _generate(
 
 def running_jobs(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
     document = client.get(f"/projects/{project_id}/generation-jobs?status={RUNNING}")
-    items = document.get("items") if isinstance(document, dict) else None
-    if not isinstance(items, list):
-        return []
-    return [item for item in items if isinstance(item, dict)]
+    return _dict_list(document.get("items") if isinstance(document, dict) else None)
+
+
+def answer_member(result: JobResult, key: str) -> Mapping[str, object]:
+    member = result.body.get(key) if isinstance(result.body, Mapping) else None
+    if not isinstance(member, Mapping):
+        raise ApiFailure("API_FAILURE", http_status=result.status_code)
+    return member
 
 
 def stage_text(context: CommandContext, job: Mapping[str, object]) -> str:

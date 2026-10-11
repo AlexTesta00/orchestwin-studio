@@ -6,11 +6,9 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
-from orchestwin.cli import costs
 from orchestwin.cli import folder as knowledge
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import design as design_api
-from orchestwin.cli.console import format_elapsed
 from orchestwin.cli.errors import USAGE_STATUS, CliError
 from orchestwin.cli.flows import changes as git
 from orchestwin.cli.flows import (
@@ -25,6 +23,7 @@ from orchestwin.cli.flows.code_agents import CLAUDE
 from orchestwin.cli.flows.design_delta import ADD, CHANGE, REMOVE
 from orchestwin.cli.flows.design_state import wrapped
 from orchestwin.cli.messages import known
+from orchestwin.cli.shapes import whole
 
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
@@ -213,11 +212,9 @@ def run(context: CommandContext, *, since: str | None, dry_run: bool, max_usd: s
     )
     announce(context, launch, max_usd=budget)
     if dry_run:
-        from orchestwin.cli.commands.code import show_words
-
-        show_words(context, launch)
+        code_run.show_words(context, launch)
         return 0
-    if not context.assume_yes and not console.confirm("align.design_confirm", default=True):
+    if not context.confirm("align.design_confirm", default=True):
         raise CliError("SPENDING_REFUSED", values={"reason": REFUSED_REASON})
     console.say("code.starting", program=launch.program)
     return report(context, launch, code_run.start(context, launch), current=current)
@@ -372,9 +369,9 @@ def order_of(
     root = project.knowledge
     present = frozenset(name for name in READ_FIRST if root.joinpath(*name.split("/")).is_file())
     fresh = summary is not None and design_version(summary) == end
-    name = "" if summary is None else inline(summary.project_name)
+    name = "" if summary is None else code_order.inline(summary.project_name)
     return DesignOrder(
-        project_name=name or inline(link.project_name),
+        project_name=name or code_order.inline(link.project_name),
         knowledge_folder=link.knowledge_folder,
         folder_version=summary.version_number if fresh and summary is not None else None,
         start=start,
@@ -482,37 +479,17 @@ def quoted(order: DesignOrder, name: str) -> str:
 
 
 def announce(context: CommandContext, launch: Launch, *, max_usd: float | None) -> None:
-    from orchestwin.cli.commands.code import mode_key
-
     console = context.console
-    settings = launch.settings
-    agent_key = "code.agent_claude" if settings.agent == CLAUDE else "code.agent_custom"
     console.write()
-    console.say(agent_key, program=launch.arguments[0])
-    console.say(mode_key(settings))
-    if settings.agent == CLAUDE and settings.model:
-        console.say("code.model", model=settings.model)
-    if max_usd is not None:
-        console.say("code.budget", usd=costs.usd_text(max_usd, context.language))
+    code_run.say_agent(context, launch, max_usd=max_usd)
     console.say("code.order", path=str(launch.files.prompt))
     console.say("code.own_account")
 
 
 def report(context: CommandContext, launch: Launch, finished: Finished, *, current: int) -> int:
-    from orchestwin.cli.commands.code import show_changes
-
     console = context.console
-    outcome = finished.outcome
-    elapsed = format_elapsed(outcome.seconds)
-    console.write()
-    if outcome.exit_status == 0:
-        console.say("code.ended", elapsed=elapsed)
-    else:
-        console.say("code.ended_status", status=outcome.exit_status, elapsed=elapsed)
-    show_changes(context, launch, finished.changes)
-    if finished.touched:
-        console.say("code.knowledge_touched", folder=launch.project.link().knowledge_folder)
-    if outcome.exit_status != 0:
+    code_run.say_ended(context, launch, finished, folder=launch.project.link().knowledge_folder)
+    if finished.outcome.exit_status != 0:
         console.say("align.design_next_steps_failed", folder=str(launch.files.folder))
         return 1
     code_run.write_design_point(
@@ -524,11 +501,3 @@ def report(context: CommandContext, launch: Launch, finished: Finished, *, curre
     )
     console.say("align.design_next_steps", version=current)
     return 0
-
-
-def whole(value: object) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-
-def inline(value: object) -> str:
-    return " ".join(str(value).split())

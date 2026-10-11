@@ -168,7 +168,15 @@ class Console:
             self.say("common.answer_yes_no")
         raise CliError("ANSWER_NOT_VALID")
 
-    def choose(self, key: str, /, options: Sequence[Choice], **values: object) -> Choice:
+    def choose(
+        self,
+        key: str,
+        /,
+        options: Sequence[Choice],
+        *,
+        default: str | None = None,
+        **values: object,
+    ) -> Choice:
         if not options:
             raise ValueError("a choice needs at least one option")
         self.write(self.text(key, **values))
@@ -176,7 +184,12 @@ class Console:
             self.write(f"  {number}. {option.label}")
         prompt = f"{self.text('common.choose_prompt')} "
         for _ in range(ATTEMPTS):
-            selected = selected_choice(self._prompt(prompt).strip(), options)
+            answer = (
+                self._prompt(prompt).strip()
+                if default is None
+                else self.ask("common.choose_prompt", default=default)
+            )
+            selected = selected_choice(answer, options)
             if selected is not None:
                 return selected
             self.say("common.choice_invalid")
@@ -421,3 +434,10 @@ def format_elapsed(seconds: float) -> str:
         return f"{minutes} min {rest:02d} s"
     hours, minutes = divmod(minutes, 60)
     return f"{hours} h {minutes:02d} min"
+
+
+def safe_text(value: object) -> str:
+    try:
+        return str(value)
+    except Exception:
+        return type(value).__name__

@@ -5,14 +5,13 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Final
 from urllib.parse import urlencode
 
-from orchestwin.cli.errors import USAGE_STATUS, ApiFailure, CliError
-from orchestwin.cli.jobs import reply_body
+from orchestwin.cli.api.replies import mapping_answer
+from orchestwin.cli.errors import USAGE_STATUS, CliError
 
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
 
 DOCUMENT: Final = "twins/evidence.json"
-KIND: Final = "orchestwin.research-evidence"
 SOURCE_KINDS: Final = (
     "PROJECT_BRIEF",
     "OWNER_INPUT",
@@ -61,12 +60,4 @@ def request(
 ) -> Mapping[str, object]:
     if query:
         route = f"{route}?{urlencode(query)}"
-    reply = client.request(method, route, body=body)
-    document = reply_body(reply)
-    if reply.status >= 400:
-        detail = document.get("detail") if isinstance(document, Mapping) else None
-        code = detail.get("code") if isinstance(detail, Mapping) else detail
-        raise ApiFailure(code if isinstance(code, str) else "API_FAILURE", http_status=reply.status)
-    if not isinstance(document, Mapping):
-        raise ApiFailure("API_FAILURE", http_status=reply.status)
-    return document
+    return mapping_answer(client.request(method, route, body=body))

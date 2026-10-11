@@ -7,7 +7,7 @@ import secrets
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from email.message import Message
 from types import MappingProxyType
@@ -132,14 +132,16 @@ def is_loopback(host: str) -> bool:
 
 def multipart(
     fields: Mapping[str, str],
-    files: Mapping[str, tuple[str, str, bytes]],
+    files: Mapping[str, tuple[str, str, bytes]] | Sequence[tuple[str, str, str, bytes]],
 ) -> tuple[str, bytes]:
+    if isinstance(files, Mapping):
+        files = [(name, *file) for name, file in files.items()]
     boundary = _boundary(fields, files)
     parts: list[bytes] = []
     for name, value in fields.items():
         head = f'--{boundary}\r\nContent-Disposition: form-data; name="{_quoted(name)}"\r\n\r\n'
         parts.append(head.encode("utf-8") + value.encode("utf-8") + b"\r\n")
-    for name, (file_name, media_type, content) in files.items():
+    for name, file_name, media_type, content in files:
         head = (
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="{_quoted(name)}"; '
@@ -151,12 +153,9 @@ def multipart(
     return f"multipart/form-data; boundary={boundary}", b"".join(parts)
 
 
-def _boundary(
-    fields: Mapping[str, str],
-    files: Mapping[str, tuple[str, str, bytes]],
-) -> str:
+def _boundary(fields: Mapping[str, str], files: Sequence[tuple[str, str, str, bytes]]) -> str:
     contents = [value.encode("utf-8") for value in fields.values()]
-    contents.extend(content for _, _, content in files.values())
+    contents.extend(content for *_, content in files)
     while True:
         boundary = f"orchestwin-{secrets.token_hex(16)}"
         marker = boundary.encode("ascii")
