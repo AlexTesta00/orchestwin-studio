@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -11,6 +9,7 @@ from enum import StrEnum
 from typing import Final
 from uuid import UUID
 
+from orchestwin.projects.requirements_primitives import snapshot_content_hash
 from orchestwin.twins.epistemics import (
     EpistemicStatus,
     EvidenceSourceKind,
@@ -271,14 +270,7 @@ class UserTwinProfileDiff:
     @property
     def proposal_hash(self) -> str:
         """Return the hash of immutable diff proposal content."""
-        return hashlib.sha256(
-            json.dumps(
-                self.proposal_snapshot(),
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        return snapshot_content_hash(self.proposal_snapshot())
 
     def to_snapshot(self) -> dict[str, object]:
         """Return proposal and decision metadata for API/audit use."""

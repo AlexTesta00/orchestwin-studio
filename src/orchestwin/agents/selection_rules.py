@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -26,6 +24,7 @@ from orchestwin.projects.briefs import (
 from orchestwin.projects.domain import (
     ProjectMode,
 )
+from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 
 _BRIEF_FIELD_ORDER: Final = tuple(BriefField)
 
@@ -269,59 +268,41 @@ class DeterministicTeamConstraints:
         if actual_agent_ids != expected_agent_ids:
             raise ValueError("team constraints must cover the complete catalog in order")
 
-        conflicting_agent_ids = tuple(
-            constraint.agent_id
-            for constraint in self.role_constraints
-            if (constraint.kind is TeamRoleConstraintKind.CONFLICT)
-        )
-        issue_agent_ids = tuple(issue.agent_id for issue in self.issues)
-
-        if conflicting_agent_ids != issue_agent_ids:
+        if self.conflicting_agent_ids != tuple(issue.agent_id for issue in self.issues):
             raise ValueError("conflicting constraints and issues must reference the same agents")
+
+    def _agent_ids(self, kind: TeamRoleConstraintKind) -> tuple[AgentIdentifier, ...]:
+        return tuple(
+            constraint.agent_id for constraint in self.role_constraints if constraint.kind is kind
+        )
 
     @property
     def mandatory_agent_ids(
         self,
     ) -> tuple[AgentIdentifier, ...]:
         """Return every role that must be present."""
-        return tuple(
-            constraint.agent_id
-            for constraint in self.role_constraints
-            if (constraint.kind is TeamRoleConstraintKind.MANDATORY)
-        )
+        return self._agent_ids(TeamRoleConstraintKind.MANDATORY)
 
     @property
     def optional_agent_ids(
         self,
     ) -> tuple[AgentIdentifier, ...]:
         """Return roles the owner may add or remove."""
-        return tuple(
-            constraint.agent_id
-            for constraint in self.role_constraints
-            if (constraint.kind is TeamRoleConstraintKind.OPTIONAL)
-        )
+        return self._agent_ids(TeamRoleConstraintKind.OPTIONAL)
 
     @property
     def impossible_agent_ids(
         self,
     ) -> tuple[AgentIdentifier, ...]:
         """Return roles explicitly incompatible with the brief."""
-        return tuple(
-            constraint.agent_id
-            for constraint in self.role_constraints
-            if (constraint.kind is TeamRoleConstraintKind.IMPOSSIBLE)
-        )
+        return self._agent_ids(TeamRoleConstraintKind.IMPOSSIBLE)
 
     @property
     def conflicting_agent_ids(
         self,
     ) -> tuple[AgentIdentifier, ...]:
         """Return roles whose brief signals contradict one another."""
-        return tuple(
-            constraint.agent_id
-            for constraint in self.role_constraints
-            if (constraint.kind is TeamRoleConstraintKind.CONFLICT)
-        )
+        return self._agent_ids(TeamRoleConstraintKind.CONFLICT)
 
     @property
     def has_conflicts(self) -> bool:
@@ -378,22 +359,14 @@ class DeterministicTeamConstraints:
         self,
     ) -> str:
         """Serialize the constraints with deterministic ordering."""
-        return json.dumps(
-            self.to_snapshot(),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(
-                ",",
-                ":",
-            ),
-        )
+        return canonical_json(self.to_snapshot())
 
     @property
     def content_hash(
         self,
     ) -> str:
         """Return the SHA-256 hash of the complete constraint set."""
-        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+        return snapshot_content_hash(self.to_snapshot())
 
 
 @dataclass(frozen=True, slots=True)

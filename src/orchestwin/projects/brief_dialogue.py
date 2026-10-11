@@ -5,6 +5,7 @@ from typing import Final
 from uuid import UUID
 
 from orchestwin.projects.briefs import LIST_FIELDS, BriefField, ProjectBrief
+from orchestwin.twins.profile_checks import normalized_text, require_timestamp, require_uuid
 
 MAX_STATEMENT_CHARACTERS: Final = 2000
 MAX_QUESTION_CHARACTERS: Final = 500
@@ -39,17 +40,6 @@ class DialogueAnswerKind(StrEnum):
 ACTIVE_STATUSES: Final = frozenset({BriefDialogueStatus.OPEN, BriefDialogueStatus.READY})
 
 
-def normalized_text(value, *, maximum):
-    if not isinstance(value, str):
-        raise ValueError("text is required")
-    normalized = " ".join(value.split())
-    if not normalized:
-        raise ValueError("text must not be empty")
-    if len(normalized) > maximum:
-        raise ValueError(f"text exceeds {maximum} characters")
-    return normalized
-
-
 def normalized_block(value, *, maximum):
     if not isinstance(value, str):
         raise ValueError("text is required")
@@ -82,16 +72,6 @@ def normalized_items(values):
     if len(items) > MAX_ANSWER_ITEMS:
         raise ValueError(f"items exceed {MAX_ANSWER_ITEMS} entries")
     return tuple(items)
-
-
-def _require_uuid(value, label):
-    if not isinstance(value, UUID):
-        raise ValueError(f"{label} must be a UUID")
-
-
-def _require_timestamp(value, label):
-    if not isinstance(value, datetime) or value.tzinfo is None:
-        raise ValueError(f"{label} must be a timezone-aware datetime")
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,16 +138,16 @@ class BriefDialogueTurn:
     answered_at: datetime | None = None
 
     def __post_init__(self):
-        _require_uuid(self.id, "turn id")
-        _require_uuid(self.dialogue_id, "dialogue id")
-        _require_uuid(self.model_generation_id, "model generation id")
+        require_uuid(self.id, "turn id")
+        require_uuid(self.dialogue_id, "dialogue id")
+        require_uuid(self.model_generation_id, "model generation id")
         if type(self.ordinal) is not int or not 1 <= self.ordinal <= MAX_DIALOGUE_QUESTIONS:
             raise ValueError("turn ordinal must be a positive integer within the question limit")
         if self.field is not None and not isinstance(self.field, BriefField):
             raise ValueError("turn field must be a BriefField or None")
         if self.question != normalized_text(self.question, maximum=MAX_QUESTION_CHARACTERS):
             raise ValueError("question must be normalized")
-        _require_timestamp(self.asked_at, "asked_at")
+        require_timestamp(self.asked_at, "asked_at")
         if self.answer is None:
             if self.answered_at is not None:
                 raise ValueError("an unanswered turn has no answer time")
@@ -176,7 +156,7 @@ class BriefDialogueTurn:
             raise ValueError("answer must be a DialogueAnswer")
         if self.answered_at is None:
             raise ValueError("an answered turn requires an answer time")
-        _require_timestamp(self.answered_at, "answered_at")
+        require_timestamp(self.answered_at, "answered_at")
         if self.answered_at < self.asked_at:
             raise ValueError("a turn cannot be answered before it is asked")
         if (
@@ -233,7 +213,7 @@ class BriefDialogue:
             (self.project_id, "project id"),
             (self.owner_user_id, "owner id"),
         ):
-            _require_uuid(value, label)
+            require_uuid(value, label)
         if (
             type(self.source_brief_version_number) is not int
             or self.source_brief_version_number < 1
@@ -243,7 +223,7 @@ class BriefDialogue:
             raise ValueError("statement must be normalized")
         if not isinstance(self.status, BriefDialogueStatus):
             raise ValueError("status must be a BriefDialogueStatus")
-        _require_timestamp(self.created_at, "created_at")
+        require_timestamp(self.created_at, "created_at")
         if not isinstance(self.turns, tuple) or len(self.turns) > MAX_DIALOGUE_QUESTIONS:
             raise ValueError("turns must be a bounded tuple")
         for ordinal, turn in enumerate(self.turns, 1):
@@ -266,7 +246,7 @@ class BriefDialogue:
             if self.status is BriefDialogueStatus.READY and self.pending_turn is not None:
                 raise ValueError("a ready dialogue has no pending question")
             return
-        _require_timestamp(self.completed_at, "completed_at")
+        require_timestamp(self.completed_at, "completed_at")
         if self.completed_at < self.created_at:
             raise ValueError("a dialogue cannot complete before its creation")
         if self.status is BriefDialogueStatus.SYNTHESIZED:
@@ -275,7 +255,7 @@ class BriefDialogue:
                 or self.resulting_brief_version_number <= self.source_brief_version_number
             ):
                 raise ValueError("a synthesized dialogue requires a later brief version")
-            _require_uuid(self.synthesis_generation_id, "synthesis generation id")
+            require_uuid(self.synthesis_generation_id, "synthesis generation id")
             return
         if (
             self.resulting_brief_version_number is not None
