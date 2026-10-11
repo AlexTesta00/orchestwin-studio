@@ -11,7 +11,7 @@ from orchestwin.artifacts.design_evaluation import (
     DesignEvaluationRun,
     design_evaluation_run_from_snapshot,
 )
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import owned_project_query
 
 RUNS = sa.table(
     "design_evaluation_runs",
@@ -68,11 +68,7 @@ class SqlAlchemyDesignEvaluationRepository:
         self._owner_user_id = owner_user_id
 
     async def _owns(self, project_id: UUID) -> bool:
-        statement = sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == project_id,
-            ProjectRecord.owner_user_id == self._owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
+        statement = owned_project_query(project_id, self._owner_user_id)
         return (await self._session.execute(statement)).scalar_one_or_none() is not None
 
     async def create(self, run: DesignEvaluationRun) -> DesignEvaluationWriteStatus:

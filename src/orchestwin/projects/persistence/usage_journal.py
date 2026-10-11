@@ -9,7 +9,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.activity import ActivityError
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import owned_project_query
 
 USAGE_EVENTS = sa.table(
     "project_usage_events",
@@ -55,11 +55,7 @@ class SqlAlchemyUsageJournalRepository:
         self.owner_user_id = owner_user_id
 
     async def owned(self, project_id: UUID, *, lock: bool = False) -> bool:
-        statement = sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == project_id,
-            ProjectRecord.owner_user_id == self.owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
+        statement = owned_project_query(project_id, self.owner_user_id)
         if lock:
             statement = statement.with_for_update()
         return await self.session.scalar(statement) is not None

@@ -24,6 +24,7 @@ from orchestwin.models.proposal_evidence_persistence import (
 )
 from orchestwin.projects.persistence.briefs import SqlAlchemyProjectBriefRepository
 from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import owned_project_query
 from orchestwin.projects.persistence.research_evidence import SqlAlchemyResearchEvidenceRepository
 from orchestwin.projects.requirements_persistence import (
     SqlAlchemyRequirementsSpecificationRepository,
@@ -171,13 +172,7 @@ class SqlAlchemyWhyQueryService:
         self, *, owner_user_id: UUID, project_id: UUID, validation_context: bool = False
     ) -> dict | None:
         async with self._session_factory() as session:
-            owned = await session.scalar(
-                sa.select(ProjectRecord.id).where(
-                    ProjectRecord.id == project_id,
-                    ProjectRecord.owner_user_id == owner_user_id,
-                    ProjectRecord.archived_at.is_(None),
-                )
-            )
+            owned = await session.scalar(owned_project_query(project_id, owner_user_id))
             if owned is None:
                 return None
             facts = await SqlAlchemySectionReads(self._session_factory).facts(
@@ -201,13 +196,7 @@ class SqlAlchemyWhyQueryService:
         sections=None,
         validation_context: bool = False,
     ) -> dict | None:
-        owned = await session.scalar(
-            sa.select(ProjectRecord.id).where(
-                ProjectRecord.id == project_id,
-                ProjectRecord.owner_user_id == owner_user_id,
-                ProjectRecord.archived_at.is_(None),
-            )
-        )
+        owned = await session.scalar(owned_project_query(project_id, owner_user_id))
         if owned is None:
             return None
         brief = await SqlAlchemyProjectBriefRepository(session).list_owned_versions(

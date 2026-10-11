@@ -8,7 +8,6 @@ from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.knowledge.state import MAX_FOLDER_TEST_RUNS
 from orchestwin.projects.acceptance_tests import (
@@ -27,7 +26,7 @@ from orchestwin.projects.acceptance_tests import (
     run_summary_from_snapshot,
     snapshot_summary_from_snapshot,
 )
-from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.owned import OwnedProjectRepository
 
 DEFAULT_LIST_LIMIT: Final = 20
 
@@ -158,23 +157,7 @@ def _run(row: Mapping[str, object], review: TestReview | None) -> TestRun:
     )
 
 
-class SqlAlchemyAcceptanceTestRepository:
-    def __init__(self, session: AsyncSession, *, owner_user_id: UUID) -> None:
-        self._session = session
-        self._owner_user_id = owner_user_id
-
-    def _owned_project(self, project_id: UUID):
-        return sa.select(ProjectRecord.id).where(
-            ProjectRecord.id == project_id,
-            ProjectRecord.owner_user_id == self._owner_user_id,
-            ProjectRecord.archived_at.is_(None),
-        )
-
-    async def project_exists(self, project_id: UUID) -> bool:
-        return (
-            await self._session.execute(self._owned_project(project_id))
-        ).scalar_one_or_none() is not None
-
+class SqlAlchemyAcceptanceTestRepository(OwnedProjectRepository):
     def _owned(self, table, project_id: UUID, *columns):
         return sa.select(*(columns or table.c)).where(
             table.c.project_id == project_id,
