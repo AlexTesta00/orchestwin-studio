@@ -37,8 +37,18 @@ from orchestwin.models.team_proposals import (
     TeamProposalJustificationKind,
     TeamProposalMemberSource,
 )
+from orchestwin.workflow.gate_flow import (
+    Clock,
+    GateOutcomes,
+    UuidFactory,
+    current_time,
+    decide_current,
+    gate_history,
+    gate_is_currently_approved,
+    latest_gate,
+    submit_artifact,
+)
 from orchestwin.workflow.gates import (
-    DEFAULT_GATE_ITERATION_LIMIT,
     GateArtifactReference,
     HumanGate,
     HumanGateAction,
@@ -47,10 +57,7 @@ from orchestwin.workflow.gates import (
     HumanGateStatus,
     HumanGateTransitionStatus,
     HumanGateType,
-    create_human_gate,
     mark_human_gate_stale,
-    next_human_gate_iteration,
-    transition_human_gate,
 )
 from orchestwin.workflow.repository import (
     HumanGateRepository,
@@ -303,8 +310,6 @@ AgentTeamUnitOfWorkFactory = Callable[
     [],
     AgentTeamUnitOfWork,
 ]
-Clock = Callable[[], datetime]
-UuidFactory = Callable[[], UUID]
 
 
 def utc_now() -> datetime:
@@ -365,13 +370,7 @@ def agent_team_gate_is_currently_approved(
     version: TeamProposalVersion | None,
 ) -> bool:
     """Return whether Gate 2 approves the exact current team."""
-    if gate is None or version is None:
-        return False
-
-    return (
-        gate.status is HumanGateStatus.APPROVED
-        and gate.artifact == agent_team_artifact_reference(version)
-    )
+    return gate_is_currently_approved(gate, version, agent_team_artifact_reference)
 
 
 def project_workflow_readiness(
@@ -400,6 +399,15 @@ def project_workflow_readiness(
         return ProjectWorkflowReadiness.TEAM_APPROVAL_REQUIRED
 
     return ProjectWorkflowReadiness.READY_FOR_MAIN_WORKFLOW
+
+
+_OUTCOMES = GateOutcomes(
+    submission=AgentTeamGateSubmissionResult,
+    submission_status=AgentTeamGateSubmissionStatus,
+    new_artifact_required=AgentTeamGateSubmissionStatus.NEW_PROPOSAL_REQUIRED,
+    decision=AgentTeamGateDecisionResult,
+    decision_status=AgentTeamGateDecisionStatus,
+)
 
 
 class LocalAgentTeamApprovalService:
@@ -437,7 +445,7 @@ class LocalAgentTeamApprovalService:
                 owner_user_id=(owner_user_id),
             )
 
-            precondition = self._edit_precondition(context)
+            precondition = self._precondition(context, TeamEditStatus)
 
             if precondition is not None:
                 return TeamEditResult(status=precondition)
@@ -552,7 +560,7 @@ class LocalAgentTeamApprovalService:
                 project_id=project_id,
                 owner_user_id=(owner_user_id),
             )
-            failure = self._submission_precondition(context)
+            failure = self._precondition(context, AgentTeamGateSubmissionStatus)
 
             if failure is not None:
                 return AgentTeamGateSubmissionResult(status=failure)
@@ -575,119 +583,15 @@ class LocalAgentTeamApprovalService:
                     status=(AgentTeamGateSubmissionStatus.PROPOSAL_STALE)
                 )
 
-            artifact = agent_team_artifact_reference(proposal)
-            latest = await unit.gates.get_latest_owned_for_update(
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
-                gate_type=(HumanGateType.AGENT_TEAM),
-            )
-
-            if latest is not None and latest.artifact == artifact:
-                return await self._submit_existing(
-                    unit=unit,
-                    gate=latest,
-                    owner_user_id=(owner_user_id),
-                    occurred_at=timestamp,
-                )
-
-            stale_events: list[HumanGateEvent] = []
-
-            if latest is not None:
-                if latest.status in {
-                    HumanGateStatus.CANCELLED,
-                    HumanGateStatus.PAUSED_NEEDS_HUMAN,
-                }:
-                    return AgentTeamGateSubmissionResult(
-                        status=(AgentTeamGateSubmissionStatus.GATE_BLOCKED),
-                        gate=latest,
-                    )
-
-                if latest.status is not HumanGateStatus.STALE:
-                    stale_result = mark_human_gate_stale(
-                        latest,
-                        current_artifact=(artifact),
-                        occurred_at=timestamp,
-                        event_id=(self._event_id_factory()),
-                    )
-
-                    if stale_result.status is HumanGateTransitionStatus.REJECTED:
-                        return AgentTeamGateSubmissionResult(
-                            status=(AgentTeamGateSubmissionStatus.TRANSITION_REJECTED),
-                            gate=latest,
-                            issue=(stale_result.issue),
-                        )
-
-                    if (
-                        stale_result.status is HumanGateTransitionStatus.APPLIED
-                        and stale_result.event is not None
-                    ):
-                        await unit.gates.save_transition(
-                            previous_gate=latest,
-                            updated_gate=(stale_result.gate),
-                            event=(stale_result.event),
-                        )
-                        stale_events.append(stale_result.event)
-                        latest = stale_result.gate
-
-                budget = next_human_gate_iteration(
-                    latest,
-                    await unit.gates.list_events_owned(
-                        project_id=project_id,
-                        owner_user_id=owner_user_id,
-                        gate_id=latest.id,
-                    ),
-                )
-
-                if budget is None:
-                    return AgentTeamGateSubmissionResult(
-                        status=(AgentTeamGateSubmissionStatus.ITERATION_LIMIT_REACHED),
-                        gate=latest,
-                        events=tuple(stale_events),
-                    )
-
-                next_iteration, max_iterations = budget
-            else:
-                next_iteration = 1
-                max_iterations = DEFAULT_GATE_ITERATION_LIMIT
-
-            draft = create_human_gate(
-                gate_id=(self._gate_id_factory()),
+            return await submit_artifact(
+                unit.gates,
+                agent_team_artifact_reference(proposal),
                 project_id=project_id,
                 owner_user_id=owner_user_id,
-                gate_type=(HumanGateType.AGENT_TEAM),
-                artifact=artifact,
-                iteration=next_iteration,
-                max_iterations=max_iterations,
-                created_at=timestamp,
-            )
-            submitted = transition_human_gate(
-                draft,
-                action=HumanGateAction.SUBMIT,
-                actor_user_id=owner_user_id,
                 occurred_at=timestamp,
-                event_id=(self._event_id_factory()),
-            )
-
-            if submitted.status is not HumanGateTransitionStatus.APPLIED or submitted.event is None:
-                return AgentTeamGateSubmissionResult(
-                    status=(AgentTeamGateSubmissionStatus.TRANSITION_REJECTED),
-                    gate=draft,
-                    events=tuple(stale_events),
-                    issue=submitted.issue,
-                )
-
-            persisted = await unit.gates.add_with_event(
-                gate=submitted.gate,
-                event=submitted.event,
-            )
-
-            return AgentTeamGateSubmissionResult(
-                status=(AgentTeamGateSubmissionStatus.SUBMITTED),
-                gate=persisted,
-                events=(
-                    *stale_events,
-                    submitted.event,
-                ),
+                gate_id_factory=self._gate_id_factory,
+                event_id_factory=self._event_id_factory,
+                outcomes=_OUTCOMES,
             )
 
     async def decide_gate(
@@ -706,7 +610,7 @@ class LocalAgentTeamApprovalService:
                 project_id=project_id,
                 owner_user_id=(owner_user_id),
             )
-            failure = self._decision_precondition(context)
+            failure = self._precondition(context, AgentTeamGateDecisionStatus)
 
             if failure is not None:
                 return AgentTeamGateDecisionResult(status=failure)
@@ -729,91 +633,16 @@ class LocalAgentTeamApprovalService:
                     status=(AgentTeamGateDecisionStatus.PROPOSAL_STALE)
                 )
 
-            gate = await unit.gates.get_latest_owned_for_update(
+            return await decide_current(
+                unit.gates,
+                agent_team_artifact_reference(proposal),
                 project_id=project_id,
-                owner_user_id=(owner_user_id),
-                gate_type=(HumanGateType.AGENT_TEAM),
-            )
-
-            if gate is None:
-                return AgentTeamGateDecisionResult(
-                    status=(AgentTeamGateDecisionStatus.GATE_NOT_FOUND)
-                )
-
-            if action is HumanGateAction.SUBMIT:
-                return AgentTeamGateDecisionResult(
-                    status=(AgentTeamGateDecisionStatus.REJECTED),
-                    gate=gate,
-                    issue=(HumanGateIssueCode.INVALID_TRANSITION),
-                )
-
-            current_artifact = agent_team_artifact_reference(proposal)
-
-            if gate.artifact != current_artifact:
-                stale_result = mark_human_gate_stale(
-                    gate,
-                    current_artifact=(current_artifact),
-                    occurred_at=timestamp,
-                    event_id=(self._event_id_factory()),
-                )
-
-                if (
-                    stale_result.status is HumanGateTransitionStatus.APPLIED
-                    and stale_result.event is not None
-                ):
-                    await unit.gates.save_transition(
-                        previous_gate=gate,
-                        updated_gate=(stale_result.gate),
-                        event=(stale_result.event),
-                    )
-
-                    return AgentTeamGateDecisionResult(
-                        status=(AgentTeamGateDecisionStatus.ARTIFACT_STALE),
-                        gate=(stale_result.gate),
-                        event=(stale_result.event),
-                    )
-
-                if stale_result.status is HumanGateTransitionStatus.NO_CHANGE:
-                    return AgentTeamGateDecisionResult(
-                        status=(AgentTeamGateDecisionStatus.ARTIFACT_STALE),
-                        gate=gate,
-                    )
-
-                return AgentTeamGateDecisionResult(
-                    status=(AgentTeamGateDecisionStatus.REJECTED),
-                    gate=gate,
-                    issue=stale_result.issue,
-                )
-
-            transition = transition_human_gate(
-                gate,
+                owner_user_id=owner_user_id,
                 action=action,
-                actor_user_id=owner_user_id,
-                occurred_at=timestamp,
                 reason=reason,
-                event_id=(self._event_id_factory()),
-            )
-
-            if (
-                transition.status is not HumanGateTransitionStatus.APPLIED
-                or transition.event is None
-            ):
-                return AgentTeamGateDecisionResult(
-                    status=(AgentTeamGateDecisionStatus.REJECTED),
-                    gate=gate,
-                    issue=transition.issue,
-                )
-
-            persisted = await unit.gates.save_transition(
-                previous_gate=gate,
-                updated_gate=(transition.gate),
-                event=transition.event,
-            )
-
-            return AgentTeamGateDecisionResult(
-                status=(AgentTeamGateDecisionStatus.APPLIED),
-                gate=persisted,
-                event=transition.event,
+                occurred_at=timestamp,
+                event_id_factory=self._event_id_factory,
+                outcomes=_OUTCOMES,
             )
 
     async def readiness(
@@ -855,12 +684,12 @@ class LocalAgentTeamApprovalService:
         owner_user_id: UUID,
     ) -> HumanGate | None:
         """Return the latest owner-scoped Agent Team gate."""
-        async with self._unit_of_work_factory() as unit:
-            return await unit.gates.get_latest_owned_for_update(
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
-                gate_type=(HumanGateType.AGENT_TEAM),
-            )
+        return await latest_gate(
+            self._unit_of_work_factory(),
+            HumanGateType.AGENT_TEAM,
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+        )
 
     async def gate_events(
         self,
@@ -873,58 +702,25 @@ class LocalAgentTeamApprovalService:
         ...,
     ]:
         """Return the append-only Gate 2 event history."""
-        async with self._unit_of_work_factory() as unit:
-            return await unit.gates.list_events_owned(
-                project_id=project_id,
-                owner_user_id=(owner_user_id),
-                gate_id=gate_id,
-            )
+        return await gate_history(
+            self._unit_of_work_factory(),
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            gate_id=gate_id,
+        )
 
     @staticmethod
-    def _edit_precondition(
-        context: TeamSelectionContext | None,
-    ) -> TeamEditStatus | None:
-        """Return an edit precondition failure when applicable."""
+    def _precondition[Status: StrEnum](
+        context: TeamSelectionContext | None, statuses: type[Status]
+    ) -> Status | None:
         if context is None:
-            return TeamEditStatus.PROJECT_NOT_FOUND
+            return statuses.PROJECT_NOT_FOUND
 
         if context.brief_version is None:
-            return TeamEditStatus.BRIEF_NOT_FOUND
+            return statuses.BRIEF_NOT_FOUND
 
         if not context.brief_is_approved:
-            return TeamEditStatus.BRIEF_NOT_APPROVED
-
-        return None
-
-    @staticmethod
-    def _submission_precondition(
-        context: TeamSelectionContext | None,
-    ) -> AgentTeamGateSubmissionStatus | None:
-        """Return a Gate 2 submission precondition failure."""
-        if context is None:
-            return AgentTeamGateSubmissionStatus.PROJECT_NOT_FOUND
-
-        if context.brief_version is None:
-            return AgentTeamGateSubmissionStatus.BRIEF_NOT_FOUND
-
-        if not context.brief_is_approved:
-            return AgentTeamGateSubmissionStatus.BRIEF_NOT_APPROVED
-
-        return None
-
-    @staticmethod
-    def _decision_precondition(
-        context: TeamSelectionContext | None,
-    ) -> AgentTeamGateDecisionStatus | None:
-        """Return a Gate 2 decision precondition failure."""
-        if context is None:
-            return AgentTeamGateDecisionStatus.PROJECT_NOT_FOUND
-
-        if context.brief_version is None:
-            return AgentTeamGateDecisionStatus.BRIEF_NOT_FOUND
-
-        if not context.brief_is_approved:
-            return AgentTeamGateDecisionStatus.BRIEF_NOT_APPROVED
+            return statuses.BRIEF_NOT_APPROVED
 
         return None
 
@@ -1062,78 +858,6 @@ class LocalAgentTeamApprovalService:
             members=tuple(members),
         )
 
-    async def _submit_existing(
-        self,
-        *,
-        unit: AgentTeamUnitOfWork,
-        gate: HumanGate,
-        owner_user_id: UUID,
-        occurred_at: datetime,
-    ) -> AgentTeamGateSubmissionResult:
-        """Submit a draft or report the current Gate 2 state."""
-        if gate.status is HumanGateStatus.PENDING_APPROVAL:
-            return AgentTeamGateSubmissionResult(
-                status=(AgentTeamGateSubmissionStatus.ALREADY_PENDING),
-                gate=gate,
-            )
-
-        if gate.status is HumanGateStatus.APPROVED:
-            return AgentTeamGateSubmissionResult(
-                status=(AgentTeamGateSubmissionStatus.ALREADY_APPROVED),
-                gate=gate,
-            )
-
-        if gate.status is HumanGateStatus.DRAFT:
-            transition = transition_human_gate(
-                gate,
-                action=HumanGateAction.SUBMIT,
-                actor_user_id=owner_user_id,
-                occurred_at=occurred_at,
-                event_id=(self._event_id_factory()),
-            )
-
-            if (
-                transition.status is not HumanGateTransitionStatus.APPLIED
-                or transition.event is None
-            ):
-                return AgentTeamGateSubmissionResult(
-                    status=(AgentTeamGateSubmissionStatus.TRANSITION_REJECTED),
-                    gate=gate,
-                    issue=transition.issue,
-                )
-
-            persisted = await unit.gates.save_transition(
-                previous_gate=gate,
-                updated_gate=(transition.gate),
-                event=transition.event,
-            )
-
-            return AgentTeamGateSubmissionResult(
-                status=(AgentTeamGateSubmissionStatus.SUBMITTED),
-                gate=persisted,
-                events=(transition.event,),
-            )
-
-        if gate.status in {
-            HumanGateStatus.PAUSED,
-            HumanGateStatus.CANCELLED,
-            HumanGateStatus.PAUSED_NEEDS_HUMAN,
-        }:
-            return AgentTeamGateSubmissionResult(
-                status=(AgentTeamGateSubmissionStatus.GATE_BLOCKED),
-                gate=gate,
-            )
-
-        return AgentTeamGateSubmissionResult(
-            status=(AgentTeamGateSubmissionStatus.NEW_PROPOSAL_REQUIRED),
-            gate=gate,
-        )
-
     def _current_time(self) -> datetime:
         """Return and validate the injected application clock."""
-        timestamp = self._clock()
-
-        if timestamp.tzinfo is None:
-            raise ValueError("Agent Team service clock must be timezone-aware")
-
-        return timestamp
+        return current_time(self._clock, "Agent Team service clock must be timezone-aware")
