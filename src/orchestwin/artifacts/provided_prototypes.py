@@ -200,9 +200,6 @@ class ProvidedPrototypeVersion:
         return canonical_workflow_json(self.to_snapshot())
 
 
-PrototypeVersion = ProvidedPrototypeVersion
-
-
 def create_provided_prototype(
     *,
     prototype_id: UUID,
@@ -366,7 +363,6 @@ def provided_prototype_from_snapshot(payload: Mapping[str, object]) -> ProvidedP
 
 __all__ = [
     "STORED_CONTRAST_THRESHOLD",
-    "PrototypeVersion",
     "ProvidedPrototypeVersion",
     "create_provided_prototype",
     "provided_prototype_from_payload",
