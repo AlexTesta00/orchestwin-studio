@@ -13,6 +13,7 @@ import type {
   RequirementsSpecificationVersionPayload,
   RequirementsTraceabilityPayload,
 } from "../types/requirements";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
@@ -25,11 +26,7 @@ export type RequirementsOperation =
   | "submit-gate"
   | "decide-gate";
 
-export interface RequirementsStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type RequirementsStoreError = StoreError;
 
 interface RequirementsState {
   projectId: string | null;
@@ -58,30 +55,6 @@ function emptyPending(): Record<RequirementsOperation, boolean> {
     "decide-revision": false,
     "submit-gate": false,
     "decide-gate": false,
-  };
-}
-
-function storeError(error: unknown): RequirementsStoreError {
-  if (error instanceof RequirementsApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected Requirements error occurred",
-    code: null,
-    status: null,
   };
 }
 
@@ -196,7 +169,11 @@ export const useRequirementsStore = defineStore("requirements", {
 
     capture(error: unknown, projectId: string, epoch: number): void {
       if (this.isCurrent(projectId, epoch)) {
-        this.error = storeError(error);
+        this.error = storeErrorOf(
+          error,
+          RequirementsApiError,
+          "An unexpected Requirements error occurred",
+        );
       }
     },
 

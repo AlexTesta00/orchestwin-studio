@@ -2,16 +2,13 @@ import { defineStore } from "pinia";
 
 import { SectionsApiError, sectionsApi, type SectionsApi } from "../api/sections";
 import type { ProjectSectionsPayload, SectionsAlignmentPayload } from "../types/sections";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type SectionsOperation = "read" | "align";
 
-export interface SectionsStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type SectionsStoreError = StoreError;
 
 interface SectionsState {
   projectId: string | null;
@@ -33,27 +30,7 @@ function emptyPending(): Record<SectionsOperation, boolean> {
 }
 
 function storeError(error: unknown): SectionsStoreError {
-  if (error instanceof SectionsApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected sections error occurred",
-    code: null,
-    status: null,
-  };
+  return storeErrorOf(error, SectionsApiError, "An unexpected sections error occurred");
 }
 
 export const useSectionsStore = defineStore("sections", {

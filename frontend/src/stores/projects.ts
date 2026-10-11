@@ -11,17 +11,10 @@ import type {
   ProjectResponse,
 } from "@/api/contracts";
 import type { useAuthStore } from "@/stores/auth";
+import { errorDetailOf } from "@/stores/storeErrors";
 
 type ApplicationApi = AuthenticationApi & ProjectApi;
 type AuthStore = ReturnType<typeof useAuthStore>;
-
-function errorCode(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.detail;
-  }
-
-  return "unexpected_error";
-}
 
 export const useProjectsStore = defineStore("projects", () => {
   const projects = ref<readonly ProjectResponse[]>([]);
@@ -39,7 +32,7 @@ export const useProjectsStore = defineStore("projects", () => {
       projects.value = await auth.withAccessToken(api, (token) => api.listProjects(token));
       return true;
     } catch (error: unknown) {
-      errorDetail.value = errorCode(error);
+      errorDetail.value = errorDetailOf(error);
       return false;
     } finally {
       loading.value = false;
@@ -60,7 +53,7 @@ export const useProjectsStore = defineStore("projects", () => {
       projects.value = [project, ...projects.value];
       return project;
     } catch (error: unknown) {
-      errorDetail.value = errorCode(error);
+      errorDetail.value = errorDetailOf(error);
       return null;
     } finally {
       loading.value = false;
@@ -101,7 +94,7 @@ export const useProjectsStore = defineStore("projects", () => {
     } catch (error: unknown) {
       currentProject.value = null;
       briefVersions.value = [];
-      errorDetail.value = errorCode(error);
+      errorDetail.value = errorDetailOf(error);
       return false;
     } finally {
       loading.value = false;
@@ -144,7 +137,7 @@ export const useProjectsStore = defineStore("projects", () => {
 
       return version;
     } catch (error: unknown) {
-      errorDetail.value = errorCode(error);
+      errorDetail.value = errorDetailOf(error);
       return null;
     } finally {
       loading.value = false;

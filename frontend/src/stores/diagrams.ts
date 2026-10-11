@@ -7,16 +7,13 @@ import type {
   DiagramStage,
   ProjectDiagramsPayload,
 } from "../types/diagrams";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type DiagramsOperation = "load";
 
-export interface DiagramsStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type DiagramsStoreError = StoreError;
 
 interface DiagramsState {
   projectId: string | null;
@@ -31,30 +28,6 @@ interface DiagramsState {
 function emptyPending(): Record<DiagramsOperation, boolean> {
   return {
     load: false,
-  };
-}
-
-function storeError(error: unknown): DiagramsStoreError {
-  if (error instanceof DiagramsApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected diagrams error occurred",
-    code: null,
-    status: null,
   };
 }
 
@@ -137,7 +110,11 @@ export const useDiagramsStore = defineStore("diagrams", {
         }
 
         if (this.isCurrent(projectId, epoch, sequence)) {
-          this.error = storeError(error);
+          this.error = storeErrorOf(
+            error,
+            DiagramsApiError,
+            "An unexpected diagrams error occurred",
+          );
         }
 
         throw error;

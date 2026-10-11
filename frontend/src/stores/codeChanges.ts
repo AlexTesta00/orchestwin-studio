@@ -7,16 +7,13 @@ import type {
   CodeChangePayload,
   CodeTaskPayload,
 } from "../types/codeChanges";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type CodeChangesOperation = "load" | "run";
 
-export interface CodeChangesStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type CodeChangesStoreError = StoreError;
 
 export interface DevelopmentSnapshot {
   alignment: AlignmentPayload;
@@ -45,30 +42,6 @@ function emptyPending(): Record<CodeChangesOperation, boolean> {
   return {
     load: false,
     run: false,
-  };
-}
-
-function storeError(error: unknown): CodeChangesStoreError {
-  if (error instanceof CodeChangesApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected code change error occurred",
-    code: null,
-    status: null,
   };
 }
 
@@ -156,7 +129,11 @@ export const useCodeChangesStore = defineStore("codeChanges", {
 
     capture(error: unknown, projectId: string, epoch: number): void {
       if (this.isCurrent(projectId, epoch)) {
-        this.error = storeError(error);
+        this.error = storeErrorOf(
+          error,
+          CodeChangesApiError,
+          "An unexpected code change error occurred",
+        );
       }
     },
 

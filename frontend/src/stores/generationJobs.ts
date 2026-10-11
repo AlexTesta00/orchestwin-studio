@@ -27,6 +27,7 @@ import {
   type GenerationJobsApi,
   type GenerationRequestJob,
 } from "../api/generationJobs";
+import { isRecord } from "../api/http";
 import { ApiRequestError } from "../api/requestError";
 import type { GenerationOperation } from "../types/designMockups";
 
@@ -74,10 +75,6 @@ interface RunningListing {
   epoch: number;
   api: GenerationJobsApi;
   promise: Promise<GenerationRequestJob[]>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function firstText(...values: unknown[]): string | null {

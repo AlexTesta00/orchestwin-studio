@@ -13,6 +13,7 @@ import type {
   ProposalRevisionPayload,
   ProposalSection,
 } from "../types/knowledgeAlignment";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
@@ -20,11 +21,7 @@ export type KnowledgeAlignmentOperation = "load" | "runs" | "apply" | "skip";
 
 export type ProposalDecision = "apply" | "skip";
 
-export interface KnowledgeAlignmentStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type KnowledgeAlignmentStoreError = StoreError;
 
 interface LoadKey {
   projectId: string;
@@ -51,30 +48,6 @@ function emptyPending(): Record<KnowledgeAlignmentOperation, boolean> {
     runs: false,
     apply: false,
     skip: false,
-  };
-}
-
-function storeError(error: unknown): KnowledgeAlignmentStoreError {
-  if (error instanceof KnowledgeAlignmentApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected knowledge alignment error occurred",
-    code: null,
-    status: null,
   };
 }
 
@@ -166,7 +139,11 @@ export const useKnowledgeAlignmentStore = defineStore("knowledgeAlignment", () =
 
   function capture(failure: unknown, project: string, epoch: number): void {
     if (isCurrent(project, epoch)) {
-      error.value = storeError(failure);
+      error.value = storeErrorOf(
+        failure,
+        KnowledgeAlignmentApiError,
+        "An unexpected knowledge alignment error occurred",
+      );
     }
   }
 

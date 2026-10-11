@@ -21,6 +21,7 @@ import type {
   InsightApplicationRequest,
   SyntheticFindingPayload,
 } from "../types/designLoop";
+import { errorMessageOf } from "./storeErrors";
 
 export type AuthorizedDesignLoopRequest = <T>(
   operation: (accessToken: string) => Promise<T>,
@@ -52,10 +53,7 @@ interface DesignLoopStoreState {
 }
 
 function errorMessage(error: unknown): string {
-  if (error instanceof DesignLoopApiError) {
-    return error.code ?? error.message;
-  }
-  return error instanceof Error ? error.message : "DESIGN_LOOP_REQUEST_FAILED";
+  return errorMessageOf(error, DesignLoopApiError, "DESIGN_LOOP_REQUEST_FAILED");
 }
 
 export function runFindings(run: DesignEvaluationRunPayload): SyntheticFindingPayload[] {

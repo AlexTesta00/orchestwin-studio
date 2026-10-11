@@ -10,16 +10,13 @@ import type {
   KnowledgePackagePublicationPayload,
   KnowledgePackageVersionPayload,
 } from "../types/knowledgePackages";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type KnowledgePackagesOperation = "load" | "publish" | "download";
 
-export interface KnowledgePackagesStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type KnowledgePackagesStoreError = StoreError;
 
 interface KnowledgePackagesState {
   projectId: string | null;
@@ -35,30 +32,6 @@ function emptyPending(): Record<KnowledgePackagesOperation, boolean> {
     load: false,
     publish: false,
     download: false,
-  };
-}
-
-function storeError(error: unknown): KnowledgePackagesStoreError {
-  if (error instanceof KnowledgePackagesApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected knowledge package error occurred",
-    code: null,
-    status: null,
   };
 }
 
@@ -131,7 +104,11 @@ export const useKnowledgePackagesStore = defineStore("knowledgePackages", {
 
     capture(error: unknown, projectId: string, epoch: number): void {
       if (this.isCurrent(projectId, epoch)) {
-        this.error = storeError(error);
+        this.error = storeErrorOf(
+          error,
+          KnowledgePackagesApiError,
+          "An unexpected knowledge package error occurred",
+        );
       }
     },
 

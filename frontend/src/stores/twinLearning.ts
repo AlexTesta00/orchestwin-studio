@@ -2,16 +2,13 @@ import { defineStore } from "pinia";
 
 import { TwinLearningApiError, twinLearningApi, type TwinLearningApi } from "../api/twinLearning";
 import type { LearningTwinPayload, TwinLearningPayload } from "../types/twinLearning";
+import { storeErrorOf, type StoreError } from "./storeErrors";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type TwinLearningOperation = "load";
 
-export interface TwinLearningStoreError {
-  message: string;
-  code: string | null;
-  status: number | null;
-}
+export type TwinLearningStoreError = StoreError;
 
 interface TwinLearningState {
   projectId: string | null;
@@ -26,30 +23,6 @@ interface TwinLearningState {
 function emptyPending(): Record<TwinLearningOperation, boolean> {
   return {
     load: false,
-  };
-}
-
-function storeError(error: unknown): TwinLearningStoreError {
-  if (error instanceof TwinLearningApiError) {
-    return {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: null,
-      status: null,
-    };
-  }
-
-  return {
-    message: "An unexpected twin learning error occurred",
-    code: null,
-    status: null,
   };
 }
 
@@ -141,7 +114,11 @@ export const useTwinLearningStore = defineStore("twinLearning", {
         return overview;
       } catch (error) {
         if (latest()) {
-          this.failure = storeError(error);
+          this.failure = storeErrorOf(
+            error,
+            TwinLearningApiError,
+            "An unexpected twin learning error occurred",
+          );
         }
         throw error;
       } finally {
