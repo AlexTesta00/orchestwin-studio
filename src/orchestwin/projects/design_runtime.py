@@ -8,9 +8,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from orchestwin.agents.persistence.repositories import (
-    SqlAlchemyTeamProposalVersionRepository,
-)
+from orchestwin.agents.persistence.repositories import SqlAlchemyTeamProposalVersionRepository
 from orchestwin.artifacts.design_gate import LocalDesignGateService
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.design_persistence import (
@@ -18,9 +16,7 @@ from orchestwin.artifacts.design_persistence import (
     SqlAlchemyDesignPackageRepository,
     SqlAlchemyDesignUnitOfWork,
 )
-from orchestwin.artifacts.design_revision_application import (
-    LocalDesignRevisionService,
-)
+from orchestwin.artifacts.design_revision_application import LocalDesignRevisionService
 from orchestwin.artifacts.design_revisions import DesignPackageDiff
 from orchestwin.artifacts.references import ArtifactKind, VersionedArtifactReference
 from orchestwin.models.design import (
@@ -48,30 +44,18 @@ from orchestwin.projects.requirements_persistence import (
     SqlAlchemyRequirementsSpecificationRepository,
 )
 from orchestwin.projects.requirements_primitives import UserTwinVersionReference
-from orchestwin.twins.persistence.repositories import (
-    SqlAlchemyUserModelingSnapshotRepository,
-)
+from orchestwin.twins.persistence.repositories import SqlAlchemyUserModelingSnapshotRepository
 from orchestwin.workflow.gates import HumanGateType
-from orchestwin.workflow.persistence.repositories import (
-    SqlAlchemyHumanGateRepository,
-)
+from orchestwin.workflow.persistence.repositories import SqlAlchemyHumanGateRepository
 
 
 class ManagedDesignUnitOfWork:
     """Close the session owned by the existing Design Unit of Work."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-        *,
-        owner_user_id: UUID,
-    ) -> None:
+    def __init__(self, session: AsyncSession, *, owner_user_id: UUID) -> None:
         self._session = session
         self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
-        self._inner = SqlAlchemyDesignUnitOfWork(
-            session,
-            owner_user_id=owner_user_id,
-        )
+        self._inner = SqlAlchemyDesignUnitOfWork(session, owner_user_id=owner_user_id)
         self.packages = self._inner.packages
         self.diffs = self._inner.diffs
 
@@ -104,38 +88,20 @@ class ManagedDesignUnitOfWork:
 class ManagedDesignUnitOfWorkFactory:
     """Create Design command Units of Work with owned sessions."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> ManagedDesignUnitOfWork:
+    def __call__(self, *, owner_user_id: UUID) -> ManagedDesignUnitOfWork:
         """Create one command Unit of Work with a fresh session."""
-        return ManagedDesignUnitOfWork(
-            self._session_factory(),
-            owner_user_id=owner_user_id,
-        )
+        return ManagedDesignUnitOfWork(self._session_factory(), owner_user_id=owner_user_id)
 
 
 class SqlAlchemyDesignGateUnitOfWork:
     """Auto-committing transaction boundary for Gate 5 use cases."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-        *,
-        owner_user_id: UUID,
-    ) -> None:
+    def __init__(self, session: AsyncSession, *, owner_user_id: UUID) -> None:
         self._session = session
-        self.packages = SqlAlchemyDesignPackageRepository(
-            session,
-            owner_user_id=owner_user_id,
-        )
+        self.packages = SqlAlchemyDesignPackageRepository(session, owner_user_id=owner_user_id)
         self.gates = SqlAlchemyHumanGateRepository(session)
 
     async def __aenter__(self) -> SqlAlchemyDesignGateUnitOfWork:
@@ -163,135 +129,82 @@ class SqlAlchemyDesignGateUnitOfWork:
 class SqlAlchemyDesignGateUnitOfWorkFactory:
     """Create owner-scoped Gate 5 Units of Work."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> SqlAlchemyDesignGateUnitOfWork:
+    def __call__(self, *, owner_user_id: UUID) -> SqlAlchemyDesignGateUnitOfWork:
         """Create one Gate 5 transaction with a fresh session."""
-        return SqlAlchemyDesignGateUnitOfWork(
-            self._session_factory(),
-            owner_user_id=owner_user_id,
-        )
+        return SqlAlchemyDesignGateUnitOfWork(self._session_factory(), owner_user_id=owner_user_id)
 
 
 class SqlAlchemyDesignQueryService:
     """Short-lived owner-scoped read service for Design API queries."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
     async def current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> DesignPackageVersion | None:
         """Return the current Design Package version."""
         async with self._session_factory() as session:
-            repository = SqlAlchemyDesignPackageRepository(
-                session,
-                owner_user_id=owner_user_id,
-            )
+            repository = SqlAlchemyDesignPackageRepository(session, owner_user_id=owner_user_id)
             return await repository.current(project_id=project_id)
 
     async def history(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> tuple[DesignPackageVersion, ...]:
         """Return immutable Design Package history."""
         async with self._session_factory() as session:
-            repository = SqlAlchemyDesignPackageRepository(
-                session,
-                owner_user_id=owner_user_id,
-            )
+            repository = SqlAlchemyDesignPackageRepository(session, owner_user_id=owner_user_id)
             return await repository.history(project_id=project_id)
 
     async def get_diff(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        diff_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID, diff_id: UUID
     ) -> DesignPackageDiff | None:
         """Return one exact Design Package diff."""
         async with self._session_factory() as session:
-            repository = SqlAlchemyDesignDiffRepository(
-                session,
-                owner_user_id=owner_user_id,
-            )
-            return await repository.get(
-                project_id=project_id,
-                diff_id=diff_id,
-            )
+            repository = SqlAlchemyDesignDiffRepository(session, owner_user_id=owner_user_id)
+            return await repository.get(project_id=project_id, diff_id=diff_id)
 
     async def diff_history(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> tuple[DesignPackageDiff, ...]:
         """Return reviewable Design Package diff history."""
         async with self._session_factory() as session:
-            repository = SqlAlchemyDesignDiffRepository(
-                session,
-                owner_user_id=owner_user_id,
-            )
+            repository = SqlAlchemyDesignDiffRepository(session, owner_user_id=owner_user_id)
             return await repository.history(project_id=project_id)
 
 
 class SqlAlchemyDesignGovernanceAdapter:
     """Load exact owner-scoped inputs for governed design generation."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
     async def load_current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> GovernedDesignContext | None:
         """Load current Requirements, Team, User Modeling, and Gate 4."""
         async with self._session_factory() as session:
             project = await SqlAlchemyProjectRepository(session).get_owned(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+                project_id=project_id, owner_user_id=owner_user_id
             )
 
             if project is None:
                 return None
 
             requirements_version = await SqlAlchemyRequirementsSpecificationRepository(
-                session,
-                owner_user_id=owner_user_id,
+                session, owner_user_id=owner_user_id
             ).current(project_id=project_id)
-            team_version = await SqlAlchemyTeamProposalVersionRepository(
-                session,
-            ).get_current_owned(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+            team_version = await SqlAlchemyTeamProposalVersionRepository(session).get_current_owned(
+                project_id=project_id, owner_user_id=owner_user_id
             )
             user_modeling_version = await SqlAlchemyUserModelingSnapshotRepository(
-                session,
-                owner_user_id=owner_user_id,
+                session, owner_user_id=owner_user_id
             ).current(project_id=project_id)
             requirements_gate = await SqlAlchemyHumanGateRepository(
-                session,
+                session
             ).get_latest_owned_for_update(
                 project_id=project_id,
                 owner_user_id=owner_user_id,
@@ -397,13 +310,9 @@ def build_design_services(
             proposals=runtime.proposal_port,
             uow_factory=command_uow_factory,
         ),
-        revisions=LocalDesignRevisionService(
-            uow_factory=command_uow_factory,
-        ),
+        revisions=LocalDesignRevisionService(uow_factory=command_uow_factory),
         queries=SqlAlchemyDesignQueryService(session_factory),
-        gate=LocalDesignGateService(
-            unit_of_work_factory=gate_uow_factory,
-        ),
+        gate=LocalDesignGateService(unit_of_work_factory=gate_uow_factory),
     )
 
 

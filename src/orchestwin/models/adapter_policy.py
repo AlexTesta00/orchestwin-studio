@@ -68,9 +68,7 @@ class ExplicitBaseFallbackAuthorization:
         ):
             validate_sha256(value, label=label)
         normalized_reason = normalize_required_text(
-            self.reason,
-            label="fallback authorization reason",
-            maximum_length=_MAX_REASON_LENGTH,
+            self.reason, label="fallback authorization reason", maximum_length=_MAX_REASON_LENGTH
         )
         if normalized_reason != self.reason:
             raise ValueError("fallback authorization reason must be normalized")
@@ -129,10 +127,7 @@ class ExactIdentityStructuredGateway(StructuredGenerationPort):
     def fallback_policy(self) -> ModelFallbackPolicy:
         return self._fallback_policy
 
-    async def generate(
-        self,
-        request: StructuredGenerationRequest,
-    ) -> StructuredGenerationResult:
+    async def generate(self, request: StructuredGenerationRequest) -> StructuredGenerationResult:
         """Execute the exact route or fail without attempting a base-model route."""
         route = self._routes.get(request.expected_identity.content_hash)
         if route is None:
@@ -191,8 +186,7 @@ def create_explicit_base_fallback_authorization(
 ) -> ExplicitBaseFallbackAuthorization:
     """Authorize one visible base-model retry after an adapter request failed."""
     _validate_adapter_to_base_identity_pair(
-        adapter_identity=failed_request.expected_identity,
-        base_identity=base_identity,
+        adapter_identity=failed_request.expected_identity, base_identity=base_identity
     )
     content_hash = explicit_base_fallback_authorization_hash(
         authorization_id=authorization_id,
@@ -225,8 +219,7 @@ def create_explicit_base_fallback_request(
 ) -> StructuredGenerationRequest:
     """Create a new auditable request; this function never executes it automatically."""
     _validate_adapter_to_base_identity_pair(
-        adapter_identity=failed_request.expected_identity,
-        base_identity=base_identity,
+        adapter_identity=failed_request.expected_identity, base_identity=base_identity
     )
     if owner_user_id != authorization.owner_user_id:
         raise ValueError("fallback authorization does not belong to the requesting owner")
@@ -288,9 +281,7 @@ def explicit_base_fallback_authorization_hash(
 
 
 def _validate_adapter_to_base_identity_pair(
-    *,
-    adapter_identity: ModelRuntimeIdentity,
-    base_identity: ModelRuntimeIdentity,
+    *, adapter_identity: ModelRuntimeIdentity, base_identity: ModelRuntimeIdentity
 ) -> None:
     if adapter_identity.adapter_id is None:
         raise ValueError("explicit base fallback requires a failed adapter request")

@@ -22,11 +22,7 @@ from orchestwin.models.change_review import (
 )
 from orchestwin.models.output_language import written_in_another_language
 from orchestwin.projects.acceptance_tests import TestCritique, TestFinding, cut_text
-from orchestwin.projects.code_changes import (
-    MAX_TWIN_NAME_LENGTH,
-    CritiqueVerdict,
-    FindingSeverity,
-)
+from orchestwin.projects.code_changes import MAX_TWIN_NAME_LENGTH, CritiqueVerdict, FindingSeverity
 from orchestwin.projects.requirements_primitives import canonical_json
 from orchestwin.twins.conversations import normalized_text
 
@@ -319,9 +315,7 @@ def bind_test_critique(output, *, twin, context: Mapping[str, object]) -> TestCr
             requirement=item.about_requirement if item.about_requirement in requirements else None,
             screen=item.about_screen if item.about_screen in screens else None,
             action=_in_language(
-                _optional_text(item.suggestion, maximum=MAX_ACTION_LENGTH),
-                locale,
-                "finding action",
+                _optional_text(item.suggestion, maximum=MAX_ACTION_LENGTH), locale, "finding action"
             ),
         )
         for item in output.findings[:MAX_FINDINGS]

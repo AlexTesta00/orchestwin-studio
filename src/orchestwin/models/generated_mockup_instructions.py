@@ -37,11 +37,7 @@ from orchestwin.artifacts.visual_directions import (
     DirectionType,
 )
 from orchestwin.models.design_drafts import requirements_view
-from orchestwin.models.design_systems import (
-    DesignSystem,
-    context_design_system,
-    design_system_view,
-)
+from orchestwin.models.design_systems import DesignSystem, context_design_system, design_system_view
 from orchestwin.models.generated_mockup_drafts import (
     declared_requirement_codes,
     requirement_codes,
@@ -858,11 +854,7 @@ def _direction_sentences(direction, choices) -> tuple[str, ...]:
 
 
 def design_section(
-    alternative,
-    *,
-    requirements,
-    language: Mapping[str, str] | None,
-    iteration: bool = False,
+    alternative, *, requirements, language: Mapping[str, str] | None, iteration: bool = False
 ) -> str:
     visual = alternative.visual_language
     direction = visual.direction
@@ -903,11 +895,7 @@ def design_section(
 
 
 def mockup_instruction(
-    alternative,
-    *,
-    requirements,
-    language: Mapping[str, str] | None,
-    context: Mapping[str, object],
+    alternative, *, requirements, language: Mapping[str, str] | None, context: Mapping[str, object]
 ) -> str:
     iteration = "current_mockup" in context
     parts = [

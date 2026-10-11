@@ -112,9 +112,7 @@ def comparable(node: object, labels: Mapping[str, str], key: str | None = None) 
     return node
 
 
-def comparable_documents(
-    documents: Mapping[str, Mapping[str, object]],
-) -> dict[str, object]:
+def comparable_documents(documents: Mapping[str, Mapping[str, object]]) -> dict[str, object]:
     labels = entity_labels(documents)
     return {stage: comparable(documents[stage], labels) for stage in STAGES if stage in documents}
 
@@ -126,8 +124,7 @@ def comparable_views(files: Mapping[str, str]) -> dict[str, str]:
 
 
 def document_differences(
-    original: Mapping[str, Mapping[str, object]],
-    imported: Mapping[str, Mapping[str, object]],
+    original: Mapping[str, Mapping[str, object]], imported: Mapping[str, Mapping[str, object]]
 ) -> list[str]:
     differences: list[str] = []
 

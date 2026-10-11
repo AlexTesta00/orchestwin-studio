@@ -32,11 +32,7 @@ from orchestwin.knowledge.documents import (
     twins_markdown,
     views_markdown,
 )
-from orchestwin.knowledge.feedback import (
-    feedback_documents,
-    feedback_markdown,
-    feedback_summary,
-)
+from orchestwin.knowledge.feedback import feedback_documents, feedback_markdown, feedback_summary
 from orchestwin.knowledge.layout import (
     FEEDBACK_CHANGES,
     FEEDBACK_DISCUSSIONS,
@@ -247,11 +243,7 @@ def _relative(path: str, stage: str) -> str:
     return path.removeprefix(f"{stage}/")
 
 
-def _views(
-    stage: DiagramStage,
-    tables: Iterable[str],
-    diagrams: Iterable[Diagram],
-) -> str:
+def _views(stage: DiagramStage, tables: Iterable[str], diagrams: Iterable[Diagram]) -> str:
     return views_markdown(
         tables=[
             {"title": _table_title(path), "path": _relative(path, stage.value)}
@@ -276,13 +268,7 @@ def identifiers(sources: KnowledgeSources) -> list[dict[str, object]]:
 
     def add(stage: str, kind: str, item: Mapping[str, object], scope: str | None = None) -> None:
         entries.append(
-            {
-                "stage": stage,
-                "kind": kind,
-                "scope": scope,
-                "code": item["code"],
-                "id": item["id"],
-            }
+            {"stage": stage, "kind": kind, "scope": scope, "code": item["code"], "id": item["id"]}
         )
 
     for key, kind in _REQUIREMENT_KINDS:
@@ -320,7 +306,7 @@ def _requirement_files(
         stage_text("requirements"): requirements_markdown(
             sources.requirements, sources.requirements_gate, locale=folder_language(sources) or "en"
         )
-        + _views(DiagramStage.REQUIREMENTS, tables, diagrams),
+        + _views(DiagramStage.REQUIREMENTS, tables, diagrams)
     }
     if package is not None:
         files.update(
@@ -631,11 +617,7 @@ def build_knowledge_folder(
     files[KNOWLEDGE_INDEX] = index_markdown(
         manifest,
         overview=folder_overview(sources),
-        development=[
-            *development_lines(sources),
-            *test_lines(sources),
-            *learning_lines(sources),
-        ],
+        development=[*development_lines(sources), *test_lines(sources), *learning_lines(sources)],
     )
     return KnowledgeFolder(
         project_id=sources.project_id,

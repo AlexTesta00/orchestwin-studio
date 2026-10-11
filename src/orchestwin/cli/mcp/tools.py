@@ -1074,20 +1074,9 @@ def _whole(value: object) -> bool:
 
 TWIN_PARAMETER: Final = Parameter(TWIN, TWIN, "mcp.parameter_twin", required=True)
 TOOLS: Final = (
-    Tool(
-        PROJECT_STATE,
-        "mcp.title_project_state",
-        "mcp.describe_project_state",
-        project_state,
-    ),
+    Tool(PROJECT_STATE, "mcp.title_project_state", "mcp.describe_project_state", project_state),
     Tool(LIST_TWINS, "mcp.title_list_twins", "mcp.describe_list_twins", list_twins),
-    Tool(
-        GET_TWIN,
-        "mcp.title_get_twin",
-        "mcp.describe_get_twin",
-        get_twin,
-        (TWIN_PARAMETER,),
-    ),
+    Tool(GET_TWIN, "mcp.title_get_twin", "mcp.describe_get_twin", get_twin, (TWIN_PARAMETER,)),
     Tool(
         GET_REQUIREMENTS,
         "mcp.title_get_requirements",

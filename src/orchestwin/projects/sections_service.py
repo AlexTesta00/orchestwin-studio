@@ -379,9 +379,7 @@ async def _twins_revision_pending(
     diffs = SqlAlchemyUserTwinProfileDiffRepository(session, owner_user_id=owner_user_id)
     for twin in snapshot.snapshot.twin_versions:
         proposed = await diffs.current_proposed(
-            project_id=project_id,
-            base_snapshot_version_id=snapshot.id,
-            twin_id=twin.twin_id,
+            project_id=project_id, base_snapshot_version_id=snapshot.id, twin_id=twin.twin_id
         )
         if proposed is not None:
             return True
@@ -453,8 +451,7 @@ class SqlAlchemySectionReads:
                 None
                 if progress.brief is None
                 else BriefFacts(
-                    version=progress.brief,
-                    approved=_approved(progress.brief_gate, progress.brief),
+                    version=progress.brief, approved=_approved(progress.brief_gate, progress.brief)
                 )
             ),
             team=base.team

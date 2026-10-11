@@ -10,35 +10,22 @@ from types import TracebackType
 from typing import Protocol, Self
 from uuid import UUID, uuid4
 
-from orchestwin.projects.briefs import (
-    LIST_FIELDS,
-    BriefField,
-    ProjectBrief,
-    ProjectBriefVersion,
-)
-from orchestwin.projects.clarification_repository import (
-    BriefAssumptionRepository,
-)
+from orchestwin.projects.briefs import LIST_FIELDS, BriefField, ProjectBrief, ProjectBriefVersion
+from orchestwin.projects.clarification_repository import BriefAssumptionRepository
 from orchestwin.projects.clarification_state import (
     BriefAssumption,
     BriefAssumptionSource,
     BriefAssumptionStatus,
     create_brief_assumption,
 )
-from orchestwin.projects.repository import (
-    BriefVersionCreationStatus,
-    ProjectBriefRepository,
-)
+from orchestwin.projects.repository import BriefVersionCreationStatus, ProjectBriefRepository
 
 
 class CurrentProjectBriefRepository(Protocol):
     """Owner-scoped access to the current Project Brief."""
 
     async def get_current_owned_for_update(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID
     ) -> ProjectBriefVersion | None:
         """Lock the project and return its current brief version."""
 
@@ -70,10 +57,7 @@ class ProjectClarificationUnitOfWork(Protocol):
         """Commit or roll back the transaction."""
 
 
-ProjectClarificationUnitOfWorkFactory = Callable[
-    [],
-    ProjectClarificationUnitOfWork,
-]
+ProjectClarificationUnitOfWorkFactory = Callable[[], ProjectClarificationUnitOfWork]
 Clock = Callable[[], datetime]
 UuidFactory = Callable[[], UUID]
 
@@ -132,20 +116,12 @@ class ProjectClarificationApplicationService(Protocol):
     """Use cases exposed to the clarification API adapter."""
 
     async def create_assumption(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        field: BriefField,
-        statement: str,
+        self, *, project_id: UUID, owner_user_id: UUID, field: BriefField, statement: str
     ) -> BriefAssumptionCreationResult:
         """Propose one owner-provided assumption."""
 
     async def assumptions(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID
     ) -> tuple[BriefAssumption, ...]:
         """Return owner-scoped assumptions."""
 
@@ -160,20 +136,11 @@ class ProjectClarificationApplicationService(Protocol):
         """Accept an assumption and create an explicit brief version."""
 
     async def accept_all_assumptions(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        reason: str | None = None,
+        self, *, project_id: UUID, owner_user_id: UUID, reason: str | None = None
     ) -> BriefAssumptionBulkAcceptanceResult: ...
 
     async def reject_assumption(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        assumption_id: UUID,
-        reason: str,
+        self, *, project_id: UUID, owner_user_id: UUID, assumption_id: UUID, reason: str
     ) -> BriefAssumptionDecisionResult:
         """Reject an assumption with a required reason."""
 
@@ -198,20 +165,14 @@ class LocalProjectClarificationApplicationService:
         self._assumption_id_factory = assumption_id_factory
 
     async def create_assumption(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        field: BriefField,
-        statement: str,
+        self, *, project_id: UUID, owner_user_id: UUID, field: BriefField, statement: str
     ) -> BriefAssumptionCreationResult:
         """Create an owner-provided assumption for the current brief."""
         timestamp = self._current_time()
 
         async with self._unit_of_work_factory() as unit:
             current = await unit.current_briefs.get_current_owned_for_update(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+                project_id=project_id, owner_user_id=owner_user_id
             )
 
             if current is None:
@@ -237,21 +198,16 @@ class LocalProjectClarificationApplicationService:
             persisted = await unit.assumptions.add(assumption)
 
             return BriefAssumptionCreationResult(
-                status=BriefAssumptionCreationStatus.CREATED,
-                assumption=persisted,
+                status=BriefAssumptionCreationStatus.CREATED, assumption=persisted
             )
 
     async def assumptions(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID
     ) -> tuple[BriefAssumption, ...]:
         """Return owner-scoped assumptions."""
         async with self._unit_of_work_factory() as unit:
             return await unit.assumptions.list_owned(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+                project_id=project_id, owner_user_id=owner_user_id
             )
 
     async def accept_assumption(
@@ -267,13 +223,10 @@ class LocalProjectClarificationApplicationService:
 
         async with self._unit_of_work_factory() as unit:
             current = await unit.current_briefs.get_current_owned_for_update(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+                project_id=project_id, owner_user_id=owner_user_id
             )
             assumption = await unit.assumptions.get_owned(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                assumption_id=assumption_id,
+                project_id=project_id, owner_user_id=owner_user_id, assumption_id=assumption_id
             )
 
             if current is None or assumption is None:
@@ -293,10 +246,7 @@ class LocalProjectClarificationApplicationService:
                     assumption=assumption,
                 )
 
-            updated_brief = self._brief_with_assumption(
-                current.brief,
-                assumption,
-            )
+            updated_brief = self._brief_with_assumption(current.brief, assumption)
 
             accepted = await unit.assumptions.accept_owned(
                 project_id=project_id,
@@ -331,18 +281,13 @@ class LocalProjectClarificationApplicationService:
             )
 
     async def accept_all_assumptions(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        reason: str | None = None,
+        self, *, project_id: UUID, owner_user_id: UUID, reason: str | None = None
     ) -> BriefAssumptionBulkAcceptanceResult:
         timestamp = self._current_time()
 
         async with self._unit_of_work_factory() as unit:
             current = await unit.current_briefs.get_current_owned_for_update(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+                project_id=project_id, owner_user_id=owner_user_id
             )
 
             if current is None:
@@ -351,8 +296,7 @@ class LocalProjectClarificationApplicationService:
                 )
 
             existing = await unit.assumptions.list_owned(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+                project_id=project_id, owner_user_id=owner_user_id
             )
             proposed = sorted(
                 (
@@ -423,12 +367,7 @@ class LocalProjectClarificationApplicationService:
             )
 
     async def reject_assumption(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        assumption_id: UUID,
-        reason: str,
+        self, *, project_id: UUID, owner_user_id: UUID, assumption_id: UUID, reason: str
     ) -> BriefAssumptionDecisionResult:
         """Reject an owner-scoped proposed assumption."""
         timestamp = self._current_time()
@@ -444,9 +383,7 @@ class LocalProjectClarificationApplicationService:
                 )
             except ValueError:
                 existing = await unit.assumptions.get_owned(
-                    project_id=project_id,
-                    owner_user_id=owner_user_id,
-                    assumption_id=assumption_id,
+                    project_id=project_id, owner_user_id=owner_user_id, assumption_id=assumption_id
                 )
 
                 return BriefAssumptionDecisionResult(
@@ -460,15 +397,11 @@ class LocalProjectClarificationApplicationService:
                 )
 
             return BriefAssumptionDecisionResult(
-                status=BriefAssumptionDecisionStatus.REJECTED,
-                assumption=rejected,
+                status=BriefAssumptionDecisionStatus.REJECTED, assumption=rejected
             )
 
     @staticmethod
-    def _brief_with_assumption(
-        brief: ProjectBrief,
-        assumption: BriefAssumption,
-    ) -> ProjectBrief:
+    def _brief_with_assumption(brief: ProjectBrief, assumption: BriefAssumption) -> ProjectBrief:
         """Materialize one accepted assumption as an explicit brief value."""
         unknown_fields = set(brief.unknown_fields)
         unknown_fields.discard(assumption.field)
@@ -483,11 +416,7 @@ class LocalProjectClarificationApplicationService:
             )
 
         return replace(
-            brief,
-            **{
-                assumption.field.value: value,
-                "unknown_fields": frozenset(unknown_fields),
-            },
+            brief, **{assumption.field.value: value, "unknown_fields": frozenset(unknown_fields)}
         )
 
     def _current_time(self) -> datetime:

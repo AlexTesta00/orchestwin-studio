@@ -364,11 +364,7 @@ _WHITESPACE_ONLY: Final = (
 )
 _PLACEHOLDER_SVG_ATTRIBUTES: Final = frozenset({"width", "height", "focusable", "xmlns"})
 _ATTRIBUTE_SPELLING: Final = MappingProxyType(
-    {
-        "viewbox": "viewBox",
-        "pathlength": "pathLength",
-        "preserveaspectratio": "preserveAspectRatio",
-    }
+    {"viewbox": "viewBox", "pathlength": "pathLength", "preserveaspectratio": "preserveAspectRatio"}
 )
 _ASCII_WHITESPACE: Final = " \t\n\f\r"
 _SPLIT: Final = re.compile(r"[ \t\n\f\r]+")
@@ -484,11 +480,7 @@ class _Recorder(HTMLParser):
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.record(
-            "start",
-            tag,
-            attributes=tuple(attrs),
-            raw=self.get_starttag_text() or "",
-            closed=True,
+            "start", tag, attributes=tuple(attrs), raw=self.get_starttag_text() or "", closed=True
         )
 
     def handle_endtag(self, tag: str) -> None:
@@ -908,10 +900,7 @@ class _TreeBuilder:
 
 
 def _parse(
-    markup: str,
-    screen_code: str,
-    screen_codes: frozenset[str],
-    token_names: frozenset[str] | None,
+    markup: str, screen_code: str, screen_codes: frozenset[str], token_names: frozenset[str] | None
 ) -> tuple[tuple[MarkupNode, ...], frozenset[str]]:
     context = _Context(screen_code, screen_codes, token_names)
     text = _prepare(markup, context)

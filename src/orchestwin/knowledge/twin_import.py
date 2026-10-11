@@ -176,8 +176,7 @@ def _with_origin(
     if reference in references:
         return observation
     return replace(
-        observation,
-        provenance=ObservationProvenance.from_references((*references, reference)),
+        observation, provenance=ObservationProvenance.from_references((*references, reference))
     )
 
 

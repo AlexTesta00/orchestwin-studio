@@ -42,11 +42,7 @@ class Project:
         if self.current_brief_version < 0:
             raise ValueError("current brief version must not be negative")
 
-        timestamps = (
-            self.created_at,
-            self.updated_at,
-            self.archived_at,
-        )
+        timestamps = (self.created_at, self.updated_at, self.archived_at)
 
         if any(timestamp is not None and timestamp.tzinfo is None for timestamp in timestamps):
             raise ValueError("project timestamps must be timezone-aware")
@@ -63,9 +59,7 @@ class Project:
         return self.archived_at is not None
 
 
-def normalize_project_name(
-    display_name: str,
-) -> str:
+def normalize_project_name(display_name: str) -> str:
     """Normalize and validate a project display name."""
     normalized = " ".join(display_name.split())
 
@@ -101,10 +95,7 @@ def create_project(
 
 
 def rename_project(
-    project: Project,
-    *,
-    display_name: str,
-    updated_at: datetime | None = None,
+    project: Project, *, display_name: str, updated_at: datetime | None = None
 ) -> Project:
     """Return a renamed project without changing its mode."""
     timestamp = updated_at or datetime.now(UTC)
@@ -112,18 +103,10 @@ def rename_project(
     if timestamp < project.updated_at:
         raise ValueError("project rename timestamp must not move backwards")
 
-    return replace(
-        project,
-        display_name=normalize_project_name(display_name),
-        updated_at=timestamp,
-    )
+    return replace(project, display_name=normalize_project_name(display_name), updated_at=timestamp)
 
 
-def archive_project(
-    project: Project,
-    *,
-    archived_at: datetime | None = None,
-) -> Project:
+def archive_project(project: Project, *, archived_at: datetime | None = None) -> Project:
     """Archive a project idempotently."""
     if project.archived_at is not None:
         return project
@@ -133,8 +116,4 @@ def archive_project(
     if timestamp < project.updated_at:
         raise ValueError("project archive timestamp must not move backwards")
 
-    return replace(
-        project,
-        archived_at=timestamp,
-        updated_at=timestamp,
-    )
+    return replace(project, archived_at=timestamp, updated_at=timestamp)

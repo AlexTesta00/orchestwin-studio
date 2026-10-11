@@ -275,9 +275,7 @@ def _behind(section: Section) -> bool:
 def _brief_section(facts: SectionFacts) -> Section:
     brief = facts.brief
     return _section(
-        ProjectStage.BRIEF,
-        _version(brief),
-        approved=brief is not None and brief.approved,
+        ProjectStage.BRIEF, _version(brief), approved=brief is not None and brief.approved
     )
 
 
@@ -434,9 +432,7 @@ def _package_section(facts: SectionFacts, upstream: tuple[Section, ...]) -> Sect
         section.state is SectionState.TO_UPDATE for section in upstream
     ):
         return Section(
-            key=ProjectStage.PACKAGE,
-            state=SectionState.FINE,
-            version_number=folder.version_number,
+            key=ProjectStage.PACKAGE, state=SectionState.FINE, version_number=folder.version_number
         )
     waiting = any(
         section.state is SectionState.IN_PROGRESS

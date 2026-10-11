@@ -115,8 +115,4 @@ def portable_twins(sources: KnowledgeSources) -> tuple[PortableTwin, ...]:
     )
 
 
-__all__ = [
-    "PortableTwin",
-    "portable_twin_documents",
-    "portable_twins",
-]
+__all__ = ["PortableTwin", "portable_twin_documents", "portable_twins"]

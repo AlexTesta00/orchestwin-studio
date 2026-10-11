@@ -24,11 +24,7 @@ class Event:
 
 class Connection:
     def __init__(
-        self,
-        socket: WebSocket,
-        *,
-        program: str = "",
-        timeout: float = REQUEST_TIMEOUT_SECONDS,
+        self, socket: WebSocket, *, program: str = "", timeout: float = REQUEST_TIMEOUT_SECONDS
     ) -> None:
         self._socket = socket
         self._program = program
@@ -48,11 +44,7 @@ class Connection:
         return tuple(self._events)
 
     def send(
-        self,
-        method: str,
-        params: Mapping[str, object] | None = None,
-        *,
-        session: str | None = None,
+        self, method: str, params: Mapping[str, object] | None = None, *, session: str | None = None
     ) -> int:
         self._last += 1
         message: dict[str, object] = {

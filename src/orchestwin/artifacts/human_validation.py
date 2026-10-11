@@ -8,11 +8,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
-from orchestwin.projects.research_evidence import (
-    EvidenceCitation,
-    EvidenceStatus,
-    EvidenceVersion,
-)
+from orchestwin.projects.research_evidence import EvidenceCitation, EvidenceStatus, EvidenceVersion
 from orchestwin.validation import ValidationError, validation_candidates
 
 

@@ -135,10 +135,7 @@ def evidence_application(function):
                 if not isinstance(error, ProposalEvidenceError):
                     await scope.event(
                         "APPLICATION_RESULT",
-                        {
-                            "status": "FAILED",
-                            "code": getattr(error, "code", type(error).__name__),
-                        },
+                        {"status": "FAILED", "code": getattr(error, "code", type(error).__name__)},
                     )
                 raise
             payload = {

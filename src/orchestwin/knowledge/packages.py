@@ -81,8 +81,4 @@ class KnowledgePackageVersion:
         )
 
 
-__all__ = [
-    "MAX_PACKAGE_ARCHIVE_SIZE",
-    "MAX_PACKAGE_FILE_NAME_LENGTH",
-    "KnowledgePackageVersion",
-]
+__all__ = ["MAX_PACKAGE_ARCHIVE_SIZE", "MAX_PACKAGE_FILE_NAME_LENGTH", "KnowledgePackageVersion"]

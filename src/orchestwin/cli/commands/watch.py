@@ -44,11 +44,7 @@ STOPPING_CODES: Final = frozenset(
 def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--twins", action="store_true", help="watch.option_twins")
     parser.add_argument(
-        "--max-usd",
-        type=float,
-        default=DEFAULT_MAX_USD,
-        metavar="USD",
-        help="watch.option_max_usd",
+        "--max-usd", type=float, default=DEFAULT_MAX_USD, metavar="USD", help="watch.option_max_usd"
     )
     parser.add_argument(
         "--interval",

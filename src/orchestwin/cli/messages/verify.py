@@ -155,10 +155,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "twin gives its opinion on each commit, then the model says whether code, design and "
         "requirements are still aligned.",
     },
-    "verify.review_label": {
-        "it": "Esame del commit {commit}",
-        "en": "Review of commit {commit}",
-    },
+    "verify.review_label": {"it": "Esame del commit {commit}", "en": "Review of commit {commit}"},
     "verify.review_heading": {
         "it": "Esame del commit {commit}: {line}",
         "en": "Review of commit {commit}: {line}",
@@ -179,10 +176,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "vede il codice allontanarsi da quanto approvato",
         "en": "sees the code drift from what was approved",
     },
-    "verify.no_findings": {
-        "it": "Nessun problema segnalato.",
-        "en": "No problem reported.",
-    },
+    "verify.no_findings": {"it": "Nessun problema segnalato.", "en": "No problem reported."},
     "verify.review_cost": {
         "it": "Costo di questo esame: {amount} USD.",
         "en": "Cost of this review: {amount} USD.",
@@ -244,10 +238,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": 'requirement {code} "{title}"',
     },
     "verify.about_requirement_code": {"it": "requisito {code}", "en": "requirement {code}"},
-    "verify.about_screen": {
-        "it": "schermata {code} «{title}»",
-        "en": 'screen {code} "{title}"',
-    },
+    "verify.about_screen": {"it": "schermata {code} «{title}»", "en": 'screen {code} "{title}"'},
     "verify.about_screen_code": {"it": "schermata {code}", "en": "screen {code}"},
     "verify.about_file": {"it": "file {path}", "en": "file {path}"},
     "verify.finding_about": {
@@ -324,10 +315,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "later one is marked as aligned.",
     },
     "verify.covered_note": {"it": "coperto da {commit}", "en": "covered by {commit}"},
-    "verify.folder_note": {
-        "it": "solo cartella di conoscenza",
-        "en": "knowledge folder only",
-    },
+    "verify.folder_note": {"it": "solo cartella di conoscenza", "en": "knowledge folder only"},
     "verify.folder_only": {
         "it": "Commit che cambiano soltanto la cartella di conoscenza, registrati senza farli "
         "esaminare: {count} ({commits}).",

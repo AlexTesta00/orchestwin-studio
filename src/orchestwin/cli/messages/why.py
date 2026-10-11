@@ -110,10 +110,7 @@ MESSAGES = {
         "it": "Manca uno scenario collegato.",
         "en": "A linked scenario is missing.",
     },
-    "why.gap.MISSING_TWIN": {
-        "it": "Manca il twin collegato.",
-        "en": "The linked twin is missing.",
-    },
+    "why.gap.MISSING_TWIN": {"it": "Manca il twin collegato.", "en": "The linked twin is missing."},
     "why.gap.MISSING_CLAIM": {
         "it": "Manca il claim collegato.",
         "en": "The linked claim is missing.",

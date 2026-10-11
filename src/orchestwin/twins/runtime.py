@@ -67,10 +67,7 @@ class ManagedUserModelingUnitOfWorkFactory:
         self._session_factory = session_factory
 
     def __call__(self, *, owner_user_id: UUID) -> ManagedUserModelingUnitOfWork:
-        return ManagedUserModelingUnitOfWork(
-            self._session_factory(),
-            owner_user_id=owner_user_id,
-        )
+        return ManagedUserModelingUnitOfWork(self._session_factory(), owner_user_id=owner_user_id)
 
 
 class ManagedArchetypeUnitOfWork(ManagedUserModelingUnitOfWork):
@@ -102,22 +99,17 @@ class LockedUserModelingSnapshotQuery:
         self._session = session
 
     async def get_current_owned_for_update(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID
     ) -> UserModelingSnapshotVersion | None:
         project = await self._session.scalar(
             owned_project_statement(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
+                project_id=project_id, owner_user_id=owner_user_id
             ).with_for_update()
         )
         if project is None:
             return None
         return await SqlAlchemyUserModelingSnapshotRepository(
-            self._session,
-            owner_user_id=owner_user_id,
+            self._session, owner_user_id=owner_user_id
         ).current(project_id=project_id)
 
 
@@ -169,25 +161,19 @@ class SqlAlchemyUserModelingGovernanceAdapter:
         self._session_factory = session_factory
 
     async def load_current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> GovernedUserModelingContext | None:
         async with self._session_factory() as session:
             project = await SqlAlchemyProjectRepository(session).get_owned(
-                owner_user_id=owner_user_id,
-                project_id=project_id,
+                owner_user_id=owner_user_id, project_id=project_id
             )
             if project is None:
                 return None
             brief = await SqlAlchemyProjectBriefRepository(session).get_current_owned(
-                owner_user_id=owner_user_id,
-                project_id=project_id,
+                owner_user_id=owner_user_id, project_id=project_id
             )
             team = await SqlAlchemyTeamProposalVersionRepository(session).get_current_owned(
-                owner_user_id=owner_user_id,
-                project_id=project_id,
+                owner_user_id=owner_user_id, project_id=project_id
             )
             brief_gate_record = await session.scalar(
                 latest_owned_gate_statement(
@@ -251,46 +237,32 @@ class SqlAlchemyUserModelingQueryService:
         """Recover proposed/confirmed personas even before a twin snapshot exists."""
         async with self._session_factory() as session:
             versions = await SqlAlchemyPersonaVersionRepository(
-                session,
-                owner_user_id=owner_user_id,
+                session, owner_user_id=owner_user_id
             ).list_current(project_id=project_id)
             return tuple(version for version in versions if not version.profile.archived)
 
     async def current_snapshot(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> UserModelingSnapshotVersion | None:
         async with self._session_factory() as session:
             return await SqlAlchemyUserModelingSnapshotRepository(
-                session,
-                owner_user_id=owner_user_id,
+                session, owner_user_id=owner_user_id
             ).current(project_id=project_id)
 
     async def snapshot_history(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> tuple[UserModelingSnapshotVersion, ...]:
         async with self._session_factory() as session:
             return await SqlAlchemyUserModelingSnapshotRepository(
-                session,
-                owner_user_id=owner_user_id,
+                session, owner_user_id=owner_user_id
             ).history(project_id=project_id)
 
     async def get_diff(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        diff_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID, diff_id: UUID
     ) -> UserTwinProfileDiff | None:
         async with self._session_factory() as session:
             return await SqlAlchemyUserTwinProfileDiffRepository(
-                session,
-                owner_user_id=owner_user_id,
+                session, owner_user_id=owner_user_id
             ).get(project_id=project_id, diff_id=diff_id)
 
 
@@ -327,6 +299,6 @@ def build_user_modeling_services(
         revisions=LocalUserTwinProfileRevisionService(uow_factory=command_units),
         queries=SqlAlchemyUserModelingQueryService(session_factory),
         gates=LocalUserModelingGateService(
-            unit_of_work_factory=SqlAlchemyUserModelingGateUnitOfWorkFactory(session_factory),
+            unit_of_work_factory=SqlAlchemyUserModelingGateUnitOfWorkFactory(session_factory)
         ),
     )

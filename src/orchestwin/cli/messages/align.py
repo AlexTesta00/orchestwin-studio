@@ -161,10 +161,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "What do you do with this proposal?",
     },
     "align.choice_apply": {"it": "Applica", "en": "Apply"},
-    "align.choice_edit": {
-        "it": "Modifica il testo e applica",
-        "en": "Edit the text and apply",
-    },
+    "align.choice_edit": {"it": "Modifica il testo e applica", "en": "Edit the text and apply"},
     "align.choice_skip": {"it": "Salta", "en": "Skip"},
     "align.choice_later": {"it": "Più tardi", "en": "Later"},
     "align.decided_later": {
@@ -189,10 +186,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Applicazione della proposta {code}",
         "en": "Applying proposal {code}",
     },
-    "align.applied": {
-        "it": "Proposta {code} applicata.",
-        "en": "Proposal {code} applied.",
-    },
+    "align.applied": {"it": "Proposta {code} applicata.", "en": "Proposal {code} applied."},
     "align.already_decided": {
         "it": "La proposta {code} è già stata decisa, forse dallo Studio web: non cambia niente.",
         "en": "Proposal {code} was already decided, perhaps in the web Studio: nothing changes.",
@@ -259,10 +253,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Proposte che aspettano una decisione: {count}.",
         "en": "Proposals waiting for a decision: {count}.",
     },
-    "align.files_written": {
-        "it": "Esito salvato in {path}.",
-        "en": "Outcome saved in {path}.",
-    },
+    "align.files_written": {"it": "Esito salvato in {path}.", "en": "Outcome saved in {path}."},
     "align.design_heading": {
         "it": "Codice di «{name}» allineato al design",
         "en": 'Code of "{name}" aligned with the design',

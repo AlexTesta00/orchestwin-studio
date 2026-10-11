@@ -8,26 +8,16 @@ from uuid import UUID
 from sqlalchemy import ColumnElement, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from orchestwin.identity.domain import (
-    GuidanceMode,
-    NormalizedEmail,
-    UserAccount,
-)
+from orchestwin.identity.domain import GuidanceMode, NormalizedEmail, UserAccount
 from orchestwin.identity.persistence.models import (
     AuthSessionRecord,
     UserGuidanceChoiceRecord,
     UserRecord,
 )
-from orchestwin.identity.sessions import (
-    RefreshSession,
-    SessionStateConflict,
-)
+from orchestwin.identity.sessions import RefreshSession, SessionStateConflict
 
 
-def user_record_to_domain(
-    record: UserRecord,
-    guidance_mode: str | None = None,
-) -> UserAccount:
+def user_record_to_domain(record: UserRecord, guidance_mode: str | None = None) -> UserAccount:
     """Translate a user record into an immutable domain value."""
     return UserAccount(
         id=record.id,
@@ -40,9 +30,7 @@ def user_record_to_domain(
     )
 
 
-def session_record_to_domain(
-    record: AuthSessionRecord,
-) -> RefreshSession:
+def session_record_to_domain(record: AuthSessionRecord) -> RefreshSession:
     """Translate a session record into an immutable domain value."""
     return RefreshSession(
         id=record.id,
@@ -62,16 +50,10 @@ def session_record_to_domain(
 class SqlAlchemyUserRepository:
     """SQLAlchemy user repository bound to one transaction session."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-    ) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def add(
-        self,
-        user: UserAccount,
-    ) -> UserAccount:
+    async def add(self, user: UserAccount) -> UserAccount:
         """Add a new account to the current transaction."""
         record = UserRecord(
             id=user.id,
@@ -87,26 +69,15 @@ class SqlAlchemyUserRepository:
 
         return user_record_to_domain(record)
 
-    async def get_by_id(
-        self,
-        user_id: UUID,
-    ) -> UserAccount | None:
+    async def get_by_id(self, user_id: UUID) -> UserAccount | None:
         """Return an account by identifier."""
         return await self._get_one(UserRecord.id == user_id)
 
-    async def get_by_email(
-        self,
-        email: NormalizedEmail,
-    ) -> UserAccount | None:
+    async def get_by_email(self, email: NormalizedEmail) -> UserAccount | None:
         """Return an account by normalized email."""
         return await self._get_one(UserRecord.email_normalized == email.value)
 
-    async def update_password_hash(
-        self,
-        *,
-        user_id: UUID,
-        password_hash: str,
-    ) -> None:
+    async def update_password_hash(self, *, user_id: UUID, password_hash: str) -> None:
         """Replace a hash after successful password verification."""
         result = await self._session.execute(
             update(UserRecord).where(UserRecord.id == user_id).values(password_hash=password_hash)
@@ -116,31 +87,19 @@ class SqlAlchemyUserRepository:
             raise RuntimeError("user disappeared during password hash upgrade")
 
     async def add_guidance_choice(
-        self,
-        *,
-        user_id: UUID,
-        mode: GuidanceMode,
-        chosen_at: datetime,
+        self, *, user_id: UUID, mode: GuidanceMode, chosen_at: datetime
     ) -> None:
         self._session.add(
-            UserGuidanceChoiceRecord(
-                user_id=user_id,
-                mode=mode.value,
-                chosen_at=chosen_at,
-            )
+            UserGuidanceChoiceRecord(user_id=user_id, mode=mode.value, chosen_at=chosen_at)
         )
         await self._session.flush()
 
-    async def _get_one(
-        self,
-        condition: ColumnElement[bool],
-    ) -> UserAccount | None:
+    async def _get_one(self, condition: ColumnElement[bool]) -> UserAccount | None:
         row = (
             await self._session.execute(
                 select(UserRecord, UserGuidanceChoiceRecord.mode)
                 .outerjoin(
-                    UserGuidanceChoiceRecord,
-                    UserGuidanceChoiceRecord.user_id == UserRecord.id,
+                    UserGuidanceChoiceRecord, UserGuidanceChoiceRecord.user_id == UserRecord.id
                 )
                 .where(condition)
             )
@@ -157,16 +116,10 @@ class SqlAlchemyUserRepository:
 class SqlAlchemyRefreshSessionRepository:
     """SQLAlchemy refresh-session repository."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-    ) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def add(
-        self,
-        session: RefreshSession,
-    ) -> RefreshSession:
+    async def add(self, session: RefreshSession) -> RefreshSession:
         """Add a refresh session to the transaction."""
         record = AuthSessionRecord(
             id=session.id,
@@ -187,10 +140,7 @@ class SqlAlchemyRefreshSessionRepository:
 
         return session_record_to_domain(record)
 
-    async def get_by_digest_for_update(
-        self,
-        digest: str,
-    ) -> RefreshSession | None:
+    async def get_by_digest_for_update(self, digest: str) -> RefreshSession | None:
         """Lock and return one session by token digest."""
         record = await self._session.scalar(
             select(AuthSessionRecord)
@@ -204,11 +154,7 @@ class SqlAlchemyRefreshSessionRepository:
         return session_record_to_domain(record)
 
     async def mark_rotated(
-        self,
-        *,
-        session_id: UUID,
-        replacement_session_id: UUID,
-        rotated_at: datetime,
+        self, *, session_id: UUID, replacement_session_id: UUID, rotated_at: datetime
     ) -> None:
         """Atomically mark an active session as rotated."""
         result = await self._session.execute(
@@ -228,13 +174,7 @@ class SqlAlchemyRefreshSessionRepository:
         if result.rowcount != 1:
             raise SessionStateConflict("refresh session changed concurrently")
 
-    async def revoke_session(
-        self,
-        *,
-        session_id: UUID,
-        revoked_at: datetime,
-        reason: str,
-    ) -> None:
+    async def revoke_session(self, *, session_id: UUID, revoked_at: datetime, reason: str) -> None:
         """Atomically revoke one active session."""
         result = await self._session.execute(
             update(AuthSessionRecord)
@@ -243,22 +183,14 @@ class SqlAlchemyRefreshSessionRepository:
                 AuthSessionRecord.rotated_at.is_(None),
                 AuthSessionRecord.revoked_at.is_(None),
             )
-            .values(
-                revoked_at=revoked_at,
-                revocation_reason=reason,
-                last_used_at=revoked_at,
-            )
+            .values(revoked_at=revoked_at, revocation_reason=reason, last_used_at=revoked_at)
         )
 
         if result.rowcount != 1:
             raise SessionStateConflict("refresh session changed concurrently")
 
     async def revoke_family(
-        self,
-        *,
-        token_family_id: UUID,
-        revoked_at: datetime,
-        reason: str,
+        self, *, token_family_id: UUID, revoked_at: datetime, reason: str
     ) -> None:
         """Revoke every active session in one token family."""
         await self._session.execute(
@@ -267,9 +199,5 @@ class SqlAlchemyRefreshSessionRepository:
                 AuthSessionRecord.token_family_id == token_family_id,
                 AuthSessionRecord.revoked_at.is_(None),
             )
-            .values(
-                revoked_at=revoked_at,
-                revocation_reason=reason,
-                last_used_at=revoked_at,
-            )
+            .values(revoked_at=revoked_at, revocation_reason=reason, last_used_at=revoked_at)
         )

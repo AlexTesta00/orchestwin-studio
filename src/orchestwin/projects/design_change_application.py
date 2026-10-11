@@ -8,10 +8,7 @@ from uuid import UUID
 
 from orchestwin.artifacts.design import DesignAlternative
 from orchestwin.artifacts.design_evaluation import DesignEvaluationError
-from orchestwin.artifacts.design_packages import (
-    DesignExplorationPackage,
-    DesignPackageVersion,
-)
+from orchestwin.artifacts.design_packages import DesignExplorationPackage, DesignPackageVersion
 from orchestwin.artifacts.design_revision_application import (
     DesignRevisionApplicationIssueCode,
     DesignRevisionResult,
@@ -76,11 +73,7 @@ class DesignChangeResult:
 
 class DesignRevisionProposer(Protocol):
     async def propose_revision(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        proposed_package: DesignExplorationPackage,
+        self, *, owner_user_id: UUID, project_id: UUID, proposed_package: DesignExplorationPackage
     ) -> DesignRevisionResult: ...
 
 
@@ -261,10 +254,7 @@ class DesignChangeApplication:
         except DesignChangeRejection:
             return _rejected(DesignChangeIssueCode.ALTERNATIVE_NOT_CHOSEN)
         draft = await self._draft(
-            context,
-            alternative,
-            requirements.specification,
-            {"design_version_id": str(current.id)},
+            context, alternative, requirements.specification, {"design_version_id": str(current.id)}
         )
         if draft is None:
             await _accept(PURPOSE, alternative.to_snapshot())

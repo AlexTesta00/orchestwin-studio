@@ -47,11 +47,7 @@ class TraceabilityLinkKind(StrEnum):
     GOVERNS = "GOVERNS"
 
 
-@dataclass(
-    frozen=True,
-    slots=True,
-    order=True,
-)
+@dataclass(frozen=True, slots=True, order=True)
 class TraceabilityNodeReference:
     """Stable reference to one traceability node."""
 
@@ -60,10 +56,7 @@ class TraceabilityNodeReference:
 
     def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic traceability-reference snapshot."""
-        return {
-            "kind": self.kind.value,
-            "artifact_id": str(self.artifact_id),
-        }
+        return {"kind": self.kind.value, "artifact_id": str(self.artifact_id)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,22 +72,13 @@ class TraceabilityNode:
             raise ValueError("traceability display code must be normalized")
 
     @property
-    def sort_key(
-        self,
-    ) -> tuple[str, str, str]:
+    def sort_key(self) -> tuple[str, str, str]:
         """Return deterministic node ordering metadata."""
-        return (
-            self.reference.kind.value,
-            self.display_code,
-            self.reference.artifact_id.hex,
-        )
+        return (self.reference.kind.value, self.display_code, self.reference.artifact_id.hex)
 
     def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic traceability-node snapshot."""
-        return {
-            "reference": self.reference.to_snapshot(),
-            "display_code": self.display_code,
-        }
+        return {"reference": self.reference.to_snapshot(), "display_code": self.display_code}
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,9 +90,7 @@ class TraceabilityLink:
     target: TraceabilityNodeReference
 
     @property
-    def sort_key(
-        self,
-    ) -> tuple[str, str, str, str, str]:
+    def sort_key(self) -> tuple[str, str, str, str, str]:
         """Return deterministic link ordering metadata."""
         return (
             self.kind.value,
@@ -136,11 +118,7 @@ _ALLOWED_LINK_SHAPES: Final = frozenset(
             TraceabilityNodeKind.USER_TWIN,
             TraceabilityNodeKind.SCENARIO,
         ),
-        (
-            TraceabilityLinkKind.REVEALS,
-            TraceabilityNodeKind.SCENARIO,
-            TraceabilityNodeKind.NEED,
-        ),
+        (TraceabilityLinkKind.REVEALS, TraceabilityNodeKind.SCENARIO, TraceabilityNodeKind.NEED),
         (
             TraceabilityLinkKind.MOTIVATES,
             TraceabilityNodeKind.NEED,
@@ -181,11 +159,7 @@ _ALLOWED_LINK_SHAPES: Final = frozenset(
             TraceabilityNodeKind.SCENARIO,
             TraceabilityNodeKind.ACCEPTANCE_CRITERION,
         ),
-        (
-            TraceabilityLinkKind.AFFECTS,
-            TraceabilityNodeKind.RISK,
-            TraceabilityNodeKind.REQUIREMENT,
-        ),
+        (TraceabilityLinkKind.AFFECTS, TraceabilityNodeKind.RISK, TraceabilityNodeKind.REQUIREMENT),
         (
             TraceabilityLinkKind.GOVERNS,
             TraceabilityNodeKind.DEFINITION_OF_DONE,
@@ -209,12 +183,10 @@ class RequirementsTraceability:
     def __post_init__(self) -> None:
         """Protect graph identity, order, and link integrity."""
         validate_positive_integer(
-            self.specification_version_number,
-            label=("traceability specification version number"),
+            self.specification_version_number, label=("traceability specification version number")
         )
         validate_sha256(
-            self.specification_content_hash,
-            label=("traceability specification content hash"),
+            self.specification_content_hash, label=("traceability specification content hash")
         )
 
         if not self.nodes:
@@ -230,12 +202,7 @@ class RequirementsTraceability:
         if len(display_codes) != len(set(display_codes)):
             raise ValueError("traceability display codes must be unique")
 
-        expected_nodes = tuple(
-            sorted(
-                self.nodes,
-                key=lambda node: node.sort_key,
-            )
-        )
+        expected_nodes = tuple(sorted(self.nodes, key=lambda node: node.sort_key))
 
         if self.nodes != expected_nodes:
             raise ValueError("traceability nodes must use canonical order")
@@ -243,12 +210,7 @@ class RequirementsTraceability:
         if len(self.links) != len(set(self.links)):
             raise ValueError("traceability links must be unique")
 
-        expected_links = tuple(
-            sorted(
-                self.links,
-                key=lambda link: link.sort_key,
-            )
-        )
+        expected_links = tuple(sorted(self.links, key=lambda link: link.sort_key))
 
         if self.links != expected_links:
             raise ValueError("traceability links must use canonical order")
@@ -259,26 +221,16 @@ class RequirementsTraceability:
             if link.source not in reference_set or link.target not in reference_set:
                 raise ValueError("traceability links must reference graph nodes")
 
-            shape = (
-                link.kind,
-                link.source.kind,
-                link.target.kind,
-            )
+            shape = (link.kind, link.source.kind, link.target.kind)
 
             if shape not in _ALLOWED_LINK_SHAPES:
                 raise ValueError("traceability link kind is incompatible with its nodes")
 
-    def outgoing(
-        self,
-        reference: TraceabilityNodeReference,
-    ) -> tuple[TraceabilityLink, ...]:
+    def outgoing(self, reference: TraceabilityNodeReference) -> tuple[TraceabilityLink, ...]:
         """Return outgoing links in canonical order."""
         return tuple(link for link in self.links if link.source == reference)
 
-    def incoming(
-        self,
-        reference: TraceabilityNodeReference,
-    ) -> tuple[TraceabilityLink, ...]:
+    def incoming(self, reference: TraceabilityNodeReference) -> tuple[TraceabilityLink, ...]:
         """Return incoming links in canonical order."""
         return tuple(link for link in self.links if link.target == reference)
 
@@ -312,22 +264,10 @@ class RequirementsCoverageSummary:
     requirement_count: int
     user_story_count: int
     acceptance_criterion_count: int
-    requirement_ids_without_user_stories: tuple[
-        UUID,
-        ...,
-    ]
-    requirement_ids_without_acceptance_criteria: tuple[
-        UUID,
-        ...,
-    ]
-    user_story_ids_without_acceptance_criteria: tuple[
-        UUID,
-        ...,
-    ]
-    acceptance_criterion_ids_without_scenarios: tuple[
-        UUID,
-        ...,
-    ]
+    requirement_ids_without_user_stories: tuple[UUID, ...]
+    requirement_ids_without_acceptance_criteria: tuple[UUID, ...]
+    user_story_ids_without_acceptance_criteria: tuple[UUID, ...]
+    acceptance_criterion_ids_without_scenarios: tuple[UUID, ...]
 
     @property
     def has_full_acceptance_coverage(self) -> bool:
@@ -363,20 +303,12 @@ class RequirementsCoverageSummary:
         }
 
 
-def _reference(
-    kind: TraceabilityNodeKind,
-    artifact_id: UUID,
-) -> TraceabilityNodeReference:
+def _reference(kind: TraceabilityNodeKind, artifact_id: UUID) -> TraceabilityNodeReference:
     """Create one concise traceability node reference."""
-    return TraceabilityNodeReference(
-        kind=kind,
-        artifact_id=artifact_id,
-    )
+    return TraceabilityNodeReference(kind=kind, artifact_id=artifact_id)
 
 
-def _twin_display_code(
-    twin_id: UUID,
-) -> str:
+def _twin_display_code(twin_id: UUID) -> str:
     """Return a stable readable User Twin traceability code."""
     return f"UT-{twin_id.hex.upper()}"
 
@@ -448,31 +380,19 @@ def build_requirements_traceability(
     for twin in specification.user_twin_references:
         nodes.append(
             TraceabilityNode(
-                reference=_reference(
-                    TraceabilityNodeKind.USER_TWIN,
-                    twin.twin_id,
-                ),
+                reference=_reference(TraceabilityNodeKind.USER_TWIN, twin.twin_id),
                 display_code=_twin_display_code(twin.twin_id),
             )
         )
 
     for story in specification.user_stories:
-        story_reference = _reference(
-            TraceabilityNodeKind.USER_STORY,
-            story.id,
-        )
-        nodes.append(
-            TraceabilityNode(
-                reference=story_reference,
-                display_code=story.code,
-            )
-        )
+        story_reference = _reference(TraceabilityNodeKind.USER_STORY, story.id)
+        nodes.append(TraceabilityNode(reference=story_reference, display_code=story.code))
         links.append(
             TraceabilityLink(
                 kind=TraceabilityLinkKind.ACTS_AS,
                 source=_reference(
-                    TraceabilityNodeKind.USER_TWIN,
-                    story.user_twin_reference.twin_id,
+                    TraceabilityNodeKind.USER_TWIN, story.user_twin_reference.twin_id
                 ),
                 target=story_reference,
             )
@@ -483,44 +403,27 @@ def build_requirements_traceability(
                 TraceabilityLink(
                     kind=TraceabilityLinkKind.MOTIVATES,
                     source=story_reference,
-                    target=_reference(
-                        TraceabilityNodeKind.REQUIREMENT,
-                        requirement_id,
-                    ),
+                    target=_reference(TraceabilityNodeKind.REQUIREMENT, requirement_id),
                 )
             )
 
     for requirement in specification.requirements:
         nodes.append(
             TraceabilityNode(
-                reference=_reference(
-                    TraceabilityNodeKind.REQUIREMENT,
-                    requirement.id,
-                ),
+                reference=_reference(TraceabilityNodeKind.REQUIREMENT, requirement.id),
                 display_code=requirement.code,
             )
         )
 
     for criterion in specification.acceptance_criteria:
-        criterion_reference = _reference(
-            TraceabilityNodeKind.ACCEPTANCE_CRITERION,
-            criterion.id,
-        )
-        nodes.append(
-            TraceabilityNode(
-                reference=criterion_reference,
-                display_code=criterion.code,
-            )
-        )
+        criterion_reference = _reference(TraceabilityNodeKind.ACCEPTANCE_CRITERION, criterion.id)
+        nodes.append(TraceabilityNode(reference=criterion_reference, display_code=criterion.code))
 
         for requirement_id in criterion.requirement_ids:
             links.append(
                 TraceabilityLink(
                     kind=TraceabilityLinkKind.VERIFIED_BY,
-                    source=_reference(
-                        TraceabilityNodeKind.REQUIREMENT,
-                        requirement_id,
-                    ),
+                    source=_reference(TraceabilityNodeKind.REQUIREMENT, requirement_id),
                     target=criterion_reference,
                 )
             )
@@ -529,35 +432,21 @@ def build_requirements_traceability(
             links.append(
                 TraceabilityLink(
                     kind=TraceabilityLinkKind.VERIFIED_BY,
-                    source=_reference(
-                        TraceabilityNodeKind.USER_STORY,
-                        story_id,
-                    ),
+                    source=_reference(TraceabilityNodeKind.USER_STORY, story_id),
                     target=criterion_reference,
                 )
             )
 
     for scenario in specification.scenarios:
-        scenario_reference = _reference(
-            TraceabilityNodeKind.SCENARIO,
-            scenario.id,
-        )
-        nodes.append(
-            TraceabilityNode(
-                reference=scenario_reference,
-                display_code=scenario.code,
-            )
-        )
+        scenario_reference = _reference(TraceabilityNodeKind.SCENARIO, scenario.id)
+        nodes.append(TraceabilityNode(reference=scenario_reference, display_code=scenario.code))
 
         for requirement_id in scenario.requirement_ids:
             links.append(
                 TraceabilityLink(
                     kind=TraceabilityLinkKind.EXERCISES,
                     source=scenario_reference,
-                    target=_reference(
-                        TraceabilityNodeKind.REQUIREMENT,
-                        requirement_id,
-                    ),
+                    target=_reference(TraceabilityNodeKind.REQUIREMENT, requirement_id),
                 )
             )
 
@@ -566,58 +455,33 @@ def build_requirements_traceability(
                 TraceabilityLink(
                     kind=TraceabilityLinkKind.EXERCISES,
                     source=scenario_reference,
-                    target=_reference(
-                        TraceabilityNodeKind.ACCEPTANCE_CRITERION,
-                        criterion_id,
-                    ),
+                    target=_reference(TraceabilityNodeKind.ACCEPTANCE_CRITERION, criterion_id),
                 )
             )
 
     for risk in specification.risks:
-        risk_reference = _reference(
-            TraceabilityNodeKind.RISK,
-            risk.id,
-        )
-        nodes.append(
-            TraceabilityNode(
-                reference=risk_reference,
-                display_code=risk.code,
-            )
-        )
+        risk_reference = _reference(TraceabilityNodeKind.RISK, risk.id)
+        nodes.append(TraceabilityNode(reference=risk_reference, display_code=risk.code))
 
         for requirement_id in risk.requirement_ids:
             links.append(
                 TraceabilityLink(
                     kind=TraceabilityLinkKind.AFFECTS,
                     source=risk_reference,
-                    target=_reference(
-                        TraceabilityNodeKind.REQUIREMENT,
-                        requirement_id,
-                    ),
+                    target=_reference(TraceabilityNodeKind.REQUIREMENT, requirement_id),
                 )
             )
 
     for item in specification.definition_of_done:
-        item_reference = _reference(
-            TraceabilityNodeKind.DEFINITION_OF_DONE,
-            item.id,
-        )
-        nodes.append(
-            TraceabilityNode(
-                reference=item_reference,
-                display_code=item.code,
-            )
-        )
+        item_reference = _reference(TraceabilityNodeKind.DEFINITION_OF_DONE, item.id)
+        nodes.append(TraceabilityNode(reference=item_reference, display_code=item.code))
 
         for requirement_id in item.requirement_ids:
             links.append(
                 TraceabilityLink(
                     kind=TraceabilityLinkKind.GOVERNS,
                     source=item_reference,
-                    target=_reference(
-                        TraceabilityNodeKind.REQUIREMENT,
-                        requirement_id,
-                    ),
+                    target=_reference(TraceabilityNodeKind.REQUIREMENT, requirement_id),
                 )
             )
 
@@ -626,18 +490,8 @@ def build_requirements_traceability(
         specification_version_id=version.id,
         specification_version_number=(version.version_number),
         specification_content_hash=version.content_hash,
-        nodes=tuple(
-            sorted(
-                nodes,
-                key=lambda node: node.sort_key,
-            )
-        ),
-        links=tuple(
-            sorted(
-                links,
-                key=lambda link: link.sort_key,
-            )
-        ),
+        nodes=tuple(sorted(nodes, key=lambda node: node.sort_key)),
+        links=tuple(sorted(links, key=lambda link: link.sort_key)),
     )
 
 

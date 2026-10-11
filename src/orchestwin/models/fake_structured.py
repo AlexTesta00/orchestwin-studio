@@ -65,8 +65,7 @@ class FakeStructuredGenerationFixture:
             raise ValueError("fake structured fixture task ID must be normalized")
         if self.expected_request_hash is not None:
             validate_sha256(
-                self.expected_request_hash,
-                label="fake structured fixture request hash",
+                self.expected_request_hash, label="fake structured fixture request hash"
             )
         for value, label in (
             (self.input_tokens, "fake fixture input tokens"),
@@ -120,10 +119,7 @@ class FakeDeterministicStructuredAdapter(StructuredGenerationPort):
     def identity(self) -> ModelRuntimeIdentity:
         return self._identity
 
-    async def generate(
-        self,
-        request: StructuredGenerationRequest,
-    ) -> StructuredGenerationResult:
+    async def generate(self, request: StructuredGenerationRequest) -> StructuredGenerationResult:
         """Return the exact configured fixture while enforcing model identity."""
         if request.expected_identity != self._identity:
             return failed_structured_generation_result(
@@ -170,8 +166,7 @@ class FakeDeterministicStructuredAdapter(StructuredGenerationPort):
             provider_request_id=f"fake-{request.request_id}",
         )
         return successful_structured_generation_result(
-            provider_kind=StructuredGenerationProviderKind.FAKE_DETERMINISTIC,
-            success=success,
+            provider_kind=StructuredGenerationProviderKind.FAKE_DETERMINISTIC, success=success
         )
 
 

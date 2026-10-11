@@ -402,16 +402,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "init.field_temporal_constraints": {"it": "Tempi", "en": "Timing"},
     "init.field_budget": {"it": "Budget", "en": "Budget"},
     "init.field_functional_requirements": {"it": "Cosa deve fare", "en": "What it must do"},
-    "init.field_non_functional_requirements": {
-        "it": "Qualità attese",
-        "en": "Expected qualities",
-    },
+    "init.field_non_functional_requirements": {"it": "Qualità attese", "en": "Expected qualities"},
     "init.field_risks": {"it": "Rischi", "en": "Risks"},
     "init.field_stakeholders": {"it": "Persone coinvolte", "en": "People involved"},
-    "init.field_available_artifacts": {
-        "it": "Materiali disponibili",
-        "en": "Available materials",
-    },
+    "init.field_available_artifacts": {"it": "Materiali disponibili", "en": "Available materials"},
     "init.field_definition_of_done": {"it": "Quando sarà finito", "en": "When it is done"},
     "init.designer_missing_end": {
         "it": "Attenzione: nelle prospettive approvate di questo progetto l'Esperienza d'uso "
@@ -587,10 +581,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Scambio di dati con servizi esterni.",
         "en": "Data exchanged with outside services.",
     },
-    "init.profiles_label": {
-        "it": "Propongo gli archetipi",
-        "en": "Proposing the archetypes",
-    },
+    "init.profiles_label": {"it": "Propongo gli archetipi", "en": "Proposing the archetypes"},
     "init.profiles_intro": {
         "it": "Archetipi proposti dal modello: {count}. Per ciascuno scegli se "
         "confermarlo o scartarlo: dagli archetipi confermati nascono gli User Twin.",

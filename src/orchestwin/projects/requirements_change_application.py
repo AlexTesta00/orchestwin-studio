@@ -112,8 +112,7 @@ class LocalRequirementsChangeService:
         include_journeys: bool = False,
     ) -> RequirementsChangeResult:
         context = await self._governance.load_current(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
+            owner_user_id=owner_user_id, project_id=project_id
         )
         issue = requirements_governance_issue(context)
 
@@ -123,10 +122,7 @@ class LocalRequirementsChangeService:
         if context is None:
             raise RuntimeError("ready requirements context cannot be None")
 
-        current, pending = await self._current(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
-        )
+        current, pending = await self._current(owner_user_id=owner_user_id, project_id=project_id)
 
         if current is None:
             return _rejected(RequirementsChangeIssueCode.SPECIFICATION_NOT_FOUND)
@@ -148,8 +144,7 @@ class LocalRequirementsChangeService:
 
         if proposal.status is not RequirementsProposalStatus.PROPOSED:
             return _rejected(
-                RequirementsChangeIssueCode.PROPOSAL_REJECTED,
-                proposal_issue=proposal.issue,
+                RequirementsChangeIssueCode.PROPOSAL_REJECTED, proposal_issue=proposal.issue
             )
 
         specification = proposal.specification
@@ -158,10 +153,7 @@ class LocalRequirementsChangeService:
             return _rejected(RequirementsChangeIssueCode.INVALID_PROPOSAL)
 
         if not await self._unchanged(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
-            context=context,
-            current=current,
+            owner_user_id=owner_user_id, project_id=project_id, context=context, current=current
         ):
             return _rejected(RequirementsChangeIssueCode.CONTEXT_CHANGED)
 
@@ -169,24 +161,18 @@ class LocalRequirementsChangeService:
             return _rejected(RequirementsChangeIssueCode.UNCHANGED)
 
         revision = await self._revisions.propose_revision(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
-            proposed_specification=specification,
+            owner_user_id=owner_user_id, project_id=project_id, proposed_specification=specification
         )
 
         if revision.status is RequirementsRevisionStatus.CREATED and revision.diff is not None:
             return RequirementsChangeResult(
-                status=RequirementsChangeStatus.CREATED,
-                revision=revision,
+                status=RequirementsChangeStatus.CREATED, revision=revision
             )
 
         return _rejected(_revision_issue(revision), revision=revision)
 
     async def _current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
+        self, *, owner_user_id: UUID, project_id: UUID
     ) -> tuple[RequirementsSpecificationVersion | None, RequirementsSpecificationDiff | None]:
         async with self._uow_factory(owner_user_id=owner_user_id) as unit:
             current = await unit.specifications.current(project_id=project_id)
@@ -195,8 +181,7 @@ class LocalRequirementsChangeService:
                 return None, None
 
             return current, await unit.diffs.current_proposed(
-                project_id=project_id,
-                base_version_id=current.id,
+                project_id=project_id, base_version_id=current.id
             )
 
     async def _unchanged(
@@ -208,8 +193,7 @@ class LocalRequirementsChangeService:
         current: RequirementsSpecificationVersion,
     ) -> bool:
         latest = await self._governance.load_current(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
+            owner_user_id=owner_user_id, project_id=project_id
         )
 
         if (
@@ -219,10 +203,7 @@ class LocalRequirementsChangeService:
         ):
             return False
 
-        version, _ = await self._current(
-            owner_user_id=owner_user_id,
-            project_id=project_id,
-        )
+        version, _ = await self._current(owner_user_id=owner_user_id, project_id=project_id)
 
         return (
             version is not None

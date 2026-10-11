@@ -311,10 +311,7 @@ def update_context(
         "project_brief": material["project_brief"],
         "requirements": material["requirements"],
         "design": material["design"],
-        "experience": {
-            "changes": list(experience["changes"]),
-            "tests": list(experience["tests"]),
-        },
+        "experience": {"changes": list(experience["changes"]), "tests": list(experience["tests"])},
         "limits": {"max_observations": MAX_UPDATE_OBSERVATIONS},
     }
 

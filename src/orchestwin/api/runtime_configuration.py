@@ -45,8 +45,7 @@ class RuntimeConnectionSettings:
 
 
 def load_runtime_connection_settings(
-    *,
-    env_file: str | Path | None = ".env",
+    *, env_file: str | Path | None = ".env"
 ) -> RuntimeConnectionSettings | None:
     """Resolve startup settings without populating or otherwise mutating os.environ.
 

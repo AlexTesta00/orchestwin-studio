@@ -21,11 +21,7 @@ INPUT_CLOSED: Final = "INPUT_CLOSED"
 
 
 def ask_once(
-    context: CommandContext,
-    client: StudioClient,
-    project_id: str,
-    twin: Twin,
-    question: str,
+    context: CommandContext, client: StudioClient, project_id: str, twin: Twin, question: str
 ) -> int:
     text = normalized_question(question)
     if len(text) > twin_chat.QUESTION_LIMIT:
@@ -49,12 +45,7 @@ def ask_once(
     return 0
 
 
-def converse(
-    context: CommandContext,
-    client: StudioClient,
-    project_id: str,
-    twin: Twin,
-) -> int:
+def converse(context: CommandContext, client: StudioClient, project_id: str, twin: Twin) -> int:
     console = context.console
     found = twin_chat.conversation(client, project_id, twin.twin_id)
     turns = twin_chat.turns(found, twin.version_id)

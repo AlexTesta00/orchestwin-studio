@@ -72,22 +72,14 @@ def build_project_diagrams(
 
 class ProjectDiagramService:
     def __init__(
-        self,
-        *,
-        project_service,
-        requirements_query_service,
-        design_query_service,
+        self, *, project_service, requirements_query_service, design_query_service
     ) -> None:
         self.project_service = project_service
         self.requirements_query_service = requirements_query_service
         self.design_query_service = design_query_service
 
     async def current(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        locale: str,
+        self, *, owner_user_id: UUID, project_id: UUID, locale: str
     ) -> ProjectDiagrams | None:
         scope = {"project_id": project_id, "owner_user_id": owner_user_id}
         brief = await self.project_service.current_brief(**scope)
@@ -98,10 +90,7 @@ class ProjectDiagramService:
             return None
         design = await self.design_query_service.current(**scope)
         return build_project_diagrams(
-            brief=brief,
-            requirements=requirements,
-            design=design,
-            locale=locale,
+            brief=brief, requirements=requirements, design=design, locale=locale
         )
 
 

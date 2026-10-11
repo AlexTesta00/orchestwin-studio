@@ -11,11 +11,7 @@ from uuid import UUID, uuid5
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.generated_mockup_structure import derive_elements
 from orchestwin.artifacts.mockup_html import render_evaluation_document
-from orchestwin.artifacts.prototypes import (
-    PrototypeElement,
-    PrototypeElementKind,
-    PrototypeScreen,
-)
+from orchestwin.artifacts.prototypes import PrototypeElement, PrototypeElementKind, PrototypeScreen
 from orchestwin.evaluation.artifact_content import MAX_VIEW_BYTES
 from orchestwin.evaluation.artifacts import (
     EvaluationArtifactBundle,

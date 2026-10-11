@@ -38,10 +38,7 @@ GRACEFUL_SECONDS: Final = 5.0
 TERMINATE_SECONDS: Final = 10.0
 REMOVE_ATTEMPTS: Final = 10
 REMOVE_PAUSE_SECONDS: Final = 0.2
-CHROMIUM_FLAGS: Final = (
-    "--headless=new",
-    "--remote-debugging-port=0",
-)
+CHROMIUM_FLAGS: Final = ("--headless=new", "--remote-debugging-port=0")
 CHROMIUM_QUIET_FLAGS: Final = (
     "--no-first-run",
     "--no-default-browser-check",

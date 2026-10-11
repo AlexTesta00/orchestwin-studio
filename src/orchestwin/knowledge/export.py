@@ -7,11 +7,7 @@ from orchestwin.artifacts.design_gate import design_gate_is_currently_approved
 from orchestwin.knowledge.diagram_service import brief_system_name
 from orchestwin.knowledge.diagrams import DEFAULT_DIAGRAM_LOCALE
 from orchestwin.knowledge.research_evidence import present as has_evidence
-from orchestwin.knowledge.sources import (
-    KnowledgeFeedback,
-    KnowledgeSources,
-    consistency_issue,
-)
+from orchestwin.knowledge.sources import KnowledgeFeedback, KnowledgeSources, consistency_issue
 from orchestwin.knowledge.state import ProjectStateSources
 from orchestwin.projects.brief_gate import project_brief_gate_is_currently_approved
 from orchestwin.projects.requirements_gate import requirements_gate_is_currently_approved
@@ -160,8 +156,7 @@ class KnowledgeSourceLoader:
             from orchestwin.knowledge.validation_records import preserve_import_history
 
             validation_records = preserve_import_history(
-                validation_records,
-                await self.import_origin_query_service.origin(**scope),
+                validation_records, await self.import_origin_query_service.origin(**scope)
             )
         sources = KnowledgeSources(
             project_id=project_id,
@@ -217,7 +212,4 @@ class KnowledgeSourceLoader:
         ]
 
 
-__all__ = [
-    "KnowledgeExportError",
-    "KnowledgeSourceLoader",
-]
+__all__ = ["KnowledgeExportError", "KnowledgeSourceLoader"]

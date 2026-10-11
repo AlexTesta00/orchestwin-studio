@@ -91,11 +91,7 @@ class FirefoxPage(BrowserPage):
         return page
 
     def _call(
-        self,
-        method: str,
-        params: Mapping[str, object] | None = None,
-        *,
-        code: str = PROTOCOL_ERROR,
+        self, method: str, params: Mapping[str, object] | None = None, *, code: str = PROTOCOL_ERROR
     ) -> Mapping[str, object]:
         return self._connection.call(method, params, code=code)
 

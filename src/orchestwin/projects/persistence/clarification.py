@@ -16,15 +16,10 @@ from orchestwin.projects.clarification_state import (
     accept_brief_assumption,
     reject_brief_assumption,
 )
-from orchestwin.projects.persistence.models import (
-    BriefAssumptionRecord,
-    ProjectRecord,
-)
+from orchestwin.projects.persistence.models import BriefAssumptionRecord, ProjectRecord
 
 
-def assumption_record_to_domain(
-    record: BriefAssumptionRecord,
-) -> BriefAssumption:
+def assumption_record_to_domain(record: BriefAssumptionRecord) -> BriefAssumption:
     """Translate an assumption record into immutable domain state."""
     return BriefAssumption(
         id=record.id,
@@ -43,17 +38,12 @@ def assumption_record_to_domain(
 
 
 def owned_assumptions_statement(
-    *,
-    project_id: UUID,
-    owner_user_id: UUID,
+    *, project_id: UUID, owner_user_id: UUID
 ) -> Select[tuple[BriefAssumptionRecord]]:
     """Build the canonical owner-scoped assumption query."""
     return (
         select(BriefAssumptionRecord)
-        .join(
-            ProjectRecord,
-            ProjectRecord.id == BriefAssumptionRecord.project_id,
-        )
+        .join(ProjectRecord, ProjectRecord.id == BriefAssumptionRecord.project_id)
         .where(
             ProjectRecord.id == project_id,
             ProjectRecord.owner_user_id == owner_user_id,
@@ -63,31 +53,21 @@ def owned_assumptions_statement(
 
 
 def owned_assumption_statement(
-    *,
-    project_id: UUID,
-    owner_user_id: UUID,
-    assumption_id: UUID,
+    *, project_id: UUID, owner_user_id: UUID, assumption_id: UUID
 ) -> Select[tuple[BriefAssumptionRecord]]:
     """Build an owner-scoped query for one assumption."""
-    return owned_assumptions_statement(
-        project_id=project_id,
-        owner_user_id=owner_user_id,
-    ).where(BriefAssumptionRecord.id == assumption_id)
+    return owned_assumptions_statement(project_id=project_id, owner_user_id=owner_user_id).where(
+        BriefAssumptionRecord.id == assumption_id
+    )
 
 
 class SqlAlchemyBriefAssumptionRepository:
     """Owner-scoped SQLAlchemy assumption repository."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-    ) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def add(
-        self,
-        assumption: BriefAssumption,
-    ) -> BriefAssumption:
+    async def add(self, assumption: BriefAssumption) -> BriefAssumption:
         """Add a proposed assumption to the transaction."""
         record = BriefAssumptionRecord(
             id=assumption.id,
@@ -110,18 +90,12 @@ class SqlAlchemyBriefAssumptionRepository:
         return assumption_record_to_domain(record)
 
     async def get_owned(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        assumption_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID, assumption_id: UUID
     ) -> BriefAssumption | None:
         """Return one assumption for its project owner."""
         record = await self._session.scalar(
             owned_assumption_statement(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                assumption_id=assumption_id,
+                project_id=project_id, owner_user_id=owner_user_id, assumption_id=assumption_id
             )
         )
 
@@ -131,20 +105,13 @@ class SqlAlchemyBriefAssumptionRepository:
         return assumption_record_to_domain(record)
 
     async def list_owned(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
+        self, *, project_id: UUID, owner_user_id: UUID
     ) -> tuple[BriefAssumption, ...]:
         """Return assumptions in deterministic creation order."""
         result = await self._session.scalars(
             owned_assumptions_statement(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-            ).order_by(
-                BriefAssumptionRecord.created_at,
-                BriefAssumptionRecord.id,
-            )
+                project_id=project_id, owner_user_id=owner_user_id
+            ).order_by(BriefAssumptionRecord.created_at, BriefAssumptionRecord.id)
         )
 
         return tuple(assumption_record_to_domain(record) for record in result.all())
@@ -161,9 +128,7 @@ class SqlAlchemyBriefAssumptionRepository:
         """Accept a proposed assumption under a row lock."""
         record = await self._session.scalar(
             owned_assumption_statement(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                assumption_id=assumption_id,
+                project_id=project_id, owner_user_id=owner_user_id, assumption_id=assumption_id
             ).with_for_update()
         )
 
@@ -177,10 +142,7 @@ class SqlAlchemyBriefAssumptionRepository:
             reason=reason,
         )
 
-        self._apply_decision(
-            record,
-            accepted,
-        )
+        self._apply_decision(record, accepted)
         await self._session.flush()
 
         return assumption_record_to_domain(record)
@@ -197,9 +159,7 @@ class SqlAlchemyBriefAssumptionRepository:
         """Reject a proposed assumption under a row lock."""
         record = await self._session.scalar(
             owned_assumption_statement(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                assumption_id=assumption_id,
+                project_id=project_id, owner_user_id=owner_user_id, assumption_id=assumption_id
             ).with_for_update()
         )
 
@@ -213,19 +173,13 @@ class SqlAlchemyBriefAssumptionRepository:
             reason=reason,
         )
 
-        self._apply_decision(
-            record,
-            rejected,
-        )
+        self._apply_decision(record, rejected)
         await self._session.flush()
 
         return assumption_record_to_domain(record)
 
     @staticmethod
-    def _apply_decision(
-        record: BriefAssumptionRecord,
-        assumption: BriefAssumption,
-    ) -> None:
+    def _apply_decision(record: BriefAssumptionRecord, assumption: BriefAssumption) -> None:
         """Copy a validated domain decision into an ORM record."""
         record.status = assumption.status.value
         record.decided_by_user_id = assumption.decided_by_user_id

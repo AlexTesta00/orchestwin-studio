@@ -7,10 +7,7 @@ from enum import StrEnum
 from typing import Final
 from uuid import UUID
 
-from orchestwin.evaluation.findings import (
-    SyntheticFinding,
-    SyntheticFindingEpistemicStatus,
-)
+from orchestwin.evaluation.findings import SyntheticFinding, SyntheticFindingEpistemicStatus
 from orchestwin.projects.requirements_primitives import (
     normalize_required_text,
     validate_positive_integer,
@@ -43,37 +40,17 @@ class EvaluationEvidenceReference:
 
     def __post_init__(self) -> None:
         for value, label, maximum_length in (
-            (
-                self.reference_id,
-                "evaluation evidence reference ID",
-                _MAX_REFERENCE_LENGTH,
-            ),
-            (
-                self.locator,
-                "evaluation evidence locator",
-                _MAX_LOCATOR_LENGTH,
-            ),
+            (self.reference_id, "evaluation evidence reference ID", _MAX_REFERENCE_LENGTH),
+            (self.locator, "evaluation evidence locator", _MAX_LOCATOR_LENGTH),
         ):
-            normalized = normalize_required_text(
-                value,
-                label=label,
-                maximum_length=maximum_length,
-            )
+            normalized = normalize_required_text(value, label=label, maximum_length=maximum_length)
             if normalized != value:
                 raise ValueError(f"{label} must be normalized")
-        validate_sha256(
-            self.content_hash,
-            label="evaluation evidence content hash",
-        )
+        validate_sha256(self.content_hash, label="evaluation evidence content hash")
 
     @property
     def sort_key(self) -> tuple[str, str, str, str]:
-        return (
-            self.reference_id,
-            self.kind.value,
-            self.content_hash,
-            self.locator,
-        )
+        return (self.reference_id, self.kind.value, self.content_hash, self.locator)
 
     def to_snapshot(self) -> dict[str, str]:
         return {
@@ -95,13 +72,9 @@ class SyntheticFindingValidationContext:
     evidence: tuple[EvaluationEvidenceReference, ...]
 
     def __post_init__(self) -> None:
+        validate_positive_integer(self.twin_version, label="validation context twin version")
         validate_positive_integer(
-            self.twin_version,
-            label="validation context twin version",
-        )
-        validate_positive_integer(
-            self.artifact_version,
-            label="validation context artifact version",
+            self.artifact_version, label="validation context artifact version"
         )
         ordered = tuple(sorted(self.evidence, key=lambda item: item.sort_key))
         if ordered != self.evidence:
@@ -131,10 +104,7 @@ class SyntheticFindingValidationIssue:
     reference_id: str | None = None
 
     def to_snapshot(self) -> dict[str, str | None]:
-        return {
-            "code": self.code.value,
-            "reference_id": self.reference_id,
-        }
+        return {"code": self.code.value, "reference_id": self.reference_id}
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,8 +127,7 @@ class SyntheticFindingValidationReport:
 
 
 def validate_synthetic_finding(
-    finding: SyntheticFinding,
-    context: SyntheticFindingValidationContext,
+    finding: SyntheticFinding, context: SyntheticFindingValidationContext
 ) -> SyntheticFindingValidationReport:
     """Validate exact identities, allowed citations, and epistemic authority."""
     issues: list[SyntheticFindingValidationIssue] = []
@@ -214,10 +183,7 @@ def validate_synthetic_finding(
             )
         )
 
-    return SyntheticFindingValidationReport(
-        finding_id=finding.finding_id,
-        issues=tuple(issues),
-    )
+    return SyntheticFindingValidationReport(finding_id=finding.finding_id, issues=tuple(issues))
 
 
 _REQUIRED_EVIDENCE_KIND: Final = {

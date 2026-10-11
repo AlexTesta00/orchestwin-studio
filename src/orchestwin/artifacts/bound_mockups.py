@@ -92,8 +92,7 @@ class BoundGeneratedMockup:
 
     def prototype(self) -> DeclarativePrototype:
         return derive_prototype(
-            self.mockup,
-            requirement_ids_by_code=dict(self.requirement_ids_by_code),
+            self.mockup, requirement_ids_by_code=dict(self.requirement_ids_by_code)
         )
 
     def to_snapshot(self) -> dict[str, object]:
@@ -139,15 +138,12 @@ def create_bound_mockup(
 ) -> BoundGeneratedMockup:
     entries = _entries(requirement_ids_by_code)
     return BoundGeneratedMockup(
-        mockup=mockup,
-        requirement_ids_by_code=tuple(sorted(entries, key=lambda entry: entry[0])),
+        mockup=mockup, requirement_ids_by_code=tuple(sorted(entries, key=lambda entry: entry[0]))
     )
 
 
 def bound_mockup_from_snapshot(
-    payload: Mapping[str, object],
-    *,
-    token_names: Iterable[str],
+    payload: Mapping[str, object], *, token_names: Iterable[str]
 ) -> BoundGeneratedMockup:
     if not isinstance(payload, Mapping) or set(payload) != _SNAPSHOT_KEYS:
         raise GeneratedMockupError("SNAPSHOT_INVALID", "bound mockup snapshot keys")

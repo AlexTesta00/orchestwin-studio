@@ -84,27 +84,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Mode: headless, Claude Code works alone, applies its edits to the files without "
         "asking and ends by itself.",
     },
-    "code.model": {
-        "it": "Modello: {model}.",
-        "en": "Model: {model}.",
-    },
+    "code.model": {"it": "Modello: {model}.", "en": "Model: {model}."},
     "code.budget": {
         "it": "Spesa massima dell'agente in questa esecuzione: {usd} USD, sul tuo account di "
         "Claude Code.",
         "en": "The most the agent may spend in this run: {usd} USD, on your Claude Code account.",
     },
-    "code.work_tasks": {
-        "it": "Lavoro: i compiti {codes}.",
-        "en": "Work: the tasks {codes}.",
-    },
+    "code.work_tasks": {"it": "Lavoro: i compiti {codes}.", "en": "Work: the tasks {codes}."},
     "code.work_all_tasks": {
         "it": "Lavoro: tutti i compiti aperti della cartella di conoscenza ({codes}).",
         "en": "Work: every open task of the knowledge folder ({codes}).",
     },
-    "code.work_request": {
-        "it": "Lavoro: la tua richiesta.",
-        "en": "Work: your request.",
-    },
+    "code.work_request": {"it": "Lavoro: la tua richiesta.", "en": "Work: your request."},
     "code.work_tasks_request": {
         "it": "Lavoro: i compiti {codes} e la tua richiesta.",
         "en": "Work: the tasks {codes} and your request.",
@@ -114,10 +105,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "approvati.",
         "en": "Work: build the application as the approved requirements and design describe.",
     },
-    "code.order": {
-        "it": "Ordine di lavoro: {path}",
-        "en": "Work order: {path}",
-    },
+    "code.order": {"it": "Ordine di lavoro: {path}", "en": "Work order: {path}"},
     "code.own_account": {
         "it": "L'agente lavora con il tuo account di quell'agente: quello che spende è fuori dai "
         "tetti di spesa dello Studio, che non lo conta.",
@@ -132,10 +120,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "the spending ceilings of the Studio. It may also ask the twins and have reviews and "
         "tests run through the Studio, which spends within its ceilings.",
     },
-    "code.confirm": {
-        "it": "Avvio l'agente adesso?",
-        "en": "Start the agent now?",
-    },
+    "code.confirm": {"it": "Avvio l'agente adesso?", "en": "Start the agent now?"},
     "code.starting": {
         "it": "Avvio {program}: il terminale è dell'agente finché non termina.",
         "en": "Starting {program}: the terminal belongs to the agent until it ends.",

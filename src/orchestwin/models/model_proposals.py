@@ -771,8 +771,7 @@ class ModelUserModelingAdapter:
                     candidate_ordinal=candidate.ordinal,
                     candidate_content_hash=candidate.content_hash,
                     profile=create_proto_persona(
-                        name=proposed.name,
-                        observations=(candidate.role_observation, *observations),
+                        name=proposed.name, observations=(candidate.role_observation, *observations)
                     ),
                 )
             )
