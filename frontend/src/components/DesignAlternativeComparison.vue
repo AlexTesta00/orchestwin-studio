@@ -20,11 +20,13 @@ export type AlternativePreview =
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 
-import { generationFailureText, generationReasonText } from "./DesignIterationPanel.vue";
+import { generationFailureText, generationReasonText } from "./iterationMessages";
 import DesignStyleTile from "./DesignStyleTile.vue";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
 import ArtifactWhy from "./ArtifactWhy.vue";
 import UiButton from "./UiButton.vue";
+import { alternativeComparisonCopy } from "./alternativeComparisonCopy";
+import { fill } from "./textFormat";
 import {
   archetypeLabel,
   DIRECTION_AXES,
@@ -74,6 +76,7 @@ interface DistancePair {
   verdict: DesignDistanceVerdict;
   verdictText: string;
   axes: string | null;
+  close: string;
   levels: DistanceLevel[];
   missing: string | null;
 }
@@ -126,212 +129,7 @@ const emit = defineEmits<{
   retry: [alternativeId: string];
 }>();
 
-const messages = {
-  en: {
-    title: "The design alternatives",
-    recommended: "recommended by the designer",
-    pros: "In favour",
-    cons: "Against",
-    open: "Try the mockup",
-    openLabel: "Try the mockup of {code} · {title}",
-    choose: "Choose this one",
-    chooseLabel: "Choose {code} · {title}",
-    choosing: "Applying your choice…",
-    chosen: "Your choice",
-    drawing: "The designer is drawing the mockup",
-    stages: {
-      GENERATING: "Drawing the screens.",
-      VALIDATING: "The Studio is checking the mockup.",
-      RETRYING: "The first attempt was not good enough: it is being redone.",
-      none: "Working on the mockup.",
-    },
-    elapsed: "Running for {time}",
-    duration:
-      "It usually takes 5 to 10 minutes. You can keep working: the drawing goes on even if you close the page.",
-    rejectedTitle: "The mockup needs another try",
-    failedTitle: "The mockup was not drawn",
-    unreadTitle: "The mockup did not load",
-    why: "Why",
-    more: ["and 1 more point", "and {n} more points"],
-    retry: "Try again",
-    retryLabel: "Try again to draw the mockup of {code}",
-    missing: "The mockup of this alternative has not been drawn yet.",
-    draw: "Draw the mockup",
-    drawLabel: "Draw the mockup of {code}",
-    drawCost: "Drawing uses the hosted model and has a cost.",
-    drawSubscription: "Drawing uses your Claude subscription: it spends no credit.",
-    loading: "Preparing the preview…",
-    thumbnail: "Preview of {code} · {title}",
-    details: "Details of the alternative",
-    layout: "Layout",
-    approach: "Approach",
-    rationale: "Model-generated rationale",
-    advantages: "Advantages",
-    tradeOffs: "Trade-offs",
-    informationArchitecture: "Information architecture",
-    accessibility: "Accessibility",
-    security: "Security",
-    workflows: "Workflows",
-    twinFit: "How it serves the twins",
-    direction: "Visual direction",
-    rules: "Rules",
-    origin:
-      "Proposed by the model among {n} candidates; chosen by the Studio because it is far from the other.",
-    systems: {
-      "apple-hig": {
-        label: "Apple guidelines",
-        origin: "Direction of the Apple Human Interface Guidelines design system.",
-      },
-    },
-    adherence: "The mockup does not follow the direction on: {axes}",
-    distance: "Distance between the alternatives",
-    verdicts: {
-      FAR: "They differ",
-      CLOSE: "Too close",
-      UNKNOWN: "Complete measure when both mockups are ready",
-    },
-    axesDifferent: "{n} of 5 axes differ",
-    close: "The two alternatives look alike in drawn style. You can regenerate them.",
-    measure: "Details of the measure",
-    levels: {
-      declared: "Declared choices",
-      styles: "Drawn style",
-      structure: "Structure of the screens",
-    },
-    score: "{n}/100",
-    differences: "Differences: {list}",
-    choicesDifferent: ["1 of {total} choices differs", "{n} of {total} choices differ"],
-    caveat: "Measure computed by the Studio: it does not replace your judgement.",
-    styleDifferences: {
-      RADIUS: "corner radius",
-      BORDER: "borders",
-      BOXING: "boxes or rules",
-      SHADOW: "shadows",
-      TYPE_SCALE: "size of the titles against the text",
-      TITLE_SCALE: "title size",
-      UPPERCASE: "upper-case text",
-      COLOUR_FIELDS: "fields of colour",
-      TINTS: "tinted surfaces",
-      GRADIENT: "gradients",
-      CONTAINER: "width of the content",
-      COLUMNS: "columns",
-      SPACING: "spacing",
-      MONOSPACE: "fixed-width type",
-    },
-    structureDifferences: {
-      OUTLINE: "arrangement of the first screen",
-      TAGS: "elements used in the screens",
-      TABLE: "tables",
-      CARDS: "cards",
-      SIDE_COLUMN: "side column",
-      NAVIGATION: "position of the navigation",
-      FORMS: "forms",
-    },
-  },
-  it: {
-    title: "Le alternative di design",
-    recommended: "consigliata dal designer",
-    pros: "A favore",
-    cons: "Contro",
-    open: "Prova il mockup",
-    openLabel: "Prova il mockup di {code} · {title}",
-    choose: "Scegli questa",
-    chooseLabel: "Scegli {code} · {title}",
-    choosing: "Applico la tua scelta…",
-    chosen: "La tua scelta",
-    drawing: "Il designer sta disegnando il mockup",
-    stages: {
-      GENERATING: "Disegna le schermate.",
-      VALIDATING: "Lo Studio controlla il mockup.",
-      RETRYING: "Il primo tentativo non andava bene: lo sta rifacendo.",
-      none: "Sta lavorando al mockup.",
-    },
-    elapsed: "In corso da {time}",
-    duration:
-      "Di solito servono da 5 a 10 minuti. Puoi continuare a lavorare: il disegno prosegue anche se chiudi la pagina.",
-    rejectedTitle: "Il mockup va rifatto",
-    failedTitle: "Il mockup non è stato disegnato",
-    unreadTitle: "Il mockup non si è caricato",
-    why: "Perché",
-    more: ["e un altro punto", "e altri {n} punti"],
-    retry: "Riprova",
-    retryLabel: "Riprova a disegnare il mockup di {code}",
-    missing: "Il mockup di questa alternativa non è ancora stato disegnato.",
-    draw: "Disegna il mockup",
-    drawLabel: "Disegna il mockup di {code}",
-    drawCost: "Il disegno usa il modello ospitato e ha un costo.",
-    drawSubscription: "Il disegno usa il tuo abbonamento di Claude: non spende credito.",
-    loading: "Preparo l'anteprima…",
-    thumbnail: "Anteprima di {code} · {title}",
-    details: "Dettagli dell'alternativa",
-    layout: "Impostazione",
-    approach: "Approccio",
-    rationale: "Motivazione generata dal modello",
-    advantages: "Vantaggi",
-    tradeOffs: "Compromessi",
-    informationArchitecture: "Architettura dell'informazione",
-    accessibility: "Accessibilità",
-    security: "Sicurezza",
-    workflows: "Flussi",
-    twinFit: "Come serve i twin",
-    direction: "Direzione visiva",
-    rules: "Regole",
-    origin:
-      "Proposta dal modello fra {n} candidate; scelta dallo Studio perché lontana dall'altra.",
-    systems: {
-      "apple-hig": {
-        label: "Linee guida Apple",
-        origin: "Direzione del sistema di design Apple Human Interface Guidelines.",
-      },
-    },
-    adherence: "Il mockup non segue la direzione su: {axes}",
-    distance: "Distanza fra le alternative",
-    verdicts: {
-      FAR: "Si distinguono",
-      CLOSE: "Troppo vicine",
-      UNKNOWN: "Misura completa quando i due mockup sono pronti",
-    },
-    axesDifferent: "Assi diversi: {n} su 5",
-    close: "Le due alternative si somigliano nello stile disegnato. Puoi rigenerarle.",
-    measure: "Dettagli della misura",
-    levels: {
-      declared: "Scelte dichiarate",
-      styles: "Stile disegnato",
-      structure: "Struttura delle schermate",
-    },
-    score: "{n}/100",
-    differences: "Differenze: {list}",
-    choicesDifferent: ["1 scelta diversa su {total}", "{n} scelte diverse su {total}"],
-    caveat: "Misura calcolata dallo Studio: non sostituisce il tuo giudizio.",
-    styleDifferences: {
-      RADIUS: "raggio degli angoli",
-      BORDER: "bordi",
-      BOXING: "riquadri o filetti",
-      SHADOW: "ombre",
-      TYPE_SCALE: "grandezza dei titoli rispetto al testo",
-      TITLE_SCALE: "grandezza del titolo",
-      UPPERCASE: "testi in maiuscolo",
-      COLOUR_FIELDS: "campiture di colore",
-      TINTS: "superfici tinte",
-      GRADIENT: "sfumature",
-      CONTAINER: "larghezza del contenuto",
-      COLUMNS: "colonne",
-      SPACING: "spaziature",
-      MONOSPACE: "caratteri a larghezza fissa",
-    },
-    structureDifferences: {
-      OUTLINE: "disposizione della prima schermata",
-      TAGS: "elementi usati nelle schermate",
-      TABLE: "tabelle",
-      CARDS: "schede",
-      SIDE_COLUMN: "colonna laterale",
-      NAVIGATION: "posizione della navigazione",
-      FORMS: "moduli",
-    },
-  },
-} as const;
-
-const copy = computed(() => messages[props.locale]);
+const copy = computed(() => alternativeComparisonCopy[props.locale]);
 const titleId = `design-alternatives-${useId()}`;
 const now = ref(Date.now());
 let clock: ReturnType<typeof setInterval> | null = null;
@@ -375,10 +173,6 @@ const distancePairs = computed<DistancePair[]>(() => {
   return pairs.map((pair) => distancePair(pair, pairs.length > 1));
 });
 
-function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
-}
-
 function listed(items: readonly string[]): string {
   return new Intl.ListFormat(props.locale, { type: "conjunction" }).format(items);
 }
@@ -403,12 +197,16 @@ function directionOf(alternative: DesignAlternativePayload): DirectionView | nul
     return null;
   }
   const system = systemOf(alternative);
+  const [other, others] = copy.value.origin;
   return {
     name: direction.name,
     concept: direction.concept,
     rules: direction.rules,
     chips: axisChips(direction),
-    origin: system === null ? fill(copy.value.origin, { n: direction.candidates }) : system.origin,
+    origin:
+      system === null
+        ? fill(props.alternatives.length > 2 ? others : other, { n: direction.candidates })
+        : system.origin,
   };
 }
 
@@ -509,6 +307,7 @@ function distancePair(pair: DesignDistancePairPayload, several: boolean): Distan
     verdict,
     verdictText: text.verdicts[verdict],
     axes: axes === null ? null : fill(text.axesDifferent, { n: axes }),
+    close: several ? fill(text.closePair, { first: pair.first, second: pair.second }) : text.close,
     levels,
     missing: missing.length > 0 ? listed(missing) : null,
   };
@@ -649,7 +448,7 @@ onBeforeUnmount(() => {
         role="status"
         data-testid="design-distance-close"
       >
-        {{ copy.close }}
+        {{ pair.close }}
       </p>
       <details class="group text-sm" data-testid="design-distance-details">
         <summary
