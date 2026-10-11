@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -8,16 +8,33 @@ from functools import partial
 from typing import Annotated, Final, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.api.code_changes import ChangeReference
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.generation_evidence import (
+    accept_generation,
+    attempt_generation,
+    current_generation_ids,
+    retire_generation,
+)
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
+from orchestwin.api.refusals import refusal
+from orchestwin.api.runtime_access import (
+    DESIGN_APPROVAL_REQUIRED,
+    PROJECT_NOT_FOUND,
+    REQUIREMENTS_APPROVAL_REQUIRED,
+    ChangeReference,
+    approved_reference,
+    current_brief,
+    database_sessions,
+    generation_cost,
+    require_approved,
+    require_project,
+    runtime_service,
+)
 from orchestwin.artifacts.design_evaluation import DesignEvaluationError
-from orchestwin.artifacts.design_gate import design_gate_is_currently_approved
-from orchestwin.identity.domain import UserAccount
 from orchestwin.knowledge.state import (
     BROWSER_NAMES,
     MAX_ADDRESS_LENGTH,
@@ -42,14 +59,7 @@ from orchestwin.knowledge.state import (
     TEST_ROLES,
     review_is_stale,
 )
-from orchestwin.models.generation_budget import provider_result_cost_microusd
-from orchestwin.models.proposal_evidence import (
-    ProposalEvidenceError,
-    current_proposal_evidence,
-    evidence_application,
-    retain_adapter_result,
-)
-from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.proposal_evidence import evidence_application
 from orchestwin.models.test_planning import (
     PLAN_PURPOSE,
     acceptance_material,
@@ -107,8 +117,6 @@ from orchestwin.projects.persistence.acceptance_tests import (
     SqlAlchemyAcceptanceTestRepository,
 )
 from orchestwin.projects.persistence.twin_learning import SqlAlchemyTwinLearningRepository
-from orchestwin.projects.requirements_gate import requirements_gate_is_currently_approved
-from orchestwin.projects.requirements_primitives import snapshot_content_hash
 from orchestwin.projects.twin_learning import learned_view
 from orchestwin.twins.user_modeling_gate import user_modeling_gate_is_currently_approved
 
@@ -120,25 +128,18 @@ PLANNED: Final = "PLANNED"
 RECORDED: Final = "RECORDED"
 REVIEWED: Final = "REVIEWED"
 INVALID_REQUEST: Final = "invalid_request"
-PROJECT_NOT_FOUND: Final = "PROJECT_NOT_FOUND"
 TEST_PLAN_NOT_FOUND: Final = "TEST_PLAN_NOT_FOUND"
 TEST_RUN_NOT_FOUND: Final = "TEST_RUN_NOT_FOUND"
 TEST_REVIEW_EXISTS: Final = "TEST_REVIEW_EXISTS"
 TEST_MODEL_NOT_CONFIGURED: Final = "TEST_MODEL_NOT_CONFIGURED"
 ACCEPTANCE_CRITERION_UNKNOWN: Final = "ACCEPTANCE_CRITERION_UNKNOWN"
-REQUIREMENTS_APPROVAL_REQUIRED: Final = "REQUIREMENTS_APPROVAL_REQUIRED"
-DESIGN_APPROVAL_REQUIRED: Final = "DESIGN_APPROVAL_REQUIRED"
 USER_MODELING_APPROVAL_REQUIRED: Final = "USER_MODELING_APPROVAL_REQUIRED"
-INVALID_PROVIDER_OUTPUT: Final = "INVALID_PROVIDER_OUTPUT"
 PLANNER_ROLE: Final = "TEST_PLANNER"
 CRITIQUE_ROLE: Final = "TEST_CRITIQUE"
 PLAN_REJECTED: Final = "PLAN_REJECTED"
 TWIN_CRITIQUED: Final = "TWIN_CRITIQUED"
 CRITIQUE_REJECTED: Final = "CRITIQUE_REJECTED"
-GENERATION_ATTEMPTS: Final = 2
-RETRYABLE_CODES: Final = frozenset(
-    {INVALID_PROVIDER_OUTPUT, "INCOMPLETE_OUTPUT", "RESPONSE_SCHEMA_ERROR"}
-)
+ATTEMPTS_EXHAUSTED: Final = "acceptance test generation attempts are exhausted"
 
 CriterionCode = Annotated[str, Field(pattern=CRITERION_CODE_PATTERN)]
 CriterionName = Annotated[
@@ -492,75 +493,12 @@ class TestReviewResult:
     review: TestReview
 
 
-def _refusal(status_code: int, code: str, **extra: object) -> HTTPException:
-    return HTTPException(status_code, detail={"code": code, **extra})
-
-
 def _invalid(error: ValueError) -> HTTPException:
-    return _refusal(
+    return refusal(
         422,
         INVALID_REQUEST,
         errors=[{"loc": ["body"], "type": "value_error", "msg": str(error)}],
     )
-
-
-async def _retire(role: str, code: str, reference: Mapping[str, str]) -> None:
-    scope = current_proposal_evidence()
-    if scope is None or scope.request is None:
-        return
-    await scope.event("APPLICATION_RESULT", {"status": code, **reference})
-    scope.retire(role=role, code=code)
-
-
-async def _accept(kind: str, snapshot: dict[str, object]) -> None:
-    scope = current_proposal_evidence()
-    if scope is None or scope.request is None:
-        return
-    await scope.event(
-        "ADAPTER_ACCEPTED",
-        {
-            "result": snapshot,
-            "generated_content_hashes": {kind: [snapshot_content_hash(snapshot)]},
-            **(
-                {"related_generations": list(scope.related_generations)}
-                if scope.related_generations
-                else {}
-            ),
-        },
-    )
-
-
-async def _attempt(
-    generation: Callable[[], Awaitable[object]],
-    bind: Callable[[object], object],
-    *,
-    role: str,
-    rejected: str,
-    reference: Mapping[str, str],
-):
-    for attempt in range(1, GENERATION_ATTEMPTS + 1):
-        try:
-            output = await generation()
-            try:
-                return bind(output)
-            except (TypeError, ValueError) as error:
-                await retain_adapter_result(error=error, reason=str(error))
-                raise ProposalGenerationError(INVALID_PROVIDER_OUTPUT) from error
-        except ProposalGenerationError as error:
-            if attempt == GENERATION_ATTEMPTS or error.code not in RETRYABLE_CODES:
-                raise
-            await _retire(role, rejected, reference)
-    raise RuntimeError("acceptance test generation attempts are exhausted")
-
-
-def _generation_ids() -> tuple[UUID, ...]:
-    scope = current_proposal_evidence()
-    if scope is None:
-        return ()
-    identifiers = [UUID(str(item["generation_id"])) for item in scope.related_generations]
-    if scope.request is not None:
-        identifiers.append(scope.request.request_id)
-    return tuple(dict.fromkeys(identifiers))
 
 
 def _findings_by_twin(run: TestRun | None) -> dict[UUID, tuple[str, ...]]:
@@ -589,7 +527,7 @@ def _requested(requirements, criteria: Sequence[str] | None) -> tuple[str, ...]:
     wanted = tuple(dict.fromkeys(criteria))
     unknown = [code for code in wanted if code not in codes]
     if unknown:
-        raise _refusal(422, ACCEPTANCE_CRITERION_UNKNOWN, codes=unknown)
+        raise refusal(422, ACCEPTANCE_CRITERION_UNKNOWN, codes=unknown)
     return tuple(code for code in codes if code in wanted)
 
 
@@ -597,18 +535,6 @@ class AcceptanceTestApplication:
     def __init__(self, runtime):
         self.runtime = runtime
         self._proposal_evidence_store = getattr(runtime, "proposal_evidence_store", None)
-
-    def _sessions(self):
-        database = getattr(self.runtime, "database_runtime", None)
-        if database is None:
-            raise _refusal(503, "DATABASE_UNAVAILABLE")
-        return database.session_factory
-
-    def _service(self, name: str, code: str):
-        service = getattr(self.runtime, name, None)
-        if service is None:
-            raise _refusal(503, code)
-        return service
 
     @staticmethod
     def _repository(session, owner_user_id: UUID):
@@ -622,115 +548,53 @@ class AcceptanceTestApplication:
 
     def _generator(self):
         if not self.plan_available():
-            raise _refusal(503, TEST_MODEL_NOT_CONFIGURED)
+            raise refusal(503, TEST_MODEL_NOT_CONFIGURED)
         return self.runtime.real_model_runtime.user_modeling.proposal_port.generator
-
-    @staticmethod
-    async def _owned(repository, project_id: UUID) -> None:
-        if not await repository.project_exists(project_id):
-            raise _refusal(404, PROJECT_NOT_FOUND)
 
     @staticmethod
     async def _run(repository, project_id: UUID, run_id: UUID) -> TestRun:
         run = await repository.run(project_id, run_id)
         if run is None:
-            raise _refusal(404, TEST_RUN_NOT_FOUND)
+            raise refusal(404, TEST_RUN_NOT_FOUND)
         return run
 
-    async def reference(self, *, owner_user_id: UUID, project_id: UUID) -> ChangeReference:
-        scope = {"owner_user_id": owner_user_id, "project_id": project_id}
-        requirements = await self._service(
-            "requirements_query_service", "REQUIREMENTS_QUERY_UNAVAILABLE"
-        ).current(**scope)
-        requirements_gate = await self._service(
-            "requirements_gate_service", "REQUIREMENTS_GATE_UNAVAILABLE"
-        ).current_gate(**scope)
-        design = await self._service("design_query_service", "DESIGN_QUERY_UNAVAILABLE").current(
-            **scope
-        )
-        design_gate = await self._service(
-            "design_gate_service", "DESIGN_GATE_UNAVAILABLE"
-        ).current_gate(**scope)
-        return ChangeReference(
-            requirements=requirements
-            if requirements_gate_is_currently_approved(requirements_gate, requirements)
-            else None,
-            design=design if design_gate_is_currently_approved(design_gate, design) else None,
-        )
-
-    async def _approved(self, owner_user_id: UUID, project_id: UUID) -> ChangeReference:
-        reference = await self.reference(owner_user_id=owner_user_id, project_id=project_id)
-        if reference.requirements is None:
-            raise _refusal(409, REQUIREMENTS_APPROVAL_REQUIRED)
-        if reference.design is None:
-            raise _refusal(409, DESIGN_APPROVAL_REQUIRED)
-        return reference
-
     async def _twins(self, owner_user_id: UUID, project_id: UUID) -> tuple[object, ...]:
-        services = self._service("user_modeling_services", "USER_MODELING_UNAVAILABLE")
+        services = runtime_service(
+            self.runtime, "user_modeling_services", "USER_MODELING_UNAVAILABLE"
+        )
         scope = {"owner_user_id": owner_user_id, "project_id": project_id}
         snapshot = await services.queries.current_snapshot(**scope)
         gate = await services.gates.current_gate(**scope)
         if snapshot is None or not user_modeling_gate_is_currently_approved(gate, snapshot):
-            raise _refusal(409, USER_MODELING_APPROVAL_REQUIRED)
+            raise refusal(409, USER_MODELING_APPROVAL_REQUIRED)
         twins = tuple(snapshot.snapshot.twin_versions)
         if not twins:
-            raise _refusal(409, USER_MODELING_APPROVAL_REQUIRED)
+            raise refusal(409, USER_MODELING_APPROVAL_REQUIRED)
         return twins
 
     async def _material(
         self, owner_user_id: UUID, project_id: UUID, reference: ChangeReference, locale: str
     ) -> dict[str, object]:
-        version = await self._service("project_service", "PROJECT_QUERY_UNAVAILABLE").current_brief(
-            project_id=project_id, owner_user_id=owner_user_id
-        )
-        if version is None:
-            raise _refusal(404, PROJECT_NOT_FOUND)
+        brief = await current_brief(self.runtime, owner_user_id, project_id)
         try:
             return acceptance_material(
-                brief=version.brief,
+                brief=brief,
                 requirements=reference.requirements,
                 design=reference.design,
                 language=locale.split("-")[0],
             )
         except DesignEvaluationError as error:
-            raise _refusal(409, error.code) from error
-
-    async def _cost(
-        self, owner_user_id: UUID, project_id: UUID, generation_ids: Sequence[UUID]
-    ) -> int:
-        reader = getattr(self._proposal_evidence_store, "get_owned", None)
-        if reader is None:
-            return 0
-        total = 0
-        for generation_id in generation_ids:
-            try:
-                record = await reader(
-                    owner_user_id=owner_user_id,
-                    project_id=project_id,
-                    generation_id=generation_id,
-                )
-            except ProposalEvidenceError:
-                continue
-            if record is None:
-                continue
-            total += sum(
-                provider_result_cost_microusd(item["payload"])
-                for item in record["observations"]
-                if item.get("kind") == "PROVIDER_RESULT"
-                and isinstance(item.get("payload"), Mapping)
-            )
-        return total
+            raise refusal(409, error.code) from error
 
     async def overview(self, *, owner_user_id: UUID, project_id: UUID) -> dict[str, object]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             plans, runs = await repository.counts(project_id)
             latest = await repository.runs(project_id, limit=1)
             reviewed = await repository.latest_reviewed_run(project_id)
-        reference = await self.reference(owner_user_id=owner_user_id, project_id=project_id)
+        reference = await approved_reference(self.runtime, owner_user_id, project_id)
         latest_run = latest[0] if latest else None
         return {
             "project_id": str(project_id),
@@ -746,12 +610,12 @@ class AcceptanceTestApplication:
 
     @evidence_application
     async def plan(self, *, owner_user_id: UUID, project_id: UUID, body) -> TestPlanResult:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             first_number = await repository.next_path_number(project_id) if body.earlier else 1
-        reference = await self._approved(owner_user_id, project_id)
+        reference = await require_approved(self.runtime, owner_user_id, project_id)
         generator = self._generator()
         codes = _requested(reference.requirements, body.criteria)
         material = await self._material(owner_user_id, project_id, reference, body.locale)
@@ -768,14 +632,15 @@ class AcceptanceTestApplication:
             earlier=earlier,
             criteria_codes=codes,
         )
-        paths, not_covered = await _attempt(
+        paths, not_covered = await attempt_generation(
             partial(plan_tests, generator, context),
             partial(bind_plan, context=context, locale=body.locale, first_number=first_number),
             role=PLANNER_ROLE,
             rejected=PLAN_REJECTED,
             reference={"test_plan_id": str(plan_id)},
+            exhausted=ATTEMPTS_EXHAUSTED,
         )
-        generation_ids = _generation_ids()
+        generation_ids = current_generation_ids()
         requirements_version, design_version = reference.version_numbers
         plan = TestPlan(
             id=plan_id,
@@ -793,42 +658,44 @@ class AcceptanceTestApplication:
             replan_of=tuple(item.path.code for item in earlier),
             snapshot_summary=snapshot.summary(),
             generation_ids=generation_ids,
-            cost_microusd=await self._cost(owner_user_id, project_id, generation_ids),
+            cost_microusd=await generation_cost(
+                self._proposal_evidence_store, owner_user_id, project_id, generation_ids
+            ),
         )
-        await _accept(PLAN_PURPOSE, plan.to_snapshot())
+        await accept_generation(PLAN_PURPOSE, plan.to_snapshot())
         async with sessions() as session, session.begin():
             status = await self._repository(session, owner_user_id).create_plan(plan)
         if status is not AcceptanceTestWriteStatus.RECORDED:
-            raise _refusal(404, PROJECT_NOT_FOUND)
+            raise refusal(404, PROJECT_NOT_FOUND)
         return TestPlanResult(status=TestPlanStatus.PLANNED, plan=plan)
 
     async def plans(self, *, owner_user_id: UUID, project_id: UUID) -> tuple[TestPlan, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             return await repository.plans(project_id)
 
     async def plan_of(self, *, owner_user_id: UUID, project_id: UUID, plan_id: UUID) -> TestPlan:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             plan = await repository.plan(project_id, plan_id)
         if plan is None:
-            raise _refusal(404, TEST_PLAN_NOT_FOUND)
+            raise refusal(404, TEST_PLAN_NOT_FOUND)
         return plan
 
     async def record(self, *, owner_user_id: UUID, project_id: UUID, body) -> TestRun:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             plans = []
             for plan_id in (body.plan_id, *body.replan_ids):
                 plan = await repository.plan(project_id, plan_id)
                 if plan is None:
-                    raise _refusal(404, TEST_PLAN_NOT_FOUND)
+                    raise refusal(404, TEST_PLAN_NOT_FOUND)
                 plans.append(plan)
             try:
                 run = build_test_run(
@@ -847,41 +714,41 @@ class AcceptanceTestApplication:
             try:
                 status = await repository.create_run(run)
             except TestPlanUnknown as error:
-                raise _refusal(404, TEST_PLAN_NOT_FOUND) from error
+                raise refusal(404, TEST_PLAN_NOT_FOUND) from error
         if status is not AcceptanceTestWriteStatus.RECORDED:
-            raise _refusal(404, PROJECT_NOT_FOUND)
+            raise refusal(404, PROJECT_NOT_FOUND)
         return run
 
     async def runs(self, *, owner_user_id: UUID, project_id: UUID) -> tuple[TestRun, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             return await repository.runs(project_id)
 
     async def run_of(self, *, owner_user_id: UUID, project_id: UUID, run_id: UUID) -> TestRun:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             return await self._run(repository, project_id, run_id)
 
     @evidence_application
     async def review(
         self, *, owner_user_id: UUID, project_id: UUID, run_id: UUID, body
     ) -> TestReviewResult:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             run = await self._run(repository, project_id, run_id)
             if not body.again and await repository.latest_review(run.id) is not None:
-                raise _refusal(409, TEST_REVIEW_EXISTS)
+                raise refusal(409, TEST_REVIEW_EXISTS)
             earlier = await repository.latest_reviewed_run(project_id, before=run)
             learned = await SqlAlchemyTwinLearningRepository(
                 session, owner_user_id=owner_user_id
             ).active(project_id)
-        reference = await self._approved(owner_user_id, project_id)
+        reference = await require_approved(self.runtime, owner_user_id, project_id)
         twins = await self._twins(owner_user_id, project_id)
         generator = self._generator()
         material = await self._material(owner_user_id, project_id, reference, body.locale)
@@ -900,18 +767,19 @@ class AcceptanceTestApplication:
                 earlier_findings=earlier_findings.get(twin.twin_id, ()),
                 learned=learned_view(learned.get(twin.twin_id, ())),
             )
-            critique = await _attempt(
+            critique = await attempt_generation(
                 partial(critique_run, generator, context),
                 partial(bind_test_critique, twin=twin, context=context),
                 role=CRITIQUE_ROLE,
                 rejected=CRITIQUE_REJECTED,
                 reference=identifiers,
+                exhausted=ATTEMPTS_EXHAUSTED,
             )
-            await _accept(REVIEW_PURPOSE, critique.to_snapshot())
+            await accept_generation(REVIEW_PURPOSE, critique.to_snapshot())
             if position < len(twins):
-                await _retire(CRITIQUE_ROLE, TWIN_CRITIQUED, identifiers)
+                await retire_generation(CRITIQUE_ROLE, TWIN_CRITIQUED, identifiers)
             critiques.append(critique)
-        generation_ids = _generation_ids()
+        generation_ids = current_generation_ids()
         review = TestReview(
             id=review_id,
             run_id=run.id,
@@ -921,23 +789,25 @@ class AcceptanceTestApplication:
             locale=body.locale,
             critiques=tuple(critiques),
             generation_ids=generation_ids,
-            cost_microusd=await self._cost(owner_user_id, project_id, generation_ids),
+            cost_microusd=await generation_cost(
+                self._proposal_evidence_store, owner_user_id, project_id, generation_ids
+            ),
         )
         async with sessions() as session, session.begin():
             status = await self._repository(session, owner_user_id).create_review(review)
         if status is AcceptanceTestWriteStatus.PROJECT_NOT_FOUND:
-            raise _refusal(404, PROJECT_NOT_FOUND)
+            raise refusal(404, PROJECT_NOT_FOUND)
         if status is not AcceptanceTestWriteStatus.RECORDED:
-            raise _refusal(404, TEST_RUN_NOT_FOUND)
+            raise refusal(404, TEST_RUN_NOT_FOUND)
         return TestReviewResult(status=TestReviewStatus.REVIEWED, review=review)
 
     async def reviews(
         self, *, owner_user_id: UUID, project_id: UUID, run_id: UUID
     ) -> tuple[TestReview, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             repository = self._repository(session, owner_user_id)
-            await self._owned(repository, project_id)
+            await require_project(repository, project_id)
             run = await self._run(repository, project_id, run_id)
             return await repository.reviews(run.id)
 
@@ -952,7 +822,7 @@ def create_acceptance_test_router() -> APIRouter:
     async def overview(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return await application(request).overview(owner_user_id=user.id, project_id=project_id)
 
@@ -961,7 +831,7 @@ def create_acceptance_test_router() -> APIRouter:
         project_id: UUID,
         body: TestPlanRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         async def planning():
             result = await application(request).plan(
@@ -982,7 +852,7 @@ def create_acceptance_test_router() -> APIRouter:
     async def plans(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await application(request).plans(owner_user_id=user.id, project_id=project_id)
         return {"items": [item.to_snapshot() for item in items]}
@@ -992,7 +862,7 @@ def create_acceptance_test_router() -> APIRouter:
         project_id: UUID,
         plan_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         item = await application(request).plan_of(
             owner_user_id=user.id, project_id=project_id, plan_id=plan_id
@@ -1004,7 +874,7 @@ def create_acceptance_test_router() -> APIRouter:
         project_id: UUID,
         body: TestRunRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         run = await application(request).record(
             owner_user_id=user.id, project_id=project_id, body=body
@@ -1015,7 +885,7 @@ def create_acceptance_test_router() -> APIRouter:
     async def runs(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await application(request).runs(owner_user_id=user.id, project_id=project_id)
         return {"items": [item.to_snapshot() for item in items]}
@@ -1025,7 +895,7 @@ def create_acceptance_test_router() -> APIRouter:
         project_id: UUID,
         run_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         item = await application(request).run_of(
             owner_user_id=user.id, project_id=project_id, run_id=run_id
@@ -1038,7 +908,7 @@ def create_acceptance_test_router() -> APIRouter:
         run_id: UUID,
         body: TestReviewRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         async def reviewing():
             result = await application(request).review(
@@ -1060,7 +930,7 @@ def create_acceptance_test_router() -> APIRouter:
         project_id: UUID,
         run_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await application(request).reviews(
             owner_user_id=user.id, project_id=project_id, run_id=run_id

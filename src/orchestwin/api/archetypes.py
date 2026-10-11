@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Annotated, Self
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.twins.archetypes import ArchetypeFailure, ArchetypeIssue, ArchetypeService
 from orchestwin.twins.personas import PersonaConfirmationStatus, PersonaSource
 from orchestwin.twins.representation import ArchetypeInput, archetype_payload
@@ -60,11 +60,9 @@ class ArchetypeArchiveRequest(BaseModel):
     based_on_version_number: int = Field(ge=1, strict=True)
 
 
-def archetype_service_dependency(request: Request) -> ArchetypeService:
-    service = getattr(request.app.state, "archetype_service", None)
-    if service is None:
-        raise HTTPException(503, detail={"code": "ARCHETYPE_SERVICE_UNAVAILABLE"})
-    return service
+archetype_service_dependency = app_service(
+    "archetype_service", {"code": "ARCHETYPE_SERVICE_UNAVAILABLE"}
+)
 
 
 def _failure(error: ArchetypeFailure) -> HTTPException:
@@ -83,7 +81,7 @@ def create_archetypes_router() -> APIRouter:
     @router.get("/archetypes", response_model=tuple[ArchetypePayload, ...])
     async def list_archetypes(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[ArchetypeService, Depends(archetype_service_dependency)],
     ):
         try:
@@ -96,7 +94,7 @@ def create_archetypes_router() -> APIRouter:
     async def create_archetype(
         project_id: UUID,
         body: ArchetypeRequest,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[ArchetypeService, Depends(archetype_service_dependency)],
     ):
         try:
@@ -112,7 +110,7 @@ def create_archetypes_router() -> APIRouter:
         project_id: UUID,
         persona_id: UUID,
         body: ArchetypeEditRequest,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[ArchetypeService, Depends(archetype_service_dependency)],
     ):
         try:
@@ -132,7 +130,7 @@ def create_archetypes_router() -> APIRouter:
         project_id: UUID,
         persona_id: UUID,
         body: ArchetypeArchiveRequest,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[ArchetypeService, Depends(archetype_service_dependency)],
     ):
         try:

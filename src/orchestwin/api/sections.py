@@ -4,14 +4,15 @@ from dataclasses import dataclass
 from typing import Annotated, Final, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.agents.realignment_service import TeamRealignmentFailure, TeamRealignmentService
 from orchestwin.agents.team_gate import LocalAgentTeamApprovalService
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
+from orchestwin.api.refusals import refusal
 from orchestwin.api.twin_learning import TwinLearningApplication
-from orchestwin.identity.domain import UserAccount
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
 from orchestwin.models.real_runtime import RealModelRuntime
 from orchestwin.persistence import DatabaseRuntime
@@ -52,7 +53,6 @@ from orchestwin.twins.runtime import UserModelingServices
 from orchestwin.workflow.gates import HumanGateAction
 
 SECTIONS_API_PREFIX: Final = "/projects/{project_id}/sections"
-_NOT_FOUND_CODES: Final = frozenset({PROJECT_NOT_FOUND})
 
 
 class ApiModel(BaseModel):
@@ -247,23 +247,13 @@ def build_sections_service(
     )
 
 
-def sections_service_dependency(request: Request) -> SectionsService:
-    service = getattr(request.app.state, "sections_service", None)
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "SECTIONS_SERVICE_UNAVAILABLE"},
-        )
-
-    return service
+sections_service_dependency = app_service(
+    "sections_service", {"code": "SECTIONS_SERVICE_UNAVAILABLE"}
+)
 
 
 def sections_failure(error: SectionsFailure) -> HTTPException:
-    status_code = (
-        status.HTTP_404_NOT_FOUND if error.code in _NOT_FOUND_CODES else status.HTTP_409_CONFLICT
-    )
-    return HTTPException(status_code=status_code, detail={"code": error.code})
+    return refusal(404 if error.code == PROJECT_NOT_FOUND else 409, error.code)
 
 
 def create_sections_router() -> APIRouter:
@@ -277,7 +267,7 @@ def create_sections_router() -> APIRouter:
     async def sections_endpoint(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[SectionsService, Depends(sections_service_dependency)],
     ) -> ProjectSectionsPayload:
         try:
@@ -300,7 +290,7 @@ def create_sections_router() -> APIRouter:
     )
     async def alignment_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[SectionsService, Depends(sections_service_dependency)],
     ) -> SectionsAlignmentPayload:
         try:

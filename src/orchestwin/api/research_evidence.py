@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Annotated
 from uuid import UUID
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
 from orchestwin.projects.evidence_application import (
     append_evidence_profiles,
     evidence_profile,
@@ -353,7 +351,7 @@ def create_research_evidence_router() -> APIRouter:
     async def list_evidence(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         all: bool = False,
     ):
         return await run(
@@ -367,7 +365,7 @@ def create_research_evidence_router() -> APIRouter:
         project_id: UUID,
         body: EvidenceBody,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return await run(
             application(request).insert(owner_user_id=user.id, project_id=project_id, body=body)
@@ -378,7 +376,7 @@ def create_research_evidence_router() -> APIRouter:
         project_id: UUID,
         evidence_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         version: int | None = None,
         text: bool = False,
     ):
@@ -398,7 +396,7 @@ def create_research_evidence_router() -> APIRouter:
         evidence_id: UUID,
         body: EvidenceBody,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return await run(
             application(request).insert(
@@ -412,7 +410,7 @@ def create_research_evidence_router() -> APIRouter:
         evidence_id: UUID,
         body: EvidenceRetireBody,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return await run(
             application(request).retire(
@@ -426,7 +424,7 @@ def create_research_evidence_router() -> APIRouter:
         evidence_id: UUID,
         body: EvidenceDeleteBody,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return await run(
             application(request).delete_text(
@@ -440,7 +438,7 @@ def create_research_evidence_router() -> APIRouter:
         evidence_id: UUID,
         body: EvidenceAssociateBody,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         return await run(
             application(request).associate_text(

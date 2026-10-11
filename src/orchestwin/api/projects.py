@@ -10,7 +10,6 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
-    Request,
     Response,
     status,
 )
@@ -21,10 +20,8 @@ from pydantic import (
     model_validator,
 )
 
-from orchestwin.api.auth import (
-    current_user_dependency,
-)
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.projects.application import (
     ProjectApplicationService,
 )
@@ -272,23 +269,7 @@ class ProjectBriefVersionResponse(BaseModel):
         )
 
 
-def project_service_dependency(
-    request: Request,
-) -> ProjectApplicationService:
-    """Return the configured project application service."""
-    service = getattr(
-        request.app.state,
-        "project_service",
-        None,
-    )
-
-    if service is None:
-        raise HTTPException(
-            status_code=(status.HTTP_503_SERVICE_UNAVAILABLE),
-            detail="project_service_unavailable",
-        )
-
-    return service
+project_service_dependency = app_service("project_service", "project_service_unavailable")
 
 
 def project_not_found() -> HTTPException:
@@ -314,10 +295,7 @@ def create_project_router() -> APIRouter:
     )
     async def create_project_endpoint(
         payload: ProjectCreateRequest,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectApplicationService,
             Depends(project_service_dependency),
@@ -343,10 +321,7 @@ def create_project_router() -> APIRouter:
         operation_id="listProjects",
     )
     async def list_projects_endpoint(
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectApplicationService,
             Depends(project_service_dependency),
@@ -363,10 +338,7 @@ def create_project_router() -> APIRouter:
     )
     async def get_project_endpoint(
         project_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectApplicationService,
             Depends(project_service_dependency),
@@ -390,10 +362,7 @@ def create_project_router() -> APIRouter:
     async def rename_project_endpoint(
         project_id: UUID,
         payload: ProjectUpdateRequest,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectApplicationService,
             Depends(project_service_dependency),
@@ -431,10 +400,7 @@ def create_project_router() -> APIRouter:
     )
     async def archive_project_endpoint(
         project_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectApplicationService,
             Depends(project_service_dependency),
@@ -458,10 +424,7 @@ def create_project_router() -> APIRouter:
         project_id: UUID,
         payload: ProjectBriefRequest,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectApplicationService,
             Depends(project_service_dependency),
@@ -499,10 +462,7 @@ def create_project_router() -> APIRouter:
     )
     async def current_brief_endpoint(
         project_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectApplicationService,
             Depends(project_service_dependency),
@@ -525,10 +485,7 @@ def create_project_router() -> APIRouter:
     )
     async def brief_history_endpoint(
         project_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectApplicationService,
             Depends(project_service_dependency),
@@ -557,10 +514,7 @@ def create_project_router() -> APIRouter:
     async def brief_version_endpoint(
         project_id: UUID,
         version_number: int,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             ProjectApplicationService,
             Depends(project_service_dependency),

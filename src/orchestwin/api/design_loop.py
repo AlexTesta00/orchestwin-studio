@@ -3,16 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated, Final
+from typing import Final
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
 from orchestwin.api.design import DesignGenerationPayload
+from orchestwin.api.generation_evidence import retire_generation
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
+from orchestwin.api.runtime_access import database_sessions, proposal_generator
 from orchestwin.artifacts.design_evaluation import (
     DesignEvaluationError,
     DesignEvaluationRun,
@@ -53,9 +55,8 @@ from orchestwin.evaluation.proposer_evaluator import (
     hosted_twin_review,
     scoped_review,
 )
-from orchestwin.identity.domain import UserAccount
 from orchestwin.models.design_change import ELEMENT_CODE_PATTERN, SCREEN_CODE_PATTERN
-from orchestwin.models.proposal_evidence import current_proposal_evidence, evidence_application
+from orchestwin.models.proposal_evidence import evidence_application
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.twins.persistence.repositories import SqlAlchemyUserTwinVersionRepository
 
@@ -130,12 +131,6 @@ class DesignLoopApplication:
         self.runtime = runtime
         self._proposal_evidence_store = getattr(runtime, "proposal_evidence_store", None)
 
-    def _sessions(self):
-        database = getattr(self.runtime, "database_runtime", None)
-        if database is None:
-            raise HTTPException(503, detail={"code": "DATABASE_UNAVAILABLE"})
-        return database.session_factory
-
     async def _current(self, owner_user_id, project_id):
         query = getattr(self.runtime, "design_query_service", None)
         if query is None:
@@ -146,7 +141,7 @@ class DesignLoopApplication:
         return current
 
     async def _twins(self, owner_user_id, project_id, version):
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         twins = []
         async with sessions() as session:
             repository = SqlAlchemyUserTwinVersionRepository(session, owner_user_id=owner_user_id)
@@ -161,14 +156,8 @@ class DesignLoopApplication:
                 twins.append(twin)
         return twins
 
-    def _generator(self):
-        real = getattr(self.runtime, "real_model_runtime", None)
-        if real is None or self._proposal_evidence_store is None:
-            return None
-        return real.user_modeling.proposal_port.generator
-
     def _mode(self, requested):
-        generator = self._generator()
+        generator = proposal_generator(self.runtime, self._proposal_evidence_store)
         evaluator = getattr(self.runtime, "final_evaluator_runtime", None)
         if requested is DesignEvaluationMode.TWIN_REVIEW or (
             requested is None and generator is not None
@@ -180,14 +169,6 @@ class DesignLoopApplication:
             raise HTTPException(503, detail={"code": "DESIGN_EVALUATOR_NOT_CONFIGURED"})
         return DesignEvaluationMode.STATIC_CHECK, evaluator
 
-    @staticmethod
-    async def _retire(code, run_id):
-        scope = current_proposal_evidence()
-        if scope is None or scope.request is None:
-            return
-        await scope.event("APPLICATION_RESULT", {"status": code, "evaluation_run_id": str(run_id)})
-        scope.retire(role="TWIN_REVIEW", code=code)
-
     async def _review(self, reviewer, request):
         for attempt in range(1, TWIN_REVIEW_ATTEMPTS + 1):
             try:
@@ -195,7 +176,11 @@ class DesignLoopApplication:
             except ProposalGenerationError as error:
                 if attempt == TWIN_REVIEW_ATTEMPTS or error.code not in RETRYABLE_REVIEW_CODES:
                     raise
-                await self._retire("TWIN_REVIEW_REJECTED", request.evaluation_run_id)
+                await retire_generation(
+                    "TWIN_REVIEW",
+                    "TWIN_REVIEW_REJECTED",
+                    {"evaluation_run_id": str(request.evaluation_run_id)},
+                )
         raise RuntimeError("twin review attempts are exhausted")
 
     @staticmethod
@@ -242,7 +227,9 @@ class DesignLoopApplication:
                     detail={"code": "DESIGN_EVALUATION_FAILED", "reason": str(error)[:300]},
                 ) from error
             if index < len(twins) - 1:
-                await self._retire("TWIN_REVIEWED", run_id)
+                await retire_generation(
+                    "TWIN_REVIEW", "TWIN_REVIEWED", {"evaluation_run_id": str(run_id)}
+                )
         return responses
 
     async def _static_check(
@@ -333,7 +320,7 @@ class DesignLoopApplication:
         refreshed = await self._current(owner_user_id, project_id)
         if (refreshed.id, refreshed.content_hash) != (version.id, version.content_hash):
             raise HTTPException(409, detail={"code": "DESIGN_CONTEXT_CHANGED"})
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             status = await SqlAlchemyDesignEvaluationRepository(
                 session, owner_user_id=owner_user_id
@@ -343,7 +330,7 @@ class DesignLoopApplication:
         return DesignEvaluationResult(status=DesignEvaluationStatus.RECORDED, run=run)
 
     async def runs(self, *, owner_user_id, project_id) -> tuple[DesignEvaluationRun, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             return await SqlAlchemyDesignEvaluationRepository(
                 session, owner_user_id=owner_user_id
@@ -356,7 +343,7 @@ class DesignLoopApplication:
             note = normalize_finding_note(body.note)
         except ValueError as error:
             raise HTTPException(422, detail={"code": "FINDING_NOTE_INVALID"}) from error
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             result = await SqlAlchemyFindingValidationRepository(
                 session, owner_user_id=owner_user_id
@@ -374,7 +361,7 @@ class DesignLoopApplication:
         return result.validation
 
     async def validations(self, *, owner_user_id, project_id) -> tuple[FindingValidation, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             return await SqlAlchemyFindingValidationRepository(
                 session, owner_user_id=owner_user_id
@@ -422,7 +409,7 @@ def create_design_loop_router():
         project_id: UUID,
         body: DesignEvaluationRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         async def evaluation():
             result = await DesignLoopApplication(request.app.state.application_runtime).evaluate(
@@ -443,7 +430,7 @@ def create_design_loop_router():
     async def runs(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await DesignLoopApplication(request.app.state.application_runtime).runs(
             owner_user_id=user.id, project_id=project_id
@@ -454,7 +441,7 @@ def create_design_loop_router():
     async def comparison(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         result = await DesignLoopApplication(request.app.state.application_runtime).comparison(
             owner_user_id=user.id, project_id=project_id
@@ -465,7 +452,7 @@ def create_design_loop_router():
     async def validations(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await DesignLoopApplication(request.app.state.application_runtime).validations(
             owner_user_id=user.id, project_id=project_id
@@ -478,7 +465,7 @@ def create_design_loop_router():
         run_id: UUID,
         body: FindingValidationRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         validation = await DesignLoopApplication(
             request.app.state.application_runtime
@@ -489,7 +476,7 @@ def create_design_loop_router():
     async def regenerate(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         async def regeneration():
             result = await DesignLoopApplication(request.app.state.application_runtime).regenerate(

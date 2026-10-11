@@ -278,6 +278,9 @@ async def current_user_dependency(
     return user
 
 
+CurrentUser = Annotated[UserAccount, Depends(current_user_dependency)]
+
+
 def unauthorized_exception() -> HTTPException:
     """Create one generic bearer authentication error."""
     return HTTPException(
@@ -590,10 +593,7 @@ def create_auth_router(
         operation_id="getCurrentLocalAccount",
     )
     async def me(
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
     ) -> UserResponse:
         return UserResponse.from_domain(user)
 
@@ -605,10 +605,7 @@ def create_auth_router(
     )
     async def choose_guidance_mode(
         payload: GuidanceModeRequest,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             IdentityApplicationService,
             Depends(identity_service_dependency),

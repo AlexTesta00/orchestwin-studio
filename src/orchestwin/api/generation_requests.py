@@ -4,26 +4,25 @@ import hashlib
 import inspect
 import json
 from collections.abc import Awaitable, Callable, Mapping
-from typing import Annotated, Final
+from typing import Final
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from fastapi.routing import APIRoute, serialize_response
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
 from orchestwin.api.generation_jobs import (
-    GENERATION_JOB_NOT_FOUND,
     GenerationJobKind,
     GenerationJobProgress,
     GenerationJobResponse,
     GenerationJobStatus,
     GenerationOperation,
     generation_jobs,
+    owned_job,
 )
-from orchestwin.identity.domain import UserAccount
 from orchestwin.projects.requirements_primitives import canonical_json
 
 GENERATION_JOBS_API_PREFIX: Final = "/projects/{project_id}/generation-jobs"
@@ -160,7 +159,7 @@ def create_generation_request_router() -> APIRouter:
     async def project_jobs(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         status: GenerationJobStatus | None = None,
     ):
         jobs = generation_jobs(request).project_jobs(user.id, project_id, status)
@@ -171,11 +170,9 @@ def create_generation_request_router() -> APIRouter:
         project_id: UUID,
         job_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
-        job = generation_jobs(request).get(user.id, project_id, job_id)
-        if job is None:
-            raise HTTPException(404, detail={"code": GENERATION_JOB_NOT_FOUND})
+        job = owned_job(request, user.id, project_id, job_id)
         return job.to_payload()
 
     return router

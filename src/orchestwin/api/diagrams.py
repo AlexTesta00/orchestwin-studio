@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
 from orchestwin.knowledge.diagram_service import (
     DiagramSourceVersion,
     ProjectDiagrams,
@@ -86,16 +86,9 @@ class ProjectDiagramsPayload(ApiModel):
         )
 
 
-def project_diagram_service_dependency(request: Request) -> ProjectDiagramService:
-    service = getattr(request.app.state, "project_diagram_service", None)
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "DIAGRAM_SERVICE_UNAVAILABLE"},
-        )
-
-    return service
+project_diagram_service_dependency = app_service(
+    "project_diagram_service", {"code": "DIAGRAM_SERVICE_UNAVAILABLE"}
+)
 
 
 def create_diagram_router() -> APIRouter:
@@ -108,7 +101,7 @@ def create_diagram_router() -> APIRouter:
     )
     async def project_diagrams_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             ProjectDiagramService,
             Depends(project_diagram_service_dependency),

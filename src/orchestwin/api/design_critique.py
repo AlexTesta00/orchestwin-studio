@@ -9,12 +9,16 @@ from typing import Annotated, Any, Final
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field
 
-from orchestwin.api.auth import current_user_dependency
+from orchestwin.api.auth import CurrentUser
 from orchestwin.api.design_loop import RETRYABLE_REVIEW_CODES, TWIN_REVIEW_ATTEMPTS
+from orchestwin.api.design_mockups import result_cost, route_kind
+from orchestwin.api.generation_evidence import retire_generation
+from orchestwin.api.runtime_access import database_sessions, proposal_generator
+from orchestwin.api.sections import sections_failure
 from orchestwin.artifacts.design_critique import (
     DESIGN_CRITIQUE_FAILED,
     DESIGN_CRITIQUE_IMAGE_TOO_LARGE,
@@ -49,8 +53,6 @@ from orchestwin.evaluation.critique_evaluator import (
     critique_route,
 )
 from orchestwin.evaluation.evaluator import EvaluationUserTwinProfile, UserTwinEvaluationRequest
-from orchestwin.identity.domain import UserAccount
-from orchestwin.models.generation_budget import provider_result_cost_microusd
 from orchestwin.models.proposal_evidence import current_proposal_evidence, evidence_application
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.structured_generation import StructuredGenerationProviderKind
@@ -121,19 +123,11 @@ def _failure(code: str, error: Exception) -> HTTPException:
     return HTTPException(502, detail={"code": code, "reason": str(error)[:MAX_REASON_LENGTH]})
 
 
-def _route_kind(route):
-    return getattr(getattr(route, "configuration", None), "provider_kind", None)
-
-
-def _result_cost(result) -> int:
-    return 0 if result is None else provider_result_cost_microusd(result.to_snapshot())
-
-
 def _attempt_cost(error: ProposalGenerationError | None = None) -> int:
     result = getattr(current_proposal_evidence(), "result", None)
     if result is None and error is not None:
         result = error.result
-    return _result_cost(result)
+    return result_cost(result)
 
 
 def _clipped(value: str, maximum: int) -> str:
@@ -198,12 +192,6 @@ class DesignCritiqueApplication:
         self.runtime = runtime
         self._proposal_evidence_store = getattr(runtime, "proposal_evidence_store", None)
 
-    def _sessions(self):
-        database = getattr(self.runtime, "database_runtime", None)
-        if database is None:
-            raise HTTPException(503, detail={"code": "DATABASE_UNAVAILABLE"})
-        return database.session_factory
-
     @staticmethod
     def _repository(session, owner_user_id):
         return SqlAlchemyDesignCritiqueRepository(session, owner_user_id=owner_user_id)
@@ -214,12 +202,10 @@ class DesignCritiqueApplication:
             try:
                 sections = await service.current(owner_user_id=owner_user_id, project_id=project_id)
             except SectionsFailure as error:
-                raise HTTPException(
-                    404 if error.code == PROJECT_NOT_FOUND else 409, detail={"code": error.code}
-                ) from None
+                raise sections_failure(error) from None
             if sections.section(ProjectStage.USER_TWINS).state not in TWINS_READY:
                 raise HTTPException(409, detail={"code": DESIGN_CRITIQUE_TWINS_REQUIRED})
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             twins = await SqlAlchemyUserTwinVersionRepository(
                 session, owner_user_id=owner_user_id
@@ -228,17 +214,11 @@ class DesignCritiqueApplication:
             raise HTTPException(409, detail={"code": DESIGN_CRITIQUE_TWINS_REQUIRED})
         return twins
 
-    def _generator(self):
-        real = getattr(self.runtime, "real_model_runtime", None)
-        if real is None or self._proposal_evidence_store is None:
-            return None
-        return real.user_modeling.proposal_port.generator
-
     def _critic(self):
-        generator = self._generator()
+        generator = proposal_generator(self.runtime, self._proposal_evidence_store)
         if generator is None:
             raise HTTPException(503, detail={"code": DESIGN_REVIEWER_NOT_CONFIGURED})
-        kind = _route_kind(critique_route(generator))
+        kind = route_kind(critique_route(generator))
         if kind is not StructuredGenerationProviderKind.CLAUDE_CODE_CLI:
             raise HTTPException(503, detail={"code": DESIGN_CRITIQUE_PROVIDER_UNSUPPORTED})
         return generator
@@ -287,7 +267,7 @@ class DesignCritiqueApplication:
             )
         except DesignCritiqueError as error:
             raise _refusal(error.code) from error
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             status = await self._repository(session, owner_user_id).create_source(source, stored)
             if status is not DesignCritiqueWriteStatus.WRITTEN:
@@ -295,12 +275,12 @@ class DesignCritiqueApplication:
         return source
 
     async def sources(self, *, owner_user_id, project_id) -> tuple[DesignCritiqueSource, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             return await self._repository(session, owner_user_id).sources(project_id)
 
     async def source(self, *, owner_user_id, project_id, source_id) -> DesignCritiqueSource:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             found = await self._repository(session, owner_user_id).source(project_id, source_id)
         if found is None:
@@ -308,7 +288,7 @@ class DesignCritiqueApplication:
         return found
 
     async def shot(self, *, owner_user_id, project_id, source_id, code) -> tuple[str, bytes]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             found = await self._repository(session, owner_user_id).shot(project_id, source_id, code)
         if found is None:
@@ -330,14 +310,6 @@ class DesignCritiqueApplication:
             contents[shot.code] = stored[1]
         return source, contents
 
-    @staticmethod
-    async def _retire(code, run_id):
-        scope = current_proposal_evidence()
-        if scope is None or scope.request is None:
-            return
-        await scope.event("APPLICATION_RESULT", {"status": code, "evaluation_run_id": str(run_id)})
-        scope.retire(role="TWIN_REVIEW", code=code)
-
     async def _review(self, reviewer, request):
         spent = 0
         for attempt in range(1, TWIN_REVIEW_ATTEMPTS + 1):
@@ -351,7 +323,11 @@ class DesignCritiqueApplication:
                 if attempt == TWIN_REVIEW_ATTEMPTS or error.code not in RETRYABLE_CRITIQUE_CODES:
                     raise
                 spent += _attempt_cost(error)
-                await self._retire("TWIN_REVIEW_REJECTED", request.evaluation_run_id)
+                await retire_generation(
+                    "TWIN_REVIEW",
+                    "TWIN_REVIEW_REJECTED",
+                    {"evaluation_run_id": str(request.evaluation_run_id)},
+                )
             else:
                 return response, spent + _attempt_cost()
         raise RuntimeError("design critique attempts are exhausted")
@@ -376,7 +352,9 @@ class DesignCritiqueApplication:
             responses.append(response)
             cost += spent
             if index < len(twins) - 1:
-                await self._retire("TWIN_REVIEWED", run_id)
+                await retire_generation(
+                    "TWIN_REVIEW", "TWIN_REVIEWED", {"evaluation_run_id": str(run_id)}
+                )
         return responses, cost
 
     @evidence_application
@@ -414,7 +392,7 @@ class DesignCritiqueApplication:
             )
         except ValueError as error:
             raise _failure(DESIGN_CRITIQUE_INVALID, error) from error
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session, session.begin():
             status = await self._repository(session, owner_user_id).create_run(run)
             if status is not DesignCritiqueWriteStatus.WRITTEN:
@@ -424,7 +402,7 @@ class DesignCritiqueApplication:
         )
 
     async def runs(self, *, owner_user_id, project_id) -> tuple[DesignCritiqueRun, ...]:
-        sessions = self._sessions()
+        sessions = database_sessions(self.runtime)
         async with sessions() as session:
             return await self._repository(session, owner_user_id).runs(project_id)
 
@@ -438,7 +416,7 @@ def create_design_critique_router() -> APIRouter:
     async def upload_source(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         shots: Annotated[list[UploadFile] | None, File()] = None,
         kind: Annotated[str, Form()] = DesignCritiqueSourceKind.IMAGE.value,
         title: Annotated[str | None, Form()] = None,
@@ -463,7 +441,7 @@ def create_design_critique_router() -> APIRouter:
     async def sources(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await DesignCritiqueApplication(request.app.state.application_runtime).sources(
             owner_user_id=user.id, project_id=project_id
@@ -476,7 +454,7 @@ def create_design_critique_router() -> APIRouter:
         source_id: UUID,
         code: str,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         media_type, content = await DesignCritiqueApplication(
             request.app.state.application_runtime
@@ -490,7 +468,7 @@ def create_design_critique_router() -> APIRouter:
         project_id: UUID,
         body: DesignCritiqueRequest,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         result = await DesignCritiqueApplication(request.app.state.application_runtime).critique(
             owner_user_id=user.id, project_id=project_id, body=body
@@ -501,7 +479,7 @@ def create_design_critique_router() -> APIRouter:
     async def runs(
         project_id: UUID,
         request: Request,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
     ):
         items = await DesignCritiqueApplication(request.app.state.application_runtime).runs(
             owner_user_id=user.id, project_id=project_id

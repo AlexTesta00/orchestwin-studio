@@ -10,7 +10,6 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
-    Request,
     Response,
     status,
 )
@@ -69,18 +68,18 @@ from orchestwin.agents.team_gate import (
     TeamEditStatus,
     create_owner_agent_rationale,
 )
-from orchestwin.api.auth import (
-    current_user_dependency,
-)
+from orchestwin.api.auth import CurrentUser, current_user_dependency
 from orchestwin.api.clarification import (
     HumanGateEventResponse,
     HumanGateResponse,
+    gate_event_response,
+    gate_response,
 )
+from orchestwin.api.dependencies import app_service
+from orchestwin.api.projects import project_not_found
+from orchestwin.api.refusals import refusal
 from orchestwin.api.services import (
     AgentTeamApprovalService,
-)
-from orchestwin.identity.domain import (
-    UserAccount,
 )
 from orchestwin.models.team_proposals import (
     ProposedTeamMember,
@@ -96,9 +95,7 @@ from orchestwin.projects.domain import (
     ProjectMode,
 )
 from orchestwin.workflow.gates import (
-    HumanGate,
     HumanGateAction,
-    HumanGateEvent,
     HumanGateIssueCode,
 )
 
@@ -634,52 +631,13 @@ class ProjectReadinessResponse(BaseModel):
     status: ProjectWorkflowReadiness
 
 
-def team_proposal_service_dependency(
-    request: Request,
-) -> TeamProposalApplicationService:
-    """Return the configured team-proposal application service."""
-    service = getattr(
-        request.app.state,
-        "team_proposal_service",
-        None,
-    )
-
-    if service is None:
-        raise HTTPException(
-            status_code=(status.HTTP_503_SERVICE_UNAVAILABLE),
-            detail="team_proposal_service_unavailable",
-        )
-
-    return service
-
-
-def agent_team_service_dependency(
-    request: Request,
-) -> AgentTeamApprovalService:
-    """Return the configured Agent Team approval service."""
-    service = getattr(
-        request.app.state,
-        "agent_team_service",
-        None,
-    )
-
-    if service is None:
-        raise HTTPException(
-            status_code=(status.HTTP_503_SERVICE_UNAVAILABLE),
-            detail="agent_team_service_unavailable",
-        )
-
-    return service
-
-
-def owner_team_inputs_dependency(request: Request) -> OwnerTeamInputService:
-    service = getattr(request.app.state, "owner_team_inputs", None)
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "OWNER_TEAM_INPUTS_UNAVAILABLE"},
-        )
-    return service
+team_proposal_service_dependency = app_service(
+    "team_proposal_service", "team_proposal_service_unavailable"
+)
+agent_team_service_dependency = app_service("agent_team_service", "agent_team_service_unavailable")
+owner_team_inputs_dependency = app_service(
+    "owner_team_inputs", {"code": "OWNER_TEAM_INPUTS_UNAVAILABLE"}
+)
 
 
 def _proposal_version_response(
@@ -690,26 +648,6 @@ def _proposal_version_response(
         return None
 
     return TeamProposalVersionResponse.from_domain(version)
-
-
-def _gate_response(
-    gate: HumanGate | None,
-) -> HumanGateResponse | None:
-    """Map an optional human gate."""
-    if gate is None:
-        return None
-
-    return HumanGateResponse.from_domain(gate)
-
-
-def _event_response(
-    event: HumanGateEvent | None,
-) -> HumanGateEventResponse | None:
-    """Map an optional gate event."""
-    if event is None:
-        return None
-
-    return HumanGateEventResponse.from_domain(event)
 
 
 def _generation_response(
@@ -741,7 +679,7 @@ def _gate_submission_response(
     """Map one Gate 2 submission result."""
     return AgentTeamGateSubmissionResponse(
         status=result.status,
-        gate=_gate_response(result.gate),
+        gate=gate_response(result.gate),
         events=tuple(HumanGateEventResponse.from_domain(event) for event in result.events),
         issue=result.issue,
     )
@@ -753,8 +691,8 @@ def _gate_decision_response(
     """Map one Gate 2 decision result."""
     return AgentTeamGateDecisionResponse(
         status=result.status,
-        gate=_gate_response(result.gate),
-        event=_event_response(result.event),
+        gate=gate_response(result.gate),
+        event=gate_event_response(result.event),
         issue=result.issue,
     )
 
@@ -776,7 +714,7 @@ def create_team_router() -> APIRouter:
     async def create_owner_team_endpoint(
         project_id: UUID,
         payload: TeamProposalEditRequest,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[OwnerTeamInputService, Depends(owner_team_inputs_dependency)],
     ) -> TeamProposalGenerationResponse:
         try:
@@ -787,27 +725,15 @@ def create_team_router() -> APIRouter:
                 owner_rationales=tuple(value.to_domain() for value in payload.owner_rationales),
             )
         except OwnerTeamInputError as error:
-            raise HTTPException(
-                status_code=(
-                    status.HTTP_409_CONFLICT
-                    if error.code == "TEAM_PROPOSAL_ALREADY_EXISTS"
-                    else status.HTTP_422_UNPROCESSABLE_CONTENT
-                ),
-                detail={"code": error.code},
+            raise refusal(
+                409 if error.code == "TEAM_PROPOSAL_ALREADY_EXISTS" else 422, error.code
             ) from error
         if result.status is not TeamProposalApplicationStatus.CREATED:
-            raise HTTPException(
-                status_code=(
-                    status.HTTP_404_NOT_FOUND
-                    if result.status
-                    in {
-                        TeamProposalApplicationStatus.PROJECT_NOT_FOUND,
-                        TeamProposalApplicationStatus.BRIEF_NOT_FOUND,
-                    }
-                    else status.HTTP_409_CONFLICT
-                ),
-                detail={"code": result.status.value},
-            )
+            not_found = {
+                TeamProposalApplicationStatus.PROJECT_NOT_FOUND,
+                TeamProposalApplicationStatus.BRIEF_NOT_FOUND,
+            }
+            raise refusal(404 if result.status in not_found else 409, result.status.value)
         return _generation_response(result)
 
     @router.get(
@@ -838,10 +764,7 @@ def create_team_router() -> APIRouter:
     async def generate_team_proposal_endpoint(
         project_id: UUID,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             TeamProposalApplicationService,
             Depends(team_proposal_service_dependency),
@@ -887,10 +810,7 @@ def create_team_router() -> APIRouter:
     )
     async def team_proposal_history_endpoint(
         project_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             TeamProposalApplicationService,
             Depends(team_proposal_service_dependency),
@@ -911,10 +831,7 @@ def create_team_router() -> APIRouter:
     )
     async def current_team_proposal_endpoint(
         project_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             TeamProposalApplicationService,
             Depends(team_proposal_service_dependency),
@@ -944,10 +861,7 @@ def create_team_router() -> APIRouter:
         project_id: UUID,
         payload: TeamProposalEditRequest,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             AgentTeamApprovalService,
             Depends(agent_team_service_dependency),
@@ -1003,10 +917,7 @@ def create_team_router() -> APIRouter:
     async def submit_agent_team_gate_endpoint(
         project_id: UUID,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             AgentTeamApprovalService,
             Depends(agent_team_service_dependency),
@@ -1053,10 +964,7 @@ def create_team_router() -> APIRouter:
     )
     async def current_agent_team_gate_endpoint(
         project_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             AgentTeamApprovalService,
             Depends(agent_team_service_dependency),
@@ -1084,10 +992,7 @@ def create_team_router() -> APIRouter:
     async def agent_team_gate_events_endpoint(
         project_id: UUID,
         gate_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             AgentTeamApprovalService,
             Depends(agent_team_service_dependency),
@@ -1111,10 +1016,7 @@ def create_team_router() -> APIRouter:
         project_id: UUID,
         payload: AgentTeamGateDecisionRequest,
         response: Response,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             AgentTeamApprovalService,
             Depends(agent_team_service_dependency),
@@ -1151,10 +1053,7 @@ def create_team_router() -> APIRouter:
     )
     async def project_readiness_endpoint(
         project_id: UUID,
-        user: Annotated[
-            UserAccount,
-            Depends(current_user_dependency),
-        ],
+        user: CurrentUser,
         service: Annotated[
             AgentTeamApprovalService,
             Depends(agent_team_service_dependency),
@@ -1167,10 +1066,7 @@ def create_team_router() -> APIRouter:
         )
 
         if readiness is ProjectWorkflowReadiness.PROJECT_NOT_FOUND:
-            raise HTTPException(
-                status_code=(status.HTTP_404_NOT_FOUND),
-                detail="project_not_found",
-            )
+            raise project_not_found()
 
         return ProjectReadinessResponse(status=readiness)
 

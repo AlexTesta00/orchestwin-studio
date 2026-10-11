@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import Annotated, Final
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 
-from orchestwin.api.auth import current_user_dependency
-from orchestwin.identity.domain import UserAccount
+from orchestwin.api.auth import CurrentUser
+from orchestwin.api.dependencies import app_service
+from orchestwin.api.refusals import refusal
 from orchestwin.projects.requirements_realignment_service import (
     RequirementsAlignment,
     RequirementsRealignmentFailure,
@@ -16,7 +17,6 @@ from orchestwin.projects.requirements_realignment_service import (
 from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
 
 REQUIREMENTS_REALIGNMENT_API_PREFIX: Final = "/projects/{project_id}/requirements/twin-alignment"
-_NOT_FOUND_CODES: Final = frozenset({"REQUIREMENTS_NOT_FOUND"})
 
 
 class ApiModel(BaseModel):
@@ -66,25 +66,13 @@ class RequirementsRealignmentPayload(ApiModel):
         )
 
 
-def requirements_realignment_service_dependency(
-    request: Request,
-) -> RequirementsRealignmentService:
-    service = getattr(request.app.state, "requirements_realignment_service", None)
-
-    if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "REQUIREMENTS_REALIGNMENT_SERVICE_UNAVAILABLE"},
-        )
-
-    return service
+requirements_realignment_service_dependency = app_service(
+    "requirements_realignment_service", {"code": "REQUIREMENTS_REALIGNMENT_SERVICE_UNAVAILABLE"}
+)
 
 
 def requirements_realignment_failure(error: RequirementsRealignmentFailure) -> HTTPException:
-    status_code = (
-        status.HTTP_404_NOT_FOUND if error.code in _NOT_FOUND_CODES else status.HTTP_409_CONFLICT
-    )
-    return HTTPException(status_code=status_code, detail={"code": error.code})
+    return refusal(404 if error.code == "REQUIREMENTS_NOT_FOUND" else 409, error.code)
 
 
 def create_requirements_realignment_router() -> APIRouter:
@@ -97,7 +85,7 @@ def create_requirements_realignment_router() -> APIRouter:
     )
     async def alignment_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsRealignmentService,
             Depends(requirements_realignment_service_dependency),
@@ -114,7 +102,7 @@ def create_requirements_realignment_router() -> APIRouter:
     )
     async def realign_endpoint(
         project_id: UUID,
-        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        user: CurrentUser,
         service: Annotated[
             RequirementsRealignmentService,
             Depends(requirements_realignment_service_dependency),
