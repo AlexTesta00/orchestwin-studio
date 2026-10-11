@@ -4,13 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from types import TracebackType
 from uuid import UUID, uuid4
 
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.agents.persistence.models import (
     TeamProposalVersionRecord,
@@ -32,6 +28,7 @@ from orchestwin.agents.team_gate import (
 from orchestwin.models.team_proposals import (
     AgentTeamProposal,
 )
+from orchestwin.persistence.unit_of_work import SqlAlchemyUnitOfWork, SqlAlchemyUnitOfWorkFactory
 from orchestwin.workflow.persistence.repositories import (
     SqlAlchemyHumanGateRepository,
 )
@@ -216,18 +213,8 @@ class SqlAlchemyEditableTeamProposalRepository:
             raise ValueError("an owner edit may change only the selected team members")
 
 
-class SqlAlchemyAgentTeamUnitOfWork:
+class SqlAlchemyAgentTeamUnitOfWork(SqlAlchemyUnitOfWork):
     """One SQLAlchemy transaction for team editing and Gate 2."""
-
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        self._session_factory = session_factory
-        self._session: AsyncSession | None = None
-        self._contexts: SqlAlchemyTeamSelectionContextRepository | None = None
-        self._proposals: SqlAlchemyEditableTeamProposalRepository | None = None
-        self._gates: SqlAlchemyHumanGateRepository | None = None
 
     @property
     def contexts(
@@ -259,53 +246,18 @@ class SqlAlchemyAgentTeamUnitOfWork:
 
         return self._gates
 
-    async def __aenter__(
-        self,
-    ) -> SqlAlchemyAgentTeamUnitOfWork:
-        """Open a SQLAlchemy session and transaction."""
-        self._session = self._session_factory()
-        await self._session.begin()
+    def _bind(self, session: AsyncSession) -> None:
+        self._contexts = SqlAlchemyTeamSelectionContextRepository(session)
+        self._proposals = SqlAlchemyEditableTeamProposalRepository(session)
+        self._gates = SqlAlchemyHumanGateRepository(session)
 
-        self._contexts = SqlAlchemyTeamSelectionContextRepository(self._session)
-        self._proposals = SqlAlchemyEditableTeamProposalRepository(self._session)
-        self._gates = SqlAlchemyHumanGateRepository(self._session)
-
-        return self
-
-    async def __aexit__(
-        self,
-        exception_type: type[BaseException] | None,
-        exception: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Commit successful work or roll back failures."""
-        if self._session is None:
-            return
-
-        try:
-            if exception_type is None:
-                await self._session.commit()
-            else:
-                await self._session.rollback()
-        finally:
-            await self._session.close()
-            self._session = None
-            self._contexts = None
-            self._proposals = None
-            self._gates = None
+    def _release(self) -> None:
+        self._contexts = None
+        self._proposals = None
+        self._gates = None
 
 
-class SqlAlchemyAgentTeamUnitOfWorkFactory:
+class SqlAlchemyAgentTeamUnitOfWorkFactory(SqlAlchemyUnitOfWorkFactory):
     """Create a fresh Agent Team unit of work per use case."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        self._session_factory = session_factory
-
-    def __call__(
-        self,
-    ) -> SqlAlchemyAgentTeamUnitOfWork:
-        """Return one unopened Agent Team unit of work."""
-        return SqlAlchemyAgentTeamUnitOfWork(self._session_factory)
+    unit_of_work = SqlAlchemyAgentTeamUnitOfWork

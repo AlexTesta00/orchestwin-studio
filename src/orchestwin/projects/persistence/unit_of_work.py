@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-from types import TracebackType
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-)
-
+from orchestwin.persistence.unit_of_work import SqlAlchemyUnitOfWork, SqlAlchemyUnitOfWorkFactory
 from orchestwin.projects.persistence.briefs import (
     SqlAlchemyProjectBriefRepository,
 )
@@ -18,18 +14,8 @@ from orchestwin.projects.persistence.repositories import (
 )
 
 
-class SqlAlchemyProjectUnitOfWork:
+class SqlAlchemyProjectUnitOfWork(SqlAlchemyUnitOfWork):
     """One SQLAlchemy transaction for project use cases."""
-
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        self._session_factory = session_factory
-        self._session: AsyncSession | None = None
-        self._projects: SqlAlchemyProjectRepository | None = None
-        self._briefs: SqlAlchemyProjectBriefRepository | None = None
-        self._overviews: SqlAlchemyProjectOverviewRepository | None = None
 
     @property
     def overviews(self) -> SqlAlchemyProjectOverviewRepository:
@@ -58,53 +44,18 @@ class SqlAlchemyProjectUnitOfWork:
 
         return self._briefs
 
-    async def __aenter__(
-        self,
-    ) -> SqlAlchemyProjectUnitOfWork:
-        """Open a SQLAlchemy session and transaction."""
-        self._session = self._session_factory()
-        await self._session.begin()
+    def _bind(self, session: AsyncSession) -> None:
+        self._projects = SqlAlchemyProjectRepository(session)
+        self._briefs = SqlAlchemyProjectBriefRepository(session)
+        self._overviews = SqlAlchemyProjectOverviewRepository(session)
 
-        self._projects = SqlAlchemyProjectRepository(self._session)
-        self._briefs = SqlAlchemyProjectBriefRepository(self._session)
-        self._overviews = SqlAlchemyProjectOverviewRepository(self._session)
-
-        return self
-
-    async def __aexit__(
-        self,
-        exception_type: type[BaseException] | None,
-        exception: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Commit successful work or roll back failures."""
-        if self._session is None:
-            return
-
-        try:
-            if exception_type is None:
-                await self._session.commit()
-            else:
-                await self._session.rollback()
-        finally:
-            await self._session.close()
-            self._session = None
-            self._projects = None
-            self._briefs = None
-            self._overviews = None
+    def _release(self) -> None:
+        self._projects = None
+        self._briefs = None
+        self._overviews = None
 
 
-class SqlAlchemyProjectUnitOfWorkFactory:
+class SqlAlchemyProjectUnitOfWorkFactory(SqlAlchemyUnitOfWorkFactory):
     """Create a fresh project unit of work per use case."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        self._session_factory = session_factory
-
-    def __call__(
-        self,
-    ) -> SqlAlchemyProjectUnitOfWork:
-        """Return one unopened unit of work."""
-        return SqlAlchemyProjectUnitOfWork(self._session_factory)
+    unit_of_work = SqlAlchemyProjectUnitOfWork

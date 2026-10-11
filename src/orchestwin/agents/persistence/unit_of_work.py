@@ -2,31 +2,18 @@
 
 from __future__ import annotations
 
-from types import TracebackType
-
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.agents.persistence.repositories import (
     SqlAlchemyTeamProposalVersionRepository,
     SqlAlchemyTeamSelectionContextRepository,
 )
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceBindings
+from orchestwin.persistence.unit_of_work import SqlAlchemyUnitOfWork, SqlAlchemyUnitOfWorkFactory
 
 
-class SqlAlchemyTeamProposalUnitOfWork:
+class SqlAlchemyTeamProposalUnitOfWork(SqlAlchemyUnitOfWork):
     """One SQLAlchemy transaction for team-proposal use cases."""
-
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        self._session_factory = session_factory
-        self._session: AsyncSession | None = None
-        self._contexts: SqlAlchemyTeamSelectionContextRepository | None = None
-        self._proposals: SqlAlchemyTeamProposalVersionRepository | None = None
 
     @property
     def contexts(
@@ -48,52 +35,17 @@ class SqlAlchemyTeamProposalUnitOfWork:
 
         return self._proposals
 
-    async def __aenter__(
-        self,
-    ) -> SqlAlchemyTeamProposalUnitOfWork:
-        """Open a SQLAlchemy session and transaction."""
-        self._session = self._session_factory()
-        await self._session.begin()
+    def _bind(self, session: AsyncSession) -> None:
+        self._contexts = SqlAlchemyTeamSelectionContextRepository(session)
+        self._proposals = SqlAlchemyTeamProposalVersionRepository(session)
+        self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
 
-        self._contexts = SqlAlchemyTeamSelectionContextRepository(self._session)
-        self._proposals = SqlAlchemyTeamProposalVersionRepository(self._session)
-        self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(self._session)
-
-        return self
-
-    async def __aexit__(
-        self,
-        exception_type: type[BaseException] | None,
-        exception: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Commit successful work or roll back failures."""
-        if self._session is None:
-            return
-
-        try:
-            if exception_type is None:
-                await self._session.commit()
-            else:
-                await self._session.rollback()
-        finally:
-            await self._session.close()
-            self._session = None
-            self._contexts = None
-            self._proposals = None
+    def _release(self) -> None:
+        self._contexts = None
+        self._proposals = None
 
 
-class SqlAlchemyTeamProposalUnitOfWorkFactory:
+class SqlAlchemyTeamProposalUnitOfWorkFactory(SqlAlchemyUnitOfWorkFactory):
     """Create a fresh proposal unit of work per use case."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        self._session_factory = session_factory
-
-    def __call__(
-        self,
-    ) -> SqlAlchemyTeamProposalUnitOfWork:
-        """Return one unopened proposal unit of work."""
-        return SqlAlchemyTeamProposalUnitOfWork(self._session_factory)
+    unit_of_work = SqlAlchemyTeamProposalUnitOfWork
