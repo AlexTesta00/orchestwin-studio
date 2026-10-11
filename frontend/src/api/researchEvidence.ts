@@ -1,4 +1,5 @@
 import { sendGeneration } from "./generationJobs";
+import { accessTokenOf, basePathOf, detailCode } from "./http";
 import { ApiRequestError } from "./requestError";
 import type {
   EvidenceMutationPayload,
@@ -56,8 +57,7 @@ export interface ResearchEvidenceApi {
 export function createResearchEvidenceApi(
   options: { basePath?: string; fetchImpl?: typeof fetch } = {},
 ): ResearchEvidenceApi {
-  const basePath = (options.basePath ?? "/api/v1").trim().replace(/\/+$/, "");
-  if (basePath.length === 0) throw new Error("Evidence API base path must not be empty");
+  const basePath = basePathOf(options.basePath ?? "/api/v1", "Evidence");
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const projectPath = (id: string) => `${basePath}/projects/${encodeURIComponent(id)}`;
   const evidencePath = (project: string, id: string) =>
@@ -70,19 +70,12 @@ export function createResearchEvidenceApi(
     body?: unknown,
     generationProject?: string,
   ): Promise<T> {
-    if (token.trim().length === 0) {
-      throw new ResearchEvidenceApiError("Authentication is required", {
-        status: 0,
-        code: "ACCESS_TOKEN_REQUIRED",
-        payload: null,
-      });
-    }
     const init: RequestInit = {
       method,
       credentials: "include",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${token.trim()}`,
+        Authorization: `Bearer ${accessTokenOf(token, ResearchEvidenceApiError)}`,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -102,20 +95,9 @@ export function createResearchEvidenceApi(
       });
     }
     if (!response.ok) {
-      const detail =
-        typeof payload === "object" && payload !== null && "detail" in payload
-          ? payload.detail
-          : null;
-      const code =
-        typeof detail === "object" &&
-        detail !== null &&
-        "code" in detail &&
-        typeof detail.code === "string"
-          ? detail.code
-          : null;
       throw new ResearchEvidenceApiError("The evidence request failed", {
         status: response.status,
-        code,
+        code: detailCode(payload),
         payload: null,
       });
     }

@@ -1,3 +1,4 @@
+import { absoluteBasePathOf, accessTokenOf, detailCode, responseBody } from "./http";
 import { ApiRequestError } from "./requestError";
 
 import type { AskTwinInput, TwinConversationPayload } from "../types/twinChat";
@@ -29,51 +30,8 @@ export interface TwinChatApi {
 
 export class TwinChatApiError extends ApiRequestError {}
 
-function normalizedBasePath(value: string): string {
-  const normalized = value.trim().replace(/\/+$/u, "");
-  if (normalized.length === 0 || !normalized.startsWith("/") || normalized.startsWith("//")) {
-    throw new Error("Twin chat API base path must be an absolute application path");
-  }
-  return normalized;
-}
-
-function requiredAccessToken(value: string): string {
-  const normalized = value.trim();
-  if (normalized.length === 0) {
-    throw new TwinChatApiError("Authentication is required", {
-      status: 0,
-      code: "ACCESS_TOKEN_REQUIRED",
-      payload: null,
-    });
-  }
-  return normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorCode(payload: unknown): string | null {
-  if (!isRecord(payload) || !isRecord(payload.detail)) {
-    return null;
-  }
-  return typeof payload.detail.code === "string" ? payload.detail.code : null;
-}
-
-async function responsePayload(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (text.trim().length === 0) {
-    return null;
-  }
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
-}
-
 export function createTwinChatApi(options: TwinChatApiOptions = {}): TwinChatApi {
-  const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
+  const basePath = absoluteBasePathOf(options.basePath ?? DEFAULT_API_BASE_PATH, "Twin chat");
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
   function conversationPath(projectId: string, twinId: string): string {
@@ -86,16 +44,16 @@ export function createTwinChatApi(options: TwinChatApiOptions = {}): TwinChatApi
   async function request<T>(path: string, accessToken: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
     headers.set("Accept", "application/json");
-    headers.set("Authorization", `Bearer ${requiredAccessToken(accessToken)}`);
+    headers.set("Authorization", `Bearer ${accessTokenOf(accessToken, TwinChatApiError)}`);
     if (init.body !== undefined) {
       headers.set("Content-Type", "application/json");
     }
     const response = await fetchImpl(path, { ...init, credentials: "include", headers });
-    const payload = await responsePayload(response);
+    const payload = await responseBody(response);
     if (!response.ok) {
       throw new TwinChatApiError("The twin chat request failed", {
         status: response.status,
-        code: errorCode(payload),
+        code: detailCode(payload),
         payload,
       });
     }

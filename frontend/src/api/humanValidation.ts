@@ -1,3 +1,4 @@
+import { accessTokenOf, basePathOf, detailCode, isRecord } from "./http";
 import { ApiRequestError } from "./requestError";
 import type {
   HumanValidationOutcome,
@@ -37,15 +38,10 @@ export interface HumanValidationApi {
   ): Promise<{ status: "VALIDATION_OUTCOME_RECORDED"; outcome: HumanValidationOutcome }>;
 }
 
-function record(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function createHumanValidationApi(
   options: { basePath?: string; fetchImpl?: typeof fetch } = {},
 ): HumanValidationApi {
-  const base = (options.basePath ?? "/api/v1").trim().replace(/\/+$/, "");
-  if (base.length === 0) throw new Error("Validation API base path must not be empty");
+  const base = basePathOf(options.basePath ?? "/api/v1", "Validation");
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const path = (project: string) => `${base}/projects/${encodeURIComponent(project)}/validation`;
 
@@ -55,19 +51,12 @@ export function createHumanValidationApi(
     expected: string,
     body?: unknown,
   ): Promise<T> {
-    if (token.trim().length === 0) {
-      throw new HumanValidationApiError("Authentication is required", {
-        status: 0,
-        code: "ACCESS_TOKEN_REQUIRED",
-        payload: null,
-      });
-    }
     const response = await fetchImpl(url, {
       method: body === undefined ? "GET" : "POST",
       credentials: "include",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${token.trim()}`,
+        Authorization: `Bearer ${accessTokenOf(token, HumanValidationApiError)}`,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -79,18 +68,14 @@ export function createHumanValidationApi(
       payload = null;
     }
     if (!response.ok) {
-      const code =
-        record(payload) && record(payload.detail) && typeof payload.detail.code === "string"
-          ? payload.detail.code
-          : null;
       throw new HumanValidationApiError("The validation request failed", {
         status: response.status,
-        code,
+        code: detailCode(payload),
         payload: null,
       });
     }
     const valid =
-      record(payload) &&
+      isRecord(payload) &&
       (expected.startsWith("orchestwin.")
         ? payload.kind === expected && payload.schema_version === 1
         : payload.status === expected);

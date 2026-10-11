@@ -1,3 +1,4 @@
+import { accessTokenOf, basePathOf, detailCode, isRecord, responseBody } from "./http";
 import { ApiRequestError } from "./requestError";
 
 const DEFAULT_API_BASE_PATH = "/api/v1";
@@ -34,56 +35,6 @@ export interface DesignAlignmentApi {
   realign(projectId: string, accessToken: string): Promise<DesignRealignmentPayload>;
 }
 
-function normalizedBasePath(value: string): string {
-  const normalized = value.trim().replace(/\/+$/, "");
-
-  if (normalized.length === 0) {
-    throw new Error("Design Alignment API base path must not be empty");
-  }
-
-  return normalized;
-}
-
-function requiredAccessToken(value: string): string {
-  const normalized = value.trim();
-
-  if (normalized.length === 0) {
-    throw new DesignAlignmentApiError("Authentication is required", {
-      status: 0,
-      code: "ACCESS_TOKEN_REQUIRED",
-      payload: null,
-    });
-  }
-
-  return normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorCode(payload: unknown): string | null {
-  if (!isRecord(payload) || !isRecord(payload.detail)) {
-    return null;
-  }
-
-  return typeof payload.detail.code === "string" ? payload.detail.code : null;
-}
-
-async function responsePayload(response: Response): Promise<unknown> {
-  const text = await response.text();
-
-  if (text.trim().length === 0) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
-}
-
 function alignmentPath(basePath: string, projectId: string): string {
   return `${basePath}/projects/${encodeURIComponent(projectId)}/design/requirements-alignment`;
 }
@@ -91,7 +42,7 @@ function alignmentPath(basePath: string, projectId: string): string {
 export function createDesignAlignmentApi(
   options: DesignAlignmentApiOptions = {},
 ): DesignAlignmentApi {
-  const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
+  const basePath = basePathOf(options.basePath ?? DEFAULT_API_BASE_PATH, "Design Alignment");
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
   async function request<T>(
@@ -104,15 +55,15 @@ export function createDesignAlignmentApi(
       credentials: "include",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${requiredAccessToken(accessToken)}`,
+        Authorization: `Bearer ${accessTokenOf(accessToken, DesignAlignmentApiError)}`,
       },
     });
-    const payload = await responsePayload(response);
+    const payload = await responseBody(response);
 
     if (!response.ok) {
       throw new DesignAlignmentApiError("The design alignment request failed", {
         status: response.status,
-        code: errorCode(payload),
+        code: detailCode(payload),
         payload,
       });
     }
