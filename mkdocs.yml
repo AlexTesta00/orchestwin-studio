@@ -1,0 +1,147 @@
+site_name: OrchesTwin Studio
+site_url: https://alextesta00.github.io/orchestwin-studio/
+site_description: Documentation of OrchesTwin Studio, a local studio that takes a software project from a two-line idea to an approved design and keeps it aligned with the code
+site_author: Alex Testa
+repo_url: https://github.com/AlexTesta00/orchestwin-studio
+repo_name: AlexTesta00/orchestwin-studio
+edit_uri: ""
+copyright: Alex Testa. Code under the Apache-2.0 license.
+docs_dir: docs
+site_dir: site
+strict: true
+
+theme:
+  name: material
+  language: en
+  logo: brand/orchestwin-wordmark.svg
+  favicon: brand/orchestwin-wordmark.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search:
+      lang: en
+
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+    absolute_links: warn
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
+
+nav:
+  - What is OrchesTwin Studio: index.md
+  - The journey:
+      - journey/index.md
+      - August, the foundations: journey/august.md
+      - September, training and measuring: journey/september.md
+      - The cut of 24 September: journey/the-cut.md
+      - The supervisors' direction: journey/october.md
+      - The last sprints: journey/last-sprints.md
+  - The framework:
+      - framework/index.md
+      - The six steps: framework/steps.md
+      - Guided and expert: framework/modes.md
+      - Archetypes, User Twins and persona: framework/twins.md
+      - The Why? and traceability: framework/why.md
+      - After the design: framework/development.md
+  - Using the Studio:
+      - Installation:
+          - installation/index.md
+          - Starting and stopping the Studio: installation/studio.md
+          - Local mode and accounts: installation/local-mode.md
+          - Generating with claude --print: installation/generation.md
+      - Web guide:
+          - web/index.md
+          - Brief: web/brief.md
+          - Perspectives: web/perspectives.md
+          - User Twin: web/twins.md
+          - Definition: web/definition.md
+          - Design & Evaluation: web/design.md
+          - Dossier: web/dossier.md
+          - After the design: web/after-design.md
+      - ut reference:
+          - ut/index.md
+          - Access and status: ut/access-and-status.md
+          - ut init: ut/init.md
+          - ut design: ut/design.md
+          - Definition, twins, evidence and archetypes: ut/definition-and-twins.md
+          - Dossier, push, why and validation: ut/dossier.md
+          - Development: ut/development.md
+  - Inside the Studio:
+      - Architecture:
+          - architecture/index.md
+          - Packages: architecture/packages.md
+          - Flows: architecture/flows.md
+          - Gates, sections and versions: architecture/states.md
+          - Persistence and migrations: architecture/persistence.md
+          - The knowledge folder: architecture/knowledge-folder.md
+          - Providers, model contracts and guard: architecture/models.md
+          - The Visual Studio Code extension: architecture/vscode-extension.md
+      - API:
+          - api/index.md
+          - Routes: api/reference.md
+      - Quality and verification:
+          - quality/index.md
+          - CI/CD: quality/ci.md
+          - Sprint tools and live trials: quality/tools.md
+  - Design and validation:
+      - Design:
+          - design/index.md
+          - Visual directions and the Apple HIG system: design/directions.md
+          - Critique of an existing design: design/critique.md
+          - Measures: design/measures.md
+      - Validation with people: validation.md
+  - Appendices:
+      - Glossary: glossary.md
+      - Limits and future work: limits.md
