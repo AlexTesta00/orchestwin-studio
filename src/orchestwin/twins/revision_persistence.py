@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from datetime import datetime
+from collections.abc import Mapping
 from enum import StrEnum
-from numbers import Real
 from typing import Protocol
 from uuid import UUID
 
@@ -24,6 +22,19 @@ from orchestwin.twins.epistemics import (
     ObservationValueKind,
     ProfileObservation,
 )
+from orchestwin.twins.record_values import datetime_value as _datetime
+from orchestwin.twins.record_values import field as _field
+from orchestwin.twins.record_values import integer as _integer
+from orchestwin.twins.record_values import optional_datetime as _optional_datetime
+from orchestwin.twins.record_values import optional_integer as _optional_integer
+from orchestwin.twins.record_values import optional_string as _optional_string
+from orchestwin.twins.record_values import optional_uuid as _optional_uuid
+from orchestwin.twins.record_values import owned_project_exists as _owned_project_exists
+from orchestwin.twins.record_values import project_is_owned as _project_is_owned
+from orchestwin.twins.record_values import real as _real
+from orchestwin.twins.record_values import sequence as _sequence
+from orchestwin.twins.record_values import string as _string
+from orchestwin.twins.record_values import uuid_value as _uuid
 from orchestwin.twins.revisions import (
     USER_TWIN_PROFILE_DIFF_SCHEMA_VERSION,
     ProfileDiffOperation,
@@ -90,12 +101,6 @@ class UserTwinProfileDiffRepository(Protocol):
 
 
 _UUID = postgresql.UUID(as_uuid=True)
-
-PROJECTS = sa.table(
-    "projects",
-    sa.column("id", _UUID),
-    sa.column("owner_user_id", _UUID),
-)
 
 SNAPSHOTS = sa.table(
     "user_modeling_snapshot_versions",
@@ -336,140 +341,44 @@ def diff_from_record(
     record: Mapping[str, object],
 ) -> UserTwinProfileDiff:
     """Reconstruct and validate one persisted profile diff."""
-    payload = _mapping(
-        _required(
-            record,
-            "diff_snapshot",
-        ),
-        label="profile diff snapshot",
-    )
+    payload = _field(record, "diff_snapshot", _mapping, "profile diff snapshot")
 
     if (
-        _integer(
-            _required(
-                payload,
-                "schema_version",
-            ),
-            label="profile diff schema version",
-        )
+        _field(payload, "schema_version", _integer, "profile diff schema version")
         != USER_TWIN_PROFILE_DIFF_SCHEMA_VERSION
     ):
         raise ValueError("unsupported User Twin profile diff schema")
 
-    base_snapshot = _mapping(
-        _required(
-            payload,
-            "base_snapshot",
-        ),
-        label="base snapshot reference",
-    )
-    base_twin = _mapping(
-        _required(
-            payload,
-            "base_twin",
-        ),
-        label="base User Twin reference",
-    )
+    base_snapshot = _field(payload, "base_snapshot", _mapping, "base snapshot reference")
+    base_twin = _field(payload, "base_twin", _mapping, "base User Twin reference")
 
     operations = tuple(
         _operation_from_snapshot(item)
-        for item in _mapping_sequence(
-            _required(
-                payload,
-                "operations",
-            ),
-            label="profile diff operations",
-        )
+        for item in _field(payload, "operations", _mapping_sequence, "profile diff operations")
     )
 
     diff = UserTwinProfileDiff(
-        id=_uuid(
-            _required(
-                payload,
-                "id",
-            ),
-            label="profile diff ID",
+        id=_field(payload, "id", _uuid, "profile diff ID"),
+        project_id=_field(payload, "project_id", _uuid, "profile diff project ID"),
+        base_snapshot_version_id=_field(
+            base_snapshot, "version_id", _uuid, "base snapshot version ID"
         ),
-        project_id=_uuid(
-            _required(
-                payload,
-                "project_id",
-            ),
-            label="profile diff project ID",
+        base_snapshot_version_number=_field(
+            base_snapshot, "version_number", _integer, "base snapshot version number"
         ),
-        base_snapshot_version_id=_uuid(
-            _required(
-                base_snapshot,
-                "version_id",
-            ),
-            label="base snapshot version ID",
+        base_snapshot_content_hash=_field(
+            base_snapshot, "content_hash", _string, "base snapshot hash"
         ),
-        base_snapshot_version_number=_integer(
-            _required(
-                base_snapshot,
-                "version_number",
-            ),
-            label="base snapshot version number",
+        twin_id=_field(base_twin, "twin_id", _uuid, "profile diff User Twin ID"),
+        base_twin_version_id=_field(base_twin, "version_id", _uuid, "base User Twin version ID"),
+        base_twin_version_number=_field(
+            base_twin, "version_number", _integer, "base User Twin version number"
         ),
-        base_snapshot_content_hash=_string(
-            _required(
-                base_snapshot,
-                "content_hash",
-            ),
-            label="base snapshot hash",
-        ),
-        twin_id=_uuid(
-            _required(
-                base_twin,
-                "twin_id",
-            ),
-            label="profile diff User Twin ID",
-        ),
-        base_twin_version_id=_uuid(
-            _required(
-                base_twin,
-                "version_id",
-            ),
-            label="base User Twin version ID",
-        ),
-        base_twin_version_number=_integer(
-            _required(
-                base_twin,
-                "version_number",
-            ),
-            label="base User Twin version number",
-        ),
-        base_twin_content_hash=_string(
-            _required(
-                base_twin,
-                "content_hash",
-            ),
-            label="base User Twin hash",
-        ),
+        base_twin_content_hash=_field(base_twin, "content_hash", _string, "base User Twin hash"),
         operations=operations,
-        created_by_user_id=_uuid(
-            _required(
-                payload,
-                "created_by_user_id",
-            ),
-            label="profile diff creator ID",
-        ),
-        created_at=_datetime(
-            _required(
-                payload,
-                "created_at",
-            ),
-            label="profile diff creation timestamp",
-        ),
-        status=UserTwinProfileDiffStatus(
-            _string(
-                _required(
-                    record,
-                    "status",
-                ),
-                label="profile diff status",
-            )
-        ),
+        created_by_user_id=_field(payload, "created_by_user_id", _uuid, "profile diff creator ID"),
+        created_at=_field(payload, "created_at", _datetime, "profile diff creation timestamp"),
+        status=UserTwinProfileDiffStatus(_field(record, "status", _string, "profile diff status")),
         decided_by_user_id=_optional_uuid(
             record.get("decided_by_user_id"),
             label="profile diff decision actor",
@@ -490,13 +399,7 @@ def diff_from_record(
         ),
     )
 
-    if diff.proposal_hash != _string(
-        _required(
-            record,
-            "proposal_hash",
-        ),
-        label="profile diff proposal hash",
-    ):
+    if diff.proposal_hash != _field(record, "proposal_hash", _string, "profile diff proposal hash"):
         raise ValueError("persisted profile diff proposal hash does not match its snapshot")
 
     if diff.proposal_snapshot() != dict(payload):
@@ -512,15 +415,7 @@ def _operation_from_snapshot(
     before_payload = payload.get("before")
 
     return ProfileDiffOperation(
-        field=UserTwinField(
-            _string(
-                _required(
-                    payload,
-                    "field",
-                ),
-                label="profile diff field",
-            )
-        ),
+        field=UserTwinField(_field(payload, "field", _string, "profile diff field")),
         before=(
             None
             if before_payload is None
@@ -531,15 +426,7 @@ def _operation_from_snapshot(
                 )
             )
         ),
-        after=_observation_from_snapshot(
-            _mapping(
-                _required(
-                    payload,
-                    "after",
-                ),
-                label="after observation",
-            )
-        ),
+        after=_observation_from_snapshot(_field(payload, "after", _mapping, "after observation")),
     )
 
 
@@ -547,42 +434,18 @@ def _observation_from_snapshot(
     payload: Mapping[str, object],
 ) -> ProfileObservation:
     """Reconstruct one profile observation from canonical JSON."""
-    value_payload = _mapping(
-        _required(
-            payload,
-            "value",
-        ),
-        label="observation value",
-    )
+    value_payload = _field(payload, "value", _mapping, "observation value")
 
     references = tuple(
         _evidence_from_snapshot(item)
-        for item in _mapping_sequence(
-            _required(
-                payload,
-                "provenance",
-            ),
-            label="observation provenance",
-        )
+        for item in _field(payload, "provenance", _mapping_sequence, "observation provenance")
     )
 
     observation = ProfileObservation(
-        observation_key=_string(
-            _required(
-                payload,
-                "observation_key",
-            ),
-            label="observation key",
-        ),
+        observation_key=_field(payload, "observation_key", _string, "observation key"),
         value=ObservationValue(
             kind=ObservationValueKind(
-                _string(
-                    _required(
-                        value_payload,
-                        "kind",
-                    ),
-                    label="observation value kind",
-                )
+                _field(value_payload, "kind", _string, "observation value kind")
             ),
             text=_optional_string(
                 value_payload.get("text"),
@@ -607,34 +470,12 @@ def _observation_from_snapshot(
             ),
         ),
         epistemic_status=EpistemicStatus(
-            _string(
-                _required(
-                    payload,
-                    "epistemic_status",
-                ),
-                label="epistemic status",
-            )
+            _field(payload, "epistemic_status", _string, "epistemic status")
         ),
-        confidence=ConfidenceScore(
-            _real(
-                _required(
-                    payload,
-                    "confidence",
-                ),
-                label="confidence",
-            )
-        ),
+        confidence=ConfidenceScore(_field(payload, "confidence", _real, "confidence")),
         provenance=ObservationProvenance(references=references),
-        human_validation=(
-            HumanValidationRequirement(
-                _string(
-                    _required(
-                        payload,
-                        "human_validation",
-                    ),
-                    label=("human validation requirement"),
-                )
-            )
+        human_validation=HumanValidationRequirement(
+            _field(payload, "human_validation", _string, "human validation requirement")
         ),
         rationale=_optional_string(
             payload.get("rationale"),
@@ -654,21 +495,9 @@ def _evidence_from_snapshot(
     """Reconstruct one evidence reference."""
     reference = EvidenceReference(
         source_kind=EvidenceSourceKind(
-            _string(
-                _required(
-                    payload,
-                    "source_kind",
-                ),
-                label="evidence source kind",
-            )
+            _field(payload, "source_kind", _string, "evidence source kind")
         ),
-        source_id=_string(
-            _required(
-                payload,
-                "source_id",
-            ),
-            label="evidence source ID",
-        ),
+        source_id=_field(payload, "source_id", _string, "evidence source ID"),
         source_version=_optional_integer(
             payload.get("source_version"),
             label="evidence source version",
@@ -706,41 +535,6 @@ def _owned_select(
             owner_user_id=owner_user_id,
         ),
     )
-
-
-def _owned_project_exists(
-    *,
-    project_id: UUID,
-    owner_user_id: UUID,
-) -> sa.ColumnElement[bool]:
-    """Create a reusable owner-project EXISTS predicate."""
-    return sa.exists(
-        sa.select(sa.literal(1))
-        .select_from(PROJECTS)
-        .where(
-            PROJECTS.c.id == project_id,
-            PROJECTS.c.owner_user_id == owner_user_id,
-        )
-    )
-
-
-async def _project_is_owned(
-    session: AsyncSession,
-    *,
-    project_id: UUID,
-    owner_user_id: UUID,
-) -> bool:
-    """Resolve ownership without leaking foreign-project existence."""
-    result = await session.execute(
-        sa.select(sa.literal(True)).where(
-            _owned_project_exists(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-            )
-        )
-    )
-
-    return result.scalar_one_or_none() is True
 
 
 async def _base_context_exists(
@@ -781,17 +575,6 @@ async def _base_context_exists(
     return result.scalar_one_or_none() is True
 
 
-def _required(
-    mapping: Mapping[str, object],
-    key: str,
-) -> object:
-    """Return one required persistence field."""
-    if key not in mapping:
-        raise ValueError(f"missing persistence field: {key}")
-
-    return mapping[key]
-
-
 def _mapping(
     value: object,
     *,
@@ -825,152 +608,4 @@ def _mapping_sequence(
             value,
             label=label,
         )
-    )
-
-
-def _sequence(
-    value: object,
-    *,
-    label: str,
-) -> Sequence[object]:
-    """Require a non-string sequence."""
-    if isinstance(value, str) or not isinstance(value, Sequence):
-        raise ValueError(f"{label} must be an array")
-
-    return value
-
-
-def _string(
-    value: object,
-    *,
-    label: str,
-) -> str:
-    """Require a string."""
-    if not isinstance(value, str):
-        raise ValueError(f"{label} must be a string")
-
-    return value
-
-
-def _optional_string(
-    value: object,
-    *,
-    label: str,
-) -> str | None:
-    """Require string or null."""
-    if value is None:
-        return None
-
-    return _string(
-        value,
-        label=label,
-    )
-
-
-def _integer(
-    value: object,
-    *,
-    label: str,
-) -> int:
-    """Require a non-boolean integer."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"{label} must be an integer")
-
-    return value
-
-
-def _optional_integer(
-    value: object,
-    *,
-    label: str,
-) -> int | None:
-    """Require integer or null."""
-    if value is None:
-        return None
-
-    return _integer(
-        value,
-        label=label,
-    )
-
-
-def _real(
-    value: object,
-    *,
-    label: str,
-) -> float:
-    """Require a non-boolean real number."""
-    if isinstance(value, bool) or not isinstance(value, Real):
-        raise ValueError(f"{label} must be a real number")
-
-    return float(value)
-
-
-def _uuid(
-    value: object,
-    *,
-    label: str,
-) -> UUID:
-    """Require or reconstruct a UUID."""
-    if isinstance(value, UUID):
-        return value
-
-    if isinstance(value, str):
-        try:
-            return UUID(value)
-        except ValueError as error:
-            raise ValueError(f"{label} must be a UUID") from error
-
-    raise ValueError(f"{label} must be a UUID")
-
-
-def _optional_uuid(
-    value: object,
-    *,
-    label: str,
-) -> UUID | None:
-    """Require UUID or null."""
-    if value is None:
-        return None
-
-    return _uuid(
-        value,
-        label=label,
-    )
-
-
-def _datetime(
-    value: object,
-    *,
-    label: str,
-) -> datetime:
-    """Require or reconstruct a timezone-aware datetime."""
-    if isinstance(value, datetime):
-        result = value
-    elif isinstance(value, str):
-        try:
-            result = datetime.fromisoformat(value)
-        except ValueError as error:
-            raise ValueError(f"{label} must be an ISO datetime") from error
-    else:
-        raise ValueError(f"{label} must be a datetime")
-
-    if result.utcoffset() is None:
-        raise ValueError(f"{label} must be timezone-aware")
-
-    return result
-
-
-def _optional_datetime(
-    value: object,
-    *,
-    label: str,
-) -> datetime | None:
-    """Require datetime or null."""
-    if value is None:
-        return None
-
-    return _datetime(
-        value,
-        label=label,
     )
