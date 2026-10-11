@@ -439,6 +439,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Le due alternative si somigliano nello stile disegnato. Puoi rigenerarle.",
         "en": "The two alternatives look alike in drawn style. You can regenerate them.",
     },
+    "design.distance_close_pair": {
+        "it": "Le alternative {first} e {second} si somigliano nello stile disegnato. "
+        "Puoi rigenerarle.",
+        "en": "Alternatives {first} and {second} look alike in the drawn style. "
+        "You can regenerate them.",
+    },
     "design.distance_adherence": {
         "it": "{code} · Il mockup non segue la direzione su: {axes}",
         "en": "{code} · The mockup does not follow the direction on: {axes}",

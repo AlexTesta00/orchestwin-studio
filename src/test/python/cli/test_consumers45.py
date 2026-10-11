@@ -267,7 +267,14 @@ def test_show_and_choose_take_the_third_code_of_a_studio_with_a_design_system(
     assert lines[direction + 1] == SYSTEM_LINES[language]
     assert lines.count(SYSTEM_LINES[language]) == 1
     pairs = [line.split(":")[0] for line in lines[end:] if line.count("DES-") == 2]
-    assert pairs == ["DES-001 · DES-002", "DES-001 · DES-003", "DES-002 · DES-003"]
+    assert pairs == [
+        "DES-001 · DES-002",
+        text("design.distance_close_pair", language, first="DES-001", second="DES-002"),
+        "DES-001 · DES-003",
+        text("design.distance_close_pair", language, first="DES-001", second="DES-003"),
+        "DES-002 · DES-003",
+        text("design.distance_close_pair", language, first="DES-002", second="DES-003"),
+    ]
     assert any(line.split()[-3:] == list(CODES) for line in lines[end:])
     assert chosen.status == 0, chosen.errors
     title = SYSTEM_TITLES[language]

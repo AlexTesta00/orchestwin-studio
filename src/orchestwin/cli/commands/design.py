@@ -411,9 +411,7 @@ def restore(
     if number not in numbers:
         raise CliError(VERSION_NOT_FOUND, values=values)
     console.say("design.restore_about", version=number, next=current + 1)
-    if not context.assume_yes and not console.confirm(
-        "design.restore_confirm", default=True, version=number
-    ):
+    if not context.confirm("design.restore_confirm", default=True, version=number):
         console.say("design.restore_cancelled", version=number)
         return 1
     try:
@@ -665,13 +663,7 @@ def menu(
         options.append(Choice(OPEN, text("design.menu_open")))
     if recovery is not None and recovery.action is not None:
         if recovery.action == REGENERATE and not modelless:
-            operations = ["DESIGN_PROPOSAL"]
-            minutes = None
-            if state.generated:
-                operations.extend(["MOCKUP", "MOCKUP"])
-                minutes = (
-                    costs.ESTIMATES["DESIGN_PROPOSAL"].minutes + costs.ESTIMATES["MOCKUP"].minutes
-                )
+            operations, minutes = design_generate.proposal_spending(state)
             label = with_estimate(
                 context,
                 priced,
