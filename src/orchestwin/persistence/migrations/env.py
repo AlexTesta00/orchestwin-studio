@@ -30,14 +30,6 @@ from orchestwin.projects.persistence.models import (
     ProjectBriefVersionRecord,
     ProjectRecord,
 )
-from orchestwin.training.persistence import (
-    TrainingDatasetQualityReportRecord,
-    TrainingDatasetVersionRecord,
-)
-from orchestwin.training.training_run_persistence import (
-    TrainingRunCheckpointRecord,
-    TrainingRunRecord,
-)
 from orchestwin.workflow.persistence.models import (
     HumanGateEventRecord,
     HumanGateRecord,
@@ -63,10 +55,6 @@ _IMPORTED_MODELS = (
     HumanGateRecord,
     HumanGateEventRecord,
     TeamProposalVersionRecord,
-    TrainingDatasetVersionRecord,
-    TrainingDatasetQualityReportRecord,
-    TrainingRunRecord,
-    TrainingRunCheckpointRecord,
 )
 
 target_metadata = OrmBase.metadata

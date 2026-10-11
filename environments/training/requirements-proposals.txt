@@ -1,3 +1,0 @@
-# Additive dependency for proposal serving in the pinned training environment.
-# Install with uv pip install --no-deps -r requirements-proposals.txt.
-llguidance==1.8.0

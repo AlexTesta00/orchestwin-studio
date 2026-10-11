@@ -15,7 +15,7 @@ from orchestwin.api.services import create_default_runtime
 from orchestwin.config import ApplicationSettings, ModelRuntimeMode
 from orchestwin.models import real_runtime
 from orchestwin.models.generation_routing import RoutingProposalGenerator
-from src.test.python.api.test_training_api import _user
+from src.test.python.api.owner_support import _user
 from src.test.python.models.test_hosted_support import (
     ANTHROPIC_KEY_ENV,
     GATEWAY_KEY,

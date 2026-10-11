@@ -71,7 +71,6 @@ class ApplicationSettings(BaseSettings):
     access_mode: AccessMode = AccessMode.ACCOUNTS
     local_owner_email: str | None = None
 
-    training_adapter_registry_root: Path = Path("var/artifacts/model-adapters")
     design_references_dir: Path | None = Field(
         default=Path("var/studio/references"), validation_alias=DESIGN_REFERENCES_VARIABLE
     )
@@ -105,15 +104,6 @@ class ApplicationSettings(BaseSettings):
             raise ValueError("at least one CORS origin is required")
 
         return normalized
-
-    @field_validator("training_adapter_registry_root")
-    @classmethod
-    def validate_storage_paths(cls, value: Path) -> Path:
-        """Reject empty or parent-traversing runtime storage paths."""
-        path = Path(value)
-        if not str(path).strip() or ".." in path.parts:
-            raise ValueError("runtime storage paths must not contain parent traversal")
-        return path
 
     @field_validator("local_owner_email")
     @classmethod

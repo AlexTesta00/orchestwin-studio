@@ -1,20 +1,28 @@
-"""Compositional, XML-compatible HTML fixtures for static evaluator supervision.
-
-The vocabulary is deliberately closed. State changes alter controls, not their
-opaque identity, profile, task, layout, or counterfactual split assignment.
-"""
-
 from __future__ import annotations
 
 import hashlib
-import itertools
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from html import escape
+from html.parser import HTMLParser
+from uuid import UUID
+
+from orchestwin.evaluation.artifact_content import prepare_artifact_content
+from orchestwin.evaluation.artifacts import (
+    EvaluationArtifactKind,
+    EvaluationArtifactReference,
+    EvaluationScenario,
+    create_evaluation_artifact_bundle,
+)
+from orchestwin.evaluation.evaluator import EvaluationUserTwinProfile, UserTwinEvaluationRequest
+from orchestwin.evaluation.model_evaluator import _input_payload
+from orchestwin.projects.requirements_primitives import canonical_json
+from orchestwin.twins.user_twins import UserTwinLifecycleStatus
 
 CURRICULUM_ID = "grounded-evaluator-complete-interface-v3"
+NOW = datetime(2026, 9, 14, tzinfo=UTC)
 LAYOUTS = {"train": tuple(range(8)), "validation": (8, 9), "test": (10, 11)}
-# Task, field label and action text; held-out services never occur in training.
 SERVICES = (
     (
         "Reserve a workshop seat",
@@ -162,6 +170,31 @@ SERVICES = (
     ),
 )
 SERVICE_SPLITS = {"train": tuple(range(12)), "validation": (12, 13, 14), "test": (15, 16, 17)}
+CHECKS = {
+    "input_label": (
+        "a nonempty explicit label associated by for",
+        "un'etichetta esplicita non vuota associata tramite for",
+    ),
+    "button_name": (
+        "a nonempty button name from text, aria-label or referenced aria-labelledby text",
+        "un nome del pulsante non vuoto da testo, aria-label o testi riferiti da aria-labelledby",
+    ),
+    "image_text": (
+        "nonempty alt text for this informative image",
+        "un testo alt non vuoto per questa immagine informativa",
+    ),
+    "heading": ("nonempty text in this heading", "un testo non vuoto in questo titolo"),
+    "error_guidance": (
+        "nonempty recovery text in this alert",
+        "un testo di recupero non vuoto in questo avviso",
+    ),
+}
+ROLES = (
+    ("Occasional service user", "Utente occasionale del servizio"),
+    ("Regular service operator", "Operatore abituale del servizio"),
+    ("New service participant", "Nuovo partecipante al servizio"),
+    ("Service desk assistant", "Addetto allo sportello del servizio"),
+)
 
 
 @dataclass(frozen=True)
@@ -184,6 +217,56 @@ class Scenario:
     detail: int
     noise: int
     reverse: bool
+
+
+@dataclass
+class Element:
+    tag: str
+    attrs: dict[str, str | None]
+    ancestors: tuple[str, ...]
+    parts: list[str] = field(default_factory=list)
+
+    @property
+    def text(self):
+        return "".join(self.parts).strip()
+
+
+class Document(HTMLParser):
+    def __init__(self, raw: str):
+        super().__init__(convert_charrefs=True)
+        self.elements: list[Element] = []
+        self.ids: dict[str, Element] = {}
+        self.stack: list[Element] = []
+        self.feed(raw)
+        self.close()
+
+    def handle_starttag(self, tag, attrs):
+        if len(dict(attrs)) != len(attrs):
+            raise ValueError("duplicate fixture attribute")
+        element = Element(
+            tag, dict(attrs), tuple(e.attrs.get("id") for e in self.stack if e.attrs.get("id"))
+        )
+        self.elements.append(element)
+        if identifier := element.attrs.get("id"):
+            if identifier in self.ids:
+                raise ValueError("duplicate fixture ID")
+            self.ids[identifier] = element
+        if tag not in {"input", "img", "meta", "link", "br", "hr"}:
+            self.stack.append(element)
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        if self.stack and self.stack[-1].tag == tag:
+            self.stack.pop()
+
+    def handle_endtag(self, tag):
+        if not self.stack or self.stack[-1].tag != tag:
+            raise ValueError("unbalanced closed fixture HTML")
+        self.stack.pop()
+
+    def handle_data(self, data):
+        for element in self.stack:
+            element.parts.append(data)
 
 
 def scenario(seed: int, split: str, ordinal: int) -> Scenario:
@@ -217,21 +300,6 @@ def scenario(seed: int, split: str, ordinal: int) -> Scenario:
     )
 
 
-def conditions(case: Scenario):
-    """Every defect combination, full absence, and partial-evidence combinations."""
-    count = len(case.controls)
-    for missing in itertools.product((False, True), repeat=count):
-        yield "complete", tuple("MISSING" if flag else "PRESENT" for flag in missing)
-    yield "form_absent", ("INSUFFICIENT",) * count
-    yield "content_unavailable", ("INSUFFICIENT",) * count
-    for absent in range(count):
-        states = ["PRESENT"] * count
-        states[absent] = "INSUFFICIENT"
-        yield "partial", tuple(states)
-        states[(absent + 1) % count] = "MISSING"
-        yield "partial", tuple(states)
-
-
 def _control(item: Control, state: str, texts: tuple[str, str, str], locale: str) -> str:
     if state == "INSUFFICIENT":
         return ""
@@ -260,7 +328,8 @@ def _control(item: Control, state: str, texts: tuple[str, str, str], locale: str
                 return f'<button id="{target}" aria-label="{action}"></button>'
             return (
                 f'<button id="{target}" aria-labelledby="{target}-a {target}-b"></button>'
-                f'<aside><span id="{target}-a">{action}</span><span id="{target}-b"> · {field}</span></aside>'
+                f'<aside><span id="{target}-a">{action}</span>'
+                f'<span id="{target}-b"> · {field}</span></aside>'
             )
         if item.defect == 0:
             return f'<button id="{target}"></button><span>{action}</span>'
@@ -274,7 +343,10 @@ def _control(item: Control, state: str, texts: tuple[str, str, str], locale: str
         )
     if item.family == "image_text":
         alt = field if present else " "
-        return f'<figure><img id="{target}" src="diagram.svg" alt="{alt}" /><figcaption>{field}</figcaption></figure>'
+        return (
+            f'<figure><img id="{target}" src="diagram.svg" alt="{alt}" />'
+            f"<figcaption>{field}</figcaption></figure>"
+        )
     if item.family == "heading":
         value = task if present else " \n "
         return f'<h2 id="{target}"><span>{value}</span></h2>'
@@ -361,7 +433,10 @@ def render(case: Scenario, locale: str, mode: str, states: tuple[str, ...]) -> s
         if mode == "form_absent"
         else f'<form id="{case.form}">{_layout(parts, case.layout)}</form>'
     )
-    navigation = f'<header><h1>{task}</h1><nav><a href="#help">Help</a><a href="#catalogue">Catalogue</a></nav></header>'
+    navigation = (
+        f"<header><h1>{task}</h1>"
+        '<nav><a href="#help">Help</a><a href="#catalogue">Catalogue</a></nav></header>'
+    )
     details = f'<section id="catalogue"><h2>{task}</h2><p>Reference {case.detail}</p></section>'
     help_content = (
         f'<aside id="help"><h2>Help</h2><label for="help-input">{field}</label>'
@@ -374,5 +449,130 @@ def render(case: Scenario, locale: str, mode: str, states: tuple[str, ...]) -> s
     )
     return (
         f'<html lang="{locale}"><head><title>{task}</title><meta charset="utf-8" /></head><body>'
-        f"{navigation}<main>{details}{form}{help_content}{extra}</main><footer>Example service</footer></body></html>"
+        f"{navigation}<main>{details}{form}{help_content}{extra}</main>"
+        "<footer>Example service</footer></body></html>"
     )
+
+
+def _request(case: Scenario, locale: str, raw: str, supplied: bool):
+    rng = random.Random(case.group_id)
+    project, workflow, artifact, twin_id, evaluation, scenario_id, bundle_id = (
+        UUID(int=rng.getrandbits(128), version=4) for _ in range(7)
+    )
+    version = rng.randint(1, 20)
+    task, _, _ = localized(case, locale)
+    lang = int(locale == "it")
+    checks = [f"#{control.target}: {CHECKS[control.family][lang]}" for control in case.controls]
+    scope = (
+        f"Task: {task}. Inspect the complete supplied page, focusing on form #{case.form}. "
+        f"Check each selected control separately: {'; '.join(checks)}. "
+        "Report one finding for each supported missing property; do not put correct controls "
+        "in findings. Unrelated text cannot label these controls. If only some targets are "
+        "absent, record evidence gaps and assess the remaining targets. Abstain when none can "
+        "be assessed. Evaluate static HTML only; no observed user or runtime behavior."
+        if locale == "en"
+        else f"Compito: {task}. Esamina la pagina completa fornita, concentrandoti sul modulo "
+        f"#{case.form}. Controlla separatamente ogni elemento: {'; '.join(checks)}. "
+        "Riporta un finding per ogni proprietà mancante supportata; non inserire controlli "
+        "corretti nei finding. Testi estranei non etichettano questi controlli. Se mancano solo "
+        "alcuni elementi, registra le lacune e valuta gli altri. Astieniti quando nessuno è "
+        "valutabile. Esamina soltanto HTML statico; nessuna osservazione di utenti o runtime."
+    )
+    digest = hashlib.sha256(raw.encode()).hexdigest()
+    descriptor = EvaluationArtifactReference(
+        artifact_id=artifact,
+        version_number=version,
+        kind=EvaluationArtifactKind.DOM_SNAPSHOT,
+        media_type="text/html",
+        sha256_digest=digest,
+        size_bytes=len(raw.encode()),
+        storage_key=f"sha256/{digest[:2]}/{digest}",
+        location=f"dom:#{case.form}",
+    )
+    bundle = create_evaluation_artifact_bundle(
+        project_id=project,
+        workflow_run_id=workflow,
+        scenario=EvaluationScenario(scenario_id, task, scope, locale, tuple(checks)),
+        artifacts=(descriptor,),
+        created_at=NOW,
+        bundle_id=bundle_id,
+    )
+    role = ROLES[case.role][lang]
+    profile = canonical_json(
+        dict(
+            name=role,
+            role=role,
+            goals=[task],
+            operational_constraints=[
+                "Synthetic profile for static review; user behavior has not been observed."
+                if locale == "en"
+                else "Profilo sintetico per revisione statica; il comportamento utente "
+                "non è stato osservato."
+            ],
+        )
+    )
+    twin = EvaluationUserTwinProfile(
+        twin_id,
+        version,
+        role,
+        UserTwinLifecycleStatus.PROTO_UT,
+        hashlib.sha256(profile.encode()).hexdigest(),
+        profile,
+    )
+    request = UserTwinEvaluationRequest(evaluation, project, workflow, bundle, twin, (), NOW)
+    payload = _input_payload(request)
+    if supplied:
+        prepared = prepare_artifact_content(
+            request, selected=((artifact, version),), read_content=lambda *_: raw.encode()
+        )
+        request = prepared.request
+        payload = prepared.content.enrich(request, _input_payload(request))
+    return request, payload
+
+
+def observe(raw: str | None, form: str, controls: list[dict]) -> list[dict]:
+    document = Document(raw) if raw is not None else None
+    if document and document.stack:
+        raise ValueError("unclosed fixture HTML")
+    observations = []
+    for control in controls:
+        target, family = control["target"], control["family"]
+        reason, state = "PROPERTY_PRESENT", "PRESENT"
+        element = document.ids.get(target) if document else None
+        if document is None:
+            state, reason = "INSUFFICIENT", "CONTENT_NOT_SUPPLIED"
+        elif form not in document.ids:
+            state, reason = "INSUFFICIENT", "FORM_ABSENT"
+        elif element is None or form not in element.ancestors:
+            state, reason = "INSUFFICIENT", "TARGET_ABSENT_FROM_FORM"
+        else:
+            if family == "input_label":
+                present = element.tag == "input" and any(
+                    e.tag == "label" and e.attrs.get("for") == target and e.text
+                    for e in document.elements
+                )
+                reason = "NO_EXPLICIT_LABEL"
+            elif family == "button_name":
+                references = (element.attrs.get("aria-labelledby") or "").split()
+                present = element.tag == "button" and bool(
+                    element.text
+                    or (element.attrs.get("aria-label") or "").strip()
+                    or any(document.ids[r].text for r in references if r in document.ids)
+                )
+                reason = "NO_BUTTON_NAME"
+            elif family == "image_text":
+                present = element.tag == "img" and bool((element.attrs.get("alt") or "").strip())
+                reason = "NO_IMAGE_TEXT"
+            elif family == "heading":
+                present = element.tag in {"h1", "h2", "h3"} and bool(element.text)
+                reason = "NO_HEADING_TEXT"
+            elif family == "error_guidance":
+                present = element.attrs.get("role") == "alert" and bool(element.text)
+                reason = "NO_RECOVERY_TEXT"
+            else:
+                raise ValueError("unsupported fixture criterion")
+            state = "PRESENT" if present else "MISSING"
+            if present:
+                reason = "PROPERTY_PRESENT"
+        observations.append(dict(target=target, family=family, state=state, reason=reason))
+    return observations

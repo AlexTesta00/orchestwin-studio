@@ -35,12 +35,10 @@ from orchestwin.evaluation.artifact_content import MAX_VIEW_BYTES
 from orchestwin.evaluation.artifacts import EvaluationArtifactKind
 from orchestwin.evaluation.evaluator import EvaluationUserTwinProfile
 from orchestwin.projects.requirements_primitives import canonical_json
-from orchestwin.training.complete_interface_curriculum import CHECKS, _request
-from orchestwin.training.complete_interface_fixtures import localized, render, scenario
-from orchestwin.training.complete_interface_validation import observe
 from orchestwin.twins.user_twins import UserTwinLifecycleStatus
 
 from . import design_fixtures
+from .complete_interface_fixtures import CHECKS, _request, localized, observe, render, scenario
 
 NOW = datetime(2026, 9, 27, 10, 0, tzinfo=UTC)
 OPAQUE = re.compile(r"[cf]-[0-9a-f]{10}")

@@ -43,7 +43,6 @@ from orchestwin.api.runtime_configuration import (
     load_runtime_connection_settings,
 )
 from orchestwin.api.sections import build_sections_service
-from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.artifacts.human_validation_runtime import SqlAlchemyHumanValidationService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.artifacts.why_runtime import SqlAlchemyWhyQueryService
@@ -131,7 +130,6 @@ from orchestwin.projects.requirements_runtime import (
     build_requirements_services,
 )
 from orchestwin.projects.sections_service import SectionsService
-from orchestwin.training.adapter_artifacts import ContentAddressedAdapterRegistry
 from orchestwin.twins.archetypes import ArchetypeService
 from orchestwin.twins.owner_inputs import OwnerUserModelingService
 from orchestwin.twins.realignment_service import UserModelingRealignmentService
@@ -143,9 +141,6 @@ from orchestwin.twins.runtime import (
     build_user_modeling_services,
 )
 from orchestwin.workflow.gates import HumanGate, HumanGateAction, HumanGateEvent
-
-DATABASE_URL_ENVIRONMENT = "ORCHESTWIN_DATABASE_URL"
-JWT_SECRET_ENVIRONMENT = "ORCHESTWIN_AUTH_JWT_SECRET"
 
 
 class AgentTeamApprovalService(Protocol):
@@ -248,7 +243,6 @@ class ApplicationRuntime:
     sections_service: SectionsService | None = None
     team_realignment_service: TeamRealignmentService | None = None
     project_import_service: ProjectImportService | None = None
-    training_api_service: TrainingApiService | None = None
     design_references_dir: Path | None = None
     design_system: DesignSystem | None = None
 
@@ -500,12 +494,6 @@ def create_default_runtime(
         sections_service=sections_service,
         team_realignment_service=team_realignment_service,
         project_import_service=project_import_service,
-        training_api_service=SqlAlchemyTrainingApiService(
-            session_factory=database_runtime.session_factory,
-            adapter_registry=ContentAddressedAdapterRegistry(
-                resolved_settings.training_adapter_registry_root
-            ),
-        ),
         design_references_dir=design_references_dir,
         design_system=design_system,
     )
