@@ -24,8 +24,6 @@ if TYPE_CHECKING:
     )
 
 CONTENT_POLICY_ID = "verified-evaluator-artifact-text-v1"
-CONTENT_PROMPT_VERSION_V1 = "s12-verified-artifact-content-v1"
-CONTENT_PROMPT_VERSION_V2 = "s12-verified-artifact-content-v2-finding-id-pattern"
 CONTENT_PROMPT_VERSION = "s12-verified-artifact-content-v3-relational-scope"
 MAX_SOURCE_BYTES = 2 * 1024 * 1024
 MAX_VIEW_BYTES = 8 * 1024

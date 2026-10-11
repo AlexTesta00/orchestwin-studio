@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import (
@@ -51,21 +49,3 @@ def create_database_runtime(settings: DatabaseSettings) -> DatabaseRuntime:
         engine=engine,
         session_factory=session_factory,
     )
-
-
-@asynccontextmanager
-async def open_session(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> AsyncIterator[AsyncSession]:
-    """Open and close a session without committing implicitly."""
-    async with session_factory() as session:
-        yield session
-
-
-@asynccontextmanager
-async def transactional_session(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> AsyncIterator[AsyncSession]:
-    """Open a transaction that commits or rolls back as one unit."""
-    async with session_factory.begin() as session:
-        yield session

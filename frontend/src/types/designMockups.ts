@@ -145,10 +145,6 @@ export interface DesignIterationPayload {
   cost_microusd: number | null;
 }
 
-export interface DesignIterationListPayload {
-  items: DesignIterationPayload[];
-}
-
 export interface ReviewPinPayload {
   number: number;
   element_code: string;

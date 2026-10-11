@@ -8,7 +8,7 @@ from uuid import UUID
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.projects.requirements import (
     Requirement,
@@ -418,28 +418,6 @@ class SqlAlchemyRequirementsUnitOfWork:
         """Rollback the shared SQLAlchemy transaction."""
         await self._session.rollback()
         self._completed = True
-
-
-class SqlAlchemyRequirementsUnitOfWorkFactory:
-    """Create owner-scoped requirements Units of Work."""
-
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-    ) -> None:
-        """Store the shared async session factory."""
-        self._session_factory = session_factory
-
-    def __call__(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> SqlAlchemyRequirementsUnitOfWork:
-        """Create one Unit of Work with a fresh async session."""
-        return SqlAlchemyRequirementsUnitOfWork(
-            self._session_factory(),
-            owner_user_id=owner_user_id,
-        )
 
 
 def specification_version_to_record(
@@ -1299,7 +1277,6 @@ __all__ = [
     "SqlAlchemyRequirementsDiffRepository",
     "SqlAlchemyRequirementsSpecificationRepository",
     "SqlAlchemyRequirementsUnitOfWork",
-    "SqlAlchemyRequirementsUnitOfWorkFactory",
     "diff_from_record",
     "diff_to_record",
     "specification_from_snapshot",

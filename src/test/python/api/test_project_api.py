@@ -141,16 +141,6 @@ class FakeProjectService:
             created_at=NOW,
         )
 
-    async def list_active(
-        self,
-        *,
-        owner_user_id: UUID,
-    ) -> tuple[Project, ...]:
-        if self.project is None:
-            return ()
-
-        return (self.project,)
-
     async def get(
         self,
         *,

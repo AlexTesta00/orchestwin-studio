@@ -140,7 +140,7 @@ describe("project route requests", () => {
       const wrapper = shallowMount(ProjectDetailView, {
         global: {
           plugins: [createPinia(), createI18n({ legacy: false, locale: "en" })],
-          stubs: { UiStepper: false, UiCard: false },
+          stubs: { UiStepper: false },
         },
       });
       state.route.params.projectId = "second";
@@ -243,7 +243,7 @@ describe("progressive project workspace", () => {
       attachTo: document.body,
       global: {
         plugins: [pinia, createI18n({ legacy: false, locale: "en" })],
-        stubs: { UiStepper: false, UiCard: false },
+        stubs: { UiStepper: false },
       },
     });
   }
@@ -620,7 +620,7 @@ describe("progressive project workspace", () => {
       attachTo: document.body,
       global: {
         plugins: [pinia, createI18n({ legacy: false, locale: "en" })],
-        stubs: { UiStepper: false, UiCard: false, InsightBriefTray: false },
+        stubs: { UiStepper: false, InsightBriefTray: false },
       },
     });
     await flushPromises();
@@ -672,7 +672,7 @@ describe("progressive project workspace", () => {
       attachTo: document.body,
       global: {
         plugins: [pinia, createI18n({ legacy: false, locale: "en" })],
-        stubs: { UiStepper: false, UiCard: false, ProjectTeamSelectionFlow: TeamStep },
+        stubs: { UiStepper: false, ProjectTeamSelectionFlow: TeamStep },
       },
     });
     await flushPromises();
@@ -1030,7 +1030,7 @@ describe("progressive project workspace", () => {
       attachTo: document.body,
       global: {
         plugins: [createPinia(), createAppI18n("it")],
-        stubs: { UiStepper: false, UiCard: false },
+        stubs: { UiStepper: false },
       },
     });
     await flushPromises();
