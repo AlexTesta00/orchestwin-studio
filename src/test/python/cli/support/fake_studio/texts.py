@@ -15,6 +15,7 @@ COSTS = {
     "MOCKUP": 1_450_000,
     "ITERATION": 1_100_000,
     "DESIGN_EVALUATION": 165_000,
+    "DESIGN_CHANGE_OPINION": 120_000,
     "DESIGN_CRITIQUE": 225_000,
     "CODE_CHANGE_REVIEW": 200_000,
     "CODE_ALIGNMENT": 250_000,
@@ -39,6 +40,7 @@ TASKS = {
     "MOCKUP": "design",
     "ITERATION": "design",
     "DESIGN_EVALUATION": "twin_review",
+    "DESIGN_CHANGE_OPINION": "twin_review",
     "DESIGN_CRITIQUE": "user-twin-evaluation",
     "CODE_CHANGE_REVIEW": "user-twin-evaluation",
     "CODE_ALIGNMENT": "user-twin-evaluation",
@@ -63,6 +65,7 @@ PURPOSES = {
     "MOCKUP": "DESIGN_MOCKUP_HTML",
     "ITERATION": "DESIGN_ITERATION",
     "DESIGN_EVALUATION": "DESIGN_TWIN_REVIEW",
+    "DESIGN_CHANGE_OPINION": "DESIGN_CHANGE_OPINION",
     "DESIGN_CRITIQUE": "DESIGN_CRITIQUE",
     "CODE_CHANGE_REVIEW": "CODE_CHANGE_REVIEW",
     "CODE_ALIGNMENT": "CODE_ALIGNMENT",
@@ -122,6 +125,8 @@ ALIGNMENT_TEXTS = {
         "design_change": "L'alternativa «{title}» cambia come chiesto: {request}",
         "targeted_element": "Modifica mirata a {element} di {screen}",
         "targeted_screen": "Modifica mirata a {screen}",
+        "targeted_parts": "Modifica mirata a {elements} di {screen}",
+        "and": "e",
     },
     "en": {
         "summary": "The code of {count} commits changes what the knowledge says about “{line}”.",
@@ -145,6 +150,8 @@ ALIGNMENT_TEXTS = {
         "design_change": "The alternative “{title}” changes as asked: {request}",
         "targeted_element": "Targeted change to {element} of {screen}",
         "targeted_screen": "Targeted change to {screen}",
+        "targeted_parts": "Targeted change to {elements} of {screen}",
+        "and": "and",
     },
 }
 WORKFLOW_STEPS = {
@@ -655,5 +662,90 @@ SCREENS = {
                 '<a class="button" href="#SCR-001">Back to the calculation</a></main>',
             ),
         ),
+    },
+}
+LANDMARK_ENTRY = {
+    "it": (
+        "SCR-001",
+        "Calcolo mancia",
+        "DEFAULT",
+        "Calcolo mancia",
+        '<header class="bar" data-req="REQ-001"><h1>{heading}</h1>'
+        '<a href="#SCR-002">Quote</a><a href="#SCR-002">Scontrino</a></header>'
+        '<nav class="tabs" aria-label="Sezioni" data-req="REQ-002">'
+        '<a href="#SCR-002">Conto</a><a href="#SCR-002">Mancia</a>'
+        '<a href="#SCR-002">Persone</a></nav>'
+        '<main class="card" aria-label="Calcolo" data-req="REQ-001 REQ-002 REQ-003">'
+        '<p class="lead">Inserisci il conto, la mancia e quante persone dividono la spesa.</p>'
+        '<form aria-label="Conto e mancia">'
+        '<label for="amount">Importo</label>'
+        '<input id="amount" name="amount" type="text" value="34,50" required>'
+        '<label for="tip">Mancia</label>'
+        '<select id="tip" name="tip"><option>5%</option><option selected>10%</option>'
+        "<option>15%</option></select>"
+        '<a class="button" href="#SCR-002">Dividi il conto</a></form>'
+        '<section class="recent" aria-label="Conti recenti">'
+        '<article><h2>Serata pizza</h2><button type="button">Dividi di nuovo</button></article>'
+        "<article><h2>Pranzo della domenica</h2>"
+        '<button type="button">Mostra le quote</button></article></section></main>',
+    ),
+    "en": (
+        "SCR-001",
+        "Tip calculator",
+        "DEFAULT",
+        "Tip calculator",
+        '<header class="bar" data-req="REQ-001"><h1>{heading}</h1>'
+        '<a href="#SCR-002">Shares</a><a href="#SCR-002">Receipt</a></header>'
+        '<nav class="tabs" aria-label="Sections" data-req="REQ-002">'
+        '<a href="#SCR-002">Bill</a><a href="#SCR-002">Tip</a>'
+        '<a href="#SCR-002">People</a></nav>'
+        '<main class="card" aria-label="Calculation" data-req="REQ-001 REQ-002 REQ-003">'
+        '<p class="lead">Enter the bill, choose the tip and say how many people share the '
+        "cost.</p>"
+        '<form aria-label="Bill and tip">'
+        '<label for="amount">Amount</label>'
+        '<input id="amount" name="amount" type="text" value="34.50" required>'
+        '<label for="tip">Tip</label>'
+        '<select id="tip" name="tip"><option>5%</option><option selected>10%</option>'
+        "<option>15%</option></select>"
+        '<a class="button" href="#SCR-002">Split the bill</a></form>'
+        '<section class="recent" aria-label="Recent bills">'
+        '<article><h2>Pizza night</h2><button type="button">Split it again</button></article>'
+        "<article><h2>Sunday lunch</h2>"
+        '<button type="button">Show the shares</button></article></section></main>',
+    ),
+}
+LANDMARK_SCREENS = {
+    language: (LANDMARK_ENTRY[language], screens["DES-002"][1])
+    for language, screens in SCREENS.items()
+}
+COLOUR_WORDS = (
+    "rosso",
+    "blu",
+    "verde",
+    "giallo",
+    "bianco",
+    "nero",
+    "red",
+    "blue",
+    "green",
+    "yellow",
+    "white",
+    "black",
+)
+OPINION_TEXTS = {
+    "it": {
+        "BLOCKS": "Con questi due colori vicini non leggerei le scritte al tavolo, con poca luce.",
+        "SLOWS": "Dopo la modifica dovrei cercare di nuovo dove toccare per dividere il conto.",
+        "HELPS": "La modifica mi aiuta: trovo subito quello che mi serve al tavolo.",
+        "what_to_do": "Tieni il testo molto più scuro o molto più chiaro dello sfondo.",
+        "try_this": "Rendi la barra più scura e il testo bianco, ben leggibile.",
+    },
+    "en": {
+        "BLOCKS": "With these two colours close together I could not read the words at the table.",
+        "SLOWS": "After the change I would look again for where to tap to split the bill.",
+        "HELPS": "The change helps me: I find what I need at the table at once.",
+        "what_to_do": "Keep the text much darker or much lighter than the background.",
+        "try_this": "Make the bar darker and the text white, easy to read.",
     },
 }

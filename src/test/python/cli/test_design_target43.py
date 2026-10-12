@@ -132,12 +132,12 @@ def screen_markup(html: str, screen: str) -> str:
 
 
 def row(output: str, code: str, kind: str, content: str) -> bool:
-    pattern = rf"^{code} +{re.escape(kind)} +{re.escape(content)}$"
+    pattern = rf"^ *{code} +{re.escape(kind)} +{re.escape(content)}$"
     return re.search(pattern, output, re.MULTILINE) is not None
 
 
 def listed_codes(output: str) -> list[str]:
-    return re.findall(r"^(ELM-[0-9]{3}) ", output, re.MULTILINE)
+    return re.findall(r"^ *(ELM-[0-9]{3}) ", output, re.MULTILINE)
 
 
 def chosen_title(session: Session) -> str:
@@ -291,6 +291,9 @@ def test_codes_that_are_not_codes_are_refused_before_the_studio_is_asked(
         (["review", "--no-review"], "design.usage_target"),
         (["--element", "ELM-012"], "design.usage_target"),
         (["choose", "DES-001", "--screen", "SCR-001"], "design.usage_target"),
+        (["show", "--ask-first"], "design.usage_target"),
+        (["change", "Bigger", "--ask-first"], "design.usage_ask_first"),
+        (["change", "Bigger", "--element", "ELM-012", "--ask-first"], "design.usage_ask_first"),
         (["change", "Bigger", "--elements"], "design.usage_elements"),
         (["--elements", "SCR-002"], "design.usage_elements"),
         (["open", "--elements"], "design.usage_elements"),
@@ -715,7 +718,13 @@ def test_the_help_names_the_options_and_the_show_action_names_elements(
     flat = " ".join(run.output.split())
 
     assert run.status == 0
-    for option in ("--screen SCREEN", "--element ELEMENT", "--no-review", "--elements [SCREEN]"):
+    for option in (
+        "--screen SCREEN",
+        "--element ELEMENT",
+        "--no-review",
+        "--ask-first",
+        "--elements [SCREEN]",
+    ):
         assert option in run.output
     assert "show --elements" in flat
     assert " ".join(said("design.option_no_review", language).split()) in flat
@@ -770,9 +779,10 @@ def test_the_target_comes_from_the_screen_and_the_element_of_the_mockup(tmp_path
     context = command_context(terminal(tmp_path, transport=NoNetwork()).environment)
     document = {"html": DOCUMENT}
 
-    assert design_change.aim_of(" scr-002 ", "elm-012") == design_change.Aim("SCR-002", "ELM-012")
+    back = design_change.Aim("SCR-002", ("ELM-012",))
+    assert design_change.aim_of(" scr-002 ", ["elm-012"]) == back
     assert design_change.aim_of(None, None) is None
-    assert design_change.target_of(context, document, design_change.Aim("SCR-002", "ELM-012")) == {
+    assert design_change.target_of(context, document, back) == {
         "screen_code": "SCR-002",
         "element_code": "ELM-012",
         "label": "Back",
@@ -783,10 +793,10 @@ def test_the_target_comes_from_the_screen_and_the_element_of_the_mockup(tmp_path
         "label": "SCR-003",
         "html": '<section id="SCR-003"></section>',
     }
-    empty = design_change.target_of(context, document, design_change.Aim("SCR-002", "ELM-015"))
+    empty = design_change.target_of(context, document, design_change.Aim("SCR-002", ("ELM-015",)))
     assert empty["label"] == "ELM-015"
     with pytest.raises(CliError) as missing:
-        design_change.target_of(context, document, design_change.Aim("SCR-001", "ELM-012"))
+        design_change.target_of(context, document, design_change.Aim("SCR-001", ("ELM-012",)))
     assert missing.value.code == "DESIGN_TARGET_NOT_FOUND"
     assert missing.value.status == 2
     assert dict(missing.value.values) == {

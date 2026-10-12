@@ -76,6 +76,10 @@ def evaluations_path(project_id: str) -> str:
     return f"{design_path(project_id)}/evaluations"
 
 
+def opinions_path(project_id: str) -> str:
+    return f"{design_path(project_id)}/opinions"
+
+
 def mockup_jobs_path(project_id: str) -> str:
     return f"{design_path(project_id)}/mockups/jobs"
 
@@ -142,8 +146,12 @@ def mockup_document(
     alternative_id: str,
     *,
     source: str = LATEST,
+    zones: bool = False,
 ) -> Mapping[str, object] | None:
-    query = urllib.parse.urlencode({"alternative_id": alternative_id, "source": source})
+    values = {"alternative_id": alternative_id, "source": source}
+    if zones:
+        values["zones"] = "true"
+    query = urllib.parse.urlencode(values)
     document = client.get(f"{design_path(project_id)}/mockups/document?{query}", optional=True)
     if document is None:
         return None
@@ -208,21 +216,30 @@ def iteration_body(
     version: Mapping[str, object],
     request: str,
     rules: Sequence[str],
-    target: Mapping[str, str] | None = None,
+    target: Mapping[str, object] | None = None,
+    opinion_id: str | None = None,
 ) -> dict[str, object]:
     body = version_body(version, request=request, assertions=list(rules))
     if target is not None:
         body["target"] = dict(target)
+    if opinion_id is not None:
+        body["opinion_id"] = opinion_id
     return body
 
 
 def evaluation_body(
-    version: Mapping[str, object], locale: str, scope: Mapping[str, str] | None = None
+    version: Mapping[str, object], locale: str, scope: Mapping[str, object] | None = None
 ) -> dict[str, object]:
     body = version_body(version, locale=locale)
     if scope is not None:
         body["scope"] = dict(scope)
     return body
+
+
+def opinion_body(
+    version: Mapping[str, object], request: str, target: Mapping[str, object], locale: str
+) -> dict[str, object]:
+    return version_body(version, request=request, target=dict(target), locale=locale)
 
 
 def propose_revision(
@@ -310,7 +327,15 @@ def distance(client: StudioClient, project_id: str) -> Mapping[str, object] | No
 
 
 def iterations(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
-    document = client.get(f"{design_path(project_id)}/iterations", optional=True)
+    return _listed(client, f"{design_path(project_id)}/iterations")
+
+
+def opinions(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
+    return _listed(client, opinions_path(project_id))
+
+
+def _listed(client: StudioClient, path: str) -> list[Mapping[str, object]]:
+    document = client.get(path, optional=True)
     return _items(document.get("items") if isinstance(document, dict) else None)
 
 

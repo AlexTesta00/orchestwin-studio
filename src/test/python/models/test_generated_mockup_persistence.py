@@ -289,3 +289,45 @@ def test_the_generations_of_the_iterations_are_read_with_their_events(database):
     assert records[1]["events"]["APPLICATION_RESULT"]["role"] == "MOCKUP_ATTEMPT"
     assert records[0]["recorded_at"] > records[1]["recorded_at"]
     assert hidden == []
+
+
+def test_the_generations_of_the_opinions_are_read_apart_from_the_iterations(database):
+    from orchestwin.persistence import create_database_runtime
+
+    async def scenario():
+        runtime = create_database_runtime(database)
+        try:
+            owner, project = await seed(runtime.session_factory)
+            store = SqlAlchemyProposalEvidenceStore(runtime.session_factory)
+            alternative = uuid4()
+            opinion = await record(
+                store,
+                owner,
+                project,
+                context("DESIGN_CHANGE_OPINION", FIRST_HASH, alternative, command_id="r1"),
+                outcome="ACCEPTED",
+                marker=1,
+            )
+            iteration = await record(
+                store,
+                owner,
+                project,
+                context("DESIGN_ITERATION", FIRST_HASH, alternative, command_id="c1"),
+                outcome="ACCEPTED",
+                marker=2,
+            )
+            readers = (store.design_change_opinion_generations, store.design_iteration_generations)
+            for reader in readers:
+                with pytest.raises(ValueError):
+                    await reader(owner_user_id=owner, project_id=project, limit=201)
+            found = [await reader(owner_user_id=owner, project_id=project) for reader in readers]
+            return opinion, iteration, found
+        finally:
+            await runtime.dispose()
+
+    opinion, iteration, (opinions, iterations) = run(scenario())
+    assert [item["generation_id"] for item in opinions] == [opinion]
+    assert [item["generation_id"] for item in iterations] == [iteration]
+    assert opinions[0]["context"]["command_id"] == "r1"
+    kinds = {"PROVIDER_RESULT", "ADAPTER_ACCEPTED", "APPLICATION_RESULT"}
+    assert set(opinions[0]["events"]) == set(iterations[0]["events"]) == kinds

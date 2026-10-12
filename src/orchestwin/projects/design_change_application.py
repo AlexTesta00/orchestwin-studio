@@ -7,6 +7,10 @@ from typing import Final, Protocol
 from uuid import UUID
 
 from orchestwin.artifacts.design import DesignAlternative
+from orchestwin.artifacts.design_change_targets import (
+    DESIGN_CHANGE_TARGET_INVALID,
+    DesignChangeTargetError,
+)
 from orchestwin.artifacts.design_evaluation import DesignEvaluationError
 from orchestwin.artifacts.design_packages import DesignExplorationPackage, DesignPackageVersion
 from orchestwin.artifacts.design_revision_application import (
@@ -57,6 +61,7 @@ class DesignChangeIssueCode(StrEnum):
     REVISION_PENDING = "DESIGN_REVISION_PENDING"
     PROTOTYPE_REQUIRED = "DESIGN_PROTOTYPE_REQUIRED"
     MODEL_NOT_CONFIGURED = "DESIGN_CHANGE_MODEL_NOT_CONFIGURED"
+    TARGET_INVALID = DESIGN_CHANGE_TARGET_INVALID
     UNCHANGED = "DESIGN_UNCHANGED"
     CONTEXT_CHANGED = "DESIGN_CONTEXT_CHANGED"
     INVALID_PROPOSAL = "INVALID_PROPOSAL"
@@ -253,6 +258,8 @@ class DesignChangeApplication:
             return _rejected(DesignChangeIssueCode.PROTOTYPE_REQUIRED)
         except DesignChangeRejection:
             return _rejected(DesignChangeIssueCode.ALTERNATIVE_NOT_CHOSEN)
+        except DesignChangeTargetError:
+            return _rejected(DesignChangeIssueCode.TARGET_INVALID)
         draft = await self._draft(
             context, alternative, requirements.specification, {"design_version_id": str(current.id)}
         )

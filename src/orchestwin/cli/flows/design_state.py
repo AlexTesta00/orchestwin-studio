@@ -3,6 +3,7 @@ from __future__ import annotations
 import textwrap
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from decimal import ROUND_DOWN, Decimal
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
@@ -14,6 +15,7 @@ from orchestwin.cli.errors import CliError
 from orchestwin.cli.flows.mockup_screens import document_screens as document_screens
 from orchestwin.cli.flows.mockup_screens import mockup_screens as mockup_screens
 from orchestwin.cli.messages import known
+from orchestwin.cli.shapes import is_number as _is_number
 from orchestwin.cli.shapes import mapping_or_empty as _mapping
 from orchestwin.cli.shapes import mappings as _mappings
 from orchestwin.cli.shapes import sequence as _sequence
@@ -43,7 +45,14 @@ KINDS: Final = (
 )
 DESIGN_STAGES: Final = frozenset({"DESIGN", "PACKAGE"})
 DESIGN_OPERATIONS: Final = frozenset(
-    {"MOCKUP", "ITERATION", "DESIGN_PROPOSAL", "DESIGN_REGENERATION", "DESIGN_EVALUATION"}
+    {
+        "MOCKUP",
+        "ITERATION",
+        "DESIGN_PROPOSAL",
+        "DESIGN_REGENERATION",
+        "DESIGN_EVALUATION",
+        "DESIGN_CHANGE_OPINION",
+    }
 )
 VISUAL_DIMENSIONS: Final = ("archetype", "hue_family", "color_mode", "tone", "heading_family")
 VISUAL_PLACEHOLDERS: Final = MappingProxyType(
@@ -84,6 +93,8 @@ LEVELS: Final = (
     ("structure", "design.distance_structure"),
 )
 JOINER: Final = " · "
+BORDER_CORRECTION: Final = "CONTROL_BORDER_REPLACED"
+TENTH: Final = Decimal("0.1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +140,7 @@ class DesignState:
     review: Mapping[str, object] | None = None
     pending_change: Mapping[str, object] | None = None
     distance: Mapping[str, object] | None = None
+    corrections: tuple[Mapping[str, object], ...] = ()
 
     @property
     def kind(self) -> str:
@@ -318,10 +330,12 @@ def read_state(client: StudioClient, project: ProjectFolder) -> DesignState:
     state = replace(state, documents=read_documents(client, state))
     if state.chosen is None:
         return state
+    changes = iteration_items(client, state)
     return replace(
         state,
         review=latest_review(client, state),
-        pending_change=pending_change(client, state),
+        pending_change=pending_change(state, changes),
+        corrections=applied_corrections(client, state, changes),
     )
 
 
@@ -362,30 +376,50 @@ def latest_review(client: StudioClient, state: DesignState) -> Mapping[str, obje
     )
 
 
-def pending_change(client: StudioClient, state: DesignState) -> Mapping[str, object] | None:
+def iteration_items(client: StudioClient, state: DesignState) -> list[Mapping[str, object]]:
     if not state.capabilities.iterations or state.applied_mockup is None:
-        return None
+        return []
+    return design_api.iterations(client, state.project_id)
+
+
+def pending_change(
+    state: DesignState, items: Sequence[Mapping[str, object]]
+) -> Mapping[str, object] | None:
     number = state.version_number
     return next(
         (
             item
-            for item in design_api.iterations(client, state.project_id)
+            for item in items
             if item.get("status") == PROPOSED and item.get("base_design_version_number") == number
         ),
         None,
     )
 
 
+def applied_corrections(
+    client: StudioClient, state: DesignState, items: Sequence[Mapping[str, object]]
+) -> tuple[Mapping[str, object], ...]:
+    number = state.version_number
+    applied = state.applied_mockup
+    if number is None or applied is None:
+        return ()
+    found = next(
+        (item for item in items if item.get("applied_design_version_number") == number), None
+    )
+    if found is None:
+        latest = design_api.latest_mockup(client, state.project_id, applied)
+        if latest is not None and latest.get("applied_design_version_number") == number:
+            found = latest
+    return () if found is None else tuple(_mappings(found.get("corrections")))
+
+
 def chosen_mockup(client: StudioClient, state: DesignState) -> Mapping[str, object] | None:
     chosen = state.chosen
     if chosen is None or state.applied_mockup != chosen.id:
         return None
-    document = state.documents.get(chosen.id)
-    if document is None:
-        document = design_api.mockup_document(
-            client, state.project_id, chosen.id, source=design_api.APPLIED
-        )
-    return document
+    return design_api.mockup_document(
+        client, state.project_id, chosen.id, source=design_api.APPLIED, zones=True
+    )
 
 
 def show_state(
@@ -622,8 +656,66 @@ def show_chosen(context: CommandContext, state: DesignState) -> None:
     console.heading(context.text("design.chosen_heading"))
     key = "design.chosen_approved" if state.approved else "design.chosen_waiting"
     console.say(key, version=state.version_number or "-")
+    show_corrections(context, state.corrections)
     show_alternative(context, state, alternative)
     show_rules(context, state.rules, changeable=state.changeable)
+
+
+def show_corrections(context: CommandContext, corrections: Sequence[Mapping[str, object]]) -> None:
+    if not corrections:
+        return
+    console = context.console
+    console.say("design.corrections_heading")
+    console.items([correction_line(context, item) for item in corrections])
+
+
+def correction_line(context: CommandContext, correction: Mapping[str, object]) -> str:
+    before = _mapping(correction.get("before"))
+    after = _mapping(correction.get("after"))
+    background = _mapping(correction.get("background"))
+    shade = colour_text(context, background)
+    if background.get("inherited") is True:
+        shade = context.text("design.correction_inherited", colour=shade)
+    count = _whole(correction.get("count"))
+    key = (
+        "design.correction_border"
+        if correction.get("code") == BORDER_CORRECTION
+        else "design.correction_text"
+    )
+    return context.text(
+        key,
+        selector=_text(correction.get("selector")) or "-",
+        before=colour_text(context, before),
+        background=shade,
+        ratio=ratio_text(context, before.get("ratio")),
+        threshold=threshold_text(context, correction.get("threshold")),
+        after=colour_text(context, after),
+        replaced=ratio_text(context, after.get("ratio")),
+        rules=context.text("design.correction_rules", count=count)
+        if count is not None and count > 1
+        else "",
+    )
+
+
+def colour_text(context: CommandContext, colour: Mapping[str, object]) -> str:
+    code = _text(colour.get("hex")).upper() or "-"
+    key = f"design.colour_{colour.get('name')}"
+    return f"{context.text(key)} {code}" if known(key) else code
+
+
+def ratio_text(context: CommandContext, value: object) -> str:
+    if not _is_number(value):
+        return "-"
+    return contrast_text(context, str(Decimal(str(value)).quantize(TENTH, rounding=ROUND_DOWN)))
+
+
+def threshold_text(context: CommandContext, value: object) -> str:
+    return contrast_text(context, f"{value:g}") if _is_number(value) else "-"
+
+
+def contrast_text(context: CommandContext, number: str) -> str:
+    shown = number.replace(".", ",") if context.language == "it" else number
+    return f"{shown}:1"
 
 
 def show_rules(context: CommandContext, rules: Sequence[str], *, changeable: bool = True) -> None:

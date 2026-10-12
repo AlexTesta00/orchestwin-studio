@@ -18,11 +18,14 @@ from orchestwin.models.output_language import dominant_language
 from .common import (
     _by_id,
     _change_target,
+    _checked_target,
     _copy,
-    _digest,
     _error,
+    _fake_design,
     _mockup_warnings,
+    _query_zones,
     _screen_list,
+    _target_snapshot,
     _tokens,
     _with_targeted,
 )
@@ -56,7 +59,9 @@ ITERATION_FIELDS = (
     "assertions",
     "target",
     "critique_source_id",
+    "opinion_id",
 )
+RESULT_APPROACHES = {"MOCKUP": 0, "ITERATION": 1}
 ITERATION_CHANGES = {
     "it": (
         "Il titolo della prima schermata invita a calcolare subito",
@@ -110,7 +115,15 @@ class _MockupRoutes:
             package = _rebased(current["package"], package)
         if package["owner_selected_alternative_id"] != alternative_id:
             return _Answer(200, None)
-        return _Answer(200, {**copy.deepcopy(stored), "package": package})
+        applied = _applied_numbers(project).get(_fake_design(stored["package"]).content_hash)
+        return _Answer(
+            200,
+            {
+                **copy.deepcopy(stored),
+                "package": package,
+                "applied_design_version_number": applied,
+            },
+        )
 
     def _checked_design(
         self, project: FakeProject | None, version_id: str | None, content_hash: str | None
@@ -189,19 +202,31 @@ class _MockupRoutes:
             alternative_id,
             list(current["package"]["owner_assertions"]),
         )
-        result = {
-            "status": "MOCKUP_GENERATED",
-            "generation_id": generation,
-            "design_version_id": current["id"],
-            "design_content_hash": current["content_hash"],
-            "package": package,
-            "approach": APPROACHES[self.language][0],
-            "changes": [],
-            "warnings": _mockup_warnings(package, project.specification["specification"]),
-            "cost_microusd": COSTS["MOCKUP"],
-        }
+        result = self._mockup_result(project, current, package, generation, "MOCKUP", [])
         project.mockups[alternative_id] = result
         return result
+
+    def _mockup_result(
+        self,
+        project: FakeProject,
+        design: Mapping[str, object],
+        package: dict[str, object],
+        generation: str,
+        operation: str,
+        changes: Sequence[str],
+    ) -> dict[str, object]:
+        return {
+            "status": "MOCKUP_GENERATED",
+            "generation_id": generation,
+            "design_version_id": design["id"],
+            "design_content_hash": design["content_hash"],
+            "package": package,
+            "approach": APPROACHES[self.language][RESULT_APPROACHES[operation]],
+            "changes": list(changes),
+            "warnings": _mockup_warnings(package, project.specification["specification"]),
+            "corrections": _copy(list(self.corrections)),
+            "cost_microusd": COSTS[operation],
+        }
 
     def _route_mockup_job_view(self, call: _Call) -> _Answer:
         return self._read_job(call, "MOCKUP")
@@ -210,6 +235,7 @@ class _MockupRoutes:
         alternative_id = _query_identifier(call, "alternative_id")
         source = call.value("source") or "latest"
         entry_screen = call.value("entry_screen")
+        zones = _query_zones(call)
         if source not in ("applied", "latest"):
             raise _Invalid([_error(("query", "source"), "enum")])
         project = self._owned(call)
@@ -236,7 +262,11 @@ class _MockupRoutes:
         tokens = _tokens(package, alternative_id)
         mockup = generated_mockup_from_snapshot(bound["mockup"], token_names=tokens)
         document = mockup_document(
-            mockup, tokens=tokens, language=_document_language(mockup), entry_screen=entry
+            mockup,
+            tokens=tokens,
+            language=_document_language(mockup),
+            entry_screen=entry,
+            zones=zones,
         )
         return _Answer(
             200,
@@ -259,6 +289,7 @@ class _MockupRoutes:
         assertions = fields.texts("assertions", nullable=False, default=[]) or []
         target = _change_target(fields)
         critique_source_id = fields.identifier("critique_source_id", required=False, nullable=True)
+        opinion_id = fields.identifier("opinion_id", required=False, nullable=True)
         fields.check()
         text, added = _normalized_iteration(request or "", assertions)
         project = self._owned(call)
@@ -273,6 +304,7 @@ class _MockupRoutes:
         bound = package.get("generated_mockup")
         if bound is None:
             raise _Refusal(409, {"code": "GENERATED_MOCKUP_REQUIRED"})
+        _checked_target(package, target)
         _merged_assertions(package["owner_assertions"], added)
         self._require_mockup_model()
         if not self._grounded(project, current):
@@ -299,10 +331,13 @@ class _MockupRoutes:
                     "request": text,
                     "target": _target_snapshot(target),
                     "critique_source_id": critique_source_id,
+                    "opinion_id": opinion_id,
                     "assertions": [
                         item for item in added if item not in package["owner_assertions"]
                     ],
                     "changes": [],
+                    "warnings": [],
+                    "corrections": [],
                     "failed": None,
                     "package_hash": None,
                     "base_design_version_number": current["version_number"],
@@ -342,23 +377,17 @@ class _MockupRoutes:
         alternative_id = str(bound["mockup"]["design_alternative_id"])
         proposed = self._mockup_package(project, package, alternative_id, merged)
         changes = _with_targeted(list(ITERATION_CHANGES[self.language]), self.language, target)
+        result = self._mockup_result(project, current, proposed, generation, "ITERATION", changes)
         for record in project.iterations:
             if record["job_id"] == job.id:
-                record["generation_id"] = generation
-                record["changes"] = changes
-                record["package_hash"] = _digest(proposed)
-                record["cost_microusd"] = COSTS["ITERATION"]
-        result = {
-            "status": "MOCKUP_GENERATED",
-            "generation_id": generation,
-            "design_version_id": current["id"],
-            "design_content_hash": current["content_hash"],
-            "package": proposed,
-            "approach": APPROACHES[self.language][1],
-            "changes": changes,
-            "warnings": _mockup_warnings(proposed, project.specification["specification"]),
-            "cost_microusd": COSTS["ITERATION"],
-        }
+                record.update(
+                    generation_id=generation,
+                    changes=changes,
+                    warnings=result["warnings"],
+                    corrections=result["corrections"],
+                    package_hash=_fake_design(proposed).content_hash,
+                    cost_microusd=COSTS["ITERATION"],
+                )
         project.mockups[alternative_id] = result
         return result
 
@@ -369,9 +398,7 @@ class _MockupRoutes:
         project = self._owned(call)
         if project is None:
             return _Answer(200, {"items": []})
-        applied: dict[str, int] = {}
-        for version in project.designs:
-            applied.setdefault(str(version["content_hash"]), int(version["version_number"]))
+        applied = _applied_numbers(project)
         items = []
         for record in project.iterations:
             if record["generation_id"] is None and record["failed"] is None:
@@ -396,6 +423,9 @@ class _MockupRoutes:
                     "base_design_version_number": record["base_design_version_number"],
                     "applied_design_version_number": number if status == "APPLIED" else None,
                     "cost_microusd": record["cost_microusd"],
+                    "warnings": _copy(record["warnings"]),
+                    "corrections": _copy(record["corrections"]),
+                    "opinion_id": record["opinion_id"],
                 }
             )
         return _Answer(200, {"items": items})
@@ -459,7 +489,8 @@ def _merged_assertions(current: Sequence[str], added: Sequence[str]) -> list[str
     return merged
 
 
-def _target_snapshot(target: Mapping[str, object] | None) -> dict[str, object] | None:
-    if target is None:
-        return None
-    return {name: value for name, value in target.items() if value is not None}
+def _applied_numbers(project: FakeProject) -> dict[str, int]:
+    applied: dict[str, int] = {}
+    for version in project.designs:
+        applied.setdefault(str(version["content_hash"]), int(version["version_number"]))
+    return applied

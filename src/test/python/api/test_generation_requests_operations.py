@@ -30,6 +30,11 @@ from orchestwin.api.design_discussion import (
     DesignDiscussionResult,
 )
 from orchestwin.api.design_loop import DesignLoopApplication
+from orchestwin.api.design_opinions import (
+    ChangeOpinionResult,
+    ChangeOpinionStatus,
+    DesignOpinionApplication,
+)
 from orchestwin.api.generation_requests import PREFERENCE_APPLIED, RESPOND_ASYNC, SERVER_ERROR
 from orchestwin.api.knowledge_alignment import (
     KnowledgeAlignmentApplication,
@@ -80,6 +85,7 @@ from src.test.python.api import test_design_loop_api as loop_harness
 from src.test.python.api.test_design_api import design_version, proposed_diff
 from src.test.python.api.test_requirements_api import specification_version
 from src.test.python.artifacts import design_fixtures
+from src.test.python.artifacts.test_design_change_opinions48 import opinion_run
 from src.test.python.artifacts.test_design_discussion import BRUNO, discussion, discussion_round
 from src.test.python.artifacts.test_design_package_extension import (
     extended_version,
@@ -132,6 +138,13 @@ TEST_REVIEW = {"locale": "it-IT", "again": False}
 TWIN_UPDATE = {"locale": "it-IT"}
 ALIGNMENT_RUN = {"locale": "it-IT", "from_commit": None, "to_commit": COMMIT, "commits": [COMMIT]}
 DESIGN_CHANGE = {"request": "Aggiungi un passo di conferma prima del salvataggio."}
+OPINION = {
+    "design_version_id": str(design_fixtures.DESIGN_VERSION_ID),
+    "design_content_hash": "c" * 64,
+    "request": "Fai la barra rossa con il testo blu",
+    "target": {"screen_code": "SCR-001", "element_code": "ELM-001"},
+    "locale": "it-IT",
+}
 ROUTES = {
     "PERSONA_PROPOSAL": ("/user-modeling/personas/proposals", None),
     "USER_TWIN_GENERATION": ("/user-modeling/snapshots/generate", None),
@@ -146,6 +159,7 @@ ROUTES = {
     "KNOWLEDGE_ALIGNMENT": ("/alignment/runs", ALIGNMENT_RUN),
     "TEST_PLAN": ("/test-plans", TEST_PLAN),
     "TEST_REVIEW": (f"/test-runs/{RUN_ID}/reviews", TEST_REVIEW),
+    "DESIGN_CHANGE_OPINION": ("/design/opinions", OPINION),
     "TWIN_UPDATE": (f"/user-twins/{TWIN}/updates", TWIN_UPDATE),
 }
 
@@ -187,6 +201,7 @@ class Scripted:
 
 def studio(scripted: Scripted, monkeypatch):
     monkeypatch.setattr(DesignLoopApplication, "evaluate", scripted)
+    monkeypatch.setattr(DesignOpinionApplication, "ask", scripted)
     monkeypatch.setattr(DesignDiscussionApplication, "start", scripted)
     monkeypatch.setattr(DesignDiscussionApplication, "next_round", scripted)
     monkeypatch.setattr(CodeChangeApplication, "review", scripted)
@@ -423,6 +438,22 @@ CASES = [
     ),
     ("TEST_REVIEW", lambda _: ProposalGenerationError("GENERATION_BUDGET_UNAVAILABLE")),
     (
+        "DESIGN_CHANGE_OPINION",
+        lambda _: ChangeOpinionResult(
+            status=ChangeOpinionStatus.RECORDED, run=opinion_run(), design_version_number=3
+        ),
+    ),
+    (
+        "DESIGN_CHANGE_OPINION",
+        lambda _: HTTPException(422, detail={"code": "DESIGN_CHANGE_TARGET_INVALID"}),
+    ),
+    (
+        "DESIGN_CHANGE_OPINION",
+        lambda _: HTTPException(409, detail={"code": "GENERATED_MOCKUP_REQUIRED"}),
+    ),
+    ("DESIGN_CHANGE_OPINION", lambda _: ProposalGenerationError("INVALID_CHANGE_OPINION_OUTPUT")),
+    ("DESIGN_CHANGE_OPINION", lambda _: ProposalGenerationError("GENERATION_BUDGET_EXCEEDED")),
+    (
         "TWIN_UPDATE",
         lambda _: TwinUpdateResult(status=TwinUpdateStatus.PROPOSED, update=twin_update()),
     ),
@@ -541,6 +572,9 @@ def test_a_refused_proposal_gives_its_reason_with_and_without_the_preference(
         ("TEST_PLAN", {**TEST_PLAN, "snapshot": None}),
         ("TEST_PLAN", {**TEST_PLAN, "criteria": []}),
         ("TEST_REVIEW", {**TEST_REVIEW, "again": "maybe"}),
+        ("DESIGN_CHANGE_OPINION", {**OPINION, "request": "   "}),
+        ("DESIGN_CHANGE_OPINION", {**OPINION, "target": None}),
+        ("DESIGN_CHANGE_OPINION", {**OPINION, "mode": "TWIN_REVIEW"}),
         ("TWIN_UPDATE", {**TWIN_UPDATE, "locale": "?"}),
         ("TWIN_UPDATE", {**TWIN_UPDATE, "again": True}),
     ],

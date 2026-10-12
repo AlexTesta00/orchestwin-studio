@@ -22,13 +22,13 @@ from orchestwin.projects.briefs import BriefField, create_project_brief
 
 from .acceptance import MAX_SNAPSHOT_TITLE_LENGTH, _criteria_outcomes, _cut_text, _run_summary
 from .changes import _recorded_order, _text_block
-from .common import _cited_ids, _copy, _critique_of, _mockup_warnings
+from .common import _cited_ids, _copy, _critique_of
 from .learning import _comparable, _cut_line
 from .projects import SEED_BRIEF
 from .tasks import _task_items
 from .team import RULE_KEYS
 from .texts import COSTS, PERSONAS
-from .values import APPROACHES, COMMIT_PATTERN, SEED_DIFF, SEED_FILE, STAGES, _iso
+from .values import COMMIT_PATTERN, SEED_DIFF, SEED_FILE, STAGES, _iso
 
 if TYPE_CHECKING:
     from .project import FakeProject
@@ -42,6 +42,7 @@ REQUEST_OPERATIONS = (
     "DESIGN_PROPOSAL",
     "DESIGN_REGENERATION",
     "DESIGN_EVALUATION",
+    "DESIGN_CHANGE_OPINION",
     "CODE_CHANGE_REVIEW",
     "TEST_PLAN",
     "TEST_REVIEW",
@@ -587,17 +588,9 @@ class _Seeding:
         selected = self._mockup_package(project, package, chosen, [])
         design = self._append_design(project, selected, account)
         if self.hosted:
-            project.mockups[chosen] = {
-                "status": "MOCKUP_GENERATED",
-                "generation_id": self._new_id(),
-                "design_version_id": design["id"],
-                "design_content_hash": design["content_hash"],
-                "package": copy.deepcopy(selected),
-                "approach": APPROACHES[self.language][0],
-                "changes": [],
-                "warnings": _mockup_warnings(selected, project.specification["specification"]),
-                "cost_microusd": COSTS["MOCKUP"],
-            }
+            project.mockups[chosen] = self._mockup_result(
+                project, design, copy.deepcopy(selected), self._new_id(), "MOCKUP", []
+            )
         if approve:
             self._approve(project, "design")
 

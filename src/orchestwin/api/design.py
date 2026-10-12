@@ -7,7 +7,15 @@ from typing import Annotated, Final, Literal, Protocol
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    field_validator,
+    model_validator,
+)
 
 from orchestwin.api.auth import CurrentUser
 from orchestwin.api.clarification import (
@@ -94,8 +102,11 @@ from orchestwin.knowledge.state import MAX_DESIGN_REQUEST_LENGTH
 from orchestwin.models.design import DesignProposalIssueCode
 from orchestwin.models.design_change import (
     ELEMENT_CODE_PATTERN,
+    MAX_TARGET_ELEMENTS,
+    MIN_TARGET_ELEMENTS,
     SCREEN_CODE_PATTERN,
     DesignChangeTarget,
+    DesignChangeTargetElement,
     target_html,
     target_label,
 )
@@ -577,21 +588,37 @@ class DesignRevisionPayload(ApiModel):
         )
 
 
+_TargetLabel = Annotated[str, AfterValidator(target_label)]
+_TargetHtml = Annotated[str, AfterValidator(target_html)]
+
+
+class DesignChangeTargetElementRequest(ApiModel):
+    element_code: str = Field(pattern=ELEMENT_CODE_PATTERN)
+    label: _TargetLabel | None = None
+    html: _TargetHtml | None = None
+
+    def to_domain(self) -> DesignChangeTargetElement:
+        return DesignChangeTargetElement(
+            element_code=self.element_code, label=self.label, html=self.html
+        )
+
+
 class DesignChangeTargetRequest(ApiModel):
     screen_code: str = Field(pattern=SCREEN_CODE_PATTERN)
     element_code: str | None = Field(default=None, pattern=ELEMENT_CODE_PATTERN)
-    label: str | None = None
-    html: str | None = None
+    label: _TargetLabel | None = None
+    html: _TargetHtml | None = None
+    elements: list[DesignChangeTargetElementRequest] | None = Field(
+        default=None,
+        min_length=MIN_TARGET_ELEMENTS,
+        max_length=MAX_TARGET_ELEMENTS,
+        exclude_if=lambda value: value is None,
+    )
 
-    @field_validator("label")
-    @classmethod
-    def normalized_label(cls, value: str | None) -> str | None:
-        return None if value is None else target_label(value)
-
-    @field_validator("html")
-    @classmethod
-    def trimmed_html(cls, value: str | None) -> str | None:
-        return None if value is None else target_html(value)
+    @model_validator(mode="after")
+    def one_part_or_several_parts(self) -> DesignChangeTargetRequest:
+        self.to_domain()
+        return self
 
     def to_domain(self) -> DesignChangeTarget:
         return DesignChangeTarget(
@@ -599,6 +626,7 @@ class DesignChangeTargetRequest(ApiModel):
             element_code=self.element_code,
             label=self.label,
             html=self.html,
+            elements=tuple(part.to_domain() for part in self.elements or ()),
         )
 
 
@@ -1322,13 +1350,13 @@ def _raise_revision_failure(result: DesignRevisionResult) -> None:
     raise conflict(code)
 
 
-_CHANGE_NOT_FOUND = frozenset(
-    {
-        DesignChangeIssueCode.PROJECT_NOT_FOUND,
-        DesignChangeIssueCode.SPECIFICATION_NOT_FOUND,
-        DesignChangeIssueCode.DESIGN_NOT_FOUND,
-    }
-)
+_CHANGE_REFUSALS: Final = {
+    DesignChangeIssueCode.PROJECT_NOT_FOUND: 404,
+    DesignChangeIssueCode.SPECIFICATION_NOT_FOUND: 404,
+    DesignChangeIssueCode.DESIGN_NOT_FOUND: 404,
+    DesignChangeIssueCode.TARGET_INVALID: 422,
+    DesignChangeIssueCode.MODEL_NOT_CONFIGURED: 503,
+}
 
 
 def design_change_payload(result: DesignChangeResult) -> DesignChangePayload:
@@ -1339,14 +1367,7 @@ def design_change_payload(result: DesignChangeResult) -> DesignChangePayload:
         )
 
     code = "DESIGN_CHANGE_REJECTED" if result.issue is None else result.issue.value
-
-    if result.issue in _CHANGE_NOT_FOUND:
-        raise refusal(404, code)
-
-    if result.issue is DesignChangeIssueCode.MODEL_NOT_CONFIGURED:
-        raise refusal(503, code)
-
-    raise conflict(code)
+    raise refusal(_CHANGE_REFUSALS.get(result.issue, 409), code)
 
 
 def _raise_gate_submission_failure(
@@ -1388,6 +1409,7 @@ __all__ = [
     "DesignChangePayload",
     "DesignChangeRequest",
     "DesignChangeService",
+    "DesignChangeTargetElementRequest",
     "DesignChangeTargetRequest",
     "DesignGenerationPayload",
     "DesignPackageChangePayload",

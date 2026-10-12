@@ -25,15 +25,25 @@ from orchestwin.agents.selection_rules import (
     TeamSelectionReasonCode,
 )
 from orchestwin.api.requirements import RequirementsSpecificationPayload
+from orchestwin.artifacts.design_change_targets import DesignChangeTargetError
 from orchestwin.artifacts.generated_mockup_review import (
     MockupIssueSeverity,
     review_generated_mockup,
 )
-from orchestwin.artifacts.generated_mockups import generated_mockup_from_snapshot
-from orchestwin.artifacts.visual_catalog import MODES, VisualChoices
+from orchestwin.artifacts.generated_mockups import GeneratedMockup, generated_mockup_from_snapshot
+from orchestwin.artifacts.visual_catalog import MODES, ColorMode, VisualChoices
 from orchestwin.knowledge.state import MAX_FINDINGS, MAX_TASK_LENGTH
+from orchestwin.models.design_change import (
+    MAX_TARGET_ELEMENTS,
+    MIN_TARGET_ELEMENTS,
+    TARGET_PART_FIELDS,
+    DesignChangeTarget,
+    DesignChangeTargetElement,
+    target_html,
+    target_label,
+    target_view,
+)
 from orchestwin.models.design_change import TARGET_FIELDS as CHANGE_TARGET_FIELDS
-from orchestwin.models.design_change import target_html, target_label
 from orchestwin.projects.briefs import BriefField
 from orchestwin.projects.domain import ProjectMode
 from orchestwin.projects.progress import ArtifactVersion
@@ -50,10 +60,10 @@ from orchestwin.twins.user_twins import (
 from orchestwin.workflow.gates import GateArtifactReference, HumanGate, HumanGateEvent
 
 from .texts import ALIGNMENT_TEXTS, LAX_BOOLEANS
-from .values import CUT_MARK, ELEMENT_CODE, SCREEN_CODE
+from .values import CUT_MARK, ELEMENT_CODE, SCREEN_CODE, _Invalid, _Refusal
 
 if TYPE_CHECKING:
-    from .fields import _Fields
+    from .fields import _Call, _Fields
 
 
 CITED_KEYS = ("requirement_ids", "user_story_ids", "acceptance_criterion_ids")
@@ -214,6 +224,7 @@ def _models(
     parse: Callable[[_Fields], dict[str, object]],
     *,
     required: bool = True,
+    nullable: bool = False,
     minimum_items: int = 0,
     maximum_items: int | None = None,
 ) -> list[dict[str, object]]:
@@ -222,6 +233,7 @@ def _models(
         name,
         allowed,
         required=required,
+        nullable=nullable,
         minimum_items=minimum_items,
         maximum_items=maximum_items,
     )
@@ -522,37 +534,55 @@ def _twin_reference(twin: Mapping[str, object]) -> dict[str, object]:
     }
 
 
-def _tokens(package: Mapping[str, object], alternative_id: str) -> dict[str, str]:
+def _visual_language(package: Mapping[str, object], alternative_id: str) -> dict[str, object]:
     alternative = _by_id(package["alternatives"], alternative_id)
     if alternative is None:
         raise RuntimeError("the mockup needs its alternative")
-    return dict(alternative["visual_language"]["tokens"])
+    return alternative["visual_language"]
+
+
+def _tokens(package: Mapping[str, object], alternative_id: str) -> dict[str, str]:
+    return dict(_visual_language(package, alternative_id)["tokens"])
+
+
+def _applied_alternative_id(package: Mapping[str, object]) -> str:
+    return str(package["generated_mockup"]["mockup"]["design_alternative_id"])
+
+
+def _colour_mode(package: Mapping[str, object]) -> ColorMode:
+    choices = _visual_language(package, _applied_alternative_id(package))["choices"]
+    return VisualChoices.from_snapshot(choices).color_mode
+
+
+def _applied_mockup(package: Mapping[str, object]) -> GeneratedMockup:
+    tokens = _tokens(package, _applied_alternative_id(package))
+    return generated_mockup_from_snapshot(package["generated_mockup"]["mockup"], token_names=tokens)
 
 
 def _mockup_warnings(
     package: Mapping[str, object], specification: Mapping[str, object]
 ) -> list[dict[str, object]]:
-    bound = package.get("generated_mockup")
-    if bound is None:
+    if package.get("generated_mockup") is None:
         return []
-    snapshot = bound["mockup"]
-    alternative = _by_id(package["alternatives"], str(snapshot["design_alternative_id"]))
-    if alternative is None:
-        raise RuntimeError("the mockup needs its alternative")
-    language = alternative["visual_language"]
-    tokens = dict(language["tokens"])
-    mode = VisualChoices.from_snapshot(language["choices"]).color_mode
     report = review_generated_mockup(
-        generated_mockup_from_snapshot(snapshot, token_names=tokens),
-        tokens=tokens,
+        _applied_mockup(package),
+        tokens=_tokens(package, _applied_alternative_id(package)),
         requirement_codes=[str(item["code"]) for item in specification["requirements"]],
-        text_contrast_threshold=MODES[mode].text_threshold,
+        text_contrast_threshold=MODES[_colour_mode(package)].text_threshold,
     )
     return [
         {"code": issue.code, "screen_code": issue.screen_code, "detail": issue.detail}
         for issue in report.issues
         if issue.severity is MockupIssueSeverity.WARNING
     ]
+
+
+def _query_zones(call: _Call) -> bool:
+    value = call.value("zones")
+    zones = False if value is None else _lax_boolean(value)
+    if zones is None:
+        raise _Invalid([_error(("query", "zones"), "bool_parsing")])
+    return zones
 
 
 def _screen_list(mockup: Mapping[str, object]) -> list[dict[str, object]]:
@@ -562,19 +592,71 @@ def _screen_list(mockup: Mapping[str, object]) -> list[dict[str, object]]:
     ]
 
 
-def _change_target(fields: _Fields) -> dict[str, object] | None:
-    child = fields.child("target", CHANGE_TARGET_FIELDS, required=False, nullable=True)
+def _change_target(fields: _Fields, *, required: bool = False) -> dict[str, object] | None:
+    child = fields.child("target", CHANGE_TARGET_FIELDS, required=required, nullable=not required)
     if child is None:
         return None
     screen = child.pattern("screen_code", SCREEN_CODE)
     element = child.pattern("element_code", ELEMENT_CODE, required=False, nullable=True)
-    texts: dict[str, object] = {}
-    for name, normalizer in (("label", target_label), ("html", target_html)):
-        text = child.text(name, required=False, nullable=True)
-        texts[name] = None if text is None else child.normalized(name, text, normalizer)
+    texts = _target_texts(child)
+    parts = _models(
+        child,
+        "elements",
+        TARGET_PART_FIELDS,
+        _target_part,
+        required=False,
+        nullable=True,
+        minimum_items=MIN_TARGET_ELEMENTS,
+        maximum_items=MAX_TARGET_ELEMENTS,
+    )
+    target = {"screen_code": screen, "element_code": element, **texts}
+    if parts:
+        target["elements"] = parts
+    _model_rule(child, lambda: _target_domain(target))
     valid = not child.errors
     fields.adopt(child)
-    return {"screen_code": screen, "element_code": element, **texts} if valid else None
+    return target if valid else None
+
+
+def _target_texts(fields: _Fields) -> dict[str, object]:
+    texts: dict[str, object] = {}
+    for name, normalizer in (("label", target_label), ("html", target_html)):
+        text = fields.text(name, required=False, nullable=True)
+        texts[name] = None if text is None else fields.normalized(name, text, normalizer)
+    return texts
+
+
+def _target_part(fields: _Fields) -> dict[str, object]:
+    return {"element_code": fields.pattern("element_code", ELEMENT_CODE), **_target_texts(fields)}
+
+
+def _target_snapshot(target: Mapping[str, object] | None) -> dict[str, object] | None:
+    if target is None:
+        return None
+    snapshot = _present(target)
+    if "elements" in snapshot:
+        snapshot["elements"] = [_present(item) for item in snapshot["elements"]]
+    return snapshot
+
+
+def _present(values: Mapping[str, object]) -> dict[str, object]:
+    return {name: value for name, value in values.items() if value is not None}
+
+
+def _checked_target(package: Mapping[str, object], target: Mapping[str, object] | None) -> None:
+    if target is None:
+        return
+    mockup = None if package.get("generated_mockup") is None else _applied_mockup(package)
+    try:
+        target_view(_target_domain(target), mockup)
+    except DesignChangeTargetError as error:
+        raise _Refusal(422, {"code": error.code}) from error
+
+
+def _target_domain(target: Mapping[str, object]) -> DesignChangeTarget:
+    snapshot = _target_snapshot(target)
+    parts = tuple(DesignChangeTargetElement(**part) for part in snapshot.pop("elements", ()))
+    return DesignChangeTarget(**snapshot, elements=parts)
 
 
 def _with_targeted(
@@ -583,10 +665,13 @@ def _with_targeted(
     if target is None:
         return changes
     texts = ALIGNMENT_TEXTS[language]
-    if target["element_code"] is None:
-        line = texts["targeted_screen"].format(screen=target["screen_code"])
+    screen = target["screen_code"]
+    codes = [part["element_code"] for part in target.get("elements") or ()]
+    if codes:
+        joined = f"{', '.join(codes[:-1])} {texts['and']} {codes[-1]}"
+        line = texts["targeted_parts"].format(elements=joined, screen=screen)
+    elif target["element_code"] is None:
+        line = texts["targeted_screen"].format(screen=screen)
     else:
-        line = texts["targeted_element"].format(
-            element=target["element_code"], screen=target["screen_code"]
-        )
+        line = texts["targeted_element"].format(element=target["element_code"], screen=screen)
     return list(dict.fromkeys((line, *changes)))

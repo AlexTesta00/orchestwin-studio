@@ -10,6 +10,7 @@ from uuid import UUID, uuid5
 
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.generated_mockup_structure import derive_elements
+from orchestwin.artifacts.generated_mockup_zones import DerivedZone, derive_zones, zone_by_code
 from orchestwin.artifacts.mockup_html import render_evaluation_document
 from orchestwin.artifacts.prototypes import PrototypeElement, PrototypeElementKind, PrototypeScreen
 from orchestwin.evaluation.artifact_content import MAX_VIEW_BYTES
@@ -58,6 +59,9 @@ TABLE_ROWS_SHOWN: Final = 12
 MAX_ELEMENT_ANCHORS: Final = 120
 OTHER_ANCHORS_PER_SCREEN: Final = 8
 DESIGN_EVALUATION_SCOPE_INVALID: Final = "DESIGN_EVALUATION_SCOPE_INVALID"
+ELEMENT_SCOPE: Final = "element"
+ZONE_SCOPE: Final = "zone"
+PARTS_SCOPE: Final = "parts"
 REMAINING_ROWS: Final = {
     "it": ("… e un'altra riga della tabella", "… e altre {count} righe della tabella"),
     "en": ("… and one more row in the table", "… and {count} more rows in the table"),
@@ -281,6 +285,10 @@ def _anchor_label(text: str) -> str:
     return text if len(text) <= ANCHOR_LABEL_LENGTH else text[: ANCHOR_LABEL_LENGTH - 1] + "…"
 
 
+def _element_label(element: PrototypeElement) -> str:
+    return _anchor_label(element.accessible_name or element.content)
+
+
 def remaining_rows_text(count: int, language: str) -> str:
     one, many = REMAINING_ROWS.get(language, REMAINING_ROWS["en"])
     return one if count == 1 else many.format(count=count)
@@ -373,6 +381,9 @@ class DesignReviewScope:
     element_code: str | None
     label: str
     place: str
+    kind: str = ELEMENT_SCOPE
+    parts: tuple[tuple[str, str], ...] = ()
+    holds: tuple[str, ...] = ()
 
     @property
     def anchor_key(self) -> str:
@@ -381,8 +392,28 @@ class DesignReviewScope:
         return f"{self.screen_code}/{self.element_code}"
 
 
+def _screen_zones(version: DesignPackageVersion, screen_code: str) -> tuple[DerivedZone, ...]:
+    bound = version.package.generated_mockup
+    zones = () if bound is None else derive_zones(bound.mockup)
+    return tuple(zone for zone in zones if zone.screen_code == screen_code)
+
+
+def _part_label(screen: PrototypeScreen, zones: Sequence[DerivedZone], code: str) -> str:
+    zone = zone_by_code(zones, code)
+    if zone is not None:
+        return _anchor_label(zone.label)
+    element = next((item for item in screen.elements if item.code == code), None)
+    if element is None:
+        raise DesignEvaluationError(DESIGN_EVALUATION_SCOPE_INVALID)
+    return _element_label(element)
+
+
 def design_review_scope(
-    version: DesignPackageVersion, *, screen_code: str, element_code: str | None = None
+    version: DesignPackageVersion,
+    *,
+    screen_code: str,
+    element_code: str | None = None,
+    element_codes: Sequence[str] = (),
 ) -> DesignReviewScope:
     _selected_alternative(version)
     screen = next(
@@ -392,13 +423,26 @@ def design_review_scope(
         raise DesignEvaluationError(DESIGN_EVALUATION_SCOPE_INVALID)
     title = _anchor_label(screen.title)
     place = f"{screen.code} {title}"
-    if element_code is None:
+    codes = tuple(element_codes) or (() if element_code is None else (element_code,))
+    if not codes:
         return DesignReviewScope(screen.code, None, title, place)
-    element = next((item for item in screen.elements if item.code == element_code), None)
-    if element is None:
-        raise DesignEvaluationError(DESIGN_EVALUATION_SCOPE_INVALID)
-    label = _anchor_label(element.accessible_name or element.content)
-    return DesignReviewScope(screen.code, element.code, label, f"{place} · {element.code} {label}")
+    zones = _screen_zones(version, screen.code)
+    parts = tuple((code, _part_label(screen, zones, code)) for code in codes)
+    named = f"{place} · " + ", ".join(f"{code} {label}" for code, label in parts)
+    if element_codes:
+        return DesignReviewScope(screen.code, None, title, named, kind=PARTS_SCOPE, parts=parts)
+    zone = zone_by_code(zones, element_code)
+    if zone is None:
+        return DesignReviewScope(screen.code, element_code, parts[0][1], named)
+    return DesignReviewScope(
+        screen.code,
+        None,
+        parts[0][1],
+        named,
+        kind=ZONE_SCOPE,
+        parts=parts,
+        holds=zone.element_codes,
+    )
 
 
 def design_review_anchors(
@@ -416,10 +460,15 @@ def design_review_anchors(
         place = f"{screen.code} {_anchor_label(screen.title)}"
         anchors[screen.code] = place
         for element in _anchored_elements(elements) if bounded else elements:
-            label = _anchor_label(element.accessible_name or element.content)
-            anchors[f"{screen.code}/{element.code}"] = f"{place} · {element.code} {label}"
-    if scope is not None:
+            anchors[f"{screen.code}/{element.code}"] = (
+                f"{place} · {element.code} {_element_label(element)}"
+            )
+    if scope is None:
+        return anchors
+    if scope.kind == ELEMENT_SCOPE:
         anchors.setdefault(scope.anchor_key, scope.place)
+    else:
+        anchors[scope.anchor_key] = scope.place
     return anchors
 
 
@@ -915,6 +964,7 @@ __all__ = [
     "DESIGN_EVALUATION_SCHEMA_VERSION",
     "DESIGN_EVALUATION_SCOPE_INVALID",
     "DESIGN_SPECIFICATION_LOCATION",
+    "ELEMENT_SCOPE",
     "EVALUATION_DOCUMENT_LOCATION",
     "HOSTED_DOCUMENT_BYTES",
     "MATCH_SIMILARITY",
@@ -922,8 +972,10 @@ __all__ = [
     "MAX_ELEMENT_ANCHORS",
     "MAX_EVALUATED_TWINS",
     "OTHER_ANCHORS_PER_SCREEN",
+    "PARTS_SCOPE",
     "REMAINING_ROWS",
     "TABLE_ROWS_SHOWN",
+    "ZONE_SCOPE",
     "AnchoredSyntheticFinding",
     "DesignEvaluationComparison",
     "DesignEvaluationDocument",

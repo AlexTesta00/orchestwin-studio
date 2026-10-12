@@ -237,7 +237,11 @@ def unusable(case):
 
 
 def test_the_request_names_the_supplied_design_after_the_target():
-    assert tuple(IterationRequest.model_fields)[-2:] == ("target", "critique_source_id")
+    assert tuple(IterationRequest.model_fields)[-3:] == (
+        "target",
+        "critique_source_id",
+        "opinion_id",
+    )
     plain = IterationRequest.model_validate(request_body(applied_versions()))
     assert plain.critique_source_id is None
     body = request_body(applied_versions(), critique_source_id=str(PAGE_ID))

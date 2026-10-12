@@ -76,6 +76,7 @@ RESULT_KEYS = {
     "approach",
     "changes",
     "warnings",
+    "corrections",
     "cost_microusd",
 }
 
@@ -797,7 +798,7 @@ def test_the_newest_mockup_of_an_alternative_survives_a_new_version_of_the_desig
         guided = generated(client, registry, versions, GUIDED_ID)["result"]
         dashboard = generated(client, registry, versions, DASHBOARD_ID)["result"]
         latest = client.get(MOCKUPS, params={"alternative_id": str(GUIDED_ID)}).json()
-        assert latest == guided
+        assert latest == {**guided, "applied_design_version_number": None}
         first = versions.versions[0]
         applied = versions.apply(DesignPackagePayload.model_validate(guided["package"]).to_domain())
         kept = client.get(MOCKUPS, params={"alternative_id": str(DASHBOARD_ID)}).json()
@@ -811,7 +812,8 @@ def test_the_newest_mockup_of_an_alternative_survives_a_new_version_of_the_desig
         versions.apply(changed)
         gone = client.get(MOCKUPS, params={"alternative_id": str(DASHBOARD_ID)}).json()
         unknown = client.get(MOCKUPS, params={"alternative_id": str(uuid4())}).json()
-    assert set(kept) == RESULT_KEYS
+    assert set(kept) == {*RESULT_KEYS, "applied_design_version_number"}
+    assert kept["applied_design_version_number"] is None
     assert kept["design_version_id"] == str(first.id)
     assert kept["generation_id"] == dashboard["generation_id"]
     rebased = DesignPackagePayload.model_validate(kept["package"]).to_domain()

@@ -265,7 +265,7 @@ def test_the_list_of_the_iterations_follows_their_evidence_and_the_design_versio
     assert [item["status"] for item in listed] == ["PROPOSED", "FAILED", "REJECTED", "PROPOSED"]
     assert [item["cost_microusd"] for item in listed] == [800_000, 0, 300_000, 400_000]
     newest = listed[0]
-    assert set(newest) == {
+    assert list(newest) == [
         "generation_id",
         "requested_at",
         "request",
@@ -277,9 +277,20 @@ def test_the_list_of_the_iterations_follows_their_evidence_and_the_design_versio
         "base_design_version_number",
         "applied_design_version_number",
         "cost_microusd",
-    }
+        "warnings",
+        "corrections",
+        "opinion_id",
+    ]
     assert newest["generation_id"] == retried["result"]["generation_id"]
     assert [item["target"] for item in listed] == [None, None, None, None]
+    assert [item["opinion_id"] for item in listed] == [None, None, None, None]
+    assert [(item["warnings"], item["corrections"]) for item in listed] == [
+        (retried["result"]["warnings"], []),
+        ([], []),
+        ([], []),
+        (first["result"]["warnings"], []),
+    ]
+    assert retried["result"]["corrections"] == first["result"]["corrections"] == []
     assert newest["assertions"] == ["Il tono resta caldo e rassicurante."]
     assert newest["changes"] == iteration_payload()["changes"]
     assert newest["base_design_version_number"] == 2

@@ -17,10 +17,11 @@ from .design import DESIGN_CHANGE_FIELDS
 from .evaluations import EVALUATION_FIELDS, EVALUATOR, SCOPE_FIELDS, SCOPED_FINDINGS
 from .fields import _Call
 from .mockups import ITERATION_CHANGES, ITERATION_FIELDS
+from .opinions import OPINION_FIELDS
 from .project import FakeProject
 from .routes import PREFIX, ROUTES, RecordedRequest, route_table
 from .studio import LOCAL_OWNER_EMAIL, FakeStudio
-from .texts import ALIGNMENT_TEXTS, COSTS, SCREENS
+from .texts import ALIGNMENT_TEXTS, COSTS, OPINION_TEXTS, SCREENS
 from .values import LOCAL_OWNER, _Answer, _Invalid, _Refusal
 
 __all__ = [
@@ -39,6 +40,8 @@ __all__ = [
     "ITERATION_FIELDS",
     "LOCAL_OWNER",
     "LOCAL_OWNER_EMAIL",
+    "OPINION_FIELDS",
+    "OPINION_TEXTS",
     "PLAN_FIELDS",
     "PREFIX",
     "PROPOSAL_APPLY_FIELDS",

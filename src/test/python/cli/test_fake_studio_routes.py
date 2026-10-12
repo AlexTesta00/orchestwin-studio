@@ -319,11 +319,13 @@ def test_the_fake_serves_every_area_that_the_commands_need(
         ("GET", project + "/design/critiques/sources/{source_id}/shots/{code}"),
         ("POST", project + "/design/critiques"),
         ("GET", project + "/design/critiques"),
+        ("POST", project + "/design/opinions"),
+        ("GET", project + "/design/opinions"),
     }
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 178
+    assert len(ROUTES) == 180
 
 
 def test_validation_routes_are_exactly_the_two_authorized_read_only_routes() -> None:
@@ -872,8 +874,11 @@ def test_the_latest_mockup_has_the_keys_of_the_real_answer() -> None:
             "approach",
             "changes",
             "warnings",
+            "corrections",
             "cost_microusd",
+            "applied_design_version_number",
         ]
+        assert (latest["corrections"], latest["applied_design_version_number"]) == ([], 2)
         DesignPackagePayload.model_validate(latest["package"]).to_domain()
         assert studio.errors == []
 

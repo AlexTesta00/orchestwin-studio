@@ -18,6 +18,7 @@ from orchestwin.artifacts.design_evaluation import (
 )
 from orchestwin.artifacts.generated_mockup_document import MockupPin, mockup_document
 from orchestwin.artifacts.generated_mockup_styles import FORBIDDEN_CHARACTERS
+from orchestwin.artifacts.generated_mockup_zones import derive_zones
 from orchestwin.artifacts.generated_mockups import generated_mockup_from_snapshot
 from orchestwin.evaluation.findings import (
     SyntheticFindingCriterion,
@@ -29,8 +30,19 @@ from orchestwin.evaluation.proposer_evaluator import (
     SCOPED_TWIN_REVIEW_PROMPT_VERSION,
     scoped_prompt_version,
 )
+from orchestwin.models.design_change import MAX_TARGET_ELEMENTS, MIN_TARGET_ELEMENTS
 
-from .common import _by_id, _digest, _error, _model_rule, _screen_list, _tokens
+from .common import (
+    _applied_mockup,
+    _by_id,
+    _digest,
+    _distinct,
+    _error,
+    _model_rule,
+    _query_zones,
+    _screen_list,
+    _tokens,
+)
 from .fields import _Fields
 from .values import DISCLAIMER, ELEMENT_CODE, MODEL, SCREEN_CODE, _Answer, _Invalid, _iso, _Refusal
 
@@ -50,7 +62,7 @@ ENTRY_SCREEN_PATTERN = re.compile(r"SCR-[0-9]{3}")
 LEADING_SCREEN = re.compile(r"(SCR-[0-9]{3,6})(?![0-9])")
 LANGUAGE_TAG = re.compile(r"[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,7}")
 EVALUATION_FIELDS = ("design_version_id", "design_content_hash", "locale", "mode", "scope")
-SCOPE_FIELDS = ("screen_code", "element_code")
+SCOPE_FIELDS = ("screen_code", "element_code", "element_codes")
 EVALUATOR = {
     "evaluator_id": "fake-twin-reviewer",
     "evaluator_version": "1",
@@ -239,7 +251,18 @@ class _EvaluationRoutes:
         package = current["package"]
         if package["owner_selected_alternative_id"] is None or package["prototype"] is None:
             raise _Refusal(409, {"code": "DESIGN_PROTOTYPE_REQUIRED"})
-        scoped = None if scope is None else _scope_anchor(package["prototype"], scope)
+        scoped = None if scope is None else _scope_anchor(package, scope)
+        twins = self._grounded_twins(project, package)
+        started = self._now()
+        for _ in twins:
+            self._record(project, "DESIGN_EVALUATION")
+        run = self._run(project, current, twins, locale, started, scoped)
+        project.runs.insert(0, run)
+        return _Answer(201, run)
+
+    def _grounded_twins(
+        self, project: FakeProject, package: Mapping[str, object]
+    ) -> list[dict[str, object]]:
         twins = [dict(item) for item in package["grounding"]["user_twin_references"]]
         for twin in twins:
             known = project.twins.get(str(twin["twin_id"]))
@@ -249,12 +272,7 @@ class _EvaluationRoutes:
                 for version in known
             ):
                 raise _Refusal(409, {"code": "USER_TWIN_CONTEXT_CHANGED"})
-        started = self._now()
-        for _ in twins:
-            self._record(project, "DESIGN_EVALUATION")
-        run = self._run(project, current, twins, locale, started, scoped)
-        project.runs.insert(0, run)
-        return _Answer(201, run)
+        return twins
 
     def _run(
         self,
@@ -479,6 +497,7 @@ class _EvaluationRoutes:
 
     def _route_review_document(self, call: _Call) -> _Answer:
         entry_screen = call.value("entry_screen")
+        zones = _query_zones(call)
         if entry_screen is not None and ENTRY_SCREEN_PATTERN.fullmatch(entry_screen) is None:
             raise _Invalid([_error(("query", "entry_screen"), "string_pattern_mismatch")])
         run, version = self._review(call)
@@ -503,6 +522,7 @@ class _EvaluationRoutes:
                 for pin in pins["pins"]
             ),
             entry_screen=entry,
+            zones=zones,
         )
         return _Answer(
             200,
@@ -621,9 +641,27 @@ def _review_scope(fields: _Fields) -> dict[str, object] | None:
         return None
     screen = child.pattern("screen_code", SCREEN_CODE)
     element = child.pattern("element_code", ELEMENT_CODE, required=False, nullable=True)
+    codes = child.texts(
+        "element_codes",
+        minimum_items=MIN_TARGET_ELEMENTS,
+        maximum_items=MAX_TARGET_ELEMENTS,
+        item_pattern=ELEMENT_CODE,
+    )
+    _model_rule(child, lambda: _one_scope(element, codes))
     valid = not child.errors
     fields.adopt(child)
-    return {"screen_code": screen, "element_code": element} if valid else None
+    if not valid:
+        return None
+    scope = {"screen_code": screen, "element_code": element}
+    return scope if codes is None else {**scope, "element_codes": codes}
+
+
+def _one_scope(element: str | None, codes: list[str] | None) -> None:
+    if codes is None:
+        return
+    if element is not None:
+        raise ValueError("a scope names one element or several")
+    _distinct(codes)
 
 
 def _scope_of_a_twin_review(scope: Mapping[str, object] | None, mode: str | None) -> None:
@@ -631,22 +669,40 @@ def _scope_of_a_twin_review(scope: Mapping[str, object] | None, mode: str | None
         raise ValueError("a scope belongs only to the review of the twins")
 
 
-def _scope_anchor(prototype: Mapping[str, object], scope: Mapping[str, object]) -> tuple[str, str]:
+def _scope_anchor(package: Mapping[str, object], scope: Mapping[str, object]) -> tuple[str, str]:
     refusal = _Refusal(422, {"code": DESIGN_EVALUATION_SCOPE_INVALID})
     screen = next(
-        (item for item in prototype["screens"] if item["code"] == scope["screen_code"]), None
+        (item for item in package["prototype"]["screens"] if item["code"] == scope["screen_code"]),
+        None,
     )
     if screen is None:
         raise refusal
-    place = f"{screen['code']} {_anchor_label(str(screen['title']))}"
-    code = scope["element_code"]
-    if code is None:
-        return str(screen["code"]), place
-    element = next((item for item in screen["elements"] if item["code"] == code), None)
-    if element is None:
+    code = str(screen["code"])
+    place = f"{code} {_anchor_label(str(screen['title']))}"
+    elements = {
+        str(item["code"]): _anchor_label(str(item["accessible_name"] or item["content"]))
+        for item in screen["elements"]
+    }
+    labels = {**elements, **_zone_labels(package, code)}
+    element = scope["element_code"]
+    codes = scope.get("element_codes") or ([] if element is None else [element])
+    if any(item not in labels for item in codes):
         raise refusal
-    label = _anchor_label(str(element["accessible_name"] or element["content"]))
-    return f"{screen['code']}/{code}", f"{place} · {code} {label}"
+    if not codes:
+        return code, place
+    named = ", ".join(f"{item} {labels[item]}" for item in codes)
+    anchor = f"{code}/{codes[0]}" if len(codes) == 1 and codes[0] in elements else code
+    return anchor, f"{place} · {named}"
+
+
+def _zone_labels(package: Mapping[str, object], screen_code: str) -> dict[str, str]:
+    if package.get("generated_mockup") is None:
+        return {}
+    return {
+        zone.code: _anchor_label(zone.label)
+        for zone in derive_zones(_applied_mockup(package))
+        if zone.screen_code == screen_code
+    }
 
 
 def _scoped_run(run: Mapping[str, object]) -> bool:

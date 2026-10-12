@@ -134,7 +134,7 @@ def severity_verdict(severities: Sequence[str]) -> str:
 
 def test_the_fields_of_the_critique_and_of_the_iteration_follow_the_contract() -> None:
     assert CRITIQUE_FIELDS == ("source_id", "locale")
-    assert ITERATION_FIELDS[-1] == "critique_source_id"
+    assert ITERATION_FIELDS[-2:] == ("critique_source_id", "opinion_id")
     assert critique_api.critiques_path("p") == "/projects/p/design/critiques"
     assert critique_api.sources_path("p") == "/projects/p/design/critiques/sources"
     assert critique_api.shot_path("p", "s", "SCR-002") == (
