@@ -27,6 +27,7 @@ from orchestwin.api.design_distance import create_design_distance_router
 from orchestwin.api.design_iterations import create_design_iteration_router
 from orchestwin.api.design_loop import create_design_loop_router
 from orchestwin.api.design_mockups import create_design_mockup_router
+from orchestwin.api.design_opinions import create_design_opinion_router
 from orchestwin.api.design_realignment import create_design_realignment_router
 from orchestwin.api.design_review_pins import create_design_review_pins_router
 from orchestwin.api.diagrams import create_diagram_router
@@ -244,6 +245,7 @@ def create_app(
         create_design_mockup_router(),
         create_design_iteration_router(),
         create_design_loop_router(),
+        create_design_opinion_router(),
         create_design_critique_router(),
         create_design_review_pins_router(),
         create_design_discussion_router(),

@@ -85,7 +85,7 @@ SCOPE_REFUSALS = (
         "string_pattern_mismatch",
     ),
     (
-        {"screen_code": "SCR-002", "element_code": "ELM-0012"},
+        {"screen_code": "SCR-002", "element_code": "ELM-0000012"},
         ["body", "scope", "element_code"],
         "string_pattern_mismatch",
     ),

@@ -12,7 +12,7 @@ from orchestwin.artifacts.visual_catalog import (
     LayoutArchetype,
 )
 from orchestwin.cli.api import design as design_api
-from orchestwin.cli.flows import design_state
+from orchestwin.cli.flows import design_generate, design_state
 from orchestwin.cli.http import UrlTransport
 from orchestwin.cli.messages import FILES, LANGUAGES, MESSAGES, known
 from orchestwin.cli.project import ProjectFolder
@@ -124,6 +124,29 @@ def test_a_running_mockup_is_found_and_no_document_is_read(tmp_path: Path) -> No
         ("MOCKUP", first)
     ]
     assert documents == 0
+
+
+def test_a_running_opinion_of_the_twins_is_followed_as_a_job_of_the_design(
+    tmp_path: Path,
+) -> None:
+    with design_session(tmp_path) as session:
+        client = session.client()
+        propose(session)
+        draw(session, "DES-002")
+        version = choose(session, "DES-002")
+        body = design_api.opinion_body(version, "Bigger title", {"screen_code": "SCR-001"}, "en-US")
+        reply = client.request(
+            "POST", design_api.opinions_path(session.project.id), body=body, prefer_async=True
+        )
+        state = read(session)
+
+    context = command_context(terminal(tmp_path / "words", transport=UrlTransport()).environment)
+    assert reply.status == 202
+    assert state.kind == design_state.JOB_RUNNING
+    assert [job["operation"] for job in state.running] == ["DESIGN_CHANGE_OPINION"]
+    assert [design_generate.track(context, state, job).name for job in state.running] == [
+        "opinion of the twins"
+    ]
 
 
 def test_alternatives_without_mockups(tmp_path: Path) -> None:

@@ -36,6 +36,7 @@ ESTIMATES: Final[Mapping[str, Estimate]] = MappingProxyType(
         "MOCKUP": Estimate(1.30, 1.60, 10.0),
         "ITERATION": Estimate(0.85, 1.33, 7.0),
         "DESIGN_EVALUATION": Estimate(0.27, 0.40, 1.5),
+        "DESIGN_CHANGE_OPINION": Estimate(0.20, 0.35, 1.5),
         "DESIGN_CRITIQUE": Estimate(0.35, 0.60, 3.0),
         "TWIN_CHAT": Estimate(0.02, 0.05, 0.3),
         "CODE_CHANGE_REVIEW": Estimate(0.15, 0.25, 1.0),

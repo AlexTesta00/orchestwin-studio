@@ -272,7 +272,13 @@ class DesignReviewPinsApplication:
         return pins
 
     async def document(
-        self, *, owner_user_id, project_id, run_id, entry_screen: str | None = None
+        self,
+        *,
+        owner_user_id,
+        project_id,
+        run_id,
+        entry_screen: str | None = None,
+        zones: bool = False,
     ) -> ReviewDocument:
         run, version, pins = await self._review(owner_user_id, project_id, run_id)
         bound = version.package.generated_mockup
@@ -292,6 +298,7 @@ class DesignReviewPinsApplication:
                 for pin in pins.pins
             ),
             entry_screen=entry,
+            zones=zones,
         )
         return ReviewDocument(
             html=html,
@@ -328,12 +335,14 @@ def create_design_review_pins_router():
         request: Request,
         user: CurrentUser,
         entry_screen: Annotated[str | None, Query(pattern=ENTRY_SCREEN_PATTERN)] = None,
+        zones: bool = False,
     ):
         result = await DesignReviewPinsApplication(request.app.state.application_runtime).document(
             owner_user_id=user.id,
             project_id=project_id,
             run_id=run_id,
             entry_screen=entry_screen,
+            zones=zones,
         )
         return ReviewDocumentPayload.from_domain(result)
 

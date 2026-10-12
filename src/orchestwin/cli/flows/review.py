@@ -45,7 +45,7 @@ def run_review(
     client: StudioClient,
     project: ProjectFolder,
     *,
-    scope: Mapping[str, str] | None = None,
+    scope: Mapping[str, object] | None = None,
 ) -> int:
     from orchestwin.workflow_inputs import PROVIDED_PROTOTYPE_REVIEW_UNAVAILABLE
 
@@ -80,7 +80,7 @@ def review_after(
     *,
     key: str,
     number: object,
-    scope: Mapping[str, str] | None = None,
+    scope: Mapping[str, object] | None = None,
 ) -> int:
     try:
         status = run_review(context, client, project, scope=scope)
@@ -329,7 +329,7 @@ def _reviewed(
     project_id: str,
     version: Mapping[str, object],
     locale: str,
-    scope: Mapping[str, str] | None = None,
+    scope: Mapping[str, object] | None = None,
 ) -> Mapping[str, object]:
     console = context.console
     label = context.text("design.label_review")

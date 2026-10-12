@@ -395,6 +395,14 @@ def test_a_twin_update_is_a_request_operation_of_its_own():
     assert payload["response"] == {"status_code": 201, "body": {"status": "PROPOSED"}}
 
 
+def test_the_opinion_of_the_twins_is_the_request_operation_just_before_the_twin_update():
+    assert GenerationOperation("DESIGN_CHANGE_OPINION") is GenerationOperation.DESIGN_CHANGE_OPINION
+    assert list(GenerationOperation)[-2:] == [
+        GenerationOperation.DESIGN_CHANGE_OPINION,
+        GenerationOperation.TWIN_UPDATE,
+    ]
+
+
 def test_the_jobs_of_a_project_are_listed_oldest_first_and_filtered_by_status():
     clock = Clock()
 

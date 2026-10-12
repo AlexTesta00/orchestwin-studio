@@ -397,7 +397,7 @@ def test_documents_exist_only_for_drawn_mockups(tmp_path: Path) -> None:
     assert latest is not None and latest["html"].startswith("<!doctype html>")
     assert latest["alternative_id"] == first and latest["source"] == "latest"
     assert applied is None
-    assert stored == jobs["DES-001"]["result"]
+    assert stored == {**jobs["DES-001"]["result"], "applied_design_version_number": None}
     assert [request.query for request in asked] == [
         urllib.parse.urlencode({"alternative_id": first})
     ]
@@ -424,7 +424,7 @@ def test_the_latest_mockup_of_an_alternative_is_read_or_is_none(tmp_path: Path) 
         )
         unreadable = design_api.latest_mockup(client, project_id, second)
 
-    assert stored == result
+    assert stored == {**result, "applied_design_version_number": None}
     assert never_drawn is None
     assert unreadable is None
 

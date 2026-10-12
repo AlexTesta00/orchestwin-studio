@@ -27,6 +27,43 @@ from .support.fake_studio import (
 from .test_fake_studio_routes import EMAIL, PREFER, poll, signed
 
 EVALUATIONS = "/design/evaluations"
+PARTS_REFUSALS = (
+    (
+        {"screen_code": "SCR-001", "element_codes": ["ELM-001"]},
+        ["body", "scope", "element_codes"],
+        "too_short",
+    ),
+    (
+        {"screen_code": "SCR-001", "element_codes": [f"ELM-{n:03d}" for n in range(9)]},
+        ["body", "scope", "element_codes"],
+        "too_long",
+    ),
+    (
+        {"screen_code": "SCR-001", "element_codes": ["ELM-1", "ELM-002"]},
+        ["body", "scope", "element_codes", 0],
+        "string_pattern_mismatch",
+    ),
+    (
+        {"screen_code": "SCR-001", "element_codes": "ELM-001"},
+        ["body", "scope", "element_codes"],
+        "list_type",
+    ),
+    (
+        {"screen_code": "SCR-001", "element_codes": ["ELM-001", "ELM-001"]},
+        ["body", "scope"],
+        "value_error",
+    ),
+    (
+        {
+            "screen_code": "SCR-001",
+            "element_code": "ELM-001",
+            "element_codes": ["ZON-001", "ELM-002"],
+        },
+        ["body", "scope"],
+        "value_error",
+    ),
+)
+NAV = {"it": ("Sezioni", "Conto"), "en": ("Sections", "Bill")}
 
 
 def review_body(project, **values) -> dict[str, object]:
@@ -115,6 +152,37 @@ def test_the_comparison_of_the_fake_leaves_out_the_reviews_of_a_changed_element(
         assert studio.errors == []
 
 
+@pytest.mark.parametrize("language", ["it", "en"])
+def test_a_review_of_a_zone_or_of_several_parts_starts_from_their_screen(language: str) -> None:
+    zone, element = NAV[language]
+    with FakeStudio(language=language, job_polls=0, landmarks=True) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        title = project.current("design")["package"]["prototype"]["screens"][0]["title"]
+        scopes = (
+            ({"screen_code": "SCR-001", "element_code": "ZON-002"}, f"ZON-002 {zone}"),
+            (
+                {"screen_code": "SCR-001", "element_codes": ["ELM-004", "ZON-002"]},
+                f"ELM-004 {element}, ZON-002 {zone}",
+            ),
+        )
+        for scope, named in scopes:
+            status, run = client.call("POST", base + EVALUATIONS, review_body(project, scope=scope))
+            assert status == 201, run
+            firsts = [response["findings"][0] for response in run["responses"]]
+            assert {
+                (item["anchor_key"], item["location"], "element_code" in item) for item in firsts
+            } == {("SCR-001", f"SCR-001 {title} · {named}", False)}
+        missing = client.call(
+            "POST",
+            base + EVALUATIONS,
+            review_body(project, scope={"screen_code": "SCR-002", "element_code": "ZON-002"}),
+        )
+        assert missing == (422, {"detail": {"code": DESIGN_EVALUATION_SCOPE_INVALID}})
+        assert studio.errors == []
+
+
 def test_a_scope_that_the_design_lacks_is_refused_like_the_real_application() -> None:
     with FakeStudio(job_polls=0) as studio:
         client = signed(studio)
@@ -140,7 +208,7 @@ def test_invalid_scopes_answer_like_the_real_application() -> None:
         base = f"/projects/{project.id}"
         cases = [
             (review_body(project, scope=scope), location, kind)
-            for scope, location, kind in SCOPE_REFUSALS
+            for scope, location, kind in (*SCOPE_REFUSALS, *PARTS_REFUSALS)
         ]
         cases.append(
             (
@@ -178,11 +246,14 @@ def test_the_job_key_of_a_scoped_review_is_the_key_of_the_real_application() -> 
         project = studio.seed_project(owner=EMAIL, name="Tip calculator", through="design")
         base = f"/projects/{project.id}"
         scope = pointed(project)
+        screen = project.current("design")["package"]["prototype"]["screens"][0]
+        parts = [item["code"] for item in screen["elements"][:2]]
         bodies = [
             review_body(project),
             review_body(project, scope=scope),
             review_body(project, scope={"screen_code": scope["screen_code"]}),
             review_body(project, mode="TWIN_REVIEW", locale="en-US", scope=scope),
+            review_body(project, scope={"screen_code": screen["code"], "element_codes": parts}),
         ]
         keys = []
         for body in bodies:

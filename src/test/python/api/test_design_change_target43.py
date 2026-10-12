@@ -143,7 +143,7 @@ TARGET_REFUSALS = (
             ["body", "target", "element_code"],
             "string_pattern_mismatch",
         )
-        for code in ("ELM-12", "ELM-0012", "elm-012", "SCR-002", "")
+        for code in ("ELM-12", "ELM-0000012", "elm-012", "SCR-002", "")
     ),
     ({"screen_code": "SCR-002", "label": 5}, ["body", "target", "label"], "string_type"),
     *(
@@ -417,40 +417,45 @@ def test_the_target_is_recorded_beside_the_request_in_the_evidence_and_read_back
 
 
 def test_an_iteration_with_a_target_reaches_the_model_and_the_list_of_the_iterations():
+    present = {**TARGET, "screen_code": "SCR-001"}
+    snapshot = {**SNAPSHOT, "screen_code": "SCR-001"}
     versions = applied_versions()
     store = MemoryMockupStore()
     generator = ScriptedMockupGenerator(answer(iteration_payload()), answer(iteration_payload()))
     client, registry = client_for(runtime(generator, store, versions))
 
     with client:
-        _started, aimed = iterate(client, registry, versions, request=AIMED_REQUEST, target=TARGET)
+        _started, aimed = iterate(client, registry, versions, request=AIMED_REQUEST, target=present)
         _started, plain = iterate(client, registry, versions, request=PLAIN_REQUEST)
         listed = client.get(ITERATIONS).json()["items"]
         versions.apply(DesignPackagePayload.model_validate(aimed["result"]["package"]).to_domain())
         after = client.get(ITERATIONS).json()["items"]
 
     assert (aimed["status"], plain["status"]) == ("SUCCEEDED", "SUCCEEDED")
-    assert aimed["result"]["changes"] == [ITALIAN_LINE, *iteration_payload()["changes"]]
+    assert aimed["result"]["changes"] == [
+        "Modifica mirata a ELM-012 di SCR-001",
+        *iteration_payload()["changes"],
+    ]
     assert plain["result"]["changes"] == iteration_payload()["changes"]
     aimed_call, plain_call = generator.calls
     keys = list(aimed_call["context"])
-    assert aimed_call["context"]["target"] == SNAPSHOT
+    assert aimed_call["context"]["target"] == snapshot
     assert keys.index("target") == keys.index("owner_request") + 1
     assert "target" not in plain_call["context"]
-    sentence = mockup_target_sentence(SNAPSHOT)
+    sentence = mockup_target_sentence(snapshot)
     text = aimed_call["instruction"]
     assert text.index(ITERATION_SENTENCE) < text.index(sentence) < text.index(CHANGES_START)
     assert text.replace(f" {sentence}", "") == plain_call["instruction"]
     assert HTML not in text
     assert [(item["request"], item["target"], item["status"]) for item in listed] == [
         (PLAIN_REQUEST, None, "PROPOSED"),
-        (AIMED_REQUEST, SNAPSHOT, "PROPOSED"),
+        (AIMED_REQUEST, snapshot, "PROPOSED"),
     ]
     assert list(listed[1])[:4] == ["generation_id", "requested_at", "request", "target"]
     assert listed[1]["changes"] == aimed["result"]["changes"]
     [applied] = [item for item in after if item["target"] is not None]
     assert (applied["status"], applied["applied_design_version_number"]) == ("APPLIED", 3)
-    assert applied["target"] == SNAPSHOT
+    assert applied["target"] == snapshot
 
 
 def test_an_iteration_with_an_invalid_target_is_refused_before_any_job():

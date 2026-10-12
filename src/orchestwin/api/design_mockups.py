@@ -173,6 +173,7 @@ class MockupResult:
     approach: str | None = None
     changes: tuple[str, ...] = ()
     warnings: tuple[dict, ...] = ()
+    corrections: tuple[dict, ...] = ()
     cost_microusd: int | None = None
 
 
@@ -251,6 +252,7 @@ def _payload(result):
         "approach": result.approach,
         "changes": list(result.changes),
         "warnings": [dict(item) for item in result.warnings],
+        "corrections": [dict(item) for item in result.corrections],
         "cost_microusd": result.cost_microusd,
     }
 
@@ -272,8 +274,16 @@ def _stored_payload(result, package):
         "approach": result.get("approach"),
         "changes": list(result.get("changes") or []),
         "warnings": list(result.get("warnings") or []),
+        "corrections": list(result.get("corrections") or []),
         "cost_microusd": result.get("cost_microusd"),
     }
+
+
+def first_version_numbers(versions) -> dict[str, int]:
+    numbers: dict[str, int] = {}
+    for version in sorted(versions, key=lambda item: item.version_number):
+        numbers.setdefault(version.content_hash, version.version_number)
+    return numbers
 
 
 def _rebased(current, package):
@@ -633,6 +643,7 @@ class ModelMockupApplication:
             approach=draft.approach,
             changes=tuple(changes),
             warnings=binding.warning_snapshots(),
+            corrections=binding.correction_snapshots(),
             cost_microusd=cost,
         )
         await record_accepted(scope, _payload(result), "DESIGN", proposed.content_hash)
@@ -721,13 +732,16 @@ class ModelMockupApplication:
             cost=cost,
         )
 
-    async def _earlier_hashes(self, owner_user_id, project_id, version, alternative):
+    async def _history(self, owner_user_id, project_id):
         history = getattr(self.runtime.design_query_service, "history", None)
         if history is None:
             return ()
+        return await history(owner_user_id=owner_user_id, project_id=project_id)
+
+    async def _earlier_hashes(self, owner_user_id, project_id, version, alternative):
         snapshot = alternative.to_snapshot()
         hashes = []
-        for item in await history(owner_user_id=owner_user_id, project_id=project_id):
+        for item in await self._history(owner_user_id, project_id):
             candidate = _alternative(item.package, alternative.id)
             if (
                 item.content_hash != version.content_hash
@@ -770,13 +784,20 @@ class ModelMockupApplication:
         if found is None:
             return None
         result, package = found
+        generated = package.content_hash
         if result.get("design_content_hash") != version.content_hash:
             package = _rebased(version.package, package)
             if package is None:
                 return None
-        return _stored_payload(result, package)
+        numbers = first_version_numbers(await self._history(owner_user_id, project_id))
+        return {
+            **_stored_payload(result, package),
+            "applied_design_version_number": numbers.get(generated),
+        }
 
-    async def document(self, *, owner_user_id, project_id, alternative_id, source, entry_screen):
+    async def document(
+        self, *, owner_user_id, project_id, alternative_id, source, entry_screen, zones=False
+    ):
         version = await self.current(owner_user_id, project_id)
         if source is MockupDocumentSource.APPLIED:
             package = version.package
@@ -802,6 +823,7 @@ class ModelMockupApplication:
             tokens=alternative.visual_language.token_values,
             language=_document_language(mockup),
             entry_screen=entry,
+            zones=zones,
         )
         return {
             "html": html,
@@ -891,6 +913,7 @@ def create_design_mockup_router():
         user: CurrentUser,
         source: MockupDocumentSource = MockupDocumentSource.LATEST,
         entry_screen: str | None = None,
+        zones: bool = False,
     ):
         return await ModelMockupApplication(request.app.state.application_runtime).document(
             owner_user_id=user.id,
@@ -898,6 +921,7 @@ def create_design_mockup_router():
             alternative_id=alternative_id,
             source=source,
             entry_screen=entry_screen,
+            zones=zones,
         )
 
     return router
@@ -921,6 +945,7 @@ __all__ = [
     "MockupStatus",
     "ModelMockupApplication",
     "create_design_mockup_router",
+    "first_version_numbers",
     "generated_route",
     "job_failure",
     "job_payload",

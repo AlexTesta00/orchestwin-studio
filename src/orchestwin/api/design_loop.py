@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Final
+from typing import Annotated, ClassVar, Final
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -55,7 +56,12 @@ from orchestwin.evaluation.proposer_evaluator import (
     hosted_twin_review,
     scoped_review,
 )
-from orchestwin.models.design_change import ELEMENT_CODE_PATTERN, SCREEN_CODE_PATTERN
+from orchestwin.models.design_change import (
+    ELEMENT_CODE_PATTERN,
+    MAX_TARGET_ELEMENTS,
+    MIN_TARGET_ELEMENTS,
+    SCREEN_CODE_PATTERN,
+)
 from orchestwin.models.proposal_evidence import evidence_application
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.twins.persistence.repositories import SqlAlchemyUserTwinVersionRepository
@@ -86,6 +92,19 @@ class DesignEvaluationScope(BaseModel):
 
     screen_code: str = Field(pattern=SCREEN_CODE_PATTERN)
     element_code: str | None = Field(default=None, pattern=ELEMENT_CODE_PATTERN)
+    element_codes: list[Annotated[str, Field(pattern=ELEMENT_CODE_PATTERN)]] | None = Field(
+        default=None,
+        min_length=MIN_TARGET_ELEMENTS,
+        max_length=MAX_TARGET_ELEMENTS,
+        exclude_if=lambda value: value is None,
+    )
+
+    @model_validator(mode="after")
+    def one_part_or_several_parts(self) -> DesignEvaluationScope:
+        codes = self.element_codes
+        if codes is not None and (self.element_code is not None or len(set(codes)) != len(codes)):
+            raise ValueError("a scope names one part or several different parts")
+        return self
 
 
 class DesignEvaluationRequest(BaseModel):
@@ -127,6 +146,10 @@ class DesignEvaluationResult:
 
 
 class DesignLoopApplication:
+    retryable_codes: ClassVar[frozenset[str]] = RETRYABLE_REVIEW_CODES
+    retire_role: ClassVar[str] = "TWIN_REVIEW"
+    retire_status: ClassVar[str] = "TWIN_REVIEW_REJECTED"
+
     def __init__(self, runtime):
         self.runtime = runtime
         self._proposal_evidence_store = getattr(runtime, "proposal_evidence_store", None)
@@ -169,27 +192,27 @@ class DesignLoopApplication:
             raise HTTPException(503, detail={"code": "DESIGN_EVALUATOR_NOT_CONFIGURED"})
         return DesignEvaluationMode.STATIC_CHECK, evaluator
 
-    async def _review(self, reviewer, request):
+    async def _review(self, reviewer, request, reference: Mapping[str, str]):
         for attempt in range(1, TWIN_REVIEW_ATTEMPTS + 1):
             try:
                 return await reviewer.evaluate(request)
             except ProposalGenerationError as error:
-                if attempt == TWIN_REVIEW_ATTEMPTS or error.code not in RETRYABLE_REVIEW_CODES:
+                if attempt == TWIN_REVIEW_ATTEMPTS or error.code not in self.retryable_codes:
                     raise
-                await retire_generation(
-                    "TWIN_REVIEW",
-                    "TWIN_REVIEW_REJECTED",
-                    {"evaluation_run_id": str(request.evaluation_run_id)},
-                )
+                await retire_generation(self.retire_role, self.retire_status, reference)
         raise RuntimeError("twin review attempts are exhausted")
 
     @staticmethod
     def _scope(version, body) -> DesignReviewScope | None:
-        if body.scope is None:
+        scope = body.scope
+        if scope is None:
             return None
         try:
             return design_review_scope(
-                version, screen_code=body.scope.screen_code, element_code=body.scope.element_code
+                version,
+                screen_code=scope.screen_code,
+                element_code=scope.element_code,
+                element_codes=tuple(scope.element_codes or ()),
             )
         except DesignEvaluationError as error:
             raise HTTPException(422, detail={"code": error.code}) from error
@@ -208,6 +231,7 @@ class DesignLoopApplication:
             )
         except DesignEvaluationError as error:
             raise HTTPException(409, detail={"code": error.code}) from error
+        reference = {"evaluation_run_id": str(run_id)}
         responses = []
         for index, twin in enumerate(twins):
             request = UserTwinEvaluationRequest(
@@ -220,16 +244,14 @@ class DesignLoopApplication:
                 requested_at=datetime.now(UTC),
             )
             try:
-                responses.append(await self._review(reviewer, request))
+                responses.append(await self._review(reviewer, request, reference))
             except ValueError as error:
                 raise HTTPException(
                     502,
                     detail={"code": "DESIGN_EVALUATION_FAILED", "reason": str(error)[:300]},
                 ) from error
             if index < len(twins) - 1:
-                await retire_generation(
-                    "TWIN_REVIEW", "TWIN_REVIEWED", {"evaluation_run_id": str(run_id)}
-                )
+                await retire_generation(self.retire_role, "TWIN_REVIEWED", reference)
         return responses
 
     async def _static_check(

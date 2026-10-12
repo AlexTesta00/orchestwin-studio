@@ -17,6 +17,7 @@ from orchestwin.api.design_mockups import (
     MockupCommandError,
     MockupStatus,
     ModelMockupApplication,
+    first_version_numbers,
     job_payload,
 )
 from orchestwin.api.generation_jobs import (
@@ -26,6 +27,7 @@ from orchestwin.api.generation_jobs import (
     owned_job,
 )
 from orchestwin.artifacts.design import contains_control_character
+from orchestwin.artifacts.design_change_targets import DesignChangeTargetError
 from orchestwin.artifacts.design_critique import (
     DESIGN_CRITIQUE_SOURCE_NOT_FOUND,
     DesignCritiqueError,
@@ -36,7 +38,7 @@ from orchestwin.artifacts.design_critique import (
 from orchestwin.artifacts.design_critique_persistence import SqlAlchemyDesignCritiqueRepository
 from orchestwin.artifacts.design_packages import MAX_OWNER_ASSERTION_LENGTH, MAX_OWNER_ASSERTIONS
 from orchestwin.artifacts.visual_icons import mockup_resources
-from orchestwin.models.design_change import with_targeted_change
+from orchestwin.models.design_change import DesignChangeTarget, target_view, with_targeted_change
 from orchestwin.models.design_drafts import requirements_language, requirements_view
 from orchestwin.models.generated_mockup_drafts import GeneratedIterationDraft
 from orchestwin.models.generated_mockup_instructions import DESIGN_ITERATION, mockup_context
@@ -47,6 +49,7 @@ MAX_ITERATION_REQUEST_LENGTH: Final = 1000
 MAX_NEW_ASSERTIONS: Final = 5
 ITERATION_REQUEST_INVALID: Final = "ITERATION_REQUEST_INVALID"
 GENERATED_MOCKUP_REQUIRED: Final = "GENERATED_MOCKUP_REQUIRED"
+REQUESTED_TARGET: Final = "requested_target"
 
 
 class IterationRequest(BaseModel):
@@ -57,6 +60,7 @@ class IterationRequest(BaseModel):
     assertions: list[str] = Field(default_factory=list)
     target: DesignChangeTargetRequest | None = None
     critique_source_id: UUID | None = None
+    opinion_id: UUID | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class IterationStatus(StrEnum):
@@ -99,6 +103,32 @@ def merged_assertions(package, assertions: Iterable[str]) -> tuple[str, ...]:
     return merged
 
 
+def _aimed_target(
+    body: IterationRequest, mockup
+) -> tuple[DesignChangeTarget | None, dict[str, object] | None]:
+    if body.target is None:
+        return None, None
+    target = body.target.to_domain()
+    try:
+        return target, target_view(target, mockup)
+    except DesignChangeTargetError as error:
+        raise MockupCommandError(422, error.code) from error
+
+
+def _recorded_request(
+    target: DesignChangeTarget | None, view: Mapping[str, object] | None, source, opinion_id
+) -> dict[str, object]:
+    recorded: dict[str, object] = {}
+    if source is not None:
+        recorded["critique_source_id"] = str(source.id)
+    if opinion_id is not None:
+        recorded["opinion_id"] = str(opinion_id)
+    snapshot = None if target is None else target.to_snapshot()
+    if snapshot != view:
+        recorded[REQUESTED_TARGET] = snapshot
+    return recorded
+
+
 def _status(events: Mapping, outcome: Mapping, applied: Mapping[str, int]):
     accepted = events.get("ADAPTER_ACCEPTED")
     if accepted is not None and outcome.get("status") == MockupStatus.GENERATED.value:
@@ -112,51 +142,57 @@ def _status(events: Mapping, outcome: Mapping, applied: Mapping[str, int]):
     return IterationStatus.FAILED, None
 
 
-def iteration_items(records, versions) -> list[dict[str, object]]:
-    numbers = {str(version.id): version.version_number for version in versions}
-    packages = {str(version.id): version.package for version in versions}
-    applied: dict[str, int] = {}
-    for version in sorted(versions, key=lambda item: item.version_number):
-        applied.setdefault(version.content_hash, version.version_number)
+def _groups(records) -> list[list]:
     groups: dict[str, list] = {}
     for record in records:
         context = record.get("context") or {}
         key = context.get("command_id") or record["generation_id"]
         groups.setdefault(str(key), []).append(record)
-    items = []
-    for group in groups.values():
-        group.sort(key=lambda item: item["recorded_at"])
-        final = group[-1]
-        events = final.get("events") or {}
-        outcome = events.get("APPLICATION_RESULT")
-        if outcome is None or outcome.get("role") == MOCKUP_ATTEMPT:
-            continue
-        first = group[0].get("context") or {}
-        status, applied_number = _status(events, outcome, applied)
-        base_id = first.get("design_version_id")
-        base = packages.get(base_id)
-        known = () if base is None else base.owner_assertions
-        accepted = events.get("ADAPTER_ACCEPTED") or {}
-        items.append(
-            {
-                "generation_id": final["generation_id"],
-                "requested_at": group[0]["recorded_at"],
-                "request": first.get("owner_request"),
-                "target": first.get("target"),
-                "critique_source_id": first.get("critique_source_id"),
-                "assertions": [item for item in first.get("assertions") or [] if item not in known],
-                "changes": list((accepted.get("result") or {}).get("changes") or []),
-                "status": status.value,
-                "base_design_version_number": numbers.get(base_id),
-                "applied_design_version_number": applied_number,
-                "cost_microusd": sum(
-                    provider_result_cost_microusd(
-                        (record.get("events") or {}).get("PROVIDER_RESULT") or {}
-                    )
-                    for record in group
-                ),
-            }
-        )
+    return [sorted(group, key=lambda item: item["recorded_at"]) for group in groups.values()]
+
+
+def _iteration_item(group, numbers, packages, applied) -> dict[str, object] | None:
+    final = group[-1]
+    events = final.get("events") or {}
+    outcome = events.get("APPLICATION_RESULT")
+    if outcome is None or outcome.get("role") == MOCKUP_ATTEMPT:
+        return None
+    first = group[0].get("context") or {}
+    status, applied_number = _status(events, outcome, applied)
+    base_id = first.get("design_version_id")
+    base = packages.get(base_id)
+    known = () if base is None else base.owner_assertions
+    result = (events.get("ADAPTER_ACCEPTED") or {}).get("result") or {}
+    return {
+        "generation_id": final["generation_id"],
+        "requested_at": group[0]["recorded_at"],
+        "request": first.get("owner_request"),
+        "target": first.get(REQUESTED_TARGET, first.get("target")),
+        "critique_source_id": first.get("critique_source_id"),
+        "assertions": [item for item in first.get("assertions") or [] if item not in known],
+        "changes": list(result.get("changes") or []),
+        "status": status.value,
+        "base_design_version_number": numbers.get(base_id),
+        "applied_design_version_number": applied_number,
+        "cost_microusd": sum(
+            provider_result_cost_microusd((record.get("events") or {}).get("PROVIDER_RESULT") or {})
+            for record in group
+        ),
+        "warnings": list(result.get("warnings") or []),
+        "corrections": list(result.get("corrections") or []),
+        "opinion_id": first.get("opinion_id"),
+    }
+
+
+def iteration_items(records, versions) -> list[dict[str, object]]:
+    numbers = {str(version.id): version.version_number for version in versions}
+    packages = {str(version.id): version.package for version in versions}
+    applied = first_version_numbers(versions)
+    items = [
+        item
+        for group in _groups(records)
+        if (item := _iteration_item(group, numbers, packages, applied)) is not None
+    ]
     items.sort(key=lambda item: item["requested_at"], reverse=True)
     return items
 
@@ -197,6 +233,7 @@ class DesignIterationApplication(ModelMockupApplication):
         if body.critique_source_id is not None:
             await self._critique_source(owner_user_id, project_id, body.critique_source_id)
         bound = self.applied_mockup(current.package)
+        _aimed_target(body, bound.mockup)
         merged_assertions(current.package, assertions)
         route = self.hosted_route(DESIGN_ITERATION)
         await self.grounded_requirements(owner_user_id, project_id, current)
@@ -217,11 +254,11 @@ class DesignIterationApplication(ModelMockupApplication):
     async def generate_iteration(self, *, owner_user_id, project_id, body, progress=None):
         progress = GenerationJobProgress() if progress is None else progress
         request, assertions = normalized_iteration(body)
-        target = None if body.target is None else body.target.to_domain()
         current = await self.checked_version(
             owner_user_id, project_id, body.design_version_id, body.design_content_hash
         )
         bound = self.applied_mockup(current.package)
+        target, view = _aimed_target(body, bound.mockup)
         merged = merged_assertions(current.package, assertions)
         alternative = self.drawable_alternative(current.package, bound.design_alternative_id)
         route = self.hosted_route(DESIGN_ITERATION)
@@ -244,6 +281,7 @@ class DesignIterationApplication(ModelMockupApplication):
         reference = None if references is None else references.view()
         resources = mockup_resources()
         system = self.alternative_design_system(alternative)
+        recorded = _recorded_request(target, view, source, body.opinion_id)
 
         def context_for(previous_answer, rejection):
             context = mockup_context(
@@ -257,7 +295,7 @@ class DesignIterationApplication(ModelMockupApplication):
                 observations=observations,
                 current_mockup=bound.mockup,
                 owner_request=request,
-                target=None if target is None else target.to_snapshot(),
+                target=view,
                 assertions=merged,
                 previous_answer=previous_answer,
                 rejection=rejection,
@@ -266,9 +304,7 @@ class DesignIterationApplication(ModelMockupApplication):
                 resources=resources,
                 design_system=system,
             )
-            if source is not None:
-                context["critique_source_id"] = str(source.id)
-            return context
+            return {**context, **recorded}
 
         def propose(_draft, binding):
             return replace(
@@ -369,6 +405,7 @@ __all__ = [
     "ITERATION_REQUEST_INVALID",
     "MAX_ITERATION_REQUEST_LENGTH",
     "MAX_NEW_ASSERTIONS",
+    "REQUESTED_TARGET",
     "DesignIterationApplication",
     "IterationRequest",
     "IterationStatus",

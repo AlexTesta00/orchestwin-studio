@@ -102,6 +102,7 @@ def _verify(record):
 MODEL_USAGE_LIMIT = 200
 DESIGN_MOCKUP_PURPOSES = ("DESIGN_MOCKUP", "DESIGN_MOCKUP_HTML", "DESIGN_ITERATION")
 DESIGN_ITERATION_PURPOSE = "DESIGN_ITERATION"
+DESIGN_CHANGE_OPINION_PURPOSE = "DESIGN_CHANGE_OPINION"
 DESIGN_ITERATION_LIMIT = 200
 _ITERATION_EVENTS = (
     "PROVIDER_RESULT",
@@ -234,15 +235,33 @@ class SqlAlchemyProposalEvidenceStore:
     async def design_iteration_generations(
         self, *, owner_user_id, project_id, limit=DESIGN_ITERATION_LIMIT
     ):
+        return await self._purpose_generations(
+            DESIGN_ITERATION_PURPOSE,
+            owner_user_id=owner_user_id,
+            project_id=project_id,
+            limit=limit,
+        )
+
+    async def design_change_opinion_generations(
+        self, *, owner_user_id, project_id, limit=DESIGN_ITERATION_LIMIT
+    ):
+        return await self._purpose_generations(
+            DESIGN_CHANGE_OPINION_PURPOSE,
+            owner_user_id=owner_user_id,
+            project_id=project_id,
+            limit=limit,
+        )
+
+    async def _purpose_generations(self, purpose, *, owner_user_id, project_id, limit):
         from sqlalchemy.dialects.postgresql import JSONB
 
         if not 1 <= limit <= DESIGN_ITERATION_LIMIT:
-            raise ValueError("design iteration limit must be between 1 and 200")
+            raise ValueError("design generation limit must be between 1 and 200")
         context = sa.func.model_source_context(GENERATIONS.c.snapshot_json)
         recorded = sa.cast(GENERATIONS.c.snapshot_json, JSONB)["recorded_at"].astext
         query = (
             _owned_generation(owner_user_id, project_id)
-            .where(context.op("->>")("purpose") == DESIGN_ITERATION_PURPOSE)
+            .where(context.op("->>")("purpose") == purpose)
             .order_by(recorded.desc(), GENERATIONS.c.id)
             .limit(limit)
         )

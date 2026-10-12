@@ -41,6 +41,7 @@ from .common import (
     _bounded,
     _by_id,
     _change_target,
+    _checked_target,
     _digest,
     _error,
     _event_payload,
@@ -59,6 +60,7 @@ from .texts import (
     DESIGN_TEXTS,
     DIRECTED_ALTERNATIVES,
     DIRECTION_TEXTS,
+    LANDMARK_SCREENS,
     MOCKUP_STYLES,
     SCREENS,
     SYSTEM_ALTERNATIVES,
@@ -459,9 +461,12 @@ class _DesignRoutes:
     def _screens(self, code: str, variant: int) -> list[dict[str, object]]:
         screens = []
         screens_of = SCREENS[self.language]
-        for index, (screen, title, state, heading, markup) in enumerate(
-            screens_of.get(code) or screens_of["DES-001"]
-        ):
+        drawn = (
+            LANDMARK_SCREENS[self.language]
+            if self.landmarks
+            else screens_of.get(code) or screens_of["DES-001"]
+        )
+        for index, (screen, title, state, heading, markup) in enumerate(drawn):
             shown = ITERATED_HEADING[self.language] if index == 0 and variant > 0 else heading
             screens.append(
                 {
@@ -703,6 +708,7 @@ class _DesignRoutes:
             raise _Refusal(404, {"code": "REQUIREMENTS_SPECIFICATION_NOT_FOUND"})
         if not self.hosted:
             raise _Refusal(503, {"code": "DESIGN_CHANGE_MODEL_NOT_CONFIGURED"})
+        _checked_target(package, target)
         self._record(project, "DESIGN_CHANGE")
         sentence = " ".join(text.split())
         proposed = copy.deepcopy(package)

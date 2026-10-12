@@ -77,6 +77,20 @@ VISUAL_WORDS: Final[dict[str, dict[str, tuple[str, str]]]] = {
         "SCRIPT": ("calligrafico", "script"),
     },
 }
+COLOUR_WORDS: Final[dict[str, tuple[str, str]]] = {
+    "red": ("rosso", "red"),
+    "orange": ("arancione", "orange"),
+    "yellow": ("giallo", "yellow"),
+    "green": ("verde", "green"),
+    "teal": ("turchese", "teal"),
+    "blue": ("blu", "blue"),
+    "purple": ("viola", "purple"),
+    "pink": ("rosa", "pink"),
+    "brown": ("marrone", "brown"),
+    "grey": ("grigio", "grey"),
+    "black": ("nero", "black"),
+    "white": ("bianco", "white"),
+}
 AXIS_WORDS: Final[dict[str, tuple[str, str]]] = {
     "layout": ("Impianto", "Layout"),
     "shape": ("Forme", "Shapes"),
@@ -134,8 +148,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "design già fatto, da un'immagine con --image o da un sito con --url; da solo elenca "
         "le critiche fatte; con --redraw ridisegna il mockup come quel design); senza azione "
         "il comando ti guida "
-        "passo per passo; show --elements elenca gli elementi del mockup scelto, a cui una "
-        "modifica può mirare con --screen e --element",
+        "passo per passo; show --elements elenca gli elementi e le zone del mockup scelto, a "
+        "cui una modifica può mirare con --screen e --element",
         "en": "what to do: show, open (the previews), choose (an alternative), change (ask for "
         "a change), review (by the twins), approve, regenerate (the alternatives), restore N "
         "(go back to version N with a new identical version, to approve), critique (what the "
@@ -143,8 +157,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "website with --url; alone it lists the critiques made; with --redraw it redraws the "
         "mockup like that design); without "
         "an action the command guides you "
-        "step by step; show --elements lists the elements of the chosen mockup, which a change "
-        "can aim at with --screen and --element",
+        "step by step; show --elements lists the elements and the zones of the chosen mockup, "
+        "which a change can aim at with --screen and --element",
     },
     "design.option_value": {
         "it": "il codice o il numero di un'alternativa (per open e choose), la modifica "
@@ -167,21 +181,30 @@ MESSAGES: dict[str, dict[str, str]] = {
         "change",
     },
     "design.option_element": {
-        "it": "l'elemento della schermata a cui mira la modifica, per esempio ELM-012; vuole "
-        "anche --screen",
-        "en": "the element of the screen that the change aims at, for example ELM-012; it needs "
-        "--screen too",
+        "it": "un elemento o una zona della schermata a cui mira la modifica, per esempio ELM-012 "
+        "o ZON-003; si può ripetere fino a 8 volte per indicare più parti della stessa "
+        "schermata; vuole anche --screen",
+        "en": "an element or a zone of the screen that the change aims at, for example ELM-012 or "
+        "ZON-003; it can be repeated up to 8 times to point at several parts of the same screen; "
+        "it needs --screen too",
     },
     "design.option_no_review": {
         "it": "dopo la modifica non chiede subito il parere dei twin; solo con change",
         "en": "after the change, do not ask the twins for their opinion right away; only with "
         "change",
     },
+    "design.option_ask_first": {
+        "it": "prima di applicare la modifica chiede il parere dei twin, poi ti fa scegliere se "
+        "applicarla comunque, cambiarla o annullarla; vuole anche --screen; solo con change",
+        "en": "before applying the change, ask the twins for their opinion, then let you choose "
+        "whether to apply it anyway, change it or cancel it; it needs --screen too; only with "
+        "change",
+    },
     "design.option_elements": {
-        "it": "elenca gli elementi del mockup scelto, di ogni schermata o solo di quella indicata "
-        "(per esempio SCR-002); solo con show",
-        "en": "list the elements of the chosen mockup, of every screen or only of the one given "
-        "(for example SCR-002); only with show",
+        "it": "elenca gli elementi e le zone del mockup scelto, di ogni schermata o solo di quella "
+        "indicata (per esempio SCR-002); solo con show",
+        "en": "list the elements and the zones of the chosen mockup, of every screen or only of "
+        "the one given (for example SCR-002); only with show",
     },
     "design.option_image": {
         "it": "il file PNG o JPEG di un design già fatto, per esempio la schermata di un sito: i "
@@ -207,8 +230,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "time.",
     },
     "design.usage_target": {
-        "it": "--screen, --element e --no-review si usano solo con `ut design change`.",
-        "en": "--screen, --element and --no-review can be used only with `ut design change`.",
+        "it": "--screen, --element, --no-review e --ask-first si usano solo con "
+        "`ut design change`.",
+        "en": "--screen, --element, --no-review and --ask-first can be used only with "
+        "`ut design change`.",
+    },
+    "design.usage_ask_first": {
+        "it": "--ask-first vuole anche --screen, la schermata su cui chiedere il parere dei twin, "
+        'per esempio `ut design change "..." --screen SCR-002 --ask-first`.',
+        "en": "--ask-first needs --screen too, the screen on which to ask the twins for their "
+        'opinion, for example `ut design change "..." --screen SCR-002 --ask-first`.',
     },
     "design.usage_elements": {
         "it": "--elements si usa solo con `ut design show`.",
@@ -637,6 +668,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "design.job_proposal": {"it": "alternative di design", "en": "design alternatives"},
     "design.job_review": {"it": "revisione dei twin", "en": "review of the twins"},
     "design.job_change": {"it": "modifica del design", "en": "change of the design"},
+    "design.job_opinion": {"it": "parere dei twin", "en": "opinion of the twins"},
     "design.job_other": {"it": "generazione del design", "en": "design generation"},
     "design.mockup_ready": {"it": "Pronto: {name}.", "en": "Ready: {name}."},
     "design.job_budget": {
@@ -900,6 +932,52 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Modifica mirata a {screen}: «{text}»",
         "en": "Targeted change to {screen}: “{text}”",
     },
+    "design.target_zone": {
+        "it": "Modifica mirata a {zone} «{text}» di {screen}",
+        "en": "Targeted change to {zone} “{text}” of {screen}",
+    },
+    "design.target_parts": {
+        "it": "Modifica mirata a {parts} di {screen}",
+        "en": "Targeted change to {parts} of {screen}",
+    },
+    "design.opinion_about": {
+        "it": "Chiedo ai twin il parere sulla richiesta prima di applicarla.",
+        "en": "I ask the twins for their opinion on the request before applying it.",
+    },
+    "design.opinion_running": {
+        "it": "I twin danno il parere sulla richiesta",
+        "en": "The twins are giving their opinion on the request",
+    },
+    "design.opinion_exists": {
+        "it": "I twin hanno già dato il parere su questa richiesta per questa versione del "
+        "design: non lo chiedo di nuovo, eccolo.",
+        "en": "The twins already gave their opinion on this request for this version of the "
+        "design: I do not ask again, here it is.",
+    },
+    "design.opinion_heading": {
+        "it": "Il parere dei twin prima della modifica",
+        "en": "What the twins think before the change",
+    },
+    "design.opinion_simulated": {
+        "it": "I pareri dei twin sono simulati dal modello: ipotesi da verificare con persone "
+        "reali, non prove.",
+        "en": "The opinions of the twins are simulated by the model: hypotheses to verify with "
+        "real people, not evidence.",
+    },
+    "design.opinion_twin": {"it": "{name} · {verdict}", "en": "{name} · {verdict}"},
+    "design.opinion_verdict_HELPS": {"it": "Aiuta", "en": "Helps"},
+    "design.opinion_verdict_SLOWS": {"it": "Rallenta", "en": "Slows down"},
+    "design.opinion_verdict_BLOCKS": {"it": "Blocca", "en": "Blocks"},
+    "design.opinion_why": {"it": "Perché: {why}", "en": "Why: {why}"},
+    "design.opinion_what_to_do": {"it": "Cosa fare: {action}", "en": "What to do: {action}"},
+    "design.opinion_try_this": {"it": "Prova questo: «{request}»", "en": "Try this: “{request}”"},
+    "design.opinion_choice_apply": {"it": "Applica comunque", "en": "Apply anyway"},
+    "design.opinion_choice_change": {"it": "Cambia la richiesta", "en": "Change the request"},
+    "design.opinion_choice_cancel": {"it": "Annulla", "en": "Cancel"},
+    "design.opinion_cancelled": {
+        "it": "Parere registrato, nessuna modifica applicata.",
+        "en": "Opinion recorded, no change applied.",
+    },
     "design.about_rules": {
         "it": "Queste regole resteranno in vigore anche dopo:",
         "en": "These rules will stay in force afterwards too:",
@@ -919,6 +997,27 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "You asked: “{request}”",
     },
     "design.change_list": {"it": "Che cosa è cambiato:", "en": "What changed:"},
+    "design.corrections_heading": {
+        "it": "Correzioni fatte dallo Studio:",
+        "en": "Corrections made by the Studio:",
+    },
+    "design.correction_text": {
+        "it": "Testo della regola «{selector}»: {before} su {background}, {ratio}, sotto il "
+        "minimo di {threshold}; lo Studio l'ha sostituito con {after}, {replaced}{rules}.",
+        "en": "Text of the rule “{selector}”: {before} on {background}, {ratio}, below the "
+        "minimum of {threshold}; the Studio replaced it with {after}, {replaced}{rules}.",
+    },
+    "design.correction_border": {
+        "it": "Bordo dei controlli della regola «{selector}»: {before} su {background}, {ratio}, "
+        "sotto il minimo di {threshold}; sostituito con {after}, {replaced}{rules}.",
+        "en": "Border of the controls of the rule “{selector}”: {before} on {background}, "
+        "{ratio}, below the minimum of {threshold}; replaced with {after}, {replaced}{rules}.",
+    },
+    "design.correction_inherited": {
+        "it": "sfondo ereditato {colour}",
+        "en": "the inherited background {colour}",
+    },
+    "design.correction_rules": {"it": " ({count} regole)", "en": " ({count} rules)"},
     "design.change_not_reviewed": {
         "it": "La modifica resta applicata nella versione {version}, ma i twin non l'hanno "
         "rivista, per il motivo indicato. Quando il motivo è risolto, lancia `ut design review` "
@@ -941,6 +1040,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "design.column_code": {"it": "Codice", "en": "Code"},
     "design.column_kind": {"it": "Tipo", "en": "Type"},
     "design.column_text": {"it": "Testo", "en": "Text"},
+    "design.elements_zone_type": {
+        "it": "zona ({count} elementi)",
+        "en": "zone ({count} elements)",
+    },
     "design.elements_none": {
         "it": "Questo mockup non ha elementi indicabili.",
         "en": "This mockup has no elements to point at.",
@@ -950,9 +1053,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This screen has no elements to point at.",
     },
     "design.elements_next": {
-        "it": 'Per una modifica mirata a uno di questi elementi: `ut design change "..." '
+        "it": 'Per una modifica mirata a una di queste parti: `ut design change "..." '
         "--screen {screen} --element {element}`.",
-        "en": 'For a change aimed at one of these elements: `ut design change "..." '
+        "en": 'For a change aimed at one of these parts: `ut design change "..." '
         "--screen {screen} --element {element}`.",
     },
     "design.elements_needs_choice": {
@@ -1266,24 +1369,56 @@ MESSAGES: dict[str, dict[str, str]] = {
         "three digits.",
     },
     "design.errors.DESIGN_ELEMENT_CODE_INVALID": {
-        "it": "«{code}» non è il codice di un elemento: scrivilo come ELM-012, cioè ELM- e tre "
-        "cifre.",
-        "en": "“{code}” is not the code of an element: write it like ELM-012, that is ELM- and "
-        "three digits.",
+        "it": "«{code}» non è il codice di un elemento o di una zona: scrivilo come ELM-012 o "
+        "ZON-003, cioè ELM- o ZON- e da tre a sei cifre.",
+        "en": "“{code}” is not the code of an element or of a zone: write it like ELM-012 or "
+        "ZON-003, that is ELM- or ZON- and three to six digits.",
+    },
+    "design.errors.DESIGN_ELEMENT_CODE_REPEATED": {
+        "it": "Hai indicato {code} più di una volta: ogni elemento o zona va indicato una volta "
+        "sola.",
+        "en": "You named {code} more than once: name each element or zone only once.",
+    },
+    "design.errors.DESIGN_ELEMENT_TOO_MANY": {
+        "it": "Hai indicato {count} parti, ma una modifica ne può indicare al massimo {limit}, "
+        "tutte della stessa schermata.",
+        "en": "You named {count} parts, but a change can name at most {limit}, all of the same "
+        "screen.",
     },
     "design.errors.DESIGN_TARGET_NOT_FOUND": {
         "it": "Il mockup del design scelto non ha la schermata {screen}. Schermate disponibili: "
-        "{screens}. `ut design show --elements` elenca gli elementi di ogni schermata.",
+        "{screens}. `ut design show --elements` elenca gli elementi e le zone di ogni schermata.",
         "en": "The mockup of the chosen design has no screen {screen}. Screens available: "
-        "{screens}. `ut design show --elements` lists the elements of every screen.",
+        "{screens}. `ut design show --elements` lists the elements and the zones of every "
+        "screen.",
     },
     "design.errors.DESIGN_TARGET_NOT_FOUND.ELEMENT": {
-        "it": "La schermata {screen} del mockup scelto non ha l'elemento {element}. Schermate "
-        "disponibili: {screens}. `ut design show --elements {screen}` elenca gli elementi di "
-        "questa schermata.",
-        "en": "The screen {screen} of the chosen mockup has no element {element}. Screens "
-        "available: {screens}. `ut design show --elements {screen}` lists the elements of this "
-        "screen.",
+        "it": "La schermata {screen} del mockup scelto non ha l'elemento o la zona {element}. "
+        "Schermate disponibili: {screens}. `ut design show --elements {screen}` elenca gli "
+        "elementi e le zone di questa schermata.",
+        "en": "The screen {screen} of the chosen mockup has no element or zone {element}. "
+        "Screens available: {screens}. `ut design show --elements {screen}` lists the elements "
+        "and the zones of this screen.",
+    },
+    "design.errors.DESIGN_CHANGE_TARGET_INVALID": {
+        "it": "Lo Studio non trova nella schermata del mockup una delle parti indicate ({code}): "
+        "forse il design è cambiato. `ut design show --elements` elenca gli elementi e le zone "
+        "di ogni schermata.",
+        "en": "The Studio does not find one of the parts given in the screen of the mockup "
+        "({code}): perhaps the design changed. `ut design show --elements` lists the elements "
+        "and the zones of every screen.",
+    },
+    "design.errors.DESIGN_CHANGE_OPINION_FAILED": {
+        "it": "Il parere dei twin non è arrivato ({code}). Il design non è cambiato; chiederlo di "
+        "nuovo è una nuova spesa.",
+        "en": "The opinion of the twins did not arrive ({code}). The design did not change; "
+        "asking again is a new expense.",
+    },
+    "design.errors.INVALID_CHANGE_OPINION_OUTPUT": {
+        "it": "Il modello ha dato un parere che non si può usare ({code}). Il design non è "
+        "cambiato; chiederlo di nuovo è una nuova spesa.",
+        "en": "The model gave an opinion that cannot be used ({code}). The design did not "
+        "change; asking again is a new expense.",
     },
     "design.errors.DESIGN_RESTORE_NUMBER_INVALID": {
         "it": "«{value}» non è il numero di una versione: scrivilo come 2, cioè un numero intero "
@@ -1659,6 +1794,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         f"design.visual_{dimension}_{value}": {"it": italian, "en": english}
         for dimension, words in VISUAL_WORDS.items()
         for value, (italian, english) in words.items()
+    },
+    **{
+        f"design.colour_{name}": {"it": italian, "en": english}
+        for name, (italian, english) in COLOUR_WORDS.items()
     },
     **{
         f"design.axis_{axis}": {"it": italian, "en": english}

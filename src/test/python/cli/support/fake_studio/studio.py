@@ -53,6 +53,7 @@ from .evidence import _EvidenceRoutes
 from .fields import _Call
 from .learning import _LearningRoutes
 from .mockups import _MockupRoutes
+from .opinions import _OpinionRoutes
 from .packages import _PackageRoutes
 from .project import FakeProject
 from .projects import MAX_PROJECT_NAME, PROJECT_MODES, _ProjectRoutes
@@ -140,6 +141,7 @@ class FakeStudio(
     _DesignRoutes,
     _MockupRoutes,
     _EvaluationRoutes,
+    _OpinionRoutes,
     _CritiqueRoutes,
     _SectionRoutes,
     _PackageRoutes,
@@ -165,6 +167,8 @@ class FakeStudio(
         now: Callable[[], datetime] | None = None,
         directions: bool = False,
         design_system: bool = False,
+        landmarks: bool = False,
+        corrections: Sequence[Mapping[str, object]] = (),
         access_mode: str = ACCOUNTS,
         local_owner_email: str = LOCAL_OWNER_EMAIL,
     ) -> None:
@@ -191,6 +195,8 @@ class FakeStudio(
         self.hosted = hosted
         self.directions = directions
         self.design_system = design_system
+        self.landmarks = landmarks
+        self.corrections = tuple(dict(item) for item in corrections)
         self.billing = billing
         self.job_polls = job_polls
         self.requests: list[RecordedRequest] = []

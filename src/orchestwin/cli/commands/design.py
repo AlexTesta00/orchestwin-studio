@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
     from orchestwin.cli.flows.design_state import Alternative, DesignState
+    from orchestwin.cli.flows.mockup_screens import MockupElement, MockupScreen
     from orchestwin.cli.project import ProjectFolder
 
 NAME = "design"
@@ -62,6 +63,7 @@ MOCKUPS: Final = "mockups"
 APPLY: Final = "apply"
 LEAVE: Final = "leave"
 EVERY_SCREEN: Final = "*"
+PART_INDENT: Final = "  "
 HARD_CODES: Final = frozenset(
     {
         "INPUT_CLOSED",
@@ -89,6 +91,7 @@ class Options:
     rules: tuple[str, ...] = ()
     aim: design_change.Aim | None = None
     reviewing: bool = True
+    asking: bool = False
     elements: bool = False
     screen: str | None = None
     version: int | None = None
@@ -104,8 +107,11 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("value", nargs="?", metavar="VALUE", help="design.option_value")
     parser.add_argument("--rule", action="append", metavar="TEXT", help="design.option_rule")
     parser.add_argument("--screen", metavar="SCREEN", help="design.option_screen")
-    parser.add_argument("--element", metavar="ELEMENT", help="design.option_element")
+    parser.add_argument(
+        "--element", action="append", metavar="ELEMENT", help="design.option_element"
+    )
     parser.add_argument("--no-review", action="store_true", help="design.option_no_review")
+    parser.add_argument("--ask-first", action="store_true", help="design.option_ask_first")
     parser.add_argument(
         "--elements",
         nargs="?",
@@ -127,48 +133,11 @@ def configure(parser: argparse.ArgumentParser) -> None:
 def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     action = arguments.action
     value = arguments.value
-    rules = list(arguments.rule or [])
-    console = context.console
-    aimed = arguments.screen is not None or arguments.element is not None
-    if rules and action != CHANGE:
-        console.error("design.usage_rule")
+    refused = usage_key(arguments)
+    if refused is not None:
+        context.console.error(refused, action=action or NAME)
         return USAGE_STATUS
-    if (aimed or arguments.no_review) and action != CHANGE:
-        console.error("design.usage_target")
-        return USAGE_STATUS
-    if arguments.elements is not None and action != SHOW:
-        console.error("design.usage_elements")
-        return USAGE_STATUS
-    critiqued = [
-        item for item in (arguments.image, arguments.url, arguments.redraw) if item is not None
-    ]
-    if critiqued and (action != CRITIQUE or len(critiqued) > 1):
-        console.error("design.usage_critique")
-        return USAGE_STATUS
-    if value is not None and action not in WITH_VALUE:
-        console.error("design.usage_value", action=action or NAME)
-        return USAGE_STATUS
-    if action == CHOOSE and not value:
-        console.error("design.usage_code")
-        return USAGE_STATUS
-    if action == RESTORE and not value:
-        console.error("design.usage_restore")
-        return USAGE_STATUS
-    options = Options(
-        rules=tuple(rules),
-        aim=design_change.aim_of(arguments.screen, arguments.element),
-        reviewing=not arguments.no_review,
-        elements=arguments.elements is not None,
-        screen=None
-        if arguments.elements in (None, EVERY_SCREEN)
-        else design_change.screen_code(arguments.elements),
-        version=restore_number(value) if action == RESTORE else None,
-        image=arguments.image,
-        url=arguments.url,
-        redraw=None
-        if arguments.redraw is None
-        else design_critique.critique_number(arguments.redraw),
-    )
+    options = options_of(arguments)
     project = context.project()
     client = context.client()
     source = (
@@ -186,6 +155,47 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         report_changed(context, client, project, error)
         design_state.show_summary(context, design_state.read_state(client, project))
         return error.status
+
+
+def usage_key(arguments: argparse.Namespace) -> str | None:
+    action = arguments.action
+    value = arguments.value
+    aimed = arguments.screen is not None or arguments.element is not None
+    targeted = aimed or arguments.no_review or arguments.ask_first
+    critiqued = [
+        item for item in (arguments.image, arguments.url, arguments.redraw) if item is not None
+    ]
+    refusals = (
+        (bool(arguments.rule) and action != CHANGE, "design.usage_rule"),
+        (targeted and action != CHANGE, "design.usage_target"),
+        (arguments.ask_first and arguments.screen is None, "design.usage_ask_first"),
+        (arguments.elements is not None and action != SHOW, "design.usage_elements"),
+        (bool(critiqued) and (action != CRITIQUE or len(critiqued) > 1), "design.usage_critique"),
+        (value is not None and action not in WITH_VALUE, "design.usage_value"),
+        (action == CHOOSE and not value, "design.usage_code"),
+        (action == RESTORE and not value, "design.usage_restore"),
+    )
+    return next((key for refused, key in refusals if refused), None)
+
+
+def options_of(arguments: argparse.Namespace) -> Options:
+    action = arguments.action
+    return Options(
+        rules=tuple(arguments.rule or ()),
+        aim=design_change.aim_of(arguments.screen, arguments.element),
+        reviewing=not arguments.no_review,
+        asking=arguments.ask_first,
+        elements=arguments.elements is not None,
+        screen=None
+        if arguments.elements in (None, EVERY_SCREEN)
+        else design_change.screen_code(arguments.elements),
+        version=restore_number(arguments.value) if action == RESTORE else None,
+        image=arguments.image,
+        url=arguments.url,
+        redraw=None
+        if arguments.redraw is None
+        else design_critique.critique_number(arguments.redraw),
+    )
 
 
 def perform(
@@ -245,6 +255,7 @@ def perform(
             options.rules,
             aim=options.aim,
             reviewing=options.reviewing,
+            asking=options.asking,
         )
     if action == RESTORE:
         return restore(context, client, project, state, options.version)
@@ -327,26 +338,36 @@ def show_elements(
         return 0
     console.write()
     console.heading(context.text("design.elements_heading", code=chosen.code, title=chosen.title))
-    columns = [
-        context.text("design.column_code"),
-        context.text("design.column_kind"),
-        context.text("design.column_text"),
-    ]
     for screen in shown:
-        console.write(
-            context.text("design.elements_screen", code=screen.code, title=screen.title or "-")
-        )
-        if screen.elements:
-            console.table(
-                columns, [[item.code, item.kind, item.text or "-"] for item in screen.elements]
-            )
-        else:
-            console.say("design.elements_screen_none")
-        console.write()
+        show_screen_parts(context, screen)
     example = next((screen for screen in shown if screen.elements), None)
     if example is not None:
         console.say("design.elements_next", screen=example.code, element=example.elements[0].code)
     return 0
+
+
+def show_screen_parts(context: CommandContext, screen: MockupScreen) -> None:
+    console = context.console
+    console.write(
+        context.text("design.elements_screen", code=screen.code, title=screen.title or "-")
+    )
+    if screen.elements:
+        columns = [
+            context.text("design.column_code"),
+            context.text("design.column_kind"),
+            context.text("design.column_text"),
+        ]
+        console.table(columns, [part_row(context, item) for item in screen.elements])
+    else:
+        console.say("design.elements_screen_none")
+    console.write()
+
+
+def part_row(context: CommandContext, part: MockupElement) -> list[str]:
+    kind = (
+        context.text("design.elements_zone_type", count=len(part.holds)) if part.zone else part.kind
+    )
+    return [f"{PART_INDENT * part.depth}{part.code}", kind, part.text or "-"]
 
 
 def open_previews(

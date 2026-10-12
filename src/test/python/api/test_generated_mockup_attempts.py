@@ -504,6 +504,7 @@ def test_a_job_payload_is_the_result_payload_or_a_job_failure():
         "approach",
         "changes",
         "warnings",
+        "corrections",
         "cost_microusd",
     }
 

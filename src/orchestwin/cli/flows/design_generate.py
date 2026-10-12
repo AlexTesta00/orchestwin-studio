@@ -54,6 +54,7 @@ OPERATION_KEYS: Final = {
     "DESIGN_PROPOSAL": "design.job_proposal",
     "DESIGN_REGENERATION": "design.job_proposal",
     "DESIGN_EVALUATION": "design.job_review",
+    "DESIGN_CHANGE_OPINION": "design.job_opinion",
     "ITERATION": "design.job_change",
 }
 

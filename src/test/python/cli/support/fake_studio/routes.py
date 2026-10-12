@@ -202,6 +202,8 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}/design/evaluations/comparison", "comparison"),
     Route("GET", "/projects/{project_id}/design/evaluations/{run_id}/pins", "review_pins"),
     Route("GET", "/projects/{project_id}/design/evaluations/{run_id}/document", "review_document"),
+    Route("POST", "/projects/{project_id}/design/opinions", "opinion"),
+    Route("GET", "/projects/{project_id}/design/opinions", "opinions"),
     Route("POST", "/projects/{project_id}/design/critiques/sources", "critique_upload"),
     Route("GET", "/projects/{project_id}/design/critiques/sources", "critique_sources"),
     Route(

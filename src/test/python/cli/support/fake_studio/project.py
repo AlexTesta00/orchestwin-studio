@@ -53,6 +53,7 @@ class FakeProject:
         self.mockups: dict[str, dict[str, object]] = {}
         self.iterations: list[dict[str, object]] = []
         self.runs: list[dict[str, object]] = []
+        self.opinions: list[dict[str, object]] = []
         self.finding_decisions: list[dict[str, object]] = []
         self.packages: list[dict[str, object]] = []
         self.folders: list[dict[str, ArtifactVersion]] = []

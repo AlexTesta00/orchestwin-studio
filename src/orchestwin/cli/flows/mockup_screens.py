@@ -11,6 +11,10 @@ from orchestwin.cli.shapes import shortened as clipped
 
 SCREEN_ID: Final = re.compile(r"SCR-[0-9]{3}")
 ELEMENT_MARK: Final = "data-elm"
+ZONE_MARK: Final = "data-ot-zone"
+ZONE: Final = "zone"
+HEADINGS: Final = frozenset({"h1", "h2", "h3", "h4"})
+CAPTIONS: Final = frozenset({"legend", "caption", "summary", "figcaption"})
 LABEL_LIMIT: Final = 120
 HTML_LIMIT: Final = 2048
 PIN_CLASS: Final = "ot-pin"
@@ -86,10 +90,16 @@ class MockupElement:
     kind: str
     text: str
     html: str
+    holds: tuple[str, ...] = ()
+    depth: int = 0
 
     @property
     def label(self) -> str:
         return self.text or self.code
+
+    @property
+    def zone(self) -> bool:
+        return self.kind == ZONE
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,30 +199,41 @@ def mockup_screens(html: str) -> tuple[MockupScreen, ...]:
     parser = _MockupParser(html)
     parser.feed(html)
     parser.finish()
-    return tuple(
-        _screen(parser, node)
-        for node in _descendants(parser.root)
-        if node.tag == "section" and SCREEN_ID.fullmatch(node.attributes.get("id", ""))
-    )
+    return tuple(_screen(parser, node) for node in _descendants(parser.root) if _is_screen(node))
 
 
 def _screen(parser: _MockupParser, node: _Node) -> MockupScreen:
-    elements: dict[str, MockupElement] = {}
-    for item in _descendants(node):
-        code = item.attributes.get(ELEMENT_MARK)
-        if not code or code in elements or _closest_screen(item) is not node:
-            continue
-        elements[code] = MockupElement(
-            code=code,
-            kind=item.tag,
-            text=_visible_text(parser, item),
-            html=_outer(parser, item),
-        )
+    parts: dict[str, MockupElement] = {}
+    for part in _parts(parser, node):
+        parts.setdefault(part.code, part)
     return MockupScreen(
         code=node.attributes["id"],
         title=_normalized(node.attributes.get("aria-label", "")),
         html=_outer(parser, node),
-        elements=tuple(elements.values()),
+        elements=tuple(parts.values()),
+    )
+
+
+def _parts(parser: _MockupParser, screen: _Node) -> Iterator[MockupElement]:
+    for node in _descendants(screen):
+        element = node.attributes.get(ELEMENT_MARK)
+        code = element or node.attributes.get(ZONE_MARK)
+        if not code or _closest_screen(node) is not screen:
+            continue
+        depth = sum(ZONE_MARK in item.attributes for item in _ancestors(node))
+        html = _outer(parser, node)
+        if element:
+            yield MockupElement(code, node.tag, _first(_names(parser, node)), html, depth=depth)
+        else:
+            text = _first(_zone_names(parser, node))
+            yield MockupElement(code, ZONE, text, html, _held(node), depth)
+
+
+def _held(node: _Node) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            code for item in _descendants(node) if (code := item.attributes.get(ELEMENT_MARK))
+        )
     )
 
 
@@ -228,36 +249,55 @@ def _descendants(node: _Node) -> Iterator[_Node]:
         pending.extend(child for child in reversed(current.children) if isinstance(child, _Node))
 
 
-def _closest(node: _Node, tag: str) -> _Node | None:
-    current: _Node | None = node
-    while current is not None and current.tag != tag:
+def _ancestors(node: _Node) -> Iterator[_Node]:
+    current = node.parent
+    while current is not None:
+        yield current
         current = current.parent
-    return current
+
+
+def _is_screen(node: _Node) -> bool:
+    return node.tag == "section" and SCREEN_ID.fullmatch(node.attributes.get("id", "")) is not None
+
+
+def _closest(node: _Node, tag: str) -> _Node | None:
+    return next((item for item in (node, *_ancestors(node)) if item.tag == tag), None)
 
 
 def _closest_screen(node: _Node) -> _Node | None:
-    current = node.parent
-    while current is not None and not (
-        current.tag == "section" and SCREEN_ID.fullmatch(current.attributes.get("id", ""))
-    ):
-        current = current.parent
-    return current
+    return next((item for item in _ancestors(node) if _is_screen(item)), None)
 
 
-def _visible_text(parser: _MockupParser, node: _Node) -> str:
-    return clipped(next((text for text in _names(parser, node) if text), ""), LABEL_LIMIT)
+def _first(texts: Iterator[str]) -> str:
+    return clipped(next((text for text in texts if text), ""), LABEL_LIMIT)
 
 
 def _names(parser: _MockupParser, node: _Node) -> Iterator[str]:
     yield _own_text(node)
-    references = node.attributes.get("aria-labelledby", "").split()
-    yield _normalized(
-        " ".join(_content(parser.ids[name]) for name in references if name in parser.ids)
-    )
+    yield _referenced_text(parser, node)
     yield _normalized(node.attributes.get("aria-label", ""))
     yield _label_text(parser, node)
     for name in NAME_ATTRIBUTES:
         yield _normalized(node.attributes.get(name, ""))
+
+
+def _zone_names(parser: _MockupParser, node: _Node) -> Iterator[str]:
+    yield _normalized(node.attributes.get("aria-label", ""))
+    yield _referenced_text(parser, node)
+    for child in node.children:
+        if isinstance(child, _Node) and child.tag in CAPTIONS:
+            yield _own_text(child)
+    for item in _descendants(node):
+        if item.tag in HEADINGS:
+            yield _own_text(item)
+    yield _own_text(node)
+
+
+def _referenced_text(parser: _MockupParser, node: _Node) -> str:
+    references = node.attributes.get("aria-labelledby", "").split()
+    return _normalized(
+        " ".join(_own_text(parser.ids[name]) for name in references if name in parser.ids)
+    )
 
 
 def _label_text(parser: _MockupParser, node: _Node) -> str:
@@ -289,14 +329,21 @@ def _own_text(node: _Node) -> str:
 
 
 def _collect(node: _Node, parts: list[str]) -> None:
+    after_element = False
     for child in node.children:
         if isinstance(child, str):
             parts.append(child)
-        elif not _silent(child):
-            spacer = " " if child.tag in BLOCK_TAGS else ""
-            parts.append(spacer)
-            _collect(child, parts)
-            parts.append(spacer)
+            after_element = False
+            continue
+        if after_element:
+            parts.append(" ")
+        after_element = True
+        if _silent(child):
+            continue
+        spacer = " " if child.tag in BLOCK_TAGS else ""
+        parts.append(spacer)
+        _collect(child, parts)
+        parts.append(spacer)
 
 
 def _silent(node: _Node) -> bool:

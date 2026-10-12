@@ -7,7 +7,7 @@ from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
-from orchestwin.artifacts.design_evaluation import DesignReviewScope
+from orchestwin.artifacts.design_evaluation import PARTS_SCOPE, ZONE_SCOPE, DesignReviewScope
 from orchestwin.evaluation.artifacts import EvaluationArtifactKind
 from orchestwin.evaluation.evaluator import (
     UserTwinEvaluationRequest,
@@ -16,6 +16,7 @@ from orchestwin.evaluation.evaluator import (
 )
 from orchestwin.evaluation.findings import SyntheticFindingCriterion, SyntheticFindingSeverity
 from orchestwin.evaluation.twin_review import bind_twin_review
+from orchestwin.models.design_change import part_noun
 from orchestwin.models.hosted_configuration import HOSTED_PROVIDER_KINDS
 from orchestwin.models.proposal_evidence import current_proposal_evidence, retain_adapter_result
 from orchestwin.models.proposal_generation import ProposalGenerationError
@@ -95,13 +96,30 @@ SCOPE_SENTENCE: Final = (
 )
 
 
-def scope_sentence(scope: DesignReviewScope) -> str:
-    label = json.dumps(scope.label, ensure_ascii=False)
+def _quoted(label: str) -> str:
+    return json.dumps(label, ensure_ascii=False)
+
+
+def _scope_subject(scope: DesignReviewScope) -> str:
+    screen = scope.screen_code
+    if scope.kind == PARTS_SCOPE:
+        parts = ", ".join(
+            f"the {part_noun(code)} {code} {_quoted(label)}" for code, label in scope.parts
+        )
+        return f"these parts of the screen {screen}: {parts}"
+    if scope.kind == ZONE_SCOPE:
+        [(zone, label)] = scope.parts
+        return (
+            f"the zone {zone} {_quoted(label)} of the screen {screen}, "
+            f"which holds the elements {', '.join(scope.holds)}"
+        )
     if scope.element_code is None:
-        subject = f"the screen {scope.screen_code} {label}"
-    else:
-        subject = f"the element {scope.element_code} {label} of the screen {scope.screen_code}"
-    return SCOPE_SENTENCE.format(subject=subject, anchor=scope.anchor_key)
+        return f"the screen {screen} {_quoted(scope.label)}"
+    return f"the element {scope.element_code} {_quoted(scope.label)} of the screen {screen}"
+
+
+def scope_sentence(scope: DesignReviewScope) -> str:
+    return SCOPE_SENTENCE.format(subject=_scope_subject(scope), anchor=scope.anchor_key)
 
 
 def twin_review_instruction(*, hosted: bool, scope: DesignReviewScope | None = None) -> str:
