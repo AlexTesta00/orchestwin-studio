@@ -5,11 +5,17 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Final
 
-from orchestwin.artifacts.generated_mockup_structure import derive_elements, locate, walk_elements
+from orchestwin.artifacts.generated_mockup_structure import (
+    DerivedElement,
+    derive_elements,
+    locate,
+    walk_elements,
+)
 from orchestwin.artifacts.generated_mockup_styles import (
     GeneratedMockupError,
     has_forbidden_character,
 )
+from orchestwin.artifacts.generated_mockup_zones import ZONE_ATTRIBUTE, DerivedZone, derive_zones
 from orchestwin.artifacts.generated_mockups import (
     DATA_ICON,
     DATA_PICTURE,
@@ -143,6 +149,20 @@ def _classes(node: MarkupElement, marker: str) -> str:
     return " ".join(item for item in (node.attribute("class"), marker) if item)
 
 
+def code_attributes(
+    elements: Iterable[DerivedElement], zones: Iterable[DerivedZone], screen_code: str
+) -> dict[tuple[int, ...], tuple[tuple[str, str], ...]]:
+    marks = (
+        *(("data-elm", item) for item in elements),
+        *((ZONE_ATTRIBUTE, item) for item in zones),
+    )
+    attributes: dict[tuple[int, ...], tuple[tuple[str, str], ...]] = {}
+    for name, item in marks:
+        if item.screen_code == screen_code:
+            attributes[item.path] = (*attributes.get(item.path, ()), (name, item.code))
+    return attributes
+
+
 def _filling(node: MarkupElement, index: int) -> tuple[tuple[tuple[str, str], ...], str]:
     icon = node.attribute(DATA_ICON)
     if icon is not None:
@@ -163,6 +183,7 @@ def mockup_document(
     language: str,
     pins: Iterable[MockupPin] = (),
     entry_screen: str | None = None,
+    zones: bool = False,
 ) -> str:
     if not isinstance(mockup, GeneratedMockup):
         raise _fail("DOCUMENT_UNSAFE", "a generated mockup is required")
@@ -173,6 +194,7 @@ def mockup_document(
     if entry not in {screen.code for screen in mockup.screens}:
         raise _fail("DOCUMENT_ENTRY_SCREEN", "entry screen")
     derived = {element.code: element for element in derive_elements(mockup)}
+    marked = derive_zones(mockup) if zones else ()
     if isinstance(pins, str | bytes | Mapping) or not isinstance(pins, Iterable):
         raise _fail("DOCUMENT_PIN", "pins must be a sequence")
     chosen = list(pins)
@@ -192,11 +214,7 @@ def mockup_document(
     sections = []
     for screen in mockup.screens:
         nodes = trees[screen.code]
-        attributes: dict[tuple[int, ...], tuple[tuple[str, str], ...]] = {
-            element.path: (("data-elm", element.code),)
-            for element in derived.values()
-            if element.screen_code == screen.code
-        }
+        attributes = code_attributes(derived.values(), marked, screen.code)
         after: dict[tuple[int, ...], str] = {}
         append: dict[tuple[int, ...], str] = {}
         for node, path in placeholders[screen.code]:
@@ -254,5 +272,6 @@ __all__ = [
     "SCREEN_ITEM_RULE",
     "SHRINKING_ELEMENTS",
     "MockupPin",
+    "code_attributes",
     "mockup_document",
 ]

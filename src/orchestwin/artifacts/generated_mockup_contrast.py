@@ -3,14 +3,17 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from types import MappingProxyType
 from typing import Final
 
+from orchestwin.artifacts.colour_names import colour_name_key
 from orchestwin.artifacts.generated_mockup_repair import RepairNote
 from orchestwin.artifacts.generated_mockup_review import (
     CONTROL_BORDER_THRESHOLD,
     MAX_SELECTOR_DETAIL,
     Resolver,
+    WeakBorder,
     background_candidates,
     is_large_text,
     selector_detail,
@@ -21,6 +24,7 @@ from orchestwin.artifacts.generated_mockup_styles import (
     MAX_STYLES_LENGTH,
     CssToken,
     GeneratedMockupError,
+    StyleRule,
     StyleSheet,
     normalize_styles,
     parse_style_sheet,
@@ -42,6 +46,12 @@ REPLACEMENT_TOKENS: Final = (
     "surface",
     "surface-alt",
 )
+_PROPERTIES: Final = MappingProxyType(
+    {TEXT_COLOUR_REPLACED: "color", CONTROL_BORDER_REPLACED: "border-color"}
+)
+_CONTROL_SURFACES: Final = ("background", "surface")
+_INHERITED_BACKGROUND: Final = "UNREADABLE_TEXT_COLOUR"
+_RATIO_DIGITS: Final = 2
 _OPENERS: Final = frozenset({"function", "(", "["})
 _CLOSERS: Final = frozenset({")", "]"})
 _BLANK: Final = frozenset({"whitespace"})
@@ -55,13 +65,83 @@ _Located = tuple[str, int, int]
 
 
 @dataclass(frozen=True, slots=True)
+class ContrastCorrection:
+    code: str
+    selector: str
+    property: str
+    before_value: str
+    before_hex: str
+    before_ratio: float
+    after_token: str
+    after_hex: str
+    after_ratio: float
+    background_hex: str
+    inherited_background: bool
+    threshold: float
+    large_text: bool
+    count: int
+
+    def to_snapshot(self) -> dict[str, object]:
+        return {
+            "code": self.code,
+            "selector": self.selector,
+            "property": self.property,
+            "before": {
+                "value": self.before_value,
+                "hex": self.before_hex,
+                "ratio": round(self.before_ratio, _RATIO_DIGITS),
+                "name": colour_name_key(self.before_hex),
+            },
+            "after": {
+                "token": self.after_token,
+                "hex": self.after_hex,
+                "ratio": round(self.after_ratio, _RATIO_DIGITS),
+                "name": colour_name_key(self.after_hex),
+            },
+            "background": {
+                "hex": self.background_hex,
+                "name": colour_name_key(self.background_hex),
+                "inherited": self.inherited_background,
+            },
+            "threshold": self.threshold,
+            "large_text": self.large_text,
+            "count": self.count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class _Change:
     rule: int
     declaration: int
     node: int
     code: str
     token: str
-    ratio: float
+    before: str
+    after: str
+    backgrounds: tuple[str, ...]
+    inherited: bool
+    threshold: float
+    large_text: bool
+
+    @property
+    def background(self) -> str:
+        return max(self.backgrounds, key=lambda background: contrast_ratio(self.after, background))
+
+    @property
+    def ratio(self) -> float:
+        return contrast_ratio(self.after, self.background)
+
+
+@dataclass(frozen=True, slots=True)
+class _Context:
+    tokens: Mapping[str, str]
+    resolver: Resolver
+    candidates: tuple[str, ...]
+    palette: Mapping[str, str]
+    surfaces: tuple[str, ...]
+    border: str | None
+    text_threshold: float
+    large_text_threshold: float
 
 
 def _palette(tokens: Mapping[str, str]) -> dict[str, str]:
@@ -73,34 +153,113 @@ def _palette(tokens: Mapping[str, str]) -> dict[str, str]:
     return palette
 
 
+def _surfaces(tokens: Mapping[str, str]) -> tuple[str, ...]:
+    values = tuple(tokens.get(f"--vl-color-{name}", "") for name in _CONTROL_SURFACES)
+    return values if all(is_hex_colour(value) for value in values) else ()
+
+
 def _text_choice(
     palette: Mapping[str, str], original: str, backgrounds: Sequence[str], threshold: float
-) -> tuple[str, float] | None:
-    chosen: tuple[tuple[float, float], str, float] | None = None
+) -> str | None:
+    chosen: tuple[tuple[float, float], str] | None = None
     for name, value in palette.items():
         ratio = max(contrast_ratio(value, background) for background in backgrounds)
         if ratio < threshold:
             continue
         key = (colour_distance(original, value), -ratio)
         if chosen is None or key < chosen[0]:
-            chosen = (key, name, ratio)
-    return None if chosen is None else (chosen[1], chosen[2])
+            chosen = (key, name)
+    return None if chosen is None else chosen[1]
 
 
 def _border_choice(
     palette: Mapping[str, str], surfaces: Sequence[str], ui_threshold: float
-) -> tuple[str, float] | None:
+) -> str | None:
     muted = palette.get("text-muted")
-    if muted is not None:
-        ratios = [contrast_ratio(muted, surface) for surface in surfaces]
-        if min(ratios) >= max(ui_threshold, CONTROL_BORDER_THRESHOLD):
-            return "text-muted", max(ratios)
+    floor = max(ui_threshold, CONTROL_BORDER_THRESHOLD)
+    if muted is not None and all(contrast_ratio(muted, surface) >= floor for surface in surfaces):
+        return "text-muted"
     text = palette.get("text")
-    if text is not None:
-        best = max(contrast_ratio(text, surface) for surface in surfaces)
-        if best >= CONTROL_BORDER_THRESHOLD:
-            return "text", best
+    if text is not None and any(
+        contrast_ratio(text, surface) >= CONTROL_BORDER_THRESHOLD for surface in surfaces
+    ):
+        return "text"
     return None
+
+
+def _context(
+    sheet: StyleSheet,
+    tokens: Mapping[str, str],
+    text_threshold: float,
+    large_text_threshold: float,
+    ui_threshold: float,
+) -> _Context:
+    resolver = Resolver(sheet, tokens)
+    rules = [rule for rule in sheet.rules if not rule.in_keyframes]
+    palette = _palette(tokens)
+    surfaces = _surfaces(tokens)
+    return _Context(
+        tokens=tokens,
+        resolver=resolver,
+        candidates=tuple(background_candidates(rules, resolver, tokens)),
+        palette=palette,
+        surfaces=surfaces,
+        border=_border_choice(palette, surfaces, ui_threshold) if surfaces else None,
+        text_threshold=text_threshold,
+        large_text_threshold=large_text_threshold,
+    )
+
+
+def _text_change(context: _Context, position: int, rule: StyleRule) -> _Change | None:
+    measured = text_contrast(rule, context.resolver, context.candidates)
+    large = is_large_text(rule, context.tokens)
+    threshold = context.large_text_threshold if large else context.text_threshold
+    if measured is None or measured.ratio >= threshold:
+        return None
+    token = _text_choice(context.palette, measured.colour, measured.backgrounds, threshold)
+    if token is None:
+        return None
+    return _Change(
+        rule=position,
+        declaration=measured.index,
+        node=0,
+        code=TEXT_COLOUR_REPLACED,
+        token=token,
+        before=measured.colour,
+        after=context.palette[token],
+        backgrounds=measured.backgrounds,
+        inherited=measured.code == _INHERITED_BACKGROUND,
+        threshold=threshold,
+        large_text=large,
+    )
+
+
+def _weak_colour(resolver: Resolver, rule: StyleRule, weak: WeakBorder) -> str:
+    colour = resolver.colour(significant(rule.declarations[weak.index].nodes)[weak.node])
+    assert colour is not None
+    return colour.hex
+
+
+def _border_changes(context: _Context, position: int, rule: StyleRule) -> list[_Change]:
+    token = context.border
+    if token is None:
+        return []
+    return [
+        _Change(
+            rule=position,
+            declaration=weak.index,
+            node=weak.node,
+            code=CONTROL_BORDER_REPLACED,
+            token=token,
+            before=_weak_colour(context.resolver, rule, weak),
+            after=context.palette[token],
+            backgrounds=context.surfaces,
+            inherited=False,
+            threshold=CONTROL_BORDER_THRESHOLD,
+            large_text=False,
+        )
+        for weak in weak_control_borders(rule, context.resolver, context.tokens)
+    ]
 
 
 def _changes(
@@ -110,35 +269,15 @@ def _changes(
     large_text_threshold: float,
     ui_threshold: float,
 ) -> list[_Change]:
-    resolver = Resolver(sheet, tokens)
-    rules = [rule for rule in sheet.rules if not rule.in_keyframes]
-    candidates = background_candidates(rules, resolver, tokens)
-    palette = _palette(tokens)
-    background = tokens.get("--vl-color-background")
-    surface = tokens.get("--vl-color-surface")
-    border = (
-        _border_choice(palette, (background, surface), ui_threshold)
-        if background is not None
-        and surface is not None
-        and is_hex_colour(background)
-        and is_hex_colour(surface)
-        else None
-    )
+    context = _context(sheet, tokens, text_threshold, large_text_threshold, ui_threshold)
     changes: list[_Change] = []
     for position, rule in enumerate(sheet.rules):
         if rule.in_keyframes:
             continue
-        measured = text_contrast(rule, resolver, candidates)
-        threshold = large_text_threshold if is_large_text(rule, tokens) else text_threshold
-        if measured is not None and measured.ratio < threshold:
-            choice = _text_choice(palette, measured.colour, measured.backgrounds, threshold)
-            if choice is not None:
-                changes.append(_Change(position, measured.index, 0, TEXT_COLOUR_REPLACED, *choice))
-        if border is not None:
-            changes.extend(
-                _Change(position, weak.index, weak.node, CONTROL_BORDER_REPLACED, *border)
-                for weak in weak_control_borders(rule, resolver, tokens)
-            )
+        text = _text_change(context, position, rule)
+        if text is not None:
+            changes.append(text)
+        changes.extend(_border_changes(context, position, rule))
     return changes
 
 
@@ -252,10 +391,99 @@ def _spliced(text: str, edits: Iterable[tuple[int, int, str]]) -> str:
     return "".join(pieces)
 
 
+def _replacement(token: str) -> str:
+    return f"var(--vl-color-{token})"
+
+
+def _correction(change: _Change, selector: str, value: str) -> ContrastCorrection:
+    background = change.background
+    return ContrastCorrection(
+        code=change.code,
+        selector=selector,
+        property=_PROPERTIES[change.code],
+        before_value=value,
+        before_hex=change.before.upper(),
+        before_ratio=contrast_ratio(change.before, background),
+        after_token=change.token,
+        after_hex=change.after.upper(),
+        after_ratio=change.ratio,
+        background_hex=background.upper(),
+        inherited_background=change.inherited,
+        threshold=change.threshold,
+        large_text=change.large_text,
+        count=1,
+    )
+
+
+def _note_name(correction: ContrastCorrection) -> str:
+    replacement = _replacement(correction.after_token)
+    return (
+        f"{correction.selector} {correction.before_value}→{replacement} "
+        f"{correction.after_ratio:.2f}"
+    )
+
+
 def _notes(entries: Iterable[tuple[str, str]]) -> tuple[RepairNote, ...]:
     counted = Counter(entries)
     notes = (RepairNote(code, None, name, number) for (code, name), number in counted.items())
     return tuple(sorted(notes, key=lambda note: (note.code, note.name)))
+
+
+def _merged(corrections: Iterable[ContrastCorrection]) -> tuple[ContrastCorrection, ...]:
+    counted = Counter(corrections)
+    merged = (replace(correction, count=number) for correction, number in counted.items())
+    return tuple(sorted(merged, key=lambda correction: (correction.code, _note_name(correction))))
+
+
+def _rewritten(
+    styles: str, sheet: StyleSheet, changes: Sequence[_Change]
+) -> tuple[str, list[ContrastCorrection]] | None:
+    text = normalize_styles(styles)
+    stream = tokenize_styles(text)
+    locator = _Locator(stream)
+    locator.rule_list()
+    if [[name for name, _start, _end in found] for found in locator.rules] != [
+        [declaration.name for declaration in rule.declarations] for rule in sheet.rules
+    ]:
+        return None
+    offsets = [0]
+    for token in stream:
+        offsets.append(offsets[-1] + len(token.text))
+    edits: list[tuple[int, int, str]] = []
+    corrections: list[ContrastCorrection] = []
+    for change in changes:
+        rule = sheet.rules[change.rule]
+        _name, start, end = locator.rules[change.rule][change.declaration]
+        ranges = _node_ranges(stream, start, _value_end(stream, start, end))
+        if len(ranges) != len(significant(rule.declarations[change.declaration].nodes)):
+            return None
+        begin, stop = ranges[change.node]
+        old = _PRINTABLE.sub("?", text_of_tokens(stream[begin:stop]))[:MAX_SELECTOR_DETAIL]
+        edits.append((offsets[begin], offsets[stop], _replacement(change.token)))
+        corrections.append(_correction(change, selector_detail(rule), old))
+    repaired = _spliced(text, edits)
+    return None if len(repaired) > MAX_STYLES_LENGTH else (repaired, corrections)
+
+
+def repair_contrast_with_corrections(
+    styles: str,
+    tokens: Mapping[str, str],
+    *,
+    text_threshold: float,
+    large_text_threshold: float,
+    ui_threshold: float,
+) -> tuple[str, tuple[RepairNote, ...], tuple[ContrastCorrection, ...]]:
+    try:
+        sheet = parse_style_sheet(styles)
+    except GeneratedMockupError:
+        return styles, (), ()
+    changes = _changes(sheet, tokens, text_threshold, large_text_threshold, ui_threshold)
+    rewritten = _rewritten(styles, sheet, changes) if changes else None
+    if rewritten is None:
+        return styles, (), ()
+    repaired, corrections = rewritten
+    notes = _notes((correction.code, _note_name(correction)) for correction in corrections)
+    return repaired, notes, _merged(corrections)
 
 
 def repair_contrast(
@@ -266,43 +494,14 @@ def repair_contrast(
     large_text_threshold: float,
     ui_threshold: float,
 ) -> tuple[str, tuple[RepairNote, ...]]:
-    try:
-        sheet = parse_style_sheet(styles)
-    except GeneratedMockupError:
-        return styles, ()
-    changes = _changes(sheet, tokens, text_threshold, large_text_threshold, ui_threshold)
-    if not changes:
-        return styles, ()
-    text = normalize_styles(styles)
-    stream = tokenize_styles(text)
-    locator = _Locator(stream)
-    locator.rule_list()
-    if [[name for name, _start, _end in found] for found in locator.rules] != [
-        [declaration.name for declaration in rule.declarations] for rule in sheet.rules
-    ]:
-        return styles, ()
-    offsets = [0]
-    for token in stream:
-        offsets.append(offsets[-1] + len(token.text))
-    edits: list[tuple[int, int, str]] = []
-    entries: list[tuple[str, str]] = []
-    for change in changes:
-        rule = sheet.rules[change.rule]
-        _name, start, end = locator.rules[change.rule][change.declaration]
-        ranges = _node_ranges(stream, start, _value_end(stream, start, end))
-        if len(ranges) != len(significant(rule.declarations[change.declaration].nodes)):
-            return styles, ()
-        begin, stop = ranges[change.node]
-        replacement = f"var(--vl-color-{change.token})"
-        old = _PRINTABLE.sub("?", text_of_tokens(stream[begin:stop]))[:MAX_SELECTOR_DETAIL]
-        edits.append((offsets[begin], offsets[stop], replacement))
-        entries.append(
-            (change.code, f"{selector_detail(rule)} {old}→{replacement} {change.ratio:.2f}")
-        )
-    repaired = _spliced(text, edits)
-    if len(repaired) > MAX_STYLES_LENGTH:
-        return styles, ()
-    return repaired, _notes(entries)
+    repaired, notes, _corrections = repair_contrast_with_corrections(
+        styles,
+        tokens,
+        text_threshold=text_threshold,
+        large_text_threshold=large_text_threshold,
+        ui_threshold=ui_threshold,
+    )
+    return repaired, notes
 
 
 __all__ = [
@@ -310,5 +509,7 @@ __all__ = [
     "CONTROL_BORDER_REPLACED",
     "REPLACEMENT_TOKENS",
     "TEXT_COLOUR_REPLACED",
+    "ContrastCorrection",
     "repair_contrast",
+    "repair_contrast_with_corrections",
 ]

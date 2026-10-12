@@ -13,7 +13,10 @@ from orchestwin.artifacts.bound_mockups import (
     create_bound_mockup,
     markup_requirement_codes,
 )
-from orchestwin.artifacts.generated_mockup_contrast import repair_contrast
+from orchestwin.artifacts.generated_mockup_contrast import (
+    ContrastCorrection,
+    repair_contrast_with_corrections,
+)
 from orchestwin.artifacts.generated_mockup_repair import repair_generated_mockup
 from orchestwin.artifacts.generated_mockup_review import (
     MockupIssue,
@@ -129,12 +132,16 @@ class GeneratedMockupBinding:
     prototype: DeclarativePrototype
     report: MockupReport
     warnings: tuple[MockupIssue, ...]
+    corrections: tuple[ContrastCorrection, ...] = ()
 
     def warning_snapshots(self) -> tuple[dict[str, object], ...]:
         return tuple(
             {"code": issue.code, "screen_code": issue.screen_code, "detail": issue.detail}
             for issue in self.warnings
         )
+
+    def correction_snapshots(self) -> tuple[dict[str, object], ...]:
+        return tuple(correction.to_snapshot() for correction in self.corrections)
 
 
 def screen_limits(alternative, *, iteration: bool = False) -> tuple[int, int]:
@@ -215,7 +222,7 @@ def bind_generated_mockup(
         token_names=tokens,
         declared_codes=declared,
     )
-    styles, contrast_notes = repair_contrast(
+    styles, contrast_notes, corrections = repair_contrast_with_corrections(
         repair.styles,
         tokens,
         text_threshold=mode.text_threshold,
@@ -305,7 +312,11 @@ def bind_generated_mockup(
             )
         )
     return GeneratedMockupBinding(
-        mockup=bound, prototype=prototype, report=report, warnings=tuple(notes)
+        mockup=bound,
+        prototype=prototype,
+        report=report,
+        warnings=tuple(notes),
+        corrections=corrections,
     )
 
 
