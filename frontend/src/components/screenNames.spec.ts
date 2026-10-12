@@ -31,6 +31,19 @@ describe("placeLabel", () => {
     expect(placeLabel("Il campo di ricerca in alto")).toBe("Il campo di ricerca in alto");
     expect(placeLabel("")).toBe("");
   });
+
+  it("keeps the names of a zone and of several parts without their codes", () => {
+    expect(placeLabel("SCR-001 Bottega Vicina · ZON-005 Cosa cerchi oggi?")).toBe(
+      "Bottega Vicina · Cosa cerchi oggi?",
+    );
+    expect(
+      placeLabel("SCR-001 Bottega Vicina · ELM-018 Forno Ravasi, ZON-005 Cosa cerchi oggi?"),
+    ).toBe("Bottega Vicina · Forno Ravasi, Cosa cerchi oggi?");
+    expect(placeLabel("SCR-001 Bottega Vicina · ELM-018 Forno Ravasi, via Roma")).toBe(
+      "Bottega Vicina · Forno Ravasi, via Roma",
+    );
+    expect(placeLabel("SCR-001 · ELM-018, ZON-005")).toBe("SCR-001 · ELM-018, ZON-005");
+  });
 });
 
 describe("elementNames and placeScreens", () => {
@@ -52,6 +65,22 @@ describe("elementNames and placeScreens", () => {
       { code: "SCR-001", title: "Registra gli ospiti" },
       { code: "SCR-002", title: "Nuovo ospite" },
       { code: "SCR-003", title: "Riepilogo" },
+    ]);
+  });
+
+  it("collects the names of the zones and of every part of a place with several parts", () => {
+    expect(
+      elementNames([
+        "SCR-001 Bottega Vicina · ZON-002 Cerca nel quartiere",
+        "SCR-001 Bottega Vicina · ELM-018 Forno Ravasi, via Roma, ZON-005 Cosa cerchi oggi?",
+      ]),
+    ).toEqual({
+      "ZON-002": "Cerca nel quartiere",
+      "ELM-018": "Forno Ravasi, via Roma",
+      "ZON-005": "Cosa cerchi oggi?",
+    });
+    expect(placeScreens(["SCR-001 Bottega Vicina · ZON-005 Cosa cerchi oggi?"])).toEqual([
+      { code: "SCR-001", title: "Bottega Vicina" },
     ]);
   });
 });
@@ -116,6 +145,27 @@ describe("withScreenNames", () => {
     expect(withScreenNames("From SCR-001 to SCR-004 and SCR-005.", { screens, locale: "en" })).toBe(
       "From “Elenco degli ospiti” to “Registra gli ospiti” and SCR-005.",
     );
+  });
+
+  it("replaces a known zone code with the label of the zone, as an element code", () => {
+    const parts = { "ZON-005": "Cosa cerchi oggi?", "ELM-018": "Forno Ravasi" };
+    expect(
+      withScreenNames("In ZON-005 la scheda ELM-018 è stretta; ZON-009 resta.", {
+        screens,
+        elements: parts,
+        locale: "it",
+      }),
+    ).toBe("In «Cosa cerchi oggi?» la scheda «Forno Ravasi» è stretta; ZON-009 resta.");
+    expect(
+      withScreenNames("ZON-005 Cosa cerchi oggi? is crowded.", {
+        screens,
+        elements: parts,
+        locale: "en",
+      }),
+    ).toBe("“Cosa cerchi oggi?” is crowded.");
+    expect(
+      withScreenNames("XZON-005 e ZON-005b restano.", { screens, elements: parts, locale: "it" }),
+    ).toBe("XZON-005 e ZON-005b restano.");
   });
 
   it("ignores a code inside a longer word and a longer word after the code", () => {

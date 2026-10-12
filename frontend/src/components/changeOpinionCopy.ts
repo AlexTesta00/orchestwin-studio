@@ -1,0 +1,46 @@
+export const changeOpinionCopy = {
+  it: {
+    title: "Che cosa dicono i twin prima della modifica",
+    note: "Parere simulato dal modello: un'ipotesi da verificare con persone vere.",
+    busy: "I twin stanno leggendo la richiesta…",
+    busyTime: "Di solito servono circa 2 minuti: intanto puoi continuare a guardare il mockup.",
+    verdicts: { HELPS: "Aiuta", SLOWS: "Rallenta", BLOCKS: "Blocca" },
+    todo: "Cosa fare:",
+    suggestion: "La chiederei così: «{text}»",
+    tryThis: "Prova questo",
+    stale:
+      "Il parere riguarda una richiesta diversa: chiedilo di nuovo o applica la richiesta nuova con «Applica la modifica».",
+    applyAnyway: "Applica comunque",
+    change: "Cambia la richiesta",
+    cancel: "Annulla",
+    arrived: "Parere di {twins}: {verdicts}",
+    twins: ["{count} twin", "{count} twin"],
+    counts: {
+      HELPS: ["{count} aiuta", "{count} aiutano"],
+      SLOWS: ["{count} rallenta", "{count} rallentano"],
+      BLOCKS: ["{count} blocca", "{count} bloccano"],
+    },
+  },
+  en: {
+    title: "What the twins say before the change",
+    note: "Opinion simulated by the model: a hypothesis to check with real people.",
+    busy: "The twins are reading the request…",
+    busyTime: "It usually takes about 2 minutes: meanwhile you can keep looking at the mockup.",
+    verdicts: { HELPS: "Helps", SLOWS: "Slows down", BLOCKS: "Blocks" },
+    todo: "What to do:",
+    suggestion: "I would ask for it like this: “{text}”",
+    tryThis: "Try this",
+    stale:
+      "The opinion is about a different request: ask for it again or apply the new request with “Apply the change”.",
+    applyAnyway: "Apply anyway",
+    change: "Change the request",
+    cancel: "Cancel",
+    arrived: "Opinion of {twins}: {verdicts}",
+    twins: ["{count} twin", "{count} twins"],
+    counts: {
+      HELPS: ["{count} helps", "{count} help"],
+      SLOWS: ["{count} slows down", "{count} slow down"],
+      BLOCKS: ["{count} blocks", "{count} block"],
+    },
+  },
+} as const;

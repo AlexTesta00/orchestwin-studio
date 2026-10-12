@@ -4,10 +4,10 @@ import { ApiRequestError } from "./requestError";
 import type {
   DesignMockupCapabilitiesPayload,
   GenerationJobPayload,
+  LatestMockupResultPayload,
   MockupDocumentPayload,
   MockupDocumentQuery,
   MockupJobRequest,
-  MockupResultPayload,
 } from "../types/designMockups";
 
 const DEFAULT_API_BASE_PATH = "/api/v1";
@@ -39,7 +39,7 @@ export interface DesignMockupsApi {
     projectId: string,
     alternativeId: string,
     accessToken: string,
-  ): Promise<MockupResultPayload | null>;
+  ): Promise<LatestMockupResultPayload | null>;
   document(
     projectId: string,
     query: MockupDocumentQuery,
@@ -143,6 +143,7 @@ export function createDesignMockupsApi(options: DesignMockupsApiOptions = {}): D
           alternative_id: query.alternative_id,
           source: query.source,
           entry_screen: query.entry_screen,
+          zones: query.zones === true ? "true" : undefined,
         }),
         {
           method: "GET",

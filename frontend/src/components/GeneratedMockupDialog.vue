@@ -62,6 +62,7 @@ import type { DesignApi } from "../api/design";
 import type { DesignIterationsApi } from "../api/designIterations";
 import type { DesignLoopApi } from "../api/designLoop";
 import type { DesignMockupsApi } from "../api/designMockups";
+import type { DesignOpinionsApi } from "../api/designOpinions";
 import { activitySignalKey } from "../stores/activityJournal";
 import type { AuthorizedMockupRequest } from "../stores/designMockups";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
@@ -109,6 +110,7 @@ const props = withDefaults(
     mockupsApi?: DesignMockupsApi | undefined;
     designApi?: DesignApi | undefined;
     loopApi?: DesignLoopApi | undefined;
+    opinionsApi?: DesignOpinionsApi | undefined;
     signal?: AbortSignal | undefined;
   }>(),
   {
@@ -125,6 +127,7 @@ const props = withDefaults(
     mockupsApi: undefined,
     designApi: undefined,
     loopApi: undefined,
+    opinionsApi: undefined,
     signal: undefined,
   },
 );
@@ -267,7 +270,7 @@ const pointable = computed(() => marked.value !== false);
 const highlightBoxes = computed(() => {
   const { hover, selected } = highlight.value;
   return [
-    ...(selected === null ? [] : [{ ...selected, kind: "selected" as const }]),
+    ...selected.map((box) => ({ ...box, kind: "selected" as const })),
     ...(hover === null ? [] : [{ ...hover, kind: "hover" as const }]),
   ].filter((box) => box.width > 0 && box.height > 0);
 });
@@ -642,7 +645,7 @@ onUnmounted(() => {
               <template v-if="inspecting" #overlay="{ factor }">
                 <div
                   v-for="box in highlightBoxes"
-                  :key="box.kind"
+                  :key="`${box.kind}:${box.code}`"
                   :class="[
                     'absolute rounded-[3px] border-2 ring-2 ring-night-deep/80',
                     box.kind === 'selected'
@@ -701,6 +704,7 @@ onUnmounted(() => {
               :mockups-api="mockupsApi"
               :design-api="designApi"
               :loop-api="loopApi"
+              :opinions-api="opinionsApi"
               :signal="signal"
               @highlight="highlight = $event"
               @version="emit('version', $event)"

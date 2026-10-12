@@ -24,16 +24,24 @@ export interface DesignIterationsApiOptions {
 
 export class DesignIterationsApiError extends ApiRequestError {}
 
+export interface DesignChangeTargetElement {
+  element_code: string;
+  label?: string;
+  html?: string;
+}
+
 export interface DesignChangeTarget {
   screen_code: string;
   element_code?: string;
-  label: string;
-  html: string;
+  label?: string;
+  html?: string;
+  elements?: DesignChangeTargetElement[];
 }
 
 export type IterationJobBody = IterationJobRequest & {
   target?: DesignChangeTarget;
   critique_source_id?: string;
+  opinion_id?: string;
 };
 
 export type DesignIterationItem = DesignIterationPayload & {

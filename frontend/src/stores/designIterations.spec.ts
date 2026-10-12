@@ -21,6 +21,7 @@ import type {
 import {
   DESIGN_CONTEXT_CHANGED,
   normalizedIterationRequest,
+  targetCodes,
   useDesignIterationsStore,
 } from "./designIterations";
 import {
@@ -38,12 +39,29 @@ const HASH_TWO = "2".repeat(64);
 const HASH_THREE = "3".repeat(64);
 const REQUEST = "Sposta il pulsante principale in alto";
 const RULE = "Il pulsante principale resta in alto";
+const OPINION = "44444444-4444-4444-8444-444444444444";
 const TARGET = {
   screen_code: "SCR-002",
   element_code: "ELM-012",
   label: "Prenota",
   html: '<button data-elm="ELM-012" type="button">Prenota</button>',
 };
+const ZONE_TARGET = { screen_code: "SCR-001", element_code: "ZON-005", label: "Cosa cerchi oggi?" };
+const PARTS_TARGET = {
+  screen_code: "SCR-001",
+  elements: [
+    { element_code: "ELM-018", label: "Forno Ravasi" },
+    { element_code: "ELM-027", label: "Panificio Colombo" },
+    { element_code: "ZON-005", label: "Cosa cerchi oggi?" },
+  ],
+};
+
+function parts(count: number) {
+  return Array.from({ length: count }, (_item, index) => ({
+    element_code: `ELM-${String(index + 1).padStart(3, "0")}`,
+    label: `Parte ${index + 1}`,
+  }));
+}
 
 const authorize: AuthorizedMockupRequest = (operation) => operation("token");
 
@@ -351,6 +369,148 @@ describe("design iterations store", () => {
         target: { ...TARGET, element_code: "ELM-0012" },
       }),
     ).not.toBeNull();
+  });
+
+  it.each([
+    ["a zone without its markup", ZONE_TARGET],
+    ["several parts in the order of the page", PARTS_TARGET],
+  ])("sends %s as the target of a change and keeps it across a reload", async (_label, target) => {
+    const api = fakeApi();
+    await activeStore().start({ request: REQUEST, target }, authorize, { api });
+
+    expect(api.startJob.mock.calls[0]?.[1]).toEqual({
+      design_version_id: versionId(HASH_TWO),
+      design_content_hash: HASH_TWO,
+      request: REQUEST,
+      assertions: [],
+      target,
+    });
+
+    setActivePinia(createPinia());
+    const store = activeStore();
+    expect(await store.recover(authorize, { api: fakeApi(), mockupsApi: fakeMockupsApi() })).toBe(
+      "running",
+    );
+    expect(store.request).toEqual({ request: REQUEST, assertions: [], target });
+  });
+
+  it("sends the opinion of the twins with the change and keeps it across a reload and a retry", async () => {
+    const api = fakeApi();
+    await activeStore().start(
+      { request: REQUEST, target: ZONE_TARGET, opinionId: OPINION },
+      authorize,
+      { api },
+    );
+    const sent = api.startJob.mock.calls[0]?.[1];
+
+    expect(sent).toEqual({
+      design_version_id: versionId(HASH_TWO),
+      design_content_hash: HASH_TWO,
+      request: REQUEST,
+      assertions: [],
+      target: ZONE_TARGET,
+      opinion_id: OPINION,
+    });
+
+    setActivePinia(createPinia());
+    const store = activeStore();
+    const again = fakeApi();
+    again.job.mockResolvedValue(job("FAILED", { failure: { code: "TIMEOUT", reasons: [] } }));
+    expect(await store.recover(authorize, { api: again, mockupsApi: fakeMockupsApi() })).toBe(
+      "failed",
+    );
+    expect(store.request).toEqual({
+      request: REQUEST,
+      assertions: [],
+      target: ZONE_TARGET,
+      opinionId: OPINION,
+    });
+    expect(await store.retry(authorize, { api: again })).toBe("started");
+    expect(again.startJob.mock.calls[0]?.[1]).toEqual(sent);
+  });
+
+  it("trims the labels of the parts and accepts zones with longer codes", () => {
+    const target = {
+      screen_code: "SCR-001",
+      elements: [
+        { element_code: "ELM-018", label: "  Forno Ravasi " },
+        { element_code: "ZON-0012", label: "Cosa cerchi oggi?", html: "<form></form>" },
+      ],
+    };
+
+    expect(normalizedIterationRequest({ request: "ok", target })).toEqual({
+      request: "ok",
+      assertions: [],
+      target: {
+        screen_code: "SCR-001",
+        elements: [
+          { element_code: "ELM-018", label: "Forno Ravasi" },
+          { element_code: "ZON-0012", label: "Cosa cerchi oggi?", html: "<form></form>" },
+        ],
+      },
+    });
+    const eight = { screen_code: "SCR-001", elements: parts(8) };
+    expect(normalizedIterationRequest({ request: "ok", target: eight })).not.toBeNull();
+  });
+
+  it.each([
+    ["a zone with a wrong code", { ...ZONE_TARGET, element_code: "ZONE-005" }],
+    ["a single part", { screen_code: "SCR-001", elements: parts(1) }],
+    ["nine parts", { screen_code: "SCR-001", elements: parts(9) }],
+    ["the same part twice", { screen_code: "SCR-001", elements: [...parts(2), ...parts(1)] }],
+    [
+      "a part without its code",
+      { screen_code: "SCR-001", elements: [...parts(2), { element_code: "ZON-5", label: "Zona" }] },
+    ],
+    [
+      "a part with an empty label",
+      { screen_code: "SCR-001", elements: [...parts(2), { element_code: "ZON-005", label: " " }] },
+    ],
+    ["the parts with an element", { ...PARTS_TARGET, element_code: "ELM-018" }],
+    ["the parts with a label", { ...PARTS_TARGET, label: "Forno Ravasi" }],
+    ["the parts with a markup", { ...PARTS_TARGET, html: "<p>Forno Ravasi</p>" }],
+  ])("refuses a target with %s without calling the server", async (_label, target) => {
+    const api = fakeApi();
+    const store = activeStore();
+
+    expect(await store.start({ request: REQUEST, target }, authorize, { api })).toBe("invalid");
+    expect(api.startJob).not.toHaveBeenCalled();
+  });
+
+  it("reads the codes of a target in the order the owner chose them", () => {
+    expect(targetCodes(TARGET)).toEqual(["ELM-012"]);
+    expect(targetCodes(ZONE_TARGET)).toEqual(["ZON-005"]);
+    expect(targetCodes(PARTS_TARGET)).toEqual(["ELM-018", "ELM-027", "ZON-005"]);
+    expect(targetCodes({ screen_code: "SCR-001", label: "Home", html: "<h1>Home</h1>" })).toEqual(
+      [],
+    );
+  });
+
+  it.each([
+    ["target", { target: { screen_code: "SCR-001", elements: [{ element_code: 18 }] } }],
+    ["opinion of the twins", { opinionId: 44 }],
+  ])("forgets a remembered change whose %s cannot be read", async (_label, unreadable) => {
+    sessionStorage.setItem(
+      "orchestwin.designIterations",
+      JSON.stringify({
+        jobs: {
+          [PROJECT]: {
+            jobId: "iteration-job-1",
+            hash: HASH_TWO,
+            request: REQUEST,
+            assertions: [],
+            ...unreadable,
+          },
+        },
+        discarded: [],
+      }),
+    );
+    const api = fakeApi();
+    const store = activeStore();
+
+    expect(await store.recover(authorize, { api, mockupsApi: fakeMockupsApi() })).toBe("inactive");
+    expect(api.job).not.toHaveBeenCalled();
+    expect(store.request).toBeNull();
   });
 
   it("asks nothing when the design has no applied generated mockup or no project", async () => {

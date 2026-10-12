@@ -27,6 +27,9 @@ export const designIterationCopy = {
     preparing: "Preparo l'anteprima…",
     open: "Apri in grande",
     openLabel: "Apri in grande: {version}",
+    corrections: "Correzioni fatte dallo Studio",
+    correctionsNote:
+      "Prima che i twin vedessero la versione, lo Studio ha sostituito i colori sotto le soglie di contrasto.",
     warnings: "Da controllare",
     warningsNote: "Lo Studio ha accettato la nuova versione, ma ha notato questi punti.",
     onScreen: "Nella schermata «{title}»: {text}",
@@ -43,6 +46,7 @@ export const designIterationCopy = {
     removeLabel: "Togli la regola: {rule}",
     history: "Richieste precedenti ({n})",
     historyChanges: "Modifiche",
+    historyCorrections: "Correzioni dello Studio",
     historyRules: "Regole aggiunte",
     statuses: {
       PROPOSED: "Da decidere",
@@ -80,6 +84,9 @@ export const designIterationCopy = {
     preparing: "Preparing the preview…",
     open: "Open large",
     openLabel: "Open large: {version}",
+    corrections: "Corrections made by the Studio",
+    correctionsNote:
+      "Before the twins saw the version, the Studio replaced the colours below the contrast thresholds.",
     warnings: "To check",
     warningsNote: "The Studio accepted the new version, but it noticed these points.",
     onScreen: "On the screen “{title}”: {text}",
@@ -96,6 +103,7 @@ export const designIterationCopy = {
     removeLabel: "Remove the rule: {rule}",
     history: "Earlier requests ({n})",
     historyChanges: "Changes",
+    historyCorrections: "Corrections by the Studio",
     historyRules: "Rules added",
     statuses: {
       PROPOSED: "To decide",

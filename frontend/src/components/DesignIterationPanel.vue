@@ -21,9 +21,11 @@ import UiStatusChip from "./UiStatusChip.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import { designIterationCopy } from "./designIterationCopy";
 import {
+  correctionLines,
   generationFailureText,
   generationReasonText,
   generationRetryable,
+  uncorrectedWarnings,
   type GenerationLocale,
 } from "./iterationMessages";
 import type { IterationItem, IterationJob, IterationReason, IterationSide } from "./iterationTypes";
@@ -195,7 +197,13 @@ const sides = computed(() =>
   }),
 );
 
-const warnings = computed(() => reasonLines(result.value?.warnings ?? []));
+const resultCorrections = computed(() => result.value?.corrections ?? []);
+
+const corrections = computed(() => correctionLines(resultCorrections.value, lang.value));
+
+const warnings = computed(() =>
+  reasonLines(uncorrectedWarnings(result.value?.warnings ?? [], resultCorrections.value)),
+);
 
 const failureText = computed(() => {
   if (phase.value === "error") {
@@ -233,7 +241,19 @@ const history = computed(() =>
     date: formatDate(item.requested_at),
     chip: CHIPS[item.status],
     label: copy.value.statuses[item.status],
-    changes: item.changes.map((change) => withScreenNames(change, naming.value)),
+    notes: [
+      {
+        key: "changes",
+        title: copy.value.historyChanges,
+        lines: item.changes.map((change) => withScreenNames(change, naming.value)),
+      },
+      {
+        key: "corrections",
+        title: copy.value.historyCorrections,
+        lines: correctionLines(item.corrections ?? [], lang.value),
+      },
+      { key: "rules", title: copy.value.historyRules, lines: item.assertions },
+    ].filter((note) => note.lines.length > 0),
   })),
 );
 
@@ -539,6 +559,25 @@ onBeforeUnmount(() => {
             </UiClaimFrame>
           </div>
         </div>
+        <div
+          v-if="corrections.length > 0"
+          class="grid gap-2"
+          data-testid="design-iteration-corrections"
+        >
+          <h3 class="text-base font-semibold">{{ copy.corrections }}</h3>
+          <p class="text-sm text-on-night-3">{{ copy.correctionsNote }}</p>
+          <ul
+            class="grid list-disc gap-1.5 pl-5 text-sm leading-normal text-on-night-2 marker:text-petrol-on-night"
+          >
+            <li
+              v-for="(line, index) in corrections"
+              :key="index"
+              data-testid="design-iteration-correction"
+            >
+              {{ line }}
+            </li>
+          </ul>
+        </div>
         <div v-if="warnings.length > 0" class="grid gap-2" data-testid="design-iteration-warnings">
           <h3 class="text-base font-semibold text-warn-on-night">{{ copy.warnings }}</h3>
           <p class="text-sm text-on-night-3">{{ copy.warningsNote }}</p>
@@ -670,16 +709,15 @@ onBeforeUnmount(() => {
           >
             {{ entry.item.request }}
           </blockquote>
-          <div v-if="entry.changes.length > 0" class="grid gap-1">
-            <p class="text-xs font-semibold text-on-night-3">{{ copy.historyChanges }}</p>
+          <div
+            v-for="note in entry.notes"
+            :key="note.key"
+            class="grid gap-1"
+            :data-testid="`design-iteration-history-${note.key}`"
+          >
+            <p class="text-xs font-semibold text-on-night-3">{{ note.title }}</p>
             <ul class="grid list-disc gap-1 pl-5 text-sm text-on-night-2">
-              <li v-for="change in entry.changes" :key="change">{{ change }}</li>
-            </ul>
-          </div>
-          <div v-if="entry.item.assertions.length > 0" class="grid gap-1">
-            <p class="text-xs font-semibold text-on-night-3">{{ copy.historyRules }}</p>
-            <ul class="grid list-disc gap-1 pl-5 text-sm text-on-night-2">
-              <li v-for="rule in entry.item.assertions" :key="rule">{{ rule }}</li>
+              <li v-for="(line, index) in note.lines" :key="index">{{ line }}</li>
             </ul>
           </div>
         </li>

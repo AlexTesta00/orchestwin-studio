@@ -29,6 +29,7 @@ export interface DesignLoopApiOptions {
 export interface DesignEvaluationScope {
   screen_code: string;
   element_code?: string;
+  element_codes?: string[];
 }
 
 export type DesignEvaluationBody = DesignEvaluationRequest & { scope?: DesignEvaluationScope };

@@ -1,7 +1,10 @@
+import type { MockupCorrectionPayload } from "../types/designMockups";
+
 export type IterationJobStatus = "RUNNING" | "SUCCEEDED" | "REJECTED" | "FAILED";
 export type IterationJobStage = "GENERATING" | "VALIDATING" | "RETRYING";
 export type IterationStatus = "PROPOSED" | "APPLIED" | "REJECTED" | "FAILED";
 export type IterationSide = "before" | "after";
+export type IterationCorrection = MockupCorrectionPayload;
 
 export interface IterationReason {
   code: string;
@@ -23,6 +26,7 @@ export interface IterationResult {
   approach: string | null;
   changes: readonly string[];
   warnings: readonly IterationReason[];
+  corrections?: readonly IterationCorrection[] | undefined;
   cost_microusd: number | null;
 }
 
@@ -45,8 +49,11 @@ export interface IterationItem {
   request: string;
   assertions: readonly string[];
   changes: readonly string[];
+  warnings?: readonly IterationReason[] | undefined;
+  corrections?: readonly IterationCorrection[] | undefined;
   status: IterationStatus;
   base_design_version_number: number | null;
   applied_design_version_number: number | null;
   cost_microusd: number | null;
+  opinion_id?: string | null | undefined;
 }

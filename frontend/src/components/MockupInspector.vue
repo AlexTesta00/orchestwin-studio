@@ -13,23 +13,26 @@ export {
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 
-import { generationFailureText } from "./iterationMessages";
+import { correctionLines, generationFailureText } from "./iterationMessages";
+import MockupChangeOpinions from "./MockupChangeOpinions.vue";
 import {
   changeTarget,
   clip,
+  codeOf,
   describeElement,
   isElement,
   MARKED,
   screenElements,
-  type InspectedElement,
   type InspectorBox,
+  type InspectorElement,
   type InspectorHighlight,
 } from "./mockupElements";
 import { mockupInspectorCopy } from "./mockupInspectorCopy";
 import { modelFeedback } from "./modelFeedback";
 import { elementNames, withScreenNames } from "./screenNames";
-import { fill } from "./textFormat";
+import { fill, plural } from "./textFormat";
 import UiStateBlock from "./UiStateBlock.vue";
+import { VERDICT_STYLES } from "./verdictStyles";
 import { designApi as defaultDesignApi, type DesignApi } from "../api/design";
 import {
   designIterationsApi,
@@ -38,10 +41,14 @@ import {
 } from "../api/designIterations";
 import { designLoopApi, type DesignEvaluationScope, type DesignLoopApi } from "../api/designLoop";
 import { designMockupsApi, type DesignMockupsApi } from "../api/designMockups";
+import { designOpinionsApi, type DesignOpinionsApi } from "../api/designOpinions";
+import { useIntlFormats } from "../composables/useIntlFormats";
 import { useDesignStore } from "../stores/design";
 import {
   DESIGN_CONTEXT_CHANGED,
   ITERATION_REQUEST_LIMIT,
+  TARGET_PARTS_LIMIT,
+  targetCodes,
   useDesignIterationsStore,
   type IterationOutcome,
   type IterationStartOptions,
@@ -53,22 +60,31 @@ import {
   useDesignLoopStore,
 } from "../stores/designLoop";
 import { generationFailureMessage, type AuthorizedMockupRequest } from "../stores/designMockups";
-import type { DesignPackagePayload } from "../types/design";
+import { CHANGE_OPINION_FAILED, useDesignOpinionsStore } from "../stores/designOpinions";
+import type { DesignPackagePayload, DesignPackageVersionPayload } from "../types/design";
 import type {
   DesignEvaluationRunPayload,
   SyntheticFindingPayload,
   SyntheticFindingSeverity,
 } from "../types/designLoop";
+import type {
+  ChangeOpinion,
+  ChangeOpinionRun,
+  ChangeOpinionVerdict,
+} from "../types/designOpinions";
 
 type Locale = "en" | "it";
 type FailureTitle = "rejected" | "failed" | "start";
-type Verdict = "helps" | "slows" | "blocks";
 type Unapplied = "stale" | "pending" | "unchanged" | "recorded" | "failed" | "context";
+type PartSubject = "element" | "zone" | "parts";
+type Subject = "screen" | PartSubject;
+type AppliedVersion = Pick<DesignPackageVersionPayload, "id" | "content_hash">;
 
 type Outcome =
   | { kind: "ready" }
   | { kind: "applied" }
   | { kind: "unapplied"; reason: Unapplied }
+  | { kind: "opinion"; code: string }
   | { kind: "error"; title: FailureTitle | null; code: string };
 
 type Review =
@@ -82,15 +98,10 @@ interface Notice {
   text: string;
 }
 
-interface AppliedVersion {
-  id: string;
-  hash: string;
-}
-
 interface TwinNote {
   key: string;
   twin: string;
-  verdict: Verdict;
+  verdict: ChangeOpinionVerdict;
   summary: string;
   action: string;
 }
@@ -107,6 +118,7 @@ const props = withDefaults(
     mockupsApi?: DesignMockupsApi | undefined;
     designApi?: DesignApi | undefined;
     loopApi?: DesignLoopApi | undefined;
+    opinionsApi?: DesignOpinionsApi | undefined;
     signal?: AbortSignal | undefined;
   }>(),
   {
@@ -116,6 +128,7 @@ const props = withDefaults(
     mockupsApi: undefined,
     designApi: undefined,
     loopApi: undefined,
+    opinionsApi: undefined,
     signal: undefined,
   },
 );
@@ -127,31 +140,34 @@ const emit = defineEmits<{
 }>();
 
 const REVEAL_MARGIN = 16;
+const HELD_PREVIEW = 3;
+const ZONE_PREFIX = "ZON-";
 const REVIEW_BUSY = "DESIGN_REVIEW_BUSY";
 const REVIEW_FAILED = "DESIGN_LOOP_REQUEST_FAILED";
+const SECONDARY_BUTTON =
+  "inline-flex min-h-11 items-center justify-center rounded-pill border px-4 py-2 text-sm font-semibold transition-colors duration-150";
 
-const VERDICTS: Record<SyntheticFindingSeverity, Verdict> = {
-  observation: "helps",
-  minor: "slows",
-  moderate: "slows",
-  major: "blocks",
-  critical: "blocks",
-};
-
-const VERDICT_STYLES: Record<Verdict, string> = {
-  helps: "bg-petrol-on-night/12 text-petrol-on-night-2",
-  slows: "bg-warn-on-night/12 text-warn-on-night",
-  blocks: "bg-fail-on-night/12 text-fail-on-night",
+const VERDICTS: Record<SyntheticFindingSeverity, ChangeOpinionVerdict> = {
+  observation: "HELPS",
+  minor: "SLOWS",
+  moderate: "SLOWS",
+  major: "BLOCKS",
+  critical: "BLOCKS",
 };
 
 const iterations = useDesignIterationsStore();
 const design = useDesignStore();
 const loop = useDesignLoopStore();
+const opinions = useDesignOpinionsStore();
 
 const copy = computed(() => mockupInspectorCopy[props.locale]);
+const modelLocale = computed(() => (props.locale === "it" ? "it-IT" : "en-US"));
+const { listFormat } = useIntlFormats(() => (props.locale === "it" ? "it-IT" : "en-GB"));
 
 const titleId = useId();
+const multiHintId = useId();
 const selectionId = useId();
+const parentId = useId();
 const fieldId = useId();
 const countId = useId();
 const estimateId = useId();
@@ -159,15 +175,20 @@ const pendingId = useId();
 const optionPrefix = useId();
 const notesId = useId();
 const versionNoteId = useId();
+const correctionsId = useId();
 const askTimeId = useId();
+const askFirstTimeId = useId();
 
 const list = ref<HTMLElement | null>(null);
+const partList = ref<HTMLElement | null>(null);
+const parentButton = ref<HTMLElement | null>(null);
 const field = ref<HTMLTextAreaElement | null>(null);
-const items = ref<InspectedElement[]>([]);
-const screenCode = ref<string | null>(null);
+const items = ref<InspectorElement[]>([]);
 const ready = ref(false);
 const hovered = ref<string | null>(null);
-const selected = ref<string | null>(null);
+const picked = ref<InspectorElement[]>([]);
+const latest = ref<string | null>(null);
+const multi = ref(false);
 const active = ref(0);
 const request = ref("");
 const review = ref(true);
@@ -180,10 +201,38 @@ const reviewState = ref<Review | null>(null);
 const appliedVersion = ref<AppliedVersion | null>(null);
 
 let page: Document | null = null;
-let live = new Map<string, Element>();
 let detach: (() => void) | null = null;
 
-const chosen = computed(() => items.value.find((item) => item.code === selected.value) ?? null);
+const byCode = computed(() => new Map(items.value.map((item) => [item.code, item])));
+
+const parts = computed(() => (items.value.length > 0 ? picked.value : []));
+
+const selected = computed(() => parts.value.map((part) => part.code));
+
+const chosen = computed(() => (parts.value.length === 1 ? (parts.value[0] ?? null) : null));
+
+const subject = computed(() => partSubject(selected.value));
+
+const target = computed(() => changeTarget(parts.value));
+
+const multiselectable = computed(() => multi.value || selected.value.length > 1);
+
+const anchor = computed(
+  () => parts.value.find((part) => part.code === latest.value) ?? parts.value.at(-1) ?? null,
+);
+
+const container = computed(() => {
+  const code = anchor.value?.parent ?? null;
+  return code === null ? null : (byCode.value.get(code) ?? null);
+});
+
+const held = computed(() =>
+  (chosen.value?.holds ?? [])
+    .slice(0, HELD_PREVIEW)
+    .flatMap((code) => byCode.value.get(code) ?? []),
+);
+
+const requirements = computed(() => [...new Set(parts.value.flatMap((part) => part.requirements))]);
 
 const length = computed(() => [...request.value].length);
 
@@ -193,25 +242,27 @@ const waiting = computed(() => iterations.state === "ready");
 
 const pending = computed(() => waiting.value && outcome.value?.kind !== "ready");
 
-const canApply = computed(
+const requestReady = computed(
   () =>
-    chosen.value !== null &&
+    parts.value.length > 0 &&
     request.value.trim().length > 0 &&
     length.value <= ITERATION_REQUEST_LIMIT &&
-    props.authorize !== undefined &&
-    !sending.value &&
-    !drawing.value &&
-    !waiting.value &&
-    !applying.value,
+    props.authorize !== undefined,
 );
 
-const estimate = computed(() => (review.value ? copy.value.estimateReview : copy.value.estimate));
+const idle = computed(() => !sending.value && !drawing.value && !waiting.value && !applying.value);
 
-const describedBy = computed(() => (pending.value ? `${estimateId} ${pendingId}` : estimateId));
+const canApply = computed(() => requestReady.value && idle.value);
+
+const estimate = computed(() => (review.value ? copy.value.estimateReview : copy.value.estimate));
 
 const applyClasses = computed(() => buttonClasses(canApply.value));
 
 const proposal = computed(() => (waiting.value ? iterations.result : null));
+
+const corrections = computed(() =>
+  correctionLines(proposal.value?.corrections ?? [], props.locale),
+);
 
 const reviewing = computed(() => reviewState.value?.kind === "running");
 
@@ -220,18 +271,40 @@ const project = computed(() => iterations.projectId ?? design.projectId);
 const currentVersion = computed<AppliedVersion | null>(() => {
   const current = design.current;
   if (current !== null && current.project_id === project.value) {
-    return { id: current.id, hash: current.content_hash };
+    return { id: current.id, content_hash: current.content_hash };
   }
   const context = iterations.design;
   return context === null
     ? appliedVersion.value
-    : { id: context.versionId, hash: context.contentHash };
+    : { id: context.versionId, content_hash: context.contentHash };
+});
+
+const canAskFirst = computed(
+  () =>
+    requestReady.value &&
+    idle.value &&
+    !reviewing.value &&
+    !opinions.busy &&
+    currentVersion.value !== null &&
+    project.value !== null,
+);
+
+const opinionStale = computed(() => {
+  const version = currentVersion.value;
+  const value = target.value;
+  return version === null || value === null || opinions.isStale(version, value, request.value);
+});
+
+const freshOpinion = computed(() => (opinionStale.value ? null : opinions.current));
+
+const opinionRun = computed<ChangeOpinionRun | null>(() => {
+  const run = opinions.current;
+  return run === null ? null : { ...run, opinions: run.opinions.map(namedOpinion) };
 });
 
 const selectedScope = computed<DesignEvaluationScope | null>(() => {
-  const item = chosen.value;
-  const screen = item?.screen ?? screenCode.value;
-  return item === null || screen === null ? null : { screen_code: screen, element_code: item.code };
+  const screen = parts.value[0]?.screen ?? null;
+  return screen === null ? null : scopeFor(screen, selected.value);
 });
 
 const plannedScope = computed(() => scopeOf(iterations.request?.target) ?? selectedScope.value);
@@ -255,7 +328,7 @@ const versionNote = computed(() => {
 });
 
 const showAsk = computed(
-  () => chosen.value !== null && (!review.value || reviewState.value?.kind === "failed"),
+  () => parts.value.length > 0 && (!review.value || reviewState.value?.kind === "failed"),
 );
 
 const canAsk = computed(
@@ -272,12 +345,7 @@ const canAsk = computed(
     !loop.isBusy,
 );
 
-const askClasses = computed(() => [
-  "inline-flex min-h-11 items-center justify-center rounded-pill border px-4 py-2 text-sm font-semibold transition-colors duration-150",
-  canAsk.value
-    ? "border-night-line-strong text-on-night hover:bg-night-hover"
-    : "cursor-not-allowed border-night-line text-on-night-3",
-]);
+const askClasses = computed(() => secondaryClasses(canAsk.value));
 
 const twinNames = computed<Record<string, string>>(() =>
   Object.fromEntries(
@@ -290,7 +358,7 @@ const twinNames = computed<Record<string, string>>(() =>
 
 const elementLabels = computed<Record<string, string>>(() =>
   Object.fromEntries(
-    items.value.filter((item) => item.text.length > 0).map((item) => [item.code, item.text]),
+    items.value.filter((item) => item.label.length > 0).map((item) => [item.code, item.label]),
   ),
 );
 
@@ -305,18 +373,14 @@ const reviewRuns = computed<DesignEvaluationRunPayload[]>(() => {
     (run) =>
       runMode(run) === "TWIN_REVIEW" &&
       run.design_version_id === version.id &&
-      run.design_content_hash === version.hash,
+      run.design_content_hash === version.content_hash,
   );
 });
 
 const notes = computed<TwinNote[]>(() => {
-  const code = chosen.value?.code ?? null;
-  if (code === null) {
-    return [];
-  }
   for (const run of reviewRuns.value) {
     const found = run.responses.flatMap((response) =>
-      response.findings.filter((finding) => findingElement(finding) === code),
+      response.findings.filter((finding) => aboutAny(finding, selected.value)),
     );
     if (found.length > 0) {
       return found.map((finding) => twinNote(finding));
@@ -331,9 +395,11 @@ const reviewNotice = computed<Notice | null>(() => {
     return null;
   }
   if (state.kind === "running") {
-    const title =
-      state.scope.element_code === undefined ? copy.value.reviewingScreen : copy.value.reviewing;
-    return { kind: "loading", title, text: copy.value.reviewTime };
+    return {
+      kind: "loading",
+      title: copy.value.reviewing[subjectOf(state.scope)],
+      text: copy.value.reviewTime,
+    };
   }
   if (state.kind === "failed") {
     return { kind: "error", title: copy.value.reviewFailed, text: reviewFailure(state.code) };
@@ -342,7 +408,7 @@ const reviewNotice = computed<Notice | null>(() => {
 });
 
 const screenLabel = computed(() => {
-  const code = chosen.value?.screen ?? screenCode.value;
+  const code = parts.value[0]?.screen ?? null;
   if (code === null) {
     return "";
   }
@@ -372,14 +438,35 @@ const notice = computed<Notice | null>(() => {
   if (value.kind === "unapplied") {
     return { kind: "error", title: copy.value.failures.apply, text: unappliedText(value.reason) };
   }
+  if (value.kind === "opinion") {
+    return { kind: "error", title: copy.value.reviewFailed, text: reviewFailure(value.code) };
+  }
   const reason = generationFailureText(value.code, props.locale);
   return value.title === null
     ? { kind: "error", title: reason, text: "" }
     : { kind: "error", title: copy.value.failures[value.title], text: reason };
 });
 
-function optionLabel(item: InspectedElement): string {
-  return [item.code, item.tag, item.text || copy.value.noText].join(", ");
+function shown(item: InspectorElement): string {
+  return item.label || copy.value.noText;
+}
+
+function partKind(item: InspectorElement): string {
+  return item.zoneKind === undefined
+    ? item.tag
+    : `${copy.value.zoneKinds[item.zoneKind]}, ${plural(item.holds.length, copy.value.elements)}`;
+}
+
+function optionLabel(item: InspectorElement): string {
+  return [item.code, partKind(item), shown(item)].join(", ");
+}
+
+function isPicked(item: InspectorElement): boolean {
+  return selected.value.includes(item.code);
+}
+
+function withPending(id: string): string {
+  return pending.value ? `${id} ${pendingId}` : id;
 }
 
 function buttonClasses(enabled: boolean): string[] {
@@ -391,18 +478,53 @@ function buttonClasses(enabled: boolean): string[] {
   ];
 }
 
-function scopeOf(target: DesignChangeTarget | undefined): DesignEvaluationScope | null {
-  if (target === undefined) {
-    return null;
+function secondaryClasses(enabled: boolean): string[] {
+  return [
+    SECONDARY_BUTTON,
+    enabled
+      ? "border-night-line-strong text-on-night hover:bg-night-hover"
+      : "cursor-not-allowed border-night-line text-on-night-3",
+  ];
+}
+
+function partSubject(codes: readonly string[]): PartSubject {
+  if (codes.length > 1) {
+    return "parts";
   }
-  return {
-    screen_code: target.screen_code,
-    ...(target.element_code === undefined ? {} : { element_code: target.element_code }),
-  };
+  return codes[0]?.startsWith(ZONE_PREFIX) === true ? "zone" : "element";
+}
+
+function scopeFor(screen: string, codes: readonly string[]): DesignEvaluationScope {
+  const [code, ...others] = codes;
+  if (code === undefined) {
+    return { screen_code: screen };
+  }
+  return others.length === 0
+    ? { screen_code: screen, element_code: code }
+    : { screen_code: screen, element_codes: [...codes] };
+}
+
+function scopeOf(target: DesignChangeTarget | undefined): DesignEvaluationScope | null {
+  return target === undefined ? null : scopeFor(target.screen_code, targetCodes(target));
+}
+
+function scopeCodes(scope: DesignEvaluationScope): string[] {
+  return scope.element_codes ?? (scope.element_code === undefined ? [] : [scope.element_code]);
 }
 
 function scopeCode(scope: DesignEvaluationScope): string {
-  return scope.element_code ?? scope.screen_code;
+  const codes = scopeCodes(scope);
+  return codes.length === 0 ? scope.screen_code : listFormat.value.format(codes);
+}
+
+function subjectOf(scope: DesignEvaluationScope): Subject {
+  const codes = scopeCodes(scope);
+  return codes.length === 0 ? "screen" : partSubject(codes);
+}
+
+function aboutAny(finding: SyntheticFindingPayload, codes: readonly string[]): boolean {
+  const code = findingElement(finding);
+  return code !== null && codes.includes(code);
 }
 
 function unappliedText(reason: Unapplied): string {
@@ -422,20 +544,20 @@ function reviewFailure(code: string): string {
 }
 
 function reviewedText(scope: DesignEvaluationScope, run: DesignEvaluationRunPayload): string {
-  const code = scope.element_code;
-  if (code === undefined) {
-    return fill(copy.value.reviewedScreen, { code: scope.screen_code });
-  }
+  const codes = scopeCodes(scope);
+  const about = subjectOf(scope);
   const noted = run.responses.some((response) =>
-    response.findings.some((finding) => findingElement(finding) === code),
+    response.findings.some((finding) => aboutAny(finding, codes)),
   );
-  return fill(noted ? copy.value.reviewed : copy.value.reviewedNone, { code });
+  const template =
+    about === "screen" || noted ? copy.value.reviewed[about] : copy.value.reviewedNone;
+  return fill(template, { code: scopeCode(scope) });
 }
 
-function named(text: string, location: string): string {
+function named(text: string, places: readonly string[] = []): string {
   return withScreenNames(text, {
     screens: props.screens,
-    elements: { ...elementNames([location]), ...elementLabels.value },
+    elements: { ...elementNames(places), ...elementLabels.value },
     locale: props.locale,
   });
 }
@@ -445,8 +567,17 @@ function twinNote(finding: SyntheticFindingPayload): TwinNote {
     key: `${finding.twin_id}:${finding.finding_id}`,
     twin: twinNames.value[finding.twin_id] ?? finding.twin_id.slice(0, 8),
     verdict: VERDICTS[finding.severity],
-    summary: named(finding.summary, finding.location),
-    action: named(finding.recommended_action, finding.location),
+    summary: named(finding.summary, [finding.location]),
+    action: named(finding.recommended_action, [finding.location]),
+  };
+}
+
+function namedOpinion(opinion: ChangeOpinion): ChangeOpinion {
+  return {
+    ...opinion,
+    why: named(opinion.why),
+    what_to_do: named(opinion.what_to_do),
+    try_this: opinion.try_this === null ? null : named(opinion.try_this),
   };
 }
 
@@ -469,13 +600,14 @@ function elementOf(target: EventTarget | null): Element | null {
 }
 
 function codeAt(target: EventTarget | null): string | null {
-  const code = elementOf(target)?.closest(MARKED)?.getAttribute("data-elm") ?? null;
-  return code !== null && live.has(code) ? code : null;
+  const marked = elementOf(target)?.closest(MARKED) ?? null;
+  const code = marked === null ? null : codeOf(marked);
+  return code !== null && byCode.value.has(code) ? code : null;
 }
 
-function boxOf(code: string | null): InspectorBox | null {
-  const element = code === null ? undefined : live.get(code);
-  if (code === null || element === undefined) {
+function boxOf(code: string): InspectorBox | null {
+  const element = byCode.value.get(code)?.node;
+  if (element === undefined) {
     return null;
   }
   const rect = element.getBoundingClientRect();
@@ -483,9 +615,10 @@ function boxOf(code: string | null): InspectorBox | null {
 }
 
 function publish(): void {
+  const hover = hovered.value;
   emit("highlight", {
-    hover: hovered.value === selected.value ? null : boxOf(hovered.value),
-    selected: boxOf(selected.value),
+    hover: hover === null || selected.value.includes(hover) ? null : boxOf(hover),
+    selected: selected.value.flatMap((code) => boxOf(code) ?? []),
   });
 }
 
@@ -510,7 +643,7 @@ function showOption(index: number): void {
 }
 
 function reveal(code: string): void {
-  const element = live.get(code);
+  const element = byCode.value.get(code)?.node;
   const view = page?.defaultView ?? null;
   if (element === undefined || view === null) {
     return;
@@ -522,21 +655,94 @@ function reveal(code: string): void {
   view.scrollTo({ top: view.scrollY + box.top - REVEAL_MARGIN });
 }
 
+function pickCodes(codes: readonly string[], code: string): void {
+  picked.value = items.value.filter((item) => codes.includes(item.code));
+  latest.value = code;
+  active.value = Math.max(
+    0,
+    items.value.findIndex((item) => item.code === code),
+  );
+  showOption(active.value);
+}
+
+function chosenText(item: InspectorElement): string {
+  return fill(copy.value.chosen, { code: item.code, text: shown(item) });
+}
+
+function countedText(item: InspectorElement, template: string): string {
+  const count = selected.value.length;
+  return count === 0
+    ? copy.value.cleared
+    : fill(template, {
+        code: item.code,
+        text: shown(item),
+        count: plural(count, copy.value.partsCount),
+      });
+}
+
 function choose(code: string): void {
-  const index = items.value.findIndex((item) => item.code === code);
-  const item = items.value[index];
+  const item = byCode.value.get(code);
   if (item === undefined) {
     return;
   }
-  selected.value = code;
-  active.value = index;
-  announcement.value = fill(copy.value.chosen, { code, text: item.text || copy.value.noText });
-  showOption(index);
+  pickCodes([code], code);
+  announcement.value = chosenText(item);
 }
 
-function clear(): void {
-  selected.value = null;
-  announcement.value = copy.value.cleared;
+function toggle(code: string): void {
+  const item = byCode.value.get(code);
+  if (item === undefined) {
+    return;
+  }
+  const removing = selected.value.includes(code);
+  if (!removing && selected.value.length >= TARGET_PARTS_LIMIT) {
+    announcement.value = fill(copy.value.tooMany, { max: TARGET_PARTS_LIMIT });
+    return;
+  }
+  const codes = removing
+    ? selected.value.filter((value) => value !== code)
+    : [...selected.value, code];
+  pickCodes(codes, code);
+  announcement.value = countedText(item, removing ? copy.value.removed : copy.value.added);
+}
+
+function pick(code: string, event: MouseEvent): void {
+  if (multi.value || event.ctrlKey || event.metaKey) {
+    toggle(code);
+  } else {
+    choose(code);
+  }
+}
+
+function clear(message: string = copy.value.cleared): void {
+  picked.value = [];
+  latest.value = null;
+  announcement.value = message;
+}
+
+async function focusInPanel(target: () => HTMLElement | null | undefined): Promise<void> {
+  await nextTick();
+  (target() ?? field.value)?.focus();
+}
+
+function removePart(code: string, index: number): void {
+  toggle(code);
+  void focusInPanel(() => {
+    const buttons = [...(partList.value?.querySelectorAll<HTMLElement>("button") ?? [])];
+    return buttons[Math.min(index, buttons.length - 1)];
+  });
+}
+
+function chooseContainer(): void {
+  const part = anchor.value;
+  const zone = container.value;
+  if (part === null || zone === null) {
+    return;
+  }
+  pickCodes([...selected.value.filter((code) => code !== part.code), zone.code], zone.code);
+  announcement.value =
+    selected.value.length === 1 ? chosenText(zone) : countedText(zone, copy.value.added);
+  void focusInPanel(() => parentButton.value);
 }
 
 function onPointer(event: Event): void {
@@ -553,32 +759,56 @@ function onClick(event: MouseEvent): void {
   }
   const code = codeAt(event.target);
   if (code !== null) {
-    choose(code);
+    pick(code, event);
   }
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === "Escape" && selected.value !== null) {
+  if (event.key === "Escape" && selected.value.length > 0) {
     event.preventDefault();
     clear();
   }
 }
 
+function sameLook(left: InspectorElement, right: InspectorElement): boolean {
+  return left.tag === right.tag && left.label === right.label;
+}
+
+function keepParts(fresh: readonly InspectorElement[], screen: string | null): void {
+  const previous = picked.value;
+  if (previous.length === 0 || fresh.length === 0) {
+    return;
+  }
+  if (previous[0]?.screen !== screen) {
+    clear(copy.value.reset);
+    return;
+  }
+  const found = new Map(fresh.map((item) => [item.code, item]));
+  const strict = previous.length > 1;
+  const kept = previous.flatMap((part) => {
+    const next = found.get(part.code);
+    return next !== undefined && (!strict || sameLook(next, part)) ? [next] : [];
+  });
+  const dropped = previous.filter((part) => !kept.some((item) => item.code === part.code));
+  picked.value = kept;
+  if (dropped.length > 0) {
+    announcement.value = fill(copy.value.dropped, {
+      codes: listFormat.value.format(dropped.map((part) => part.code)),
+    });
+  }
+}
+
 function read(current: Document): void {
   const found = screenElements(current);
-  live = new Map(
-    found.elements.map((element) => [element.getAttribute("data-elm") ?? "", element]),
-  );
-  items.value = found.elements.map((element) => describeElement(element));
-  screenCode.value = found.screen ?? props.screen;
+  const screen = found.screen ?? props.screen;
+  const fresh = found.elements.map((element) => describeElement(element, screen));
+  keepParts(fresh, screen);
+  items.value = fresh;
   ready.value = true;
   hovered.value = null;
-  if (selected.value !== null && live.size > 0 && !live.has(selected.value)) {
-    selected.value = null;
-  }
   active.value = Math.max(
     0,
-    items.value.findIndex((item) => item.code === selected.value),
+    fresh.findIndex((item) => selected.value.includes(item.code)),
   );
   publish();
 }
@@ -589,7 +819,6 @@ function attach(): void {
   page = props.frame?.contentDocument ?? null;
   const current = page;
   if (current === null) {
-    live = new Map();
     items.value = [];
     ready.value = false;
     hovered.value = null;
@@ -645,20 +874,22 @@ function onListKeydown(event: KeyboardEvent): void {
     focusOption(Math.min(count - 1, Math.max(0, next)));
     return;
   }
+  const actions: Record<string, (code: string) => void> = { Enter: choose, " ": toggle };
+  const action = actions[event.key];
   const item = items.value[active.value];
-  if ((event.key === "Enter" || event.key === " ") && item !== undefined) {
+  if (action !== undefined && item !== undefined) {
     event.preventDefault();
-    choose(item.code);
+    action(item.code);
     return;
   }
-  if (event.key === "Escape" && selected.value !== null) {
+  if (event.key === "Escape" && selected.value.length > 0) {
     event.preventDefault();
     clear();
   }
 }
 
 function onPanelKeydown(event: KeyboardEvent): void {
-  if (event.key !== "Escape" || event.isComposing || selected.value === null) {
+  if (event.key !== "Escape" || event.isComposing || selected.value.length === 0) {
     return;
   }
   event.preventDefault();
@@ -719,14 +950,10 @@ function settle(result: IterationOutcome, screen: string): void {
 }
 
 async function apply(): Promise<void> {
-  const code = selected.value;
-  const element = code === null ? undefined : live.get(code);
+  const value = target.value;
+  const opinion = freshOpinion.value;
   const authorize = props.authorize;
-  if (!canApply.value || element === undefined || authorize === undefined) {
-    return;
-  }
-  const target = changeTarget(element, screenCode.value ?? props.screen);
-  if (target === null) {
+  if (!canApply.value || value === null || authorize === undefined) {
     return;
   }
   sending.value = true;
@@ -736,14 +963,55 @@ async function apply(): Promise<void> {
   }
   try {
     const result = await iterations.start(
-      { request: request.value, target },
+      {
+        request: request.value,
+        target: value,
+        ...(opinion === null ? {} : { opinionId: opinion.run_id }),
+      },
       authorize,
       startOptions(),
     );
-    settle(result, target.screen_code);
+    settle(result, value.screen_code);
   } finally {
     sending.value = false;
   }
+}
+
+async function askFirst(): Promise<void> {
+  const value = target.value;
+  const version = currentVersion.value;
+  const projectId = project.value;
+  const authorize = props.authorize;
+  if (
+    !canAskFirst.value ||
+    value === null ||
+    version === null ||
+    projectId === null ||
+    authorize === undefined
+  ) {
+    return;
+  }
+  outcome.value = null;
+  try {
+    await opinions.ask(
+      projectId,
+      version,
+      request.value,
+      value,
+      modelLocale.value,
+      authorize,
+      props.opinionsApi ?? designOpinionsApi,
+    );
+  } catch {
+    outcome.value = { kind: "opinion", code: opinions.error ?? CHANGE_OPINION_FAILED };
+  }
+}
+
+function cancelRequest(): void {
+  request.value = "";
+  opinions.clear();
+  announcement.value = copy.value.cancelled;
+  void nextTick(() => field.value?.focus());
 }
 
 async function applyProposal(
@@ -781,7 +1049,7 @@ async function applyProposal(
       outcome.value = { kind: "unapplied", reason: "recorded" };
       return null;
     }
-    return { id: version.id, hash: version.content_hash };
+    return { id: version.id, content_hash: version.content_hash };
   } catch {
     const changed = design.error?.code === DESIGN_CONTEXT_CHANGED;
     outcome.value = {
@@ -807,11 +1075,11 @@ async function askTwins(
     const run = await loop.evaluate(
       projectId,
       version.id,
-      version.hash,
+      version.content_hash,
       authorize,
       props.loopApi ?? designLoopApi,
       "TWIN_REVIEW",
-      props.locale === "it" ? "it-IT" : "en-US",
+      modelLocale.value,
       scope,
     );
     reviewState.value = { kind: "done", scope, run };
@@ -885,7 +1153,7 @@ onBeforeUnmount(() => {
   detach?.();
   detach = null;
   page = null;
-  live = new Map();
+  opinions.clear();
 });
 </script>
 
@@ -911,78 +1179,179 @@ onBeforeUnmount(() => {
     >
       {{ copy.none }}
     </p>
-    <ul
-      v-else
-      ref="list"
-      role="listbox"
-      :aria-labelledby="titleId"
-      class="relative grid max-h-64 list-none gap-1 overflow-y-auto rounded-field border border-night-line p-1"
-      data-testid="mockup-elements"
-      @keydown="onListKeydown"
-      @focusout="onListFocusOut"
-      @mouseleave="hovered = null"
-    >
-      <li
-        v-for="(item, index) in items"
-        :id="`${optionPrefix}-${index}`"
-        :key="item.code"
-        role="option"
-        :aria-selected="item.code === selected ? 'true' : 'false'"
-        :tabindex="index === active ? 0 : -1"
-        :aria-label="optionLabel(item)"
-        :class="[
-          'grid cursor-pointer gap-0.5 rounded-control px-3 py-2 text-sm transition-colors duration-150',
-          item.code === selected ? 'bg-on-night text-ink' : 'text-on-night hover:bg-night-hover',
-        ]"
-        :data-code="item.code"
-        data-testid="mockup-element"
-        @click="choose(item.code)"
-        @focus="onOptionFocus(index)"
-        @mouseenter="hovered = item.code"
+    <template v-else>
+      <div class="grid gap-1">
+        <label class="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm text-on-night-2">
+          <input
+            v-model="multi"
+            type="checkbox"
+            class="h-5 w-5 shrink-0 accent-petrol-on-night"
+            :aria-describedby="multiHintId"
+            data-testid="mockup-multi"
+          />
+          <span>{{ copy.multi }}</span>
+        </label>
+        <p
+          :id="multiHintId"
+          class="text-xs leading-normal text-on-night-3"
+          data-testid="mockup-multi-hint"
+        >
+          {{ fill(copy.multiHint, { max: TARGET_PARTS_LIMIT }) }}
+        </p>
+      </div>
+      <ul
+        ref="list"
+        role="listbox"
+        :aria-labelledby="titleId"
+        :aria-multiselectable="multiselectable ? 'true' : undefined"
+        class="relative grid max-h-64 list-none gap-1 overflow-y-auto rounded-field border border-night-line p-1"
+        data-testid="mockup-elements"
+        @keydown="onListKeydown"
+        @focusout="onListFocusOut"
+        @mouseleave="hovered = null"
       >
-        <span class="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
-          <span class="font-semibold">{{ item.code }}</span>
-          <span :class="item.code === selected ? 'text-ink-2' : 'text-on-night-3'">
-            {{ item.tag }}
+        <li
+          v-for="(item, index) in items"
+          :id="`${optionPrefix}-${index}`"
+          :key="item.code"
+          role="option"
+          :aria-selected="isPicked(item) ? 'true' : 'false'"
+          :tabindex="index === active ? 0 : -1"
+          :aria-label="optionLabel(item)"
+          :class="[
+            'grid cursor-pointer gap-0.5 rounded-control px-3 py-2 text-sm transition-colors duration-150',
+            isPicked(item) ? 'bg-on-night text-ink' : 'text-on-night hover:bg-night-hover',
+          ]"
+          :data-code="item.code"
+          :data-kind="item.kind"
+          data-testid="mockup-element"
+          @click="pick(item.code, $event)"
+          @focus="onOptionFocus(index)"
+          @mouseenter="hovered = item.code"
+        >
+          <span class="flex flex-wrap items-baseline gap-x-2 text-xs">
+            <span class="font-mono font-semibold">{{ item.code }}</span>
+            <span
+              :class="[
+                item.zoneKind === undefined ? 'font-mono' : '',
+                isPicked(item) ? 'text-ink-2' : 'text-on-night-3',
+              ]"
+            >
+              {{ partKind(item) }}
+            </span>
           </span>
-        </span>
-        <span class="min-w-0 break-words">{{ item.text || copy.noText }}</span>
-      </li>
-    </ul>
+          <span class="min-w-0 break-words">{{ shown(item) }}</span>
+        </li>
+      </ul>
+    </template>
     <p
-      v-if="ready && items.length > 0 && chosen === null"
+      v-if="ready && items.length > 0 && parts.length === 0"
       class="text-sm leading-normal text-on-night-3"
       data-testid="mockup-inspect-hint"
     >
       {{ copy.hint }}
     </p>
     <section
-      v-if="chosen !== null"
+      v-if="parts.length > 0"
       class="grid gap-3"
       :aria-labelledby="selectionId"
       data-testid="mockup-selection"
       @keydown="onPanelKeydown"
     >
-      <h4 :id="selectionId" class="text-[15px] font-semibold">{{ copy.selection }}</h4>
+      <h4 :id="selectionId" class="text-[15px] font-semibold">{{ copy.selection[subject] }}</h4>
+      <ul
+        v-if="chosen === null"
+        ref="partList"
+        class="grid list-none gap-1.5"
+        :aria-labelledby="selectionId"
+        data-testid="mockup-parts"
+      >
+        <li
+          v-for="(part, index) in parts"
+          :key="part.code"
+          class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-control border border-night-line px-3 py-2"
+          :data-code="part.code"
+          :data-kind="part.kind"
+          data-testid="mockup-part"
+        >
+          <span class="grid min-w-0 flex-1 gap-0.5 text-sm">
+            <span class="flex flex-wrap items-baseline gap-x-2 text-xs">
+              <span class="font-mono font-semibold">{{ part.code }}</span>
+              <span :class="[part.zoneKind === undefined ? 'font-mono' : '', 'text-on-night-3']">
+                {{ partKind(part) }}
+              </span>
+            </span>
+            <span class="break-words">{{ shown(part) }}</span>
+          </span>
+          <button
+            type="button"
+            :class="secondaryClasses(true)"
+            :aria-label="fill(copy.removeLabel, { part: optionLabel(part) })"
+            data-testid="mockup-part-remove"
+            @click="removePart(part.code, index)"
+          >
+            {{ copy.remove }}
+          </button>
+        </li>
+      </ul>
       <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
-        <dt class="text-on-night-3">{{ copy.code }}</dt>
-        <dd class="font-mono" data-testid="mockup-selection-code">{{ chosen.code }}</dd>
+        <template v-if="chosen !== null">
+          <dt class="text-on-night-3">{{ copy.code }}</dt>
+          <dd class="font-mono" data-testid="mockup-selection-code">{{ chosen.code }}</dd>
+        </template>
         <dt class="text-on-night-3">{{ copy.screen }}</dt>
         <dd class="break-words" data-testid="mockup-selection-screen">{{ screenLabel }}</dd>
-        <dt class="text-on-night-3">{{ copy.text }}</dt>
-        <dd class="break-words" data-testid="mockup-selection-text">
-          {{ chosen.text || copy.noText }}
-        </dd>
+        <template v-if="chosen !== null">
+          <dt class="text-on-night-3">{{ copy.text }}</dt>
+          <dd class="break-words" data-testid="mockup-selection-text">{{ shown(chosen) }}</dd>
+        </template>
         <dt class="text-on-night-3">{{ copy.requirements }}</dt>
         <dd data-testid="mockup-selection-requirements">
-          <ul v-if="chosen.requirements.length > 0" class="grid list-none gap-0.5 font-mono">
-            <li v-for="code in chosen.requirements" :key="code" data-testid="mockup-requirement">
+          <ul v-if="requirements.length > 0" class="grid list-none gap-0.5 font-mono">
+            <li v-for="code in requirements" :key="code" data-testid="mockup-requirement">
               {{ code }}
             </li>
           </ul>
           <span v-else>{{ copy.noRequirements }}</span>
         </dd>
       </dl>
+      <div
+        v-if="chosen?.zoneKind !== undefined"
+        class="grid gap-1 text-sm"
+        data-testid="mockup-selection-holds"
+      >
+        <p class="text-on-night-2">{{ plural(chosen.holds.length, copy.holds) }}</p>
+        <ul class="grid list-none gap-0.5">
+          <li
+            v-for="part in held"
+            :key="part.code"
+            class="break-words"
+            data-testid="mockup-selection-held"
+          >
+            <span class="font-mono font-semibold">{{ part.code }}</span>
+            {{ shown(part) }}
+          </li>
+        </ul>
+      </div>
+      <div v-if="container !== null" class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <button
+          ref="parentButton"
+          type="button"
+          :class="secondaryClasses(true)"
+          :aria-describedby="parentId"
+          data-testid="mockup-select-parent"
+          @click="chooseContainer"
+        >
+          {{ copy.selectParent }}
+        </button>
+        <p
+          :id="parentId"
+          class="min-w-0 text-[13px] break-words text-on-night-3"
+          data-testid="mockup-parent"
+        >
+          {{ optionLabel(container) }}
+        </p>
+      </div>
       <section
         v-if="notes.length > 0"
         class="grid gap-2"
@@ -1052,6 +1421,17 @@ onBeforeUnmount(() => {
           {{ fill(copy.count, { n: length, max: ITERATION_REQUEST_LIMIT }) }}
         </p>
       </div>
+      <MockupChangeOpinions
+        :run="opinionRun"
+        :busy="opinions.busy"
+        :stale="opinionStale"
+        :can-apply="canApply"
+        :locale="locale"
+        @apply="apply"
+        @change="field?.focus()"
+        @cancel="cancelRequest"
+        @try="trySuggestion"
+      />
       <label class="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm text-on-night-2">
         <input
           v-model="review"
@@ -1070,7 +1450,7 @@ onBeforeUnmount(() => {
           data-testid="mockup-ask-twins"
           @click="askAbout"
         >
-          {{ copy.askTwins }}
+          {{ copy.askTwins[subject] }}
         </button>
         <p :id="askTimeId" class="text-[13px] text-on-night-3" data-testid="mockup-ask-time">
           {{ copy.askTwinsTime }}
@@ -1081,7 +1461,7 @@ onBeforeUnmount(() => {
           type="button"
           :class="applyClasses"
           :aria-disabled="canApply ? undefined : 'true'"
-          :aria-describedby="describedBy"
+          :aria-describedby="withPending(estimateId)"
           data-testid="mockup-apply"
           @click="apply"
         >
@@ -1089,6 +1469,25 @@ onBeforeUnmount(() => {
         </button>
         <p :id="estimateId" class="text-[13px] text-on-night-3" data-testid="mockup-estimate">
           {{ estimate }}
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <button
+          type="button"
+          :class="secondaryClasses(canAskFirst)"
+          :aria-disabled="canAskFirst ? undefined : 'true'"
+          :aria-describedby="withPending(askFirstTimeId)"
+          data-testid="mockup-ask-first"
+          @click="askFirst"
+        >
+          {{ copy.askFirst }}
+        </button>
+        <p
+          :id="askFirstTimeId"
+          class="text-[13px] text-on-night-3"
+          data-testid="mockup-ask-first-time"
+        >
+          {{ copy.askFirstTime }}
         </p>
       </div>
       <p
@@ -1125,6 +1524,25 @@ onBeforeUnmount(() => {
       >
         {{ versionNote }}
       </p>
+      <section
+        v-if="corrections.length > 0"
+        class="mt-1.5 grid gap-1.5"
+        :aria-labelledby="correctionsId"
+        data-testid="mockup-version-corrections"
+      >
+        <h4 :id="correctionsId" class="text-sm font-semibold">{{ copy.corrections }}</h4>
+        <ul
+          class="grid list-disc gap-1 pl-5 text-[13px] leading-normal text-on-night-2 marker:text-petrol-on-night"
+        >
+          <li
+            v-for="(line, index) in corrections"
+            :key="index"
+            data-testid="mockup-version-correction"
+          >
+            {{ line }}
+          </li>
+        </ul>
+      </section>
     </div>
     <UiStateBlock
       v-if="reviewNotice !== null"

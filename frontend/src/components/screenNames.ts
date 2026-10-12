@@ -17,9 +17,12 @@ export interface ScreenNaming {
   locale: ScreenNameLocale;
 }
 
-const CODE = /(?<![\p{L}\p{N}_-])(?:SCR|ELM|FLOW)-\d+(?![\p{L}\p{N}_])/gu;
-const PLACE_CODE = /^(?:SCR|ELM)-\d+(?![\p{L}\p{N}_])[\s:·\-–—]*/u;
-const PLACE_NAME = /^((?:SCR|ELM)-\d+)(?![\p{L}\p{N}_])[\s:·\-–—]*(.*)$/u;
+const CODE = /(?<![\p{L}\p{N}_-])(?:SCR|ELM|ZON|FLOW)-\d+(?![\p{L}\p{N}_])/gu;
+const PLACE_CODE = /^(?:SCR|ELM|ZON)-\d+(?![\p{L}\p{N}_])[\s:·\-–—]*/u;
+const PLACE_NAME = /^((?:SCR|ELM|ZON)-\d+)(?![\p{L}\p{N}_])[\s:·\-–—]*(.*)$/u;
+const PLACE_PARTS = /,\s*(?=(?:ELM|ZON)-\d)/u;
+const SCREEN_PREFIXES = ["SCR-"] as const;
+const PART_PREFIXES = ["ELM-", "ZON-"] as const;
 const SEPARATOR = /[\s:·\-–—]/u;
 const WORD = /[\p{L}\p{N}_]/u;
 const TRAILING_SPACE = /\s+$/u;
@@ -41,19 +44,25 @@ const QUOTES: Readonly<Record<ScreenNameLocale, readonly [string, string]>> = {
   en: ["“", "”"],
 };
 
-function namesAfter(prefix: "SCR" | "ELM", locations: readonly string[]): Record<string, string> {
+function hasPrefix(code: string, prefixes: readonly string[]): boolean {
+  return prefixes.some((prefix) => code.startsWith(prefix));
+}
+
+function placeParts(location: string): string[][] {
+  return location.split("·").map((part) => part.split(PLACE_PARTS).map((piece) => piece.trim()));
+}
+
+function namesAfter(
+  prefixes: readonly string[],
+  locations: readonly string[],
+): Record<string, string> {
   const names: Record<string, string> = {};
   for (const location of locations) {
-    for (const part of location.split("·")) {
-      const match = PLACE_NAME.exec(part.trim());
+    for (const piece of placeParts(location).flat()) {
+      const match = PLACE_NAME.exec(piece);
       const code = match?.[1];
       const name = match?.[2]?.trim() ?? "";
-      if (
-        code !== undefined &&
-        code.startsWith(`${prefix}-`) &&
-        name.length > 0 &&
-        !(code in names)
-      ) {
+      if (code !== undefined && hasPrefix(code, prefixes) && name.length > 0 && !(code in names)) {
         names[code] = name;
       }
     }
@@ -61,21 +70,30 @@ function namesAfter(prefix: "SCR" | "ELM", locations: readonly string[]): Record
   return names;
 }
 
+function pieceLabels(pieces: readonly string[]): string {
+  return pieces
+    .map((piece) => piece.replace(PLACE_CODE, "").trim())
+    .filter((piece) => piece.length > 0)
+    .join(", ");
+}
+
 export function placeLabel(location: string): string {
   const place = location.trim();
-  const names = place
-    .split("·")
-    .map((part) => part.trim().replace(PLACE_CODE, "").trim())
+  const names = placeParts(place)
+    .map(pieceLabels)
     .filter((part) => part.length > 0);
   return names.length === 0 ? place : names.join(" · ");
 }
 
 export function elementNames(locations: readonly string[]): Record<string, string> {
-  return namesAfter("ELM", locations);
+  return namesAfter(PART_PREFIXES, locations);
 }
 
 export function placeScreens(locations: readonly string[]): ScreenName[] {
-  return Object.entries(namesAfter("SCR", locations)).map(([code, title]) => ({ code, title }));
+  return Object.entries(namesAfter(SCREEN_PREFIXES, locations)).map(([code, title]) => ({
+    code,
+    title,
+  }));
 }
 
 function sameWords(left: string, right: string, locale: ScreenNameLocale): boolean {
@@ -126,7 +144,7 @@ function knownNames(naming: ScreenNaming): Map<string, string> {
   }
   for (const [code, name] of Object.entries(naming.elements ?? {})) {
     const label = name.trim();
-    if (code.startsWith("ELM-") && label.length > 0 && !names.has(code)) {
+    if (hasPrefix(code, PART_PREFIXES) && label.length > 0 && !names.has(code)) {
       names.set(code, label);
     }
   }

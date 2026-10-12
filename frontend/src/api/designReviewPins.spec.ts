@@ -51,6 +51,23 @@ describe("design review pins api", () => {
     }
   });
 
+  it("asks for the zones of the reviewed document only when they are requested", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      response(200, { html: "<!doctype html>", source: "review", entry_screen: "SCR-001" }),
+    );
+    const api = createDesignReviewPinsApi({ fetchImpl });
+
+    await api.document("project 1", "run/1", "SCR-002", "token", { zones: true });
+    await api.document("project 1", "run/1", null, "token", { zones: true });
+    await api.document("project 1", "run/1", null, "token", { zones: false });
+
+    expect(fetchImpl.mock.calls.map((call) => String(call[0]))).toEqual([
+      "/api/v1/projects/project%201/design/evaluations/run%2F1/document?entry_screen=SCR-002&zones=true",
+      "/api/v1/projects/project%201/design/evaluations/run%2F1/document?zones=true",
+      "/api/v1/projects/project%201/design/evaluations/run%2F1/document",
+    ]);
+  });
+
   it.each([
     [409, "GENERATED_MOCKUP_REQUIRED"],
     [404, "DESIGN_EVALUATION_NOT_FOUND"],

@@ -49,7 +49,8 @@ export type GenerationOperation =
   | "TEST_REVIEW"
   | "TWIN_UPDATE"
   | "KNOWLEDGE_ALIGNMENT"
-  | "DESIGN_CHANGE";
+  | "DESIGN_CHANGE"
+  | "DESIGN_CHANGE_OPINION";
 
 export interface GenerationJobResponsePayload {
   status_code: number;
@@ -60,6 +61,20 @@ export interface MockupIssuePayload {
   code: string;
   screen_code: string | null;
   detail: string;
+}
+
+export type MockupCorrectionCode = "TEXT_COLOUR_REPLACED" | "CONTROL_BORDER_REPLACED";
+
+export interface MockupCorrectionPayload {
+  code: MockupCorrectionCode;
+  selector: string;
+  property: "color" | "border-color";
+  before: { value: string; hex: string; ratio: number; name: string };
+  after: { token: string; hex: string; ratio: number; name: string };
+  background: { hex: string; name: string; inherited: boolean };
+  threshold: number;
+  large_text: boolean;
+  count: number;
 }
 
 export interface GenerationFailurePayload {
@@ -76,7 +91,12 @@ export interface MockupResultPayload {
   approach: string | null;
   changes: string[];
   warnings: MockupIssuePayload[];
+  corrections?: MockupCorrectionPayload[];
   cost_microusd: number | null;
+}
+
+export interface LatestMockupResultPayload extends MockupResultPayload {
+  applied_design_version_number?: number | null;
 }
 
 export interface GenerationJobPayload {
@@ -102,7 +122,11 @@ export interface MockupJobRequest {
 
 export type MockupDocumentSource = "applied" | "latest";
 
-export interface MockupDocumentQuery {
+export interface MockupDocumentZones {
+  zones?: boolean;
+}
+
+export interface MockupDocumentQuery extends MockupDocumentZones {
   alternative_id: UUID;
   source: MockupDocumentSource;
   entry_screen?: string;
@@ -139,10 +163,13 @@ export interface DesignIterationPayload {
   request: string;
   assertions: string[];
   changes: string[];
+  warnings?: MockupIssuePayload[];
+  corrections?: MockupCorrectionPayload[];
   status: DesignIterationStatus;
   base_design_version_number: number;
   applied_design_version_number: number | null;
   cost_microusd: number | null;
+  opinion_id?: UUID | null;
 }
 
 export interface ReviewPinPayload {

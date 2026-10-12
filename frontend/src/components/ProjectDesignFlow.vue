@@ -57,9 +57,11 @@ import UiTechnicalDetails from "./UiTechnicalDetails.vue";
 import { designChangeQuote, designChangeSentence } from "./designChanges";
 import { designFlowCopy } from "./designFlowCopy";
 import {
+  correctionLines,
   generationFailureText,
   generationReasonText,
   generationRetryable,
+  uncorrectedWarnings,
 } from "./iterationMessages";
 import type { IterationJob, IterationSide } from "./iterationTypes";
 import { generationProgress, modelFeedback } from "./modelFeedback";
@@ -173,6 +175,7 @@ const REVIEWED_KINDS = new Set([
   "GENERATED_SCREEN",
   "GENERATED_STYLES",
 ]);
+const DIALOG_ZONES = { zones: true } as const;
 
 const props = withDefaults(
   defineProps<{
@@ -775,9 +778,10 @@ const dialogDocument = computed<MockupDocumentPayload | null>(() => {
   const entryScreen = state.entryScreen ?? "";
   if (state.source === "review") {
     const run = reviewRun.value;
-    return run === null ? null : mockups.reviewDocumentFor(run.id, entryScreen);
+    return run === null ? null : mockups.reviewDocumentFor(run.id, entryScreen, DIALOG_ZONES);
   }
   return mockups.documentFor(state.alternativeId, {
+    ...DIALOG_ZONES,
     source: state.source,
     entryScreen,
     ...(state.revision === null ? {} : { revision: state.revision }),
@@ -1019,23 +1023,9 @@ const mockupNotes = computed(() => {
   const notes: { id: string; label: string; lines: string[] }[] = [];
   for (const alternative of alternatives.value) {
     const entry = mockups.entry(alternative.id);
-    if (entry.state !== "ready" || entry.result.warnings.length === 0) {
+    const lines = entry.state === "ready" ? mockupNoteLines(entry.result) : [];
+    if (lines.length === 0) {
       continue;
-    }
-    const screens = new Map(
-      (entry.result.package.generated_mockup?.mockup.screens ?? []).map((screen) => [
-        screen.code,
-        screen.title,
-      ]),
-    );
-    const lines: string[] = [];
-    for (const warning of entry.result.warnings) {
-      const sentence = generationReasonText(warning.code, props.locale);
-      const title = warning.screen_code === null ? undefined : screens.get(warning.screen_code);
-      const line = title === undefined ? sentence : fill(text.onScreen, { title, text: sentence });
-      if (!lines.includes(line)) {
-        lines.push(line);
-      }
     }
     notes.push({
       id: alternative.id,
@@ -1045,6 +1035,22 @@ const mockupNotes = computed(() => {
   }
   return notes;
 });
+
+function mockupNoteLines(result: MockupResultPayload): string[] {
+  const corrections = result.corrections ?? [];
+  const screens = new Map(
+    (result.package.generated_mockup?.mockup.screens ?? []).map((screen) => [
+      screen.code,
+      screen.title,
+    ]),
+  );
+  const warnings = uncorrectedWarnings(result.warnings, corrections).map((warning) => {
+    const sentence = generationReasonText(warning.code, props.locale);
+    const title = warning.screen_code === null ? undefined : screens.get(warning.screen_code);
+    return title === undefined ? sentence : fill(copy.value.onScreen, { title, text: sentence });
+  });
+  return [...new Set([...correctionLines(corrections, props.locale), ...warnings])];
+}
 
 function money(microusd: number | null): string {
   return new Intl.NumberFormat(props.locale === "it" ? "it-IT" : "en-US", {
@@ -1932,12 +1938,14 @@ async function loadDialogDocument(): Promise<void> {
     if (reviewing !== null) {
       await mockups.loadReviewDocument(reviewing.id, authorizedRequest, {
         api: pinsApi.value,
+        ...DIALOG_ZONES,
         ...entry,
       });
     } else {
       await mockups.loadDocument(state.alternativeId, authorizedRequest, {
         api: mockupsApi.value,
         source: state.source === "applied" ? "applied" : "latest",
+        ...DIALOG_ZONES,
         ...entry,
         ...(state.revision === null ? {} : { revision: state.revision }),
       });
