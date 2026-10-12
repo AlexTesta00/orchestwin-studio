@@ -44,7 +44,7 @@ On 6 October 2026 `ut align` made seven proposals on the Calcolatrice iPhone: fo
 
 ## Times and steps of the project
 
-At the bottom of every project sits a collapsed block, "Times and steps of the project", which collects for each section the time to approval, your actions, the generations and the waits. Time spent, details, "Why?" and mockups opened are counted only during a study session, which you start from "Study session" with a code such as SES-P01: it records what you open, not what you type. Under the table come the "Limits of the measure", starting with "The times include breaks." These blocks are there for the sessions with people planned for sprint 48.
+At the bottom of every project sits a collapsed block, "Times and steps of the project", which collects for each section the time to approval, your actions, the generations and the waits. Time spent, details, "Why?" and mockups opened are counted only during a study session, which you start from "Study session" with a code such as SES-P01: it records what you open, not what you type. Under the table come the "Limits of the measure", starting with "The times include breaks." These blocks are there for the sessions with people planned for sprint 49.
 
 ![The end of "Acceptance tests" for the Calcolatrice iPhone, with AC-011 "Not covered" and its reason, and below it the "Study session" block open with the "Session code" field](../assets/web/web-sessione-di-prova.png)
 

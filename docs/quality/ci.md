@@ -49,7 +49,7 @@ The `test` job runs on `ubuntu-24.04`, `macos-14` and `windows-2025` with `fail-
 
 Until 11 October the limit was 45 minutes, and Windows barely fitted in it, because on the same code the time changes a lot from one runner to another. On 11 October the push of `f8e4569` finished green in 44 min 56 s, while the pull request for the same commit was cancelled at 45 min 15 s with the PostgreSQL suite halfway through. On Windows the time goes into the Python tests (between 19:54 and 29:00, in minutes and seconds) and the integration tests (between 7:03 and 10:00). Even the installation of PostgreSQL takes between 1:41 and 3:27 there, against under 34 seconds elsewhere.
 
-On 8 October run 623, the merge of `develop` into `main` through pull request 107, was cancelled, and `release` never started. No version has come out since v1.2.0, although `main` has 31 more commits, 23 of them `feat`. On 11 October commit `a850cd6` raised the limit to 75 minutes. On that same commit Windows took 30 min 22 s in run 639 and 45 min 15 s in run 640: under the old limit the second run would have been cancelled.
+On 8 October run 623, the merge of `develop` into `main` through pull request 107, was cancelled, and `release` never started. No version came out after v1.2.0 until 11 October, although `main` had 31 more commits, 23 of them `feat`. On 11 October commit `a850cd6` raised the limit to 75 minutes. On that same commit Windows took 30 min 22 s in run 639 and 45 min 15 s in run 640: under the old limit the second run would have been cancelled.
 
 The typical durations come from twelve runs between 5 and 11 October, read on 11 October from GitHub's public API. For `test` only the successful jobs are counted.
 
@@ -85,6 +85,7 @@ The exclamation mark after the type is not enough. On 29 September a trial with 
 | v1.0.0 | 29 September 2026 | 84 |
 | v1.1.0 | 2 October 2026 | 92 |
 | v1.2.0 | 5 October 2026 | 101 |
+| v1.3.0 | 11 October 2026 | 112 |
 
 Release v1.1.0 brings together 58 `feat` commits and 7 `fix` commits; v1.2.0 has 40 `feat` and 11 `fix`. The `v0.0.1` tag of 17 August has no release.
 

@@ -63,7 +63,7 @@ The counts cover the files tracked by Git at commit `a850cd6`, on 11 October 202
 | Extension, `editors/vscode` | 14 | 5,952 | 197 tests in 13 `*.test.js` files |
 | Scripts, `scripts/` | 10 | 1,326 | none |
 
-The sprint 46 refactor had left the backend at 181,794 lines. The four extra lines, and test case number 12,436, come from the fix `77da801` of 11 October 2026. In the final chain of sprint 46, 12,248 Python tests passed on Windows, with 13 skipped and 174 integration tests left out, and 173 integration tests passed on PostgreSQL. The API registers 42 routers, and the OpenAPI document read from the running Studio on 11 October 2026 had 179 paths and 212 operations. [The API](../api/index.md) explains how to read it, and [The test suites](../quality/index.md) describes the suites.
+The sprint 46 refactor had left the backend at 181,794 lines. The four extra lines, and test case number 12,436, come from the fix `77da801` of 11 October 2026. In the final chain of sprint 46, 12,248 Python tests passed on Windows, with 13 skipped and 174 integration tests left out, and 173 integration tests passed on PostgreSQL. The API registers 43 routers, the last one added in sprint 48 for the twins' opinions before a change. The OpenAPI document read from the running Studio on 11 October 2026 had 179 paths and 212 operations. [The API](../api/index.md) explains how to read it, and [The test suites](../quality/index.md) describes the suites.
 
 ## The architecture pages
 

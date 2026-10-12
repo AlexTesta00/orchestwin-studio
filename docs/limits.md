@@ -1,6 +1,6 @@
 # Limits and future work
 
-The biggest limit is also the simplest to state. As of 11 October 2026 no session with people has taken place, and everything I know about the Studio's usability and the quality of its designs comes from my own judgement, from the twins or from the software's measures.
+The biggest limit is also the simplest to state. As of 12 October 2026 no session with people has taken place, and everything I know about the Studio's usability and the quality of its designs comes from my own judgement, from the twins or from the software's measures.
 
 ## Validation
 
@@ -13,6 +13,12 @@ There is only one judgement on the quality of the designs, mine, given on synthe
 The [distance measure](design/measures.md) between the alternatives helps, but it looks at one thing only. The verdict is computed on the drawn style, with a threshold of 45 out of 100, and it gives no weight to serif or sans-serif type or to the layout of the text. That is why in sprint 38 the pair of the test calculator got the verdict "Too close" even though it looked different to the eye. With the three alternatives of 10 October 2026, the pairs of the gym project stand at 92, 71 and 39. That is a single project, and the pair formed by the editorial direction and the Apple one stays below the threshold.
 
 Four gaps remain in the process that produces alternatives and mockups. Adherence to the direction is measured, not enforced: in the gym project the mockup of DES-003 does not follow its direction on shapes and colour, and nothing stops it. The instruction forbids gradients, while the contract and the validators accept them, except repeating or conic ones on backgrounds. The twins' critiques of the alternatives come out of the same call that writes the alternatives, so they are a self-assessment, and twins and designs come from the same model. The free directions do not stay clear of the axes of the Apple system: only the instruction keeps them away.
+
+## Point and ask
+
+The twins' opinion before a change is a hypothesis simulated by the model, like every review of theirs. It comes from the same kind of model that draws the mockups, and no person has confirmed it. On 12 October 2026 the three twins did object to a red bar with blue text, quoting the ratio computed by the Studio, but that is a single run on a single project. Zone codes, like element codes, follow the order of the document: a version that adds, removes or moves a container renumbers the zones after it. The Studio refuses a request whose codes no longer exist on that screen, and `ut design show --elements` gives the current ones.
+
+The contrast corrections of the mockups are now declared, with the colour before and after. None of the four runs on Bottega Vicina of 12 October set one off, because the designer chose or kept readable colours by itself, so the declared corrections have not been seen on a real case yet. One silent correction is left, in the palette. When the model proposes the alternatives and one of the fifteen colours misses the contrast that the colour mode requires, the Studio shifts its lightness and records only which roles it moved, in the evidence of the generation (`PALETTE_ADJUSTED`). Neither the web nor `ut` shows that shift.
 
 ## Traceability
 
@@ -28,7 +34,7 @@ Sprint 46 deleted the `training` package, not its tables. `training_dataset_vers
 
 ## Continuous integration
 
-The test job on Windows took between 37 and 45 minutes depending on the machine, and the limit was 45. On 11 October 2026 a run of the sprint 46 pull request stopped at the limit, after 45 minutes and 15 seconds, with the PostgreSQL suite cut short; the same day I raised the limit to 75 minutes. One dependency remains. This documentation is published after the [release](quality/ci.md), and the release starts only after the `test` and `build` jobs on the three systems: if the Windows job fails, the documentation does not go out. Today `main` has 31 commits after v1.2.0 of 5 October 2026 and no new version.
+The test job on Windows took between 37 and 45 minutes depending on the machine, and the limit was 45. On 11 October 2026 a run of the sprint 46 pull request stopped at the limit, after 45 minutes and 15 seconds, with the PostgreSQL suite cut short; the same day I raised the limit to 75 minutes. One dependency remains. This documentation is published after the [release](quality/ci.md), and the release starts only after the `test` and `build` jobs on the three systems: if the Windows job fails, the documentation does not go out. On 11 October 2026 that chain went through: release v1.3.0 came out and the site went online.
 
 ## Method
 
@@ -36,6 +42,6 @@ The measures of the sprints are checks that things work, not evaluations. The co
 
 ## The work ahead
 
-There are three dates, all still to come. On 15 October 2026 there is the demo for the supervisors: ten minutes on the Calcolatrice iPhone, the iPhone-style calculator, with no live generations and with the results of the runs already made. After this documentation comes sprint 48, devoted to the tests with people. Test 1 waits for the approved consent and the participants, test 2 for the eBRT material and the raters as well. The thesis is due by 13 November 2026.
+There are three dates, all still to come. On 15 October 2026 there is the demo for the supervisors: ten minutes on the Calcolatrice iPhone, the iPhone-style calculator, with no live generations and with the results of the runs already made. Sprint 48, opened on 12 October after a comment from a supervisor, went to a second round of point and ask, and the tests with people moved to sprint 49. Test 1 waits for the approved consent and the participants, test 2 for the eBRT material and the raters as well. The thesis is due by 13 November 2026.
 
-Some ideas are left for later. On 6 October 2026 I told the supervisors that an interactive mockup with drag and drop would not fit before the deadline, and on 8 October 2026 point and ask, the "Point at an element" gesture, arrived in its place. The design system is chosen for the whole Studio and only `apple-hig` has its own texts: choosing it project by project is postponed. The free directions should be kept away from the axes of the Apple system by a rule in the code, rather than by the instruction alone.
+Some ideas are left for later. On 6 October 2026 I told the supervisors that an interactive mockup with drag and drop would not fit before the deadline, and on 8 October 2026 point and ask, the "Point at an element" gesture, arrived in its place. Its second round, on 12 October, added zones, several parts in one request and the twins' opinion before the change. The design system is chosen for the whole Studio and only `apple-hig` has its own texts: choosing it project by project is postponed. The free directions should be kept away from the axes of the Apple system by a rule in the code, rather than by the instruction alone.

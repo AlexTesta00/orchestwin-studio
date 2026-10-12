@@ -2,7 +2,7 @@
 
 The web interface and `ut` work on the same data through an HTTP API written with FastAPI. The web reaches it through its own server, which forwards every address that starts with `/api`; `ut` calls it directly, on `http://127.0.0.1:8000` unless it is pointed at another Studio.
 
-All 212 operations sit under the `/api/v1` prefix, the only version the API has, and the OpenAPI 3.1.0 schema declares the package version, 0.0.0. The API speaks JSON. The exceptions are four routes that upload or return files, such as the ZIP of a version of the knowledge folder.
+All 214 operations sit under the `/api/v1` prefix, the only version the API has, and the OpenAPI 3.1.0 schema declares the package version, 0.0.0. The API speaks JSON. The exceptions are four routes that upload or return files, such as the ZIP of a version of the knowledge folder.
 
 ## Reading the API
 
@@ -12,7 +12,7 @@ While the Studio is running, the API answers on `http://127.0.0.1:8000` and the 
 
 In local mode, Swagger UI is better opened through the web. At `http://127.0.0.1:8080/api/v1/docs` its requests go through like the web's own, whereas a write request sent from the page served on 8000 carries an origin the Studio does not admit. Requests sent from Swagger UI act on the real database, and on the routes that generate they start a generation.
 
-Next to this page sits [`openapi.json`](openapi.json), exported from the code at commit `a850cd6`: 179 paths, 212 operations, 417 schemas. It is written by `esporta_openapi47.py`, a sprint 47 script kept outside the repository. The script builds the app in memory with fake settings, as `test_health.py` does, with no database and without reading `.env`. Two runs give the same file (sha256 `b2d76dfc…`), and the [Routes](reference.md) page is generated from it.
+Next to this page sits [`openapi.json`](openapi.json), exported on 12 October 2026 from the code of the sprint 48 branch, `sprint/48-point-and-ask`: 180 paths, 214 operations, 419 schemas. It is written by `esporta_openapi47.py`, a sprint 47 script kept outside the repository. The script builds the app in memory with fake settings, as `test_health.py` does, with no database and without reading `.env`. Two runs give the same file (sha256 `c519b32b…`), and the [Routes](reference.md) page is generated from it.
 
 ## Access and local mode
 
@@ -34,7 +34,7 @@ With `LOCAL_OWNER`, registration and login answer 404 `local_mode`. A request wi
 | `agent-teams` | agent catalogue, Perspectives and their gate, project readiness | 11 |
 | `user-modeling` | archetypes, personas, User Twins, snapshots, gates, import, conversation with a twin | 26 |
 | `requirements` | the Definition: proposals, revisions, changes, traceability, coverage, gate | 18 |
-| `design` | alternatives, mockups, iterations, the twins' evaluations and discussions, critique, distance, versions, gate | 46 |
+| `design` | alternatives, mockups, iterations, the twins' evaluations and discussions, critique, distance, versions, gate | 48 |
 | `generation-jobs` | generation jobs | 2 |
 | `artifacts` | provenance graph, "Why?", diagrams | 5 |
 | `validation` | hypotheses to check with people, and their outcomes | 5 |
@@ -53,7 +53,7 @@ With `LOCAL_OWNER`, registration and login answer 404 `local_mode`. A request wi
 
 ## Generations as jobs
 
-Long generations became background jobs in sprint 24, on 28 September 2026, because they outlasted the connections carrying them. The public tunnel used for the demo at the time closed unanswered requests after 100 seconds, the container's nginx after 60, and the design alternatives took 186. Today sixteen routes that ask the model for a proposal accept `Prefer: respond-async`. Without the header they answer when the generation is over; with it they answer 202 straight away, with the job and with `Preference-Applied: respond-async`. Mockups and iterations have routes of their own, `POST .../design/mockups/jobs` and `POST .../design/iterations/jobs`, which always answer 202.
+Long generations became background jobs in sprint 24, on 28 September 2026, because they outlasted the connections carrying them. The public tunnel used for the demo at the time closed unanswered requests after 100 seconds, the container's nginx after 60, and the design alternatives took 186. Today seventeen routes that ask the model for a proposal accept `Prefer: respond-async`. Without the header they answer when the generation is over; with it they answer 202 straight away, with the job and with `Preference-Applied: respond-async`. Mockups and iterations have routes of their own, `POST .../design/mockups/jobs` and `POST .../design/iterations/jobs`, which always answer 202.
 
 The request below does start a real generation of the Definition. The response is the one `test_generation_requests.py` expects when the job starts.
 
@@ -163,4 +163,4 @@ A 4xx is about the request or the state of the project, and the same request wil
 
 The sprint 46 refactor, between 10 and 11 October 2026, had one criterion: "same behaviour, same tests, all green". For the API this meant comparing two fingerprints before and after every unit of work. The first was the sha256 of the OpenAPI with sorted keys, `b11950b7…`, with 185 paths, 218 operations and 419 schemas at commit `2cbc053`; the second, `96e8fefc…`, covered the list of the 218 routes in registration order. Both stayed identical after every unit of the API refactor.
 
-The only intended change came from deleting the `training` package (commit `66f8988`, 11 October 2026), which took away six routes and two schemas: that is where today's 179 paths and 212 operations come from. The `ut` tests guard the contract on every run, because the fake Studio they use can only have routes that exist in the real OpenAPI (`test_fake_studio_routes.py`).
+The only intended change came from deleting the `training` package (commit `66f8988`, 11 October 2026), which took away six routes and two schemas and left 179 paths and 212 operations. Sprint 48 added `GET` and `POST /design/opinions`, and that is where today's 180 paths and 214 operations come from. The `ut` tests guard the contract on every run, because the fake Studio they use can only have routes that exist in the real OpenAPI (`test_fake_studio_routes.py`).

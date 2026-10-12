@@ -1,6 +1,6 @@
 # Routes
 
-This list is generated from [`openapi.json`](openapi.json), the schema that the API produces from the code at commit `a850cd6`. It holds 179 paths and 212 operations, split into the 24 groups of the OpenAPI document (its `tags`) and listed in the order they appear in the schema, which is also the order of Swagger UI. The summary is the operation's `summary` as the code writes it; when the code leaves it out, FastAPI derives it from the function name.
+This list is generated from [`openapi.json`](openapi.json), the schema that the API produces from the code at commit `sprint/48-point-and-ask`. It holds 180 paths and 214 operations, split into the 24 groups of the OpenAPI document (its `tags`) and listed in the order they appear in the schema, which is also the order of Swagger UI. The summary is the operation's `summary` as the code writes it; when the code leaves it out, FastAPI derives it from the function name.
 
 An operation requires authentication when the schema gives it the `HTTPBearer` security scheme. The access token goes in the `Authorization: Bearer` header, except in local mode, where the Studio recognises the owner's requests by itself ([The API](index.md) explains when).
 
@@ -184,6 +184,8 @@ All 18 operations require authentication.
 | GET | `/api/v1/projects/{project_id}/design/evaluations/validations` | Validations |
 | POST | `/api/v1/projects/{project_id}/design/evaluations/{run_id}/validations` | Record Validation |
 | POST | `/api/v1/projects/{project_id}/design/regenerations` | Regenerate |
+| POST | `/api/v1/projects/{project_id}/design/opinions` | Ask |
+| GET | `/api/v1/projects/{project_id}/design/opinions` | Opinion Runs |
 | POST | `/api/v1/projects/{project_id}/design/critiques/sources` | Upload Source |
 | GET | `/api/v1/projects/{project_id}/design/critiques/sources` | Sources |
 | GET | `/api/v1/projects/{project_id}/design/critiques/sources/{source_id}/shots/{code}` | Shot |
@@ -202,7 +204,7 @@ All 18 operations require authentication.
 | GET | `/api/v1/projects/{project_id}/design/requirements-alignment` | Alignment Endpoint |
 | POST | `/api/v1/projects/{project_id}/design/requirements-alignment` | Realign Endpoint |
 
-All 46 operations require authentication.
+All 48 operations require authentication.
 
 ## generation-jobs
 

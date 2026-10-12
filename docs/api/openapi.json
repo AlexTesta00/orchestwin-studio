@@ -5202,6 +5202,16 @@
               ],
               "title": "Entry Screen"
             }
+          },
+          {
+            "name": "zones",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Zones"
+            }
           }
         ],
         "responses": {
@@ -5688,6 +5698,106 @@
         }
       }
     },
+    "/api/v1/projects/{project_id}/design/opinions": {
+      "post": {
+        "tags": [
+          "design"
+        ],
+        "summary": "Ask",
+        "operationId": "ask_api_v1_projects__project_id__design_opinions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesignOpinionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "design"
+        ],
+        "summary": "Opinion Runs",
+        "operationId": "opinion_runs_api_v1_projects__project_id__design_opinions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_id}/design/critiques/sources": {
       "post": {
         "tags": [
@@ -6053,6 +6163,16 @@
                 }
               ],
               "title": "Entry Screen"
+            }
+          },
+          {
+            "name": "zones",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Zones"
             }
           }
         ],
@@ -13682,6 +13802,43 @@
         ],
         "title": "DesignChangeRequest"
       },
+      "DesignChangeTargetElementRequest": {
+        "properties": {
+          "element_code": {
+            "type": "string",
+            "pattern": "^(ELM|ZON)-[0-9]{3,6}$",
+            "title": "Element Code"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "element_code"
+        ],
+        "title": "DesignChangeTargetElementRequest"
+      },
       "DesignChangeTargetRequest": {
         "properties": {
           "screen_code": {
@@ -13693,7 +13850,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^ELM-[0-9]{3}$"
+                "pattern": "^(ELM|ZON)-[0-9]{3,6}$"
               },
               {
                 "type": "null"
@@ -13722,6 +13879,22 @@
               }
             ],
             "title": "Html"
+          },
+          "elements": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DesignChangeTargetElementRequest"
+                },
+                "type": "array",
+                "maxItems": 8,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elements"
           }
         },
         "additionalProperties": false,
@@ -13971,13 +14144,30 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^ELM-[0-9]{3}$"
+                "pattern": "^(ELM|ZON)-[0-9]{3,6}$"
               },
               {
                 "type": "null"
               }
             ],
             "title": "Element Code"
+          },
+          "element_codes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "pattern": "^(ELM|ZON)-[0-9]{3,6}$"
+                },
+                "type": "array",
+                "maxItems": 8,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Element Codes"
           }
         },
         "additionalProperties": false,
@@ -14325,6 +14515,43 @@
         ],
         "title": "DesignGroundingPayload",
         "description": "Exact approved inputs and traceability indexes used by design."
+      },
+      "DesignOpinionRequest": {
+        "properties": {
+          "design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Design Version Id"
+          },
+          "design_content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Design Content Hash"
+          },
+          "request": {
+            "type": "string",
+            "title": "Request"
+          },
+          "target": {
+            "$ref": "#/components/schemas/DesignChangeTargetRequest"
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 2,
+            "title": "Locale",
+            "default": "it-IT"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "design_version_id",
+          "design_content_hash",
+          "request",
+          "target"
+        ],
+        "title": "DesignOpinionRequest"
       },
       "DesignPackageChangePayload": {
         "properties": {
@@ -17164,6 +17391,18 @@
               }
             ],
             "title": "Critique Source Id"
+          },
+          "opinion_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opinion Id"
           }
         },
         "additionalProperties": false,

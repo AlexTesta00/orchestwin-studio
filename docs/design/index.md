@@ -36,7 +36,7 @@ Then comes one HTML mockup per alternative, from 2 to 8 screens, with at most 48
 
 The owner chooses. Each twin reviews the chosen mockup in a call of its own, with eight questions and at most six observations. The web presents these reviews as "Synthetic pre-validation": "they are design hypotheses to weigh, not evidence from real users". The observations the owner confirms go into the next mockup.
 
-You can ask for a change in words, up to 1,000 characters, with rules that must stay true in later versions, or point at one element of the mockup and ask for a change there alone. Every change is a proposed version that you apply or discard. From "Versions of the design" you can go back to an older version: the Studio creates a new, identical one for you to approve. Next to the gate the web reminds you that "Owner approval is governance, not empirical validation."
+You can ask for a change in words, up to 1,000 characters, with rules that must stay true in later versions. You can also point at the mockup and ask for a change there alone: at one element, at a zone such as a section or a group of cards, or at up to eight parts of the same screen. Before anything is applied, the twins can give their opinion on the request. Each one reads it with the palette, the contrast thresholds and the ratios the Studio computed for the colours the request names, and says whether the change helps, slows down or blocks. Then you apply it anyway, change it or cancel it. Every change is a proposed version that you apply or discard. From "Versions of the design" you can go back to an older version: the Studio creates a new, identical one for you to approve. Next to the gate the web reminds you that "Owner approval is governance, not empirical validation."
 
 The diagram follows a design from the context to the Dossier; the critique of an existing design comes in from the side and reaches the same proposed version.
 
@@ -57,8 +57,10 @@ flowchart TD
     V -->|"accepted"| Q["Distance between the alternatives, threshold 45 on style"]
     Q --> O["The owner chooses"]
     O --> R["Twin review of the chosen mockup"]
-    R --> I["Change in words or on an element"]
+    R --> I["Change in words, on an element, a zone or several parts"]
     I --> N["New proposed version"]
+    I -->|"Ask the twins before applying"| J["Twins' opinion before the change"]
+    J -->|"Apply anyway"| N
     N -->|"Apply the change"| R
     O --> G["Gate, design approval"]
     G --> F["Dossier"]
@@ -78,7 +80,7 @@ Whatever the model writes goes through five checks, in the order of the table.
 | Check | What it does |
 |---|---|
 | Repair | removes, and records, what the contract does not allow but is not deceptive: scripts, images, frames, `style` attributes, links that do not lead to another screen, style declarations with colours outside the tokens or with `url()` |
-| Contrast | replaces the colour of a text, or of a control's border, that falls below the threshold with the nearest token that clears it, and records the change |
+| Contrast | replaces the colour of a text, or of a control's border, that falls below the threshold with the nearest token that clears it, and tells the owner under "Corrections made by the Studio": the colour before and after, both ratios and the threshold |
 | Contract | rejects a response outside the limits: 2 to 8 screens, 40,000 characters per screen, 250,000 in all, 1,500 elements, 60,000 characters of style |
 | Static review | rejects a control without a requirement, a table with fewer than 3 rows, a screen with fewer than 150 characters or 6 elements, a screen without a requirement, placeholder text, a screen that cannot be reached from SCR-001, text below the contrast threshold, a control border below 3:1 |
 | Language and coverage | rejects texts in another language, fewer screens than the archetype's minimum, coverage of less than half the declared requirements |
@@ -89,4 +91,4 @@ One gap remains. The instruction forbids every gradient, but the contract allows
 
 The judgement on quality is mine, one person's, given on synthetic projects with one generation per condition, and the measure's verdict looks only at drawn style. There are favourable judgements, such as "I like the latest generation of the gym a lot" on 4 October and "perfect, the Apple style becomes the standard" on 10 October, but they remain one person's opinion. My judgement on the three alternatives of the gym project, generated in the late afternoon of 10 October, is not recorded. The quality and variety goal is not declared reached. One of my working rules sets the criterion: "Until Alex says the mockups are beautiful, no chat writes that the quality goal is reached."
 
-Checking with other people is future work. The protocol of the quality test calls for independent raters working blind, and the tests with people are planned for sprint 48 ([Validation with people](../validation.md)). The other three pages cover the [visual directions](directions.md), the [critique of an existing design](critique.md) and the numbers of the [measures](measures.md).
+Checking with other people is future work. The protocol of the quality test calls for independent raters working blind, and the tests with people are planned for sprint 49 ([Validation with people](../validation.md)). The other three pages cover the [visual directions](directions.md), the [critique of an existing design](critique.md) and the numbers of the [measures](measures.md).
