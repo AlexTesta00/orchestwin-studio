@@ -10,6 +10,7 @@ import type {
   GenerationJobPayload,
   MockupDocumentPayload,
   MockupDocumentSource,
+  MockupDocumentZones,
   MockupIssuePayload,
   MockupResultPayload,
   ReviewPinsPayload,
@@ -86,15 +87,12 @@ export interface MockupRequestOptions {
   draw?: boolean;
 }
 
-export interface MockupDocumentOptions {
-  source?: MockupDocumentSource;
-  entryScreen?: string;
-  revision?: string;
+export interface MockupDocumentOptions extends MockupDocumentLookup {
   api?: DesignMockupsApi;
   force?: boolean;
 }
 
-export interface MockupDocumentLookup {
+export interface MockupDocumentLookup extends MockupDocumentZones {
   source?: MockupDocumentSource;
   entryScreen?: string;
   revision?: string;
@@ -105,7 +103,7 @@ export interface ReviewPinsOptions {
   force?: boolean;
 }
 
-export interface ReviewDocumentOptions {
+export interface ReviewDocumentOptions extends MockupDocumentZones {
   entryScreen?: string;
   api?: DesignReviewPinsApi;
   force?: boolean;
@@ -190,6 +188,10 @@ function failedEntry(
 
 function documentCacheKey(document: MockupDocumentPayload): string {
   return memoryKey(document.content_hash, document.entry_screen);
+}
+
+function zonesKey(lookup: MockupDocumentZones): string {
+  return lookup.zones === true ? "zones" : "";
 }
 
 export const useDesignMockupsStore = defineStore("designMockups", () => {
@@ -642,12 +644,8 @@ export const useDesignMockupsStore = defineStore("designMockups", () => {
     }
   }
 
-  function documentRequestKey(
-    alternativeId: string,
-    source: MockupDocumentSource,
-    entryScreen: string,
-    revision: string | undefined,
-  ): string {
+  function documentRequestKey(alternativeId: string, lookup: MockupDocumentLookup): string {
+    const source = lookup.source ?? "latest";
     const current = entry(alternativeId);
     const computedRevision =
       source === "applied"
@@ -656,7 +654,13 @@ export const useDesignMockupsStore = defineStore("designMockups", () => {
           ? current.result.generation_id
           : "none";
 
-    return memoryKey(alternativeId, source, entryScreen, revision ?? computedRevision);
+    return memoryKey(
+      alternativeId,
+      source,
+      lookup.entryScreen ?? "",
+      lookup.revision ?? computedRevision,
+      zonesKey(lookup),
+    );
   }
 
   function storeDocument(requestKey: string, document: MockupDocumentPayload): void {
@@ -685,7 +689,7 @@ export const useDesignMockupsStore = defineStore("designMockups", () => {
       );
 
       if (isCurrentProject(project, epoch)) {
-        storeDocument(documentRequestKey(alternativeId, "latest", "", undefined), document);
+        storeDocument(documentRequestKey(alternativeId, { source: "latest" }), document);
         markDrawn(project, alternativeId);
       }
 
@@ -1058,14 +1062,7 @@ export const useDesignMockupsStore = defineStore("designMockups", () => {
     alternativeId: string,
     lookup: MockupDocumentLookup = {},
   ): MockupDocumentPayload | null {
-    return cachedDocument(
-      documentRequestKey(
-        alternativeId,
-        lookup.source ?? "latest",
-        lookup.entryScreen ?? "",
-        lookup.revision,
-      ),
-    );
+    return cachedDocument(documentRequestKey(alternativeId, lookup));
   }
 
   function remember<T>(
@@ -1104,7 +1101,7 @@ export const useDesignMockupsStore = defineStore("designMockups", () => {
 
     const source = options.source ?? "latest";
     const entryScreen = options.entryScreen ?? "";
-    const requestKey = documentRequestKey(alternativeId, source, entryScreen, options.revision);
+    const requestKey = documentRequestKey(alternativeId, options);
     const cached = options.force === true ? null : cachedDocument(requestKey);
 
     if (cached !== null) {
@@ -1121,6 +1118,7 @@ export const useDesignMockupsStore = defineStore("designMockups", () => {
             alternative_id: alternativeId,
             source,
             ...(entryScreen === "" ? {} : { entry_screen: entryScreen }),
+            ...(options.zones === true ? { zones: true } : {}),
           },
           token,
         ),
@@ -1173,12 +1171,20 @@ export const useDesignMockupsStore = defineStore("designMockups", () => {
     return payload;
   }
 
-  function reviewDocumentKey(runId: string, entryScreen: string): string {
-    return memoryKey("review", reviewKey(runId), entryScreen);
+  function reviewDocumentKey(
+    runId: string,
+    entryScreen: string,
+    lookup: MockupDocumentZones,
+  ): string {
+    return memoryKey("review", reviewKey(runId), entryScreen, zonesKey(lookup));
   }
 
-  function reviewDocumentFor(runId: string, entryScreen = ""): MockupDocumentPayload | null {
-    return cachedDocument(reviewDocumentKey(runId, entryScreen));
+  function reviewDocumentFor(
+    runId: string,
+    entryScreen = "",
+    lookup: MockupDocumentZones = {},
+  ): MockupDocumentPayload | null {
+    return cachedDocument(reviewDocumentKey(runId, entryScreen, lookup));
   }
 
   function loadReviewDocument(
@@ -1193,7 +1199,7 @@ export const useDesignMockupsStore = defineStore("designMockups", () => {
     }
 
     const entryScreen = options.entryScreen ?? "";
-    const requestKey = reviewDocumentKey(runId, entryScreen);
+    const requestKey = reviewDocumentKey(runId, entryScreen, options);
     const cached = options.force === true ? null : cachedDocument(requestKey);
 
     if (cached !== null) {
@@ -1204,7 +1210,9 @@ export const useDesignMockupsStore = defineStore("designMockups", () => {
     const api = options.api ?? designReviewPinsApi;
     const load = async () => {
       const document = await authorize((token) =>
-        api.document(project, runId, entryScreen === "" ? null : entryScreen, token),
+        api.document(project, runId, entryScreen === "" ? null : entryScreen, token, {
+          zones: options.zones === true,
+        }),
       );
 
       if (isCurrentProject(project, epoch)) {

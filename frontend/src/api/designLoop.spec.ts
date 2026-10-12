@@ -277,6 +277,26 @@ describe("designLoop api", () => {
     ]);
   });
 
+  it("sends the scope of a review of a changed zone or of several changed parts", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      response(201, { id: "run-4", responses: [] }),
+    );
+    const api = createDesignLoopApi({ fetchImpl });
+    const body = {
+      design_version_id: "v",
+      design_content_hash: "a".repeat(64),
+      mode: "TWIN_REVIEW" as const,
+    };
+    const zone = { screen_code: "SCR-001", element_code: "ZON-005" };
+    const parts = { screen_code: "SCR-001", element_codes: ["ELM-018", "ELM-027", "ZON-005"] };
+    await api.evaluate("p", { ...body, scope: zone }, "token");
+    await api.evaluate("p", { ...body, scope: parts }, "token");
+    expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
+      { ...body, scope: zone },
+      { ...body, scope: parts },
+    ]);
+  });
+
   it("starts, continues and decides a twin discussion", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "GET") {

@@ -111,6 +111,36 @@ describe("design iterations api", () => {
   });
 
   it.each([
+    ["a zone", { screen_code: "SCR-001", element_code: "ZON-005", label: "Cosa cerchi oggi?" }],
+    [
+      "several parts",
+      {
+        screen_code: "SCR-001",
+        elements: [
+          { element_code: "ELM-018", label: "Forno Ravasi" },
+          { element_code: "ZON-005", label: "Cosa cerchi oggi?" },
+        ],
+      },
+    ],
+  ])("sends %s that a change is aimed at exactly as given", async (_label, target) => {
+    const fetchImpl = vi.fn(async () =>
+      response(202, { job_id: "job-1", kind: "ITERATION", status: "RUNNING" }),
+    );
+    const api = createDesignIterationsApi({ fetchImpl });
+    const body = {
+      design_version_id: "version-2",
+      design_content_hash: "b".repeat(64),
+      request: "Metti la ricerca in alto",
+      assertions: [],
+      target,
+    };
+
+    await api.startJob(PROJECT_ID, body, "token");
+
+    expect(calls(fetchImpl)[0]?.body).toEqual(body);
+  });
+
+  it.each([
     [409, "DESIGN_CONTEXT_CHANGED"],
     [409, "GENERATED_MOCKUP_REQUIRED"],
     [422, "ITERATION_REQUEST_INVALID"],

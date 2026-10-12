@@ -1,7 +1,11 @@
 import { accessTokenOf, basePathOf, detailCode, responseBody } from "./http";
 import { ApiRequestError } from "./requestError";
 
-import type { MockupDocumentPayload, ReviewPinsPayload } from "../types/designMockups";
+import type {
+  MockupDocumentPayload,
+  MockupDocumentZones,
+  ReviewPinsPayload,
+} from "../types/designMockups";
 
 const DEFAULT_API_BASE_PATH = "/api/v1";
 
@@ -19,6 +23,7 @@ export interface DesignReviewPinsApi {
     runId: string,
     entryScreen: string | null,
     accessToken: string,
+    options?: MockupDocumentZones,
   ): Promise<MockupDocumentPayload>;
 }
 
@@ -65,12 +70,14 @@ export function createDesignReviewPinsApi(
       return request(`${evaluationPath(basePath, projectId, runId)}/pins`, accessToken);
     },
 
-    document(projectId, runId, entryScreen, accessToken) {
+    document(projectId, runId, entryScreen, accessToken, options = {}) {
       const path = `${evaluationPath(basePath, projectId, runId)}/document`;
-      const query =
-        entryScreen === null ? "" : `?${new URLSearchParams({ entry_screen: entryScreen })}`;
+      const query = new URLSearchParams({
+        ...(entryScreen === null ? {} : { entry_screen: entryScreen }),
+        ...(options.zones === true ? { zones: "true" } : {}),
+      }).toString();
 
-      return request(`${path}${query}`, accessToken);
+      return request(query === "" ? path : `${path}?${query}`, accessToken);
     },
   };
 }

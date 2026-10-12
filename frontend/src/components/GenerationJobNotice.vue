@@ -99,6 +99,10 @@ const messages = {
         what: "the change to the design from the words",
         of: "of the change to the design from the words",
       },
+      DESIGN_CHANGE_OPINION: {
+        what: "the twins' opinion on the requested change",
+        of: "of the twins' opinion on the requested change",
+      },
     } satisfies Record<GenerationOperation, Subject>,
   },
   it: {
@@ -161,6 +165,10 @@ const messages = {
       DESIGN_CHANGE: {
         what: "la modifica del design dalle parole",
         of: "della modifica del design dalle parole",
+      },
+      DESIGN_CHANGE_OPINION: {
+        what: "il parere dei twin sulla modifica richiesta",
+        of: "del parere dei twin sulla modifica richiesta",
       },
     } satisfies Record<GenerationOperation, Subject>,
   },

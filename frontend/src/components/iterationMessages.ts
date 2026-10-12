@@ -1,3 +1,6 @@
+import type { IterationCorrection } from "./iterationTypes";
+import { fill } from "./textFormat";
+
 export type GenerationLocale = "en" | "it";
 
 type Sentences = Record<string, readonly [string, string]>;
@@ -471,6 +474,41 @@ const NOT_RETRYABLE = new Set([
   "MOCKUP_ENTRY_SCREEN_INVALID",
 ]);
 
+const COLOURS: Sentences = {
+  red: ["red", "rosso"],
+  orange: ["orange", "arancione"],
+  yellow: ["yellow", "giallo"],
+  green: ["green", "verde"],
+  teal: ["teal", "turchese"],
+  blue: ["blue", "blu"],
+  purple: ["purple", "viola"],
+  pink: ["pink", "rosa"],
+  brown: ["brown", "marrone"],
+  grey: ["grey", "grigio"],
+  black: ["black", "nero"],
+  white: ["white", "bianco"],
+};
+
+const TEXT_CORRECTION = [
+  "Text of the rule “{selector}”: {before} on {background}, {beforeRatio}:1, below the minimum of {threshold}:1; the Studio replaced it with {after}, {afterRatio}:1{rules}.",
+  "Testo della regola «{selector}»: {before} su {background}, {beforeRatio}:1, sotto il minimo di {threshold}:1; lo Studio l'ha sostituito con {after}, {afterRatio}:1{rules}.",
+] as const;
+
+const BORDER_CORRECTION = [
+  "Border of the controls of the rule “{selector}”: {before} on {background}, {beforeRatio}:1, below the minimum of {threshold}:1; replaced with {after}, {afterRatio}:1{rules}.",
+  "Bordo dei controlli della regola «{selector}»: {before} su {background}, {beforeRatio}:1, sotto il minimo di {threshold}:1; sostituito con {after}, {afterRatio}:1{rules}.",
+] as const;
+
+const INHERITED_BACKGROUND = [
+  "the inherited background {colour}",
+  "sfondo ereditato {colour}",
+] as const;
+
+const CORRECTED_RULES = [" ({count} rules)", " ({count} regole)"] as const;
+
+const RATIO_DIGITS = 1;
+const RATIO_SCALE = 10 ** RATIO_DIGITS;
+
 function pick(sentence: readonly [string, string], locale: GenerationLocale): string {
   return sentence[locale === "it" ? 1 : 0];
 }
@@ -499,4 +537,60 @@ export function generationReasonText(code: string, locale: GenerationLocale): st
     return pick(REQUIREMENT_REASON, locale);
   }
   return pick(DEFAULT_REASON, locale);
+}
+
+export function colourWord(key: string, locale: GenerationLocale): string {
+  const known = COLOURS[key];
+  return known === undefined ? "" : pick(known, locale);
+}
+
+export function correctionLines(
+  corrections: readonly IterationCorrection[],
+  locale: GenerationLocale,
+): string[] {
+  return corrections.map((correction) => correctionLine(correction, locale));
+}
+
+export function uncorrectedWarnings<T extends { code: string }>(
+  warnings: readonly T[],
+  corrections: readonly IterationCorrection[],
+): T[] {
+  const corrected = new Set<string>(corrections.map((correction) => correction.code));
+  return warnings.filter((warning) => !corrected.has(warning.code));
+}
+
+function correctionLine(correction: IterationCorrection, locale: GenerationLocale): string {
+  const sentence =
+    correction.code === "CONTROL_BORDER_REPLACED" ? BORDER_CORRECTION : TEXT_CORRECTION;
+  const background = colourText(correction.background, locale);
+  return fill(pick(sentence, locale), {
+    selector: correction.selector,
+    before: colourText(correction.before, locale),
+    background: correction.background.inherited
+      ? fill(pick(INHERITED_BACKGROUND, locale), { colour: background })
+      : background,
+    beforeRatio: ratioText(correction.before.ratio, locale),
+    threshold: thresholdText(correction.threshold, locale),
+    after: colourText(correction.after, locale),
+    afterRatio: ratioText(correction.after.ratio, locale),
+    rules:
+      correction.count > 1 ? fill(pick(CORRECTED_RULES, locale), { count: correction.count }) : "",
+  });
+}
+
+function colourText(colour: { hex: string; name: string }, locale: GenerationLocale): string {
+  const word = colourWord(colour.name, locale);
+  const hex = colour.hex.toUpperCase();
+  return word === "" ? hex : `${word} ${hex}`;
+}
+
+function ratioText(value: number, locale: GenerationLocale): string {
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: RATIO_DIGITS,
+    maximumFractionDigits: RATIO_DIGITS,
+  }).format(Math.floor(value * RATIO_SCALE) / RATIO_SCALE);
+}
+
+function thresholdText(value: number, locale: GenerationLocale): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: RATIO_DIGITS }).format(value);
 }

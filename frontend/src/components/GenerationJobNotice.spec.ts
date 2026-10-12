@@ -198,8 +198,20 @@ describe("GenerationJobNotice", () => {
       "Lo Studio sta generando la modifica del design dalle parole.",
       "La generazione della modifica del design dalle parole non è riuscita.",
     ],
+    [
+      "DESIGN_CHANGE_OPINION",
+      "en",
+      "The Studio is generating the twins' opinion on the requested change.",
+      "The generation of the twins' opinion on the requested change did not succeed.",
+    ],
+    [
+      "DESIGN_CHANGE_OPINION",
+      "it",
+      "Lo Studio sta generando il parere dei twin sulla modifica richiesta.",
+      "La generazione del parere dei twin sulla modifica richiesta non è riuscita.",
+    ],
   ] as const)(
-    "names the %s started by ut align or by a proposal in %s",
+    "names the %s started by ut align, by a proposal or before a change in %s",
     (operation, locale, running, failed) => {
       const started = mount(GenerationJobNotice, { props: { job: job({ operation }), locale } });
       const stopped = mount(GenerationJobNotice, {

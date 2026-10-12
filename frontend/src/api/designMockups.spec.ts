@@ -172,6 +172,76 @@ describe("design mockups api", () => {
     ]);
   });
 
+  it("asks for the zones of a document only when they are requested", async () => {
+    const fetchImpl = vi.fn(async () => response(200, {}));
+    const api = createDesignMockupsApi({ fetchImpl });
+    const documentPath = `/api/v1/projects/${ENCODED_PROJECT}/design/mockups/document?alternative_id=${ALTERNATIVE_ID}`;
+
+    await api.document(
+      PROJECT_ID,
+      { alternative_id: ALTERNATIVE_ID, source: "applied", zones: true },
+      "token",
+    );
+    await api.document(
+      PROJECT_ID,
+      { alternative_id: ALTERNATIVE_ID, source: "latest", entry_screen: "SCR-002", zones: true },
+      "token",
+    );
+    await api.document(
+      PROJECT_ID,
+      { alternative_id: ALTERNATIVE_ID, source: "applied", zones: false },
+      "token",
+    );
+
+    expect(calls(fetchImpl).map((call) => call.url)).toEqual([
+      `${documentPath}&source=applied&zones=true`,
+      `${documentPath}&source=latest&entry_screen=SCR-002&zones=true`,
+      `${documentPath}&source=applied`,
+    ]);
+  });
+
+  it("returns the newest mockup with the corrections of the Studio and the version it became", async () => {
+    const correction = {
+      code: "TEXT_COLOUR_REPLACED",
+      selector: ".topbar a",
+      property: "color",
+      before: { value: "#0a84ff", hex: "#0A84FF", ratio: 2.13, name: "blue" },
+      after: { token: "on-primary", hex: "#FFFFFF", ratio: 4.02, name: "white" },
+      background: { hex: "#FF3B30", name: "red", inherited: false },
+      threshold: 4.5,
+      large_text: false,
+      count: 1,
+    };
+    const result = {
+      status: "MOCKUP_GENERATED",
+      generation_id: "generation-2",
+      design_version_id: "version-3",
+      design_content_hash: "b".repeat(64),
+      package: {},
+      approach: null,
+      changes: ["The top bar is red"],
+      warnings: [
+        {
+          code: "TEXT_COLOUR_REPLACED",
+          screen_code: null,
+          detail: ".topbar a #0a84ff→var(--vl-color-on-primary) 4.02",
+        },
+      ],
+      corrections: [correction],
+      applied_design_version_number: 3,
+      cost_microusd: null,
+    };
+    const api = createDesignMockupsApi({ fetchImpl: async () => response(200, result) });
+
+    const latest = await api.latest(PROJECT_ID, ALTERNATIVE_ID, "token");
+
+    expect(latest).toEqual(result);
+    expect(latest?.corrections?.map((item) => [item.before.hex, item.after.hex])).toEqual([
+      ["#0A84FF", "#FFFFFF"],
+    ]);
+    expect(latest?.applied_design_version_number).toBe(3);
+  });
+
   it.each([
     [409, "DESIGN_CONTEXT_CHANGED"],
     [422, "DESIGN_ALTERNATIVE_NOT_FOUND"],

@@ -320,6 +320,30 @@ describe("designLoop store", () => {
     expect(store.busy).toBeNull();
   });
 
+  it("asks the twins about a changed zone and about several changed parts with their codes", async () => {
+    const store = useDesignLoopStore();
+    const api = fakeApi();
+    await store.load("project-1", authorize, api);
+    const scopes = [
+      { screen_code: "SCR-001", element_code: "ZON-005" },
+      { screen_code: "SCR-001", element_codes: ["ELM-018", "ELM-027", "ZON-005"] },
+    ];
+    for (const scope of scopes) {
+      await store.evaluate(
+        "project-1",
+        "version-1",
+        "a".repeat(64),
+        authorize,
+        api,
+        "TWIN_REVIEW",
+        "it-IT",
+        scope,
+      );
+    }
+    expect(vi.mocked(api.evaluate).mock.calls.map((call) => call[1].scope)).toEqual(scopes);
+    expect(store.busy).toBeNull();
+  });
+
   it("reads the element that a twin gives to a finding", () => {
     const finding: SyntheticFindingPayload = {
       finding_id: "UTF-001",

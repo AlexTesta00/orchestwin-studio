@@ -2710,7 +2710,13 @@ describe("ProjectDesignFlow", () => {
 
     await card(wrapper, "DES-001").get('[data-testid="alternative-open"]').trigger("click");
     await flushPromises();
-    expect(pinsApi.document).toHaveBeenCalledWith(DESIGN_PROJECT_ID, "run-1", null, "access-token");
+    expect(pinsApi.document).toHaveBeenCalledWith(
+      DESIGN_PROJECT_ID,
+      "run-1",
+      null,
+      "access-token",
+      { zones: true },
+    );
     const dialog = document.body.querySelector("[data-testid='mockup-dialog']");
     expect(dialog).not.toBeNull();
     expect(dialog?.querySelector("iframe")?.getAttribute("sandbox")).toBe("");
@@ -2728,6 +2734,7 @@ describe("ProjectDesignFlow", () => {
       "run-1",
       "SCR-002",
       "access-token",
+      { zones: true },
     );
     document.body.querySelector<HTMLElement>("[data-testid='mockup-dialog-close']")?.click();
     await flushPromises();
@@ -2737,6 +2744,91 @@ describe("ProjectDesignFlow", () => {
     expect(
       wrapper.findAll('[data-testid="design-observation-number"]').map((item) => item.text()),
     ).toEqual(["1", "2"]);
+  });
+
+  it("asks for the document of the mockup dialog with its zones and for the previews without them", async () => {
+    const api = new FakeDesignApi(GENERATED_SELECTED);
+    const applied = mockupDocument(DESIGN_ALTERNATIVE_ID, "applied");
+    const mockupsApi = fakeMockupsApi({
+      capabilities: GENERATED,
+      documents: { [`${DESIGN_ALTERNATIVE_ID}|applied`]: applied },
+    });
+    const wrapper = mountFlow(api, { mockupsApi, attach: true });
+    await flushPromises();
+    const previews = mockupsApi.document.mock.calls.map((call) => call[1]);
+
+    await card(wrapper, "DES-001").get('[data-testid="alternative-open"]').trigger("click");
+    await flushPromises();
+
+    expect(previews).toContainEqual({ alternative_id: DESIGN_ALTERNATIVE_ID, source: "applied" });
+    expect(previews.some((query) => "zones" in query)).toBe(false);
+    expect(mockupsApi.document).toHaveBeenLastCalledWith(
+      DESIGN_PROJECT_ID,
+      { alternative_id: DESIGN_ALTERNATIVE_ID, source: "applied", zones: true },
+      "access-token",
+    );
+    expect(
+      document.body.querySelector("[data-testid='mockup-dialog'] iframe")?.getAttribute("srcdoc"),
+    ).toBe(applied.html);
+  });
+
+  it("shows the colours that the Studio corrected in an earlier request among the earlier requests", async () => {
+    const api = new FakeDesignApi(GENERATED_SELECTED);
+    const iterationsApi = {
+      ...fakeIterationsApi(() => job(null)),
+      list: vi.fn<DesignIterationsApi["list"]>(async () => ({
+        items: [
+          {
+            generation_id: "generation-earlier",
+            requested_at: STARTED_AT,
+            request: "Make the top bar red",
+            assertions: [],
+            changes: ["The top bar is red"],
+            warnings: [
+              {
+                code: "TEXT_COLOUR_REPLACED",
+                screen_code: null,
+                detail: ".topbar a #0a84ff→var(--vl-color-on-primary) 4.02",
+              },
+            ],
+            corrections: [
+              {
+                code: "TEXT_COLOUR_REPLACED",
+                selector: ".topbar a",
+                property: "color",
+                before: { value: "#0a84ff", hex: "#0A84FF", ratio: 2.13, name: "blue" },
+                after: { token: "on-primary", hex: "#FFFFFF", ratio: 4.02, name: "white" },
+                background: { hex: "#FF3B30", name: "red", inherited: false },
+                threshold: 4.5,
+                large_text: false,
+                count: 1,
+              },
+            ],
+            status: "APPLIED",
+            base_design_version_number: 1,
+            applied_design_version_number: 2,
+            cost_microusd: null,
+            opinion_id: null,
+          },
+        ],
+      })),
+    };
+    const mockupsApi = fakeMockupsApi({
+      capabilities: GENERATED,
+      documents: {
+        [`${DESIGN_ALTERNATIVE_ID}|applied`]: mockupDocument(DESIGN_ALTERNATIVE_ID, "applied"),
+      },
+    });
+    const wrapper = mountFlow(api, { mockupsApi, iterationsApi });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="design-iteration-history-toggle"]').trigger("click");
+
+    const corrected = wrapper.get('[data-testid="design-iteration-history-corrections"]');
+    expect(corrected.get("p").text()).toBe("Corrections by the Studio");
+    expect(corrected.findAll("li").map((item) => item.text())).toEqual([
+      "Text of the rule “.topbar a”: blue #0A84FF on red #FF3B30, 2.1:1, below the minimum of 4.5:1; the Studio replaced it with white #FFFFFF, 4.0:1.",
+    ]);
   });
 
   it("asks for changes with a rule that stays valid and shows the designer at work", async () => {
@@ -2969,7 +3061,12 @@ describe("ProjectDesignFlow", () => {
     });
     expect(mockupsApi.document).toHaveBeenLastCalledWith(
       DESIGN_PROJECT_ID,
-      { alternative_id: DESIGN_ALTERNATIVE_ID, source: "latest", entry_screen: "SCR-001" },
+      {
+        alternative_id: DESIGN_ALTERNATIVE_ID,
+        source: "latest",
+        entry_screen: "SCR-001",
+        zones: true,
+      },
       "access-token",
     );
     expect(
@@ -3273,6 +3370,56 @@ describe("ProjectDesignFlow", () => {
       "Lo Studio ha tolto un contenitore che non accetta e ne ha tenuto il contenuto: il mockup resta valido",
     ]);
     expect(notes.text()).not.toMatch(/ATTRIBUTE_REMOVED|onclick|SCR-00/);
+  });
+
+  it("tells in the technical details each colour the Studio corrected and the other notes in words", async () => {
+    const api = new FakeDesignApi(GENERATED_UNSELECTED);
+    const corrected = mockupResult(DESIGN_ALTERNATIVE_ID, GENERATED_UNSELECTED, {
+      warnings: [
+        {
+          code: "TEXT_COLOUR_REPLACED",
+          screen_code: null,
+          detail: ".topbar a #0a84ff→var(--vl-color-on-primary) 4.02",
+        },
+        {
+          code: "CONTROL_BORDER_REPLACED",
+          screen_code: null,
+          detail: "input #c7c7cc→var(--vl-color-text-muted) 3.12",
+        },
+        { code: "STYLE_DECLARATION_REMOVED", screen_code: null, detail: "color" },
+      ],
+      corrections: [
+        {
+          code: "TEXT_COLOUR_REPLACED",
+          selector: ".topbar a",
+          property: "color",
+          before: { value: "#0a84ff", hex: "#0A84FF", ratio: 2.13, name: "blue" },
+          after: { token: "on-primary", hex: "#FFFFFF", ratio: 4.02, name: "white" },
+          background: { hex: "#FF3B30", name: "red", inherited: false },
+          threshold: 4.5,
+          large_text: false,
+          count: 1,
+        },
+      ],
+    });
+    const wrapper = mountFlow(api, {
+      locale: "it",
+      mockupsApi: fakeMockupsApi({
+        capabilities: GENERATED,
+        latest: { [DESIGN_ALTERNATIVE_ID]: corrected },
+      }),
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
+    const notes = wrapper.get('[data-testid="design-mockup-notes"]');
+    expect(notes.findAll("li").map((item) => item.text())).toEqual([
+      "Testo della regola «.topbar a»: blu #0A84FF su rosso #FF3B30, 2,1:1, sotto il minimo di 4,5:1; lo Studio l'ha sostituito con bianco #FFFFFF, 4,0:1.",
+      "Lo Studio ha reso ben visibile il bordo di un campo o di un pulsante: il mockup resta valido",
+      "Lo Studio ha tolto dagli stili un'indicazione che non accetta, come un colore fuori dalla tavolozza: il mockup resta valido",
+    ]);
+    expect(notes.text()).not.toContain("un testo poco leggibile");
+    expect(notes.text()).not.toMatch(/→|var\(--vl|on-primary/);
   });
 
   it("has no axe violations with drawn thumbnails, the matrix and the bar", async () => {

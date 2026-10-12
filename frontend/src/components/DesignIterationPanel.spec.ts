@@ -11,6 +11,7 @@ import DesignIterationPanel, {
   type IterationJob,
 } from "./DesignIterationPanel.vue";
 import type { MockupDocument } from "./GeneratedMockupDialog.vue";
+import type { IterationCorrection } from "./iterationTypes";
 import source from "./DesignIterationPanel.vue?raw";
 
 const REVIEW_CODES = {
@@ -222,6 +223,69 @@ const ready = job({
     cost_microusd: 412000,
   },
 });
+
+const CORRECTIONS: IterationCorrection[] = [
+  {
+    code: "TEXT_COLOUR_REPLACED",
+    selector: ".badge",
+    property: "color",
+    before: { value: "#9ca3af", hex: "#9ca3af", ratio: 2.54, name: "grey" },
+    after: { token: "text", hex: "#1D1D1F", ratio: 7.12, name: "black" },
+    background: { hex: "#FFFFFF", name: "white", inherited: false },
+    threshold: 4.5,
+    large_text: false,
+    count: 1,
+  },
+  {
+    code: "CONTROL_BORDER_REPLACED",
+    selector: "input",
+    property: "border-color",
+    before: { value: "#e5e7eb", hex: "#E5E7EB", ratio: 1.24, name: "grey" },
+    after: { token: "text-muted", hex: "#6E6E73", ratio: 4.61, name: "grey" },
+    background: { hex: "#FFFFFF", name: "white", inherited: false },
+    threshold: 3,
+    large_text: false,
+    count: 1,
+  },
+  {
+    code: "TEXT_COLOUR_REPLACED",
+    selector: ".hint",
+    property: "color",
+    before: { value: "var(--vl-color-surface-alt)", hex: "#D1D5DB", ratio: 1.43, name: "grey" },
+    after: { token: "text-muted", hex: "#6E6E73", ratio: 4.83, name: "grey" },
+    background: { hex: "#F5F5F7", name: "white", inherited: true },
+    threshold: 4.5,
+    large_text: false,
+    count: 2,
+  },
+];
+
+const CORRECTION_LINES = [
+  "Testo della regola «.badge»: grigio #9CA3AF su bianco #FFFFFF, 2,5:1, sotto il minimo di 4,5:1; lo Studio l'ha sostituito con nero #1D1D1F, 7,1:1.",
+  "Bordo dei controlli della regola «input»: grigio #E5E7EB su bianco #FFFFFF, 1,2:1, sotto il minimo di 3:1; sostituito con grigio #6E6E73, 4,6:1.",
+  "Testo della regola «.hint»: grigio #D1D5DB su sfondo ereditato bianco #F5F5F7, 1,4:1, sotto il minimo di 4,5:1; lo Studio l'ha sostituito con grigio #6E6E73, 4,8:1 (2 regole).",
+];
+
+const CONTRAST_WARNINGS = [
+  {
+    code: "TEXT_COLOUR_REPLACED",
+    screen_code: null,
+    detail: ".badge #9ca3af→var(--vl-color-text) 7.12",
+  },
+  {
+    code: "CONTROL_BORDER_REPLACED",
+    screen_code: null,
+    detail: "input #e5e7eb→var(--vl-color-text-muted) 4.61",
+  },
+  {
+    code: "TEXT_COLOUR_REPLACED",
+    screen_code: null,
+    detail: ".hint #d1d5db→var(--vl-color-text-muted) 4.83 (2)",
+  },
+];
+
+const INTERNAL_TEXT =
+  /TEXT_COLOUR|CONTROL_BORDER|ICON_UNKNOWN|PLACEHOLDER_EMPTIED|var\(--vl|→|text-muted|rocket-ship|SCR-00/;
 
 const items: IterationItem[] = [
   {
@@ -829,46 +893,144 @@ describe("design iteration panel", () => {
     },
   );
 
-  it("shows the colours, the icons and the placeholders that the Studio repaired among the points to check", () => {
+  it("names the colours that the Studio replaced with their contrast before the other points to check", () => {
     const wrapper = mountPanel({
       job: {
         ...ready,
         result: {
           ...ready.result!,
           warnings: [
-            {
-              code: "TEXT_COLOUR_REPLACED",
-              screen_code: null,
-              detail: ".badge #9ca3af→var(--vl-color-text) 7.12",
-            },
-            {
-              code: "CONTROL_BORDER_REPLACED",
-              screen_code: null,
-              detail: "input #e5e7eb→var(--vl-color-text-muted) 4.61",
-            },
-            {
-              code: "TEXT_COLOUR_REPLACED",
-              screen_code: null,
-              detail: ".hint #d1d5db→var(--vl-color-text-muted) 4.83",
-            },
+            ...CONTRAST_WARNINGS,
             { code: "ICON_UNKNOWN", screen_code: "SCR-001", detail: "rocket-ship" },
             { code: "PLACEHOLDER_EMPTIED", screen_code: "SCR-002", detail: "package" },
           ],
+          corrections: CORRECTIONS,
         },
       },
       before: documentOf("before"),
       after: documentOf("after"),
     });
+    const corrections = wrapper.get("[data-testid='design-iteration-corrections']");
+    expect(corrections.get("h3").text()).toBe("Correzioni fatte dallo Studio");
+    expect(corrections.get("p").text()).toBe(
+      "Prima che i twin vedessero la versione, lo Studio ha sostituito i colori sotto le soglie di contrasto.",
+    );
+    expect(
+      corrections.findAll("[data-testid='design-iteration-correction']").map((item) => item.text()),
+    ).toEqual(CORRECTION_LINES);
     const warnings = wrapper.get("[data-testid='design-iteration-warnings']");
     expect(warnings.findAll("li").map((item) => item.text())).toEqual([
-      "Lo Studio ha sostituito il colore di un testo poco leggibile con un colore della tavolozza che si legge bene: il mockup resta valido",
-      "Lo Studio ha reso ben visibile il bordo di un campo o di un pulsante: il mockup resta valido",
       "Nella schermata «Registro dei prestiti»: Lo Studio ha sostituito con un'icona semplice un'icona dal nome sconosciuto: il mockup resta valido",
       "Nella schermata «Nuovo prestito»: Lo Studio ha svuotato il segnaposto di un'icona o di una foto che conteneva un disegno: il mockup resta valido",
     ]);
-    expect(warnings.text()).not.toMatch(
-      /TEXT_COLOUR|CONTROL_BORDER|ICON_UNKNOWN|PLACEHOLDER_EMPTIED|var\(--vl|→|rocket-ship|SCR-00/,
+    expect(
+      corrections.element.compareDocumentPosition(warnings.element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(corrections.text()).not.toMatch(INTERNAL_TEXT);
+    expect(warnings.text()).not.toMatch(INTERNAL_TEXT);
+  });
+
+  it("keeps the general sentence of a replaced colour when the version has no correction of that kind", async () => {
+    const wrapper = mountPanel({
+      job: { ...ready, result: { ...ready.result!, warnings: CONTRAST_WARNINGS } },
+      before: documentOf("before"),
+      after: documentOf("after"),
+    });
+    const lines = () =>
+      wrapper.findAll("[data-testid='design-iteration-warnings'] li").map((item) => item.text());
+    expect(wrapper.find("[data-testid='design-iteration-corrections']").exists()).toBe(false);
+    expect(lines()).toEqual([
+      "Lo Studio ha sostituito il colore di un testo poco leggibile con un colore della tavolozza che si legge bene: il mockup resta valido",
+      "Lo Studio ha reso ben visibile il bordo di un campo o di un pulsante: il mockup resta valido",
+    ]);
+    await wrapper.setProps({
+      job: {
+        ...ready,
+        result: { ...ready.result!, warnings: CONTRAST_WARNINGS, corrections: [CORRECTIONS[0]!] },
+      },
+    });
+    expect(
+      wrapper.findAll("[data-testid='design-iteration-correction']").map((item) => item.text()),
+    ).toEqual([CORRECTION_LINES[0]]);
+    expect(lines()).toEqual([
+      "Lo Studio ha reso ben visibile il bordo di un campo o di un pulsante: il mockup resta valido",
+    ]);
+    expect(wrapper.text()).not.toMatch(INTERNAL_TEXT);
+  });
+
+  it("lists the colours that the Studio corrected under the changes of an earlier request", async () => {
+    const wrapper = mountPanel({
+      job: null,
+      items: [
+        {
+          ...items[0]!,
+          status: "APPLIED",
+          applied_design_version_number: 3,
+          warnings: CONTRAST_WARNINGS.slice(0, 2),
+          corrections: CORRECTIONS.slice(0, 2),
+          opinion_id: null,
+        },
+        items[1]!,
+      ],
+    });
+    await wrapper.get("[data-testid='design-iteration-history-toggle']").trigger("click");
+    const [first, second] = wrapper.findAll("[data-testid='design-iteration-history-item']");
+    const notes = (entry: typeof first) =>
+      entry
+        ?.findAll(
+          [
+            "[data-testid='design-iteration-history-changes']",
+            "[data-testid='design-iteration-history-corrections']",
+            "[data-testid='design-iteration-history-rules']",
+          ].join(", "),
+        )
+        .map((note) => note.attributes("data-testid"));
+    expect(notes(first)).toEqual([
+      "design-iteration-history-changes",
+      "design-iteration-history-corrections",
+      "design-iteration-history-rules",
+    ]);
+    const corrected = first?.get("[data-testid='design-iteration-history-corrections']");
+    expect(corrected?.get("p").text()).toBe("Correzioni dello Studio");
+    expect(corrected?.findAll("li").map((item) => item.text())).toEqual(
+      CORRECTION_LINES.slice(0, 2),
     );
+    expect(notes(second)).toEqual([]);
+    expect(wrapper.text()).not.toMatch(INTERNAL_TEXT);
+  });
+
+  it("names the corrections of the Studio in English too", async () => {
+    const wrapper = mountPanel({
+      locale: "en",
+      job: { ...ready, result: { ...ready.result!, corrections: [CORRECTIONS[1]!] } },
+      before: documentOf("before"),
+      after: documentOf("after"),
+      items: [{ ...items[0]!, corrections: [CORRECTIONS[1]!] }],
+    });
+    const corrections = wrapper.get("[data-testid='design-iteration-corrections']");
+    expect(corrections.get("h3").text()).toBe("Corrections made by the Studio");
+    expect(corrections.get("p").text()).toBe(
+      "Before the twins saw the version, the Studio replaced the colours below the contrast thresholds.",
+    );
+    const line =
+      "Border of the controls of the rule “input”: grey #E5E7EB on white #FFFFFF, 1.2:1, below the minimum of 3:1; replaced with grey #6E6E73, 4.6:1.";
+    expect(corrections.get("[data-testid='design-iteration-correction']").text()).toBe(line);
+    await wrapper.get("[data-testid='design-iteration-history-toggle']").trigger("click");
+    const history = wrapper.get("[data-testid='design-iteration-history-corrections']");
+    expect(history.get("p").text()).toBe("Corrections by the Studio");
+    expect(history.get("li").text()).toBe(line);
+  });
+
+  it("has no axe violations with the corrections of the Studio and an earlier request open", async () => {
+    const wrapper = mountPanel({
+      job: { ...ready, result: { ...ready.result!, corrections: CORRECTIONS } },
+      before: documentOf("before"),
+      after: documentOf("after"),
+      items: [{ ...items[0]!, corrections: CORRECTIONS }],
+    });
+    await wrapper.get("[data-testid='design-iteration-history-toggle']").trigger("click");
+    await expectAccessible(wrapper.element, { iframes: false });
   });
 
   it("has a sentence of its own for every failure of the contract, of the store and of the provider", () => {

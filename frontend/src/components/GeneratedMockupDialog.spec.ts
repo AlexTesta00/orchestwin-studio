@@ -23,14 +23,17 @@ import { whyContextKey } from "./whyContext";
 import type { DesignApi } from "../api/design";
 import type { DesignIterationsApi } from "../api/designIterations";
 import type { DesignLoopApi } from "../api/designLoop";
+import type { DesignOpinionsApi } from "../api/designOpinions";
 import { activitySignalKey } from "../stores/activityJournal";
 import { useDesignStore } from "../stores/design";
 import { useDesignIterationsStore } from "../stores/designIterations";
 import { useDesignLoopStore } from "../stores/designLoop";
 import type { AuthorizedMockupRequest } from "../stores/designMockups";
+import { useDesignOpinionsStore } from "../stores/designOpinions";
 import type { DesignPackageDiffPayload, DesignPackageVersionPayload } from "../types/design";
 import type { DesignEvaluationRunPayload, SyntheticFindingPayload } from "../types/designLoop";
 import type { GenerationJobPayload } from "../types/designMockups";
+import type { ChangeOpinionRun } from "../types/designOpinions";
 import { whyDocument, whyNode } from "../test/whyFixtures";
 
 function documentFor(entry: string): MockupDocument {
@@ -340,12 +343,40 @@ function inFrame(frame: HTMLIFrameElement, selector: string): HTMLElement {
   return element;
 }
 
-function pointer(target: Element, type: string): boolean {
+function pointer(
+  target: Element,
+  type: string,
+  keys: Pick<MouseEventInit, "ctrlKey" | "metaKey"> = {},
+): boolean {
   const view = target.ownerDocument.defaultView;
   if (view === null) {
     throw new Error("missing window");
   }
-  return target.dispatchEvent(new view.MouseEvent(type, { bubbles: true, cancelable: true }));
+  return target.dispatchEvent(
+    new view.MouseEvent(type, { bubbles: true, cancelable: true, ...keys }),
+  );
+}
+
+function zonedDocument(): MockupDocument {
+  return {
+    ...documentFor("SCR-001"),
+    html: [
+      "<!doctype html><html lang='it'><body class='ot-mockup'>",
+      "<section class='ot-screen' id='SCR-001' data-entry>",
+      "<header data-ot-zone='ZON-001'><h1 data-elm='ELM-001'>Registro dei prestiti</h1>",
+      "<a href='#SCR-002' data-elm='ELM-002'>Nuovo prestito</a></header>",
+      "<p data-elm='ELM-003' data-req='REQ-004'>Tre prestiti in ritardo</p>",
+      "</section></body></html>",
+    ].join(""),
+    content_hash: "d".repeat(64),
+  };
+}
+
+function boxes(): string[][] {
+  return all("[data-testid='mockup-inspect-highlight']").map((box) => [
+    box.dataset.kind ?? "",
+    box.dataset.code ?? "",
+  ]);
 }
 
 function placed(element: Element, left: number, top: number, width: number, height: number): void {
@@ -1104,5 +1135,131 @@ describe("pointing at an element of the mockup", () => {
     pointer(inFrame(frame, "[data-elm='ELM-001']"), "click");
     await flushPromises();
     await expectAccessible(query("[data-testid='mockup-dialog']"), { iframes: false });
+  });
+
+  it("draws a solid box for every chosen part, zones included, and the dashed one under the mouse", async () => {
+    const dialog = open({ document: zonedDocument(), editable: true, authorize });
+    query("[data-testid='mockup-inspect']").click();
+    const frame = await loadFrame();
+    const zone = inFrame(frame, "[data-ot-zone='ZON-001']");
+    const link = inFrame(frame, "[data-elm='ELM-002']");
+    const note = inFrame(frame, "[data-elm='ELM-003']");
+    placed(zone, 0, 0, 800, 120);
+    placed(link, 30, 60, 200, 24);
+    placed(note, 30, 140, 400, 24);
+
+    pointer(zone, "mousemove");
+    await flushPromises();
+    expect(boxes()).toEqual([["hover", "ZON-001"]]);
+    pointer(note, "click");
+    pointer(link, "click", { ctrlKey: true });
+    await flushPromises();
+    expect(boxes()).toEqual([
+      ["selected", "ELM-002"],
+      ["selected", "ELM-003"],
+      ["hover", "ZON-001"],
+    ]);
+    const solid = all("[data-testid='mockup-inspect-highlight'][data-kind='selected']");
+    expect(solid.map((box) => [box.style.left, box.style.top, box.style.width])).toEqual([
+      ["30px", "60px", "200px"],
+      ["30px", "140px", "400px"],
+    ]);
+    expect(solid.map((box) => box.textContent?.trim())).toEqual(["ELM-002", "ELM-003"]);
+
+    query("[data-testid='mockup-select-parent']").click();
+    await flushPromises();
+    expect(boxes()).toEqual([
+      ["selected", "ZON-001"],
+      ["selected", "ELM-003"],
+    ]);
+    expect(all("[data-testid='mockup-part']").map((part) => part.dataset.code)).toEqual([
+      "ZON-001",
+      "ELM-003",
+    ]);
+    await expectAccessible(query("[data-testid='mockup-dialog']"), { iframes: false });
+
+    keydown(query("[data-testid='mockup-elements']"), "Escape");
+    await flushPromises();
+    expect(dialog.emitted("close")).toBeUndefined();
+    expect(boxes()).toEqual([["hover", "ZON-001"]]);
+  });
+
+  it("asks the twins before the change inside the dialog and forgets their opinion when it closes", async () => {
+    const request = "Rendi il collegamento rosso con il testo blu";
+    const run: ChangeOpinionRun = {
+      run_id: "44444444-4444-4444-8444-444444444444",
+      design_version_id: VERSION.id,
+      design_content_hash: HASH,
+      design_version_number: 1,
+      request,
+      target: { screen_code: "SCR-001", element_code: "ELM-002", label: "Nuovo prestito" },
+      locale: "it-IT",
+      requested_at: "2026-10-12T10:00:00+00:00",
+      opinions: [
+        {
+          twin_id: "55555555-5555-4555-8555-555555555551",
+          twin_version: 1,
+          twin_name: "Volontari al banco",
+          verdict: "BLOCKS",
+          why: "Il testo blu su ELM-002 rosso non si legge.",
+          what_to_do: "Tieni bianco il testo.",
+          try_this: null,
+          profile_keys: ["goals"],
+          confidence: 0.7,
+          generation_id: "generation-opinion-1",
+        },
+      ],
+      contrast: {
+        mode: "LIGHT",
+        text_threshold: 4.5,
+        large_text_threshold: 3,
+        control_border_threshold: 3,
+      },
+      cost_microusd: null,
+    };
+    const opinionsApi = {
+      ask: vi.fn<DesignOpinionsApi["ask"]>(async () => run),
+    };
+    useDesignIterationsStore().activate(DESIGN_PROJECT_ID, VERSION);
+    const design = useDesignStore();
+    design.activateProject(DESIGN_PROJECT_ID);
+    design.applyVersion(VERSION);
+    const dialog = open({ document: markedDocument(), editable: true, authorize, opinionsApi });
+    query("[data-testid='mockup-inspect']").click();
+    await loadFrame();
+    query("[data-testid='mockup-element'][data-code='ELM-002']").click();
+    await flushPromises();
+    const field = query<HTMLTextAreaElement>("[data-testid='mockup-request']");
+    field.value = request;
+    field.dispatchEvent(new Event("input"));
+    await flushPromises();
+
+    query("[data-testid='mockup-ask-first']").click();
+    await flushPromises();
+
+    expect(opinionsApi.ask).toHaveBeenCalledExactlyOnceWith(
+      DESIGN_PROJECT_ID,
+      {
+        design_version_id: VERSION.id,
+        design_content_hash: HASH,
+        request,
+        target: {
+          screen_code: "SCR-001",
+          element_code: "ELM-002",
+          label: "Nuovo prestito",
+          html: '<a href="#SCR-002" data-elm="ELM-002" data-req="REQ-003">Nuovo prestito</a>',
+        },
+        locale: "it-IT",
+      },
+      "token",
+    );
+    expect(
+      query("[data-testid='mockup-dialog-sidecar'] [data-testid='mockup-opinion-why']").textContent,
+    ).toContain("Il testo blu su «Nuovo prestito» rosso non si legge.");
+    await expectAccessible(query("[data-testid='mockup-dialog']"), { iframes: false });
+
+    dialog.unmount();
+    wrapper = null;
+    expect(useDesignOpinionsStore().current).toBeNull();
   });
 });

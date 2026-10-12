@@ -4,6 +4,7 @@ import { computed, ref } from "vue";
 import {
   designIterationsApi,
   type DesignChangeTarget,
+  type DesignChangeTargetElement,
   type DesignIterationItem,
   type DesignIterationsApi,
   type IterationJobBody,
@@ -40,11 +41,13 @@ export const ITERATION_ASSERTION_LIMIT = 300;
 export const ITERATION_ASSERTIONS_PER_REQUEST = 5;
 export const TARGET_LABEL_LIMIT = 120;
 export const TARGET_HTML_LIMIT = 2048;
+export const TARGET_PARTS_LIMIT = 8;
+export const PART_CODE = /^(ELM|ZON)-\d{3,6}$/;
 export const DESIGN_CONTEXT_CHANGED = "DESIGN_CONTEXT_CHANGED";
 export const DESIGN_ITERATIONS_UNAVAILABLE = "DESIGN_ITERATIONS_UNAVAILABLE";
 
 const SCREEN_CODE = /^SCR-\d{3}$/;
-const ELEMENT_CODE = /^ELM-\d{3,6}$/;
+const TARGET_PARTS_MINIMUM = 2;
 
 export type IterationState = "idle" | "drawing" | "ready" | "rejected" | "failed";
 
@@ -53,12 +56,14 @@ export interface IterationRequest {
   assertions: string[];
   target?: DesignChangeTarget;
   critiqueSourceId?: string;
+  opinionId?: string;
 }
 
 export interface IterationRequestInput {
   request: string;
   assertions?: readonly string[];
   target?: DesignChangeTarget | null;
+  opinionId?: string;
 }
 
 export interface IterationFailure {
@@ -95,13 +100,9 @@ export interface IterationStartOptions extends IterationRequestOptions {
   replace?: boolean;
 }
 
-interface RememberedIteration {
+interface RememberedIteration extends IterationRequest {
   jobId: string;
   hash: string;
-  request: string;
-  assertions: string[];
-  target?: DesignChangeTarget;
-  critiqueSourceId?: string;
 }
 
 interface IterationMemory {
@@ -115,6 +116,10 @@ interface IterationAccess {
   mockupsApi: DesignMockupsApi;
 }
 
+type TargetPart = Pick<DesignChangeTarget, "element_code" | "label" | "html">;
+
+type TargetText = Pick<DesignChangeTarget, "label" | "html">;
+
 const MEMORY_KEY = "orchestwin.designIterations";
 const MEMORY_LIMIT = 200;
 
@@ -122,13 +127,29 @@ function isStringList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function hasPartFields(value: Record<string, unknown>): boolean {
+  return (
+    isOptionalString(value.element_code) &&
+    isOptionalString(value.label) &&
+    isOptionalString(value.html)
+  );
+}
+
+function isTargetElement(value: unknown): value is DesignChangeTargetElement {
+  return isRecord(value) && typeof value.element_code === "string" && hasPartFields(value);
+}
+
 function isTarget(value: unknown): value is DesignChangeTarget {
   return (
     isRecord(value) &&
     typeof value.screen_code === "string" &&
-    (value.element_code === undefined || typeof value.element_code === "string") &&
-    typeof value.label === "string" &&
-    typeof value.html === "string"
+    hasPartFields(value) &&
+    (value.elements === undefined ||
+      (Array.isArray(value.elements) && value.elements.every(isTargetElement)))
   );
 }
 
@@ -140,7 +161,8 @@ function isRememberedIteration(value: unknown): value is RememberedIteration {
     typeof value.request === "string" &&
     isStringList(value.assertions) &&
     (value.target === undefined || isTarget(value.target)) &&
-    (value.critiqueSourceId === undefined || typeof value.critiqueSourceId === "string")
+    isOptionalString(value.critiqueSourceId) &&
+    isOptionalString(value.opinionId)
   );
 }
 
@@ -174,24 +196,64 @@ function withinLimit(value: string, limit: number): boolean {
   return count > 0 && count <= limit;
 }
 
+function validPart(part: TargetPart): boolean {
+  return (
+    (part.element_code === undefined || PART_CODE.test(part.element_code)) &&
+    (part.label === undefined || withinLimit(part.label.trim(), TARGET_LABEL_LIMIT)) &&
+    (part.html === undefined || withinLimit(part.html, TARGET_HTML_LIMIT))
+  );
+}
+
+function validElements(elements: readonly DesignChangeTargetElement[]): boolean {
+  return (
+    elements.length >= TARGET_PARTS_MINIMUM &&
+    elements.length <= TARGET_PARTS_LIMIT &&
+    new Set(elements.map((part) => part.element_code)).size === elements.length &&
+    elements.every(validPart)
+  );
+}
+
+function described(part: TargetText): TargetText {
+  return {
+    ...(part.label === undefined ? {} : { label: part.label.trim() }),
+    ...(part.html === undefined ? {} : { html: part.html }),
+  };
+}
+
+export function targetCodes(target: DesignChangeTarget): string[] {
+  if (target.elements !== undefined) {
+    return target.elements.map((part) => part.element_code);
+  }
+  return target.element_code === undefined ? [] : [target.element_code];
+}
+
 function normalizedTarget(value: DesignChangeTarget): DesignChangeTarget | null {
-  const label = value.label.trim();
-  const element = value.element_code;
+  const { screen_code: screen, element_code: code, elements } = value;
+
+  if (!SCREEN_CODE.test(screen) || !validPart(value)) {
+    return null;
+  }
+
+  if (elements === undefined) {
+    return {
+      screen_code: screen,
+      ...(code === undefined ? {} : { element_code: code }),
+      ...described(value),
+    };
+  }
 
   if (
-    !SCREEN_CODE.test(value.screen_code) ||
-    (element !== undefined && !ELEMENT_CODE.test(element)) ||
-    !withinLimit(label, TARGET_LABEL_LIMIT) ||
-    !withinLimit(value.html, TARGET_HTML_LIMIT)
+    code !== undefined ||
+    value.label !== undefined ||
+    value.html !== undefined ||
+    !validElements(elements)
   ) {
     return null;
   }
 
   return {
-    screen_code: value.screen_code,
-    ...(element === undefined ? {} : { element_code: element }),
-    label,
-    html: value.html,
+    screen_code: screen,
+    elements: elements.map((part) => ({ element_code: part.element_code, ...described(part) })),
   };
 }
 
@@ -212,13 +274,15 @@ export function normalizedIterationRequest(input: IterationRequestInput): Iterat
     return null;
   }
 
+  const opinion = input.opinionId === undefined ? {} : { opinionId: input.opinionId };
+
   if (input.target === undefined || input.target === null) {
-    return { request, assertions };
+    return { request, assertions, ...opinion };
   }
 
   const target = normalizedTarget(input.target);
 
-  return target === null ? null : { request, assertions, target };
+  return target === null ? null : { request, assertions, target, ...opinion };
 }
 
 function iterationContext(version: DesignPackageVersionPayload): IterationDesignContext {
@@ -611,6 +675,7 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
     const replaced = result.value;
     const target = value.target === undefined ? {} : { target: value.target };
     const source = value.critiqueSourceId;
+    const opinion = value.opinionId;
     const body: IterationJobBody = {
       design_version_id: context.versionId,
       design_content_hash: context.contentHash,
@@ -618,6 +683,7 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
       assertions: value.assertions,
       ...target,
       ...(source === undefined ? {} : { critique_source_id: source }),
+      ...(opinion === undefined ? {} : { opinion_id: opinion }),
     };
     starting.value = true;
     request.value = value;
@@ -625,14 +691,7 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
     try {
       const created = await authorize((token) => api.startJob(project, body, token));
 
-      rememberIteration(project, {
-        jobId: created.job_id,
-        hash: context.contentHash,
-        request: value.request,
-        assertions: value.assertions,
-        ...target,
-        ...(source === undefined ? {} : { critiqueSourceId: source }),
-      });
+      rememberIteration(project, { ...value, jobId: created.job_id, hash: context.contentHash });
 
       if (replaced !== null) {
         rememberDiscarded(project, replaced.generation_id);
@@ -787,6 +846,7 @@ export const useDesignIterationsStore = defineStore("designIterations", () => {
         ...(remembered.critiqueSourceId === undefined
           ? {}
           : { critiqueSourceId: remembered.critiqueSourceId }),
+        ...(remembered.opinionId === undefined ? {} : { opinionId: remembered.opinionId }),
       };
 
       try {
