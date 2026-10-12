@@ -42,4 +42,4 @@ flowchart LR
   style VU stroke-dasharray: 5 5
 ```
 
-No session with people has taken place. The hypotheses to verify exist, the protocols of the two tests are written and the tests are planned for sprint 48; where things stand is described in [Validation with people](../validation.md).
+No session with people has taken place. The hypotheses to verify exist, the protocols of the two tests are written and the tests are planned for sprint 49; where things stand is described in [Validation with people](../validation.md).

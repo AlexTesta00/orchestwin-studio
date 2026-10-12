@@ -2,9 +2,9 @@
 
 I made the first commit of OrchesTwin Studio on 4 August 2026 at 11:34, and all it added was a `.gitignore`. The README came an hour later, with the idea I started from: a multi-agent platform governed by a person, taking a project "from project intake to executable software evaluation". That promise no longer holds. Today the Studio stops at the design, the code is written outside it, and the twins examine that code commit by commit, as [the framework](../framework/index.md) explains.
 
-As of 11 October the repository has 842 commits. In 69 days I opened 47 numbered sprints and one sprint T, which has no commits. The sprints were short, from a few hours to a few days; the longest, the twelfth, ran for two weeks.
+As of 12 October main has 871 commits. In 70 days I opened 48 numbered sprints and one sprint T, which has no commits. The sprints were short, from a few hours to a few days; the longest, the twelfth, ran for two weeks.
 
-Every sprint had its own branch and ended with a pull request into develop, merged with a rebase. Sprints 12 and 13 are the exceptions, because they came in through a merge commit, and so is sprint 22, which never had a branch of its own. Releases went from develop to main, numbered by semantic-release from the commit messages: thirteen versions, from v0.1.0 on 18 August to v1.2.0 on 5 October. Every commit carries my name, apart from the 32 made by the bot that updates the dependencies.
+Every sprint had its own branch and ended with a pull request into develop, merged with a rebase. Sprints 12 and 13 are the exceptions, because they came in through a merge commit, and so are sprint 22, which never had a branch of its own, and sprint 47, whose pull request went into main by mistake. Releases went from develop to main, numbered by semantic-release from the commit messages: fourteen versions, from v0.1.0 on 18 August to v1.3.0 on 11 October. Every commit carries my name, apart from the 32 made by the bot that updates the dependencies.
 
 No written plan survives for the first seventeen sprints; the earliest is the plan of sprint 18. On the evening of 24 September I changed the way I worked. For each sprint I opened a new chat, which proposed the plan in blocks, waited for my approval before changing anything and, at the end, wrote the handoff for the next chat. The Git commands I always ran myself.
 
@@ -45,9 +45,9 @@ timeline
         11 October : Refactor and documentation
 ```
 
-## The 47 sprints
+## The 48 sprints
 
-The table follows the order in which I ran the sprints, so 38 comes before 37 and sprint T sits between 42 and 43. The dates are the author dates of the first and the last commit. From sprint 22 on I made the commits at the end of the sprint, which means the date says when I closed it, not how long the work took. The version is the first release that contains the sprint. No release has come out since v1.2.0: sprints 40 to 43 are on main, those from 44 onwards only on develop. The commit column does not add up to the repository's 842, because it leaves out the 32 commits of the dependency bot, four merge commits and a few maintenance commits made between one sprint and the next.
+The table follows the order in which I ran the sprints, so 38 comes before 37 and sprint T sits between 42 and 43. The dates are the author dates of the first and the last commit. From sprint 22 on I made the commits at the end of the sprint, which means the date says when I closed it, not how long the work took. The version is the first release that contains the sprint. Release v1.3.0 came out on 11 October 2026, once the pull request of sprint 47 had gone into main, and it holds sprints 40 to 47. Sprint 48 is in progress on its branch, with no commits yet. The commit column does not add up to the 871 commits of main, because it leaves out the 32 commits of the dependency bot, 19 merge commits and a few other commits made between one sprint and the next.
 
 | Sprint | Name | First commit | Last commit | Commits | Version |
 |---|---|---|---|---|---|
@@ -90,18 +90,19 @@ The table follows the order in which I ran the sprints, so 38 comes before 37 an
 | 38 | Design variety | 4 October | 4 October | 13 | v1.2.0 |
 | 37 | Preparing the tests with people | 4 October | 4 October | 8 | v1.2.0 |
 | 39 | Mode chosen once | 5 October | 5 October | 11 | v1.2.0 |
-| 40 | `ut verify` and `ut align` from the code | 6 October | 6 October | 7 | on main, no release |
-| 41 | Local mode and `ut push` | 6 October | 6 October | 8 | on main, no release |
-| 42 | `ut align` from the design | 7 October | 7 October | 10 | on main, no release |
+| 40 | `ut verify` and `ut align` from the code | 6 October | 6 October | 7 | v1.3.0 |
+| 41 | Local mode and `ut push` | 6 October | 6 October | 8 | v1.3.0 |
+| 42 | `ut align` from the design | 7 October | 7 October | 10 | v1.3.0 |
 | T | Tests with people, phase 1 | none | none | 0 | none |
-| 43 | Point and ask, design versions | 8 October | 8 October | 5 | on main, no release |
-| 44 | Critique of an existing design | 9 October | 9 October | 6 | develop only |
-| 45 | Accessible design, then the Apple style | 10 October | 10 October | 6 | develop only |
-| 46 | Refactor | 11 October | 11 October | 24 | develop only |
-| 47 | Documentation | in progress | in progress | 0 | none |
+| 43 | Point and ask, design versions | 8 October | 8 October | 5 | v1.3.0 |
+| 44 | Critique of an existing design | 9 October | 9 October | 6 | v1.3.0 |
+| 45 | Accessible design, then the Apple style | 10 October | 10 October | 6 | v1.3.0 |
+| 46 | Refactor | 11 October | 11 October | 24 | v1.3.0 |
+| 47 | Documentation | 11 October | 11 October | 13 | v1.3.0 |
+| 48 | Point and ask, second round | in progress | in progress | 0 | none |
 
 ## What is missing
 
-As of 11 October no session with people has taken place. What the twins report is still simulated, and the two tests prepared in sprint 37, one on usability and one on the quality of the result, have moved to sprint 48. I do not claim to have reached the goal that matters most for the thesis, the quality and variety of the generated designs ([Design quality and variety](../design/index.md)). My judgement changed from one sprint to the next, and my verdict on the three alternatives the gym project got on 10 October has not been recorded yet.
+As of 11 October no session with people has taken place. What the twins report is still simulated, and the two tests prepared in sprint 37, one on usability and one on the quality of the result, have moved to sprint 49. I do not claim to have reached the goal that matters most for the thesis, the quality and variety of the generated designs ([Design quality and variety](../design/index.md)). My judgement changed from one sprint to the next, and my verdict on the three alternatives the gym project got on 10 October has not been recorded yet.
 
 Two dates lie ahead. On 15 October I will show the supervisors the demo on the Calcolatrice iPhone, the iPhone-style calculator, with no live generation. By 13 November 2026 I will hand in the thesis.

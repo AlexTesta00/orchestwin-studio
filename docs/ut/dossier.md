@@ -149,4 +149,4 @@ Outcomes (0)
 Outcomes do not automatically promote twin claims.
 ```
 
-Zero hypotheses and zero outcomes, because no session with people has been held yet, on that project or on any other. The tests with people are planned for sprint 48 and described in [Validation with people](../validation.md).
+Zero hypotheses and zero outcomes, because no session with people has been held yet, on that project or on any other. The tests with people are planned for sprint 49 and described in [Validation with people](../validation.md).

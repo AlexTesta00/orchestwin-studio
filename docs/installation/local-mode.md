@@ -47,7 +47,7 @@ ut logout --studio http://127.0.0.1:8000
 
 ## When you need accounts
 
-You need accounts when other people use the Studio. The tests with people, planned for sprint 48, will work that way: one participant at a time, in person, on the author's computer, each with a pseudonymous account. The subscription that runs the generations cannot serve other people from a server. To go back to accounts, remove `access` from the settings file and restart: without that key, the script uses accounts.
+You need accounts when other people use the Studio. The tests with people, planned for sprint 49, will work that way: one participant at a time, in person, on the author's computer, each with a pseudonymous account. The subscription that runs the generations cannot serve other people from a server. To go back to accounts, remove `access` from the settings file and restart: without that key, the script uses accounts.
 
 With accounts, the home page leads to "Create your account". The password must be 8 to 1,024 characters long, with at least one uppercase letter and one special character. The web interface reminds you of this: "At least 8 characters, with an uppercase letter and a special character." The Studio keeps only its Argon2 hash. Right after that comes "How do you want to work?", a choice that cannot be changed once you confirm it. A sign-in lasts 15 minutes and renews itself through a cookie valid for 30 days.
 

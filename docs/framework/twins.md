@@ -36,7 +36,7 @@ An inferred, hypothesized or contested claim must have a rationale, and it alway
 
 ## A twin's opinion is a hypothesis
 
-Everything a twin says is a hypothesis to be checked with real people, and the Studio does not leave that implicit. In the code every twin finding is simulated feedback, because `is_simulated_feedback` is always true. The interface says so again on the matrix of the twins' opinions ("Simulated feedback, not evidence"), in the mockup review ("Synthetic pre-validation") and in `ut`, before every list of findings. Approving a twin, confirming one of its observations and approving a design are project decisions, and none of them becomes evidence about users. The first test with people, planned for sprint 48, will also ask whether the people using the Studio have understood this difference.
+Everything a twin says is a hypothesis to be checked with real people, and the Studio does not leave that implicit. In the code every twin finding is simulated feedback, because `is_simulated_feedback` is always true. The interface says so again on the matrix of the twins' opinions ("Simulated feedback, not evidence"), in the mockup review ("Synthetic pre-validation") and in `ut`, before every list of findings. Approving a twin, confirming one of its observations and approving a design are project decisions, and none of them becomes evidence about users. The first test with people, planned for sprint 49, will also ask whether the people using the Studio have understood this difference.
 
 ## Text evidence
 

@@ -3,7 +3,7 @@
 The design is the step where the model does the most work and where your choices weigh the most. The `ut design` command brings the "Design & Evaluation" step of the web into the terminal: alternatives, mockups opened in the browser, what the twins think, changes asked in words, the choice and the approval. Run it without an action and it guides you; give it an action and it does only that.
 
 ```text
-usage: ut design [-h] [--rule TEXT] [--screen SCREEN] [--element ELEMENT] [--no-review]
+usage: ut design [-h] [--rule TEXT] [--screen SCREEN] [--element ELEMENT] [--no-review] [--ask-first]
                  [--elements [SCREEN]] [--image FILE] [--url ADDRESS] [--redraw [N]]
                  [ACTION] [VALUE]
 ```
@@ -15,10 +15,10 @@ The `VALUE` argument is the code or the number of an alternative for `open` and 
 | Action | What it does | Model |
 |---|---|---|
 | none | guides you with a menu | when needed, after the estimate |
-| `show` | alternatives, distance, what the twins think, chosen design | no |
+| `show` | alternatives, distance, what the twins think, chosen design, corrections made by the Studio | no |
 | `open [N]` | writes the previews and opens them | no |
 | `choose N` | chooses an alternative, then the twins review it | yes |
-| `change "…"` | changes the chosen design as you describe it in words | yes |
+| `change "…"` | changes the chosen design as you describe it in words, everywhere or on parts of one screen | yes |
 | `review` | review by the twins | yes, if there is none yet |
 | `approve` | approves and downloads the knowledge folder | no |
 | `regenerate` | new alternatives from the approved steps | yes |
@@ -29,14 +29,15 @@ The `VALUE` argument is the code or the number of an alternative for `open` and 
 |---|---|---|
 | `--rule TEXT` | a rule that stays valid in the later changes; repeatable | none |
 | `--screen SCREEN` | the screen the change aims at, such as SCR-002 | the whole mockup |
-| `--element ELEMENT` | an element of that screen, such as ELM-012; needs `--screen` | the whole screen |
+| `--element ELEMENT` | an element or a zone of that screen, such as ELM-012 or ZON-003; repeatable up to eight times; needs `--screen` | the whole screen |
 | `--no-review` | no review by the twins right after the change | review right away |
-| `--elements [SCREEN]` | the elements of the chosen mockup that you can point at | every screen |
+| `--ask-first` | the twins' opinion on the request before it is applied, then the choice to apply it anyway, change it or cancel it; needs `--screen` | the change starts at once |
+| `--elements [SCREEN]` | the elements and the zones of the chosen mockup that you can point at | every screen |
 | `--image FILE` | PNG or JPEG of a design that already exists | - |
 | `--url ADDRESS` | a website to photograph 1440 and 390 pixels wide | - |
 | `--redraw [N]` | redraws the mockup like the design of critique N | the latest critique |
 
-The first four options work only with `change`, `--elements` only with `show`, and the last three only with `critique`, one at a time; anything else is a usage error. The texts are in `messages/design.py`.
+The first five options work only with `change`, `--elements` only with `show`, and the last three only with `critique`, one at a time; anything else is a usage error. The texts are in `messages/design.py`.
 
 ## Without an action
 
@@ -55,7 +56,7 @@ When there is no design yet, `ut design` announces "I am about to prepare the de
 
 On 2 October 2026, on the calculator used for measurements, the command took 540.0 seconds: 3 min 10 s for two alternatives and 5 min 46 s for the two mockups, against the "about 13 min" it had announced. Then it stopped at the menu.
 
-The transcripts on this page come from runs made with the Italian interface. They show the lines that the English interface prints in the same place, taken from the messages in the code, with the original numbers and times. Texts that belong to a project, such as a request or a title, are translated from Italian, while names stay as they are.
+Unless a transcript says otherwise, the transcripts on this page come from runs made with the Italian interface. They show the lines that the English interface prints in the same place, taken from the messages in the code, with the original numbers and times. Texts that belong to a project, such as a request or a title, are translated from Italian, while names stay as they are.
 
 ```powershell
 ut --yes design
@@ -73,23 +74,40 @@ Write the number of your choice:
 
 ## Looking without spending
 
-With `ut design show` you see the alternatives with their visual direction and, where there is one, their design system. Then comes the distance between the alternatives, marked "They differ" or "Too close", with the note "Measure computed by the Studio: it does not replace your judgement." After that you read what the twins think and the chosen design with the rules in force. With `--elements` the command lists the elements a change can aim at. This excerpt is from 8 October 2026, on the Calcolatrice iPhone (the iPhone-style calculator).
+With `ut design show` you see the alternatives with their visual direction and, where there is one, their design system. Then comes the distance between the alternatives, marked "They differ" or "Too close", with the note "Measure computed by the Studio: it does not replace your judgement." After that you read what the twins think and the chosen design with the rules in force. When the Studio replaced colours for contrast in the current version, "Corrections made by the Studio:" follows the line of the version, with one sentence per correction. Each sentence starts with "Text of the rule" or "Border of the controls of the rule" and the selector. It gives the colour before on its background with their ratio, the minimum that was missed, and the colour that took its place with the new ratio. The sentences are the ones the web shows ([Design and evaluation](../web/design.md)). With no correction, there is no heading either.
+
+With `--elements` the command lists what a change can aim at: the elements and, since 12 October 2026, the zones. A zone is a container with at least two elements, such as a header, a section, a list or a group of cards. It sits in the same table as the elements, in the order of the page, with the type "zone (N elements)", and every row is indented two spaces for each zone that contains it. The excerpt below is the first screen of Bottega Vicina ("the shop next door"), version 3 of the design, built with the code of the command from the mockup the Studio served on 12 October. Rows are cut, and the texts of the project are translated from Italian except the names.
 
 ```powershell
 ut design show --elements SCR-001
 ```
 
 ```text
-Elements of the mockup of DES-001 · Quadro strumenti: full-screen calculator with a framed display
-================================================================================
-SCR-001 · Ready for the first sum
-Code     Type    Text
--------  ------  ---------------------------------------------------------------
-ELM-001  p       Calcolatrice Quadro
-ELM-002  p       Available offline
-ELM-003  output  0
-ELM-004  button  AC
+Elements of the mockup of DES-001 · Banco a fasce: one task per screen
+======================================================================
+SCR-001 · What are you looking for today?
+Code             Type                Text
+---------------  ------------------  -------------------------------------------
+ZON-001          zone (7 elements)   Banco sotto casa …
+  ELM-001        p                   Banco sotto casa
+…
+ZON-004          zone (41 elements)  What are you looking for today?
+  ZON-005        zone (31 elements)  What are you looking for today?
+    ZON-006      zone (4 elements)   What are you looking for today?
+      ELM-014    p                   Shops less than 2 km away
+      ELM-015    h1                  What are you looking for today?
+…
+    ZON-007      zone (9 elements)   Forno Ravasi
+      ELM-018    h2                  Forno Ravasi
+…
+    ZON-009      zone (9 elements)   Panificio Colombo
+      ELM-027    h2                  Panificio Colombo
+…
+
+For a change aimed at one of these parts: `ut design change "..." --screen SCR-001 --element ZON-001`.
 ```
+
+The six screens of that version hold 201 elements and 61 zones, 18 of them on this one. ZON-001 is the bar at the top, ZON-004 the main content, ZON-005 the group of producer cards, and ZON-007 and ZON-009 the sections of the two bakeries.
 
 With `ut design open` the command writes an `index.html` with the cards of the alternatives and one page per mockup, then opens the index; `ut design open 2` opens the second alternative. After a change there is also a page for the version that came before, such as `DES-001-before.html`.
 
@@ -97,7 +115,7 @@ With `ut design open` the command writes an `index.html` with the cards of the a
 
 Choosing, with `ut design choose N`, creates a new version with the alternative you picked and asks the twins for their review at once: "You chose {code} “{title}”: the design is now at version {version}." On 29 September 2026, `ut --yes design choose DES-002` took 77.0 seconds, review included.
 
-With `ut design change "…"` you ask the model to change the chosen design, in at most 1,000 characters. The rules you pass with `--rule` stay valid for the following changes too, up to five new ones at a time and twenty in all. The change produces a version to approve, and the previews show the before and the after. Then the twins review it, and the command sorts their findings into solved, still open and new. Here is an excerpt from 7 October 2026, on the Calcolatrice iPhone; the request and the rule were written in Italian.
+With `ut design change "…"` you ask the model to change the chosen design, in at most 1,000 characters. The rules you pass with `--rule` stay valid for the following changes too, up to five new ones at a time and twenty in all. The change produces a version to approve, and the previews show the before and the after. When the Studio replaced colours for contrast, "Corrections made by the Studio:" comes right after "What changed:". Then the twins review it, and the command sorts their findings into solved, still open and new. Here is an excerpt from 7 October 2026, on the Calcolatrice iPhone (the iPhone-style calculator); the request and the rule were written in Italian.
 
 ```powershell
 ut design change "Add to the keypad a ⌫ key that deletes the last digit typed, to the left of the equals key, as tall as the other keys and with a label that screen readers can read." --rule "The digits on the display stay the largest on the page."
@@ -122,11 +140,70 @@ With `--screen` and `--element`, both the change and the opinion of the twins fo
 ut design change "make it dark blue with a white symbol, taller than the others" --screen SCR-001 --element ELM-023
 ```
 
-Read the codes again with `show --elements` before you use them, because they follow the order of the elements: on 7 October a change had renumbered them.
+Since 12 October `--element` also takes a zone, and you can repeat it up to eight times to aim at several parts of the same screen. The command reads the parts from the mockup and starts by naming them. A code written twice, a ninth part or a code the screen does not have stops it before anything is spent, for example with "You named ZON-007 more than once: name each element or zone only once." The first example a supervisor gave on 12 October, the two bakeries of Bottega Vicina in two rows instead of two columns, was sent that day from the web and became version 4 in 5 min 07 s ([Design and evaluation](../web/design.md)). From the terminal it would go like this, written as an example and never run.
+
+```powershell
+ut design change "Instead of two columns side by side, show these two cards one under the other, in two rows, full width" --screen SCR-001 --element ZON-007 --element ZON-009
+```
+
+```text
+Targeted change to ZON-007 “Forno Ravasi”, ZON-009 “Panificio Colombo” of SCR-001
+I am about to ask the model to change the chosen design: “Instead of two columns side by side, show these two cards one under the other, in two rows, full width”. Right after, the twins review the new version.
+This generation runs on the Claude subscription: it spends no credit. Estimated time: about 9 min.
+Applying the change to the design...
+…
+```
+
+The review that follows looks at the same parts. With a zone or several parts, the request the designer receives names every part with its text and says that everything else stays as it is.
+
+On 12 October the bar at the top of Bottega Vicina was changed from the terminal, with the request written in Italian.
+
+```powershell
+ut --yes design change "For the bar at the top use the warning red of the palette as the background, without changing the colours of the texts and the links of the bar" --screen SCR-001 --element ZON-001
+```
+
+Version 5 came in 8 min 15 s: the bar is red on every screen, and its texts and links stayed white. The designer warned that red is also the colour of "Esaurito" (sold out) and of the errors. The review that followed took 2 min 25 s. A last request, to turn the texts of the bar to the secondary grey with `--no-review`, came back identical to the design in 3 min 58 s.
+
+Read the codes again with `show --elements` before you use them, because they follow the order of the document, for zones as for elements: on 7 October a change had renumbered the elements.
 
 The review, `ut design review`, has the twins review the chosen version, or shows the review that already exists without spending anything. It always opens with "The twins' findings are simulated by the model: hypotheses to verify with real people, not evidence."
 
 Approval, with `ut design approve`, saves the version in `.orchestwin/steps/design.json` and downloads the knowledge folder: "Design approved: {code} “{title}”, version {version}. Now I prepare the knowledge folder." On 7 October, version 7 of the Calcolatrice produced version 9 of the folder, with 72 files.
+
+## Asking the twins before a change
+
+With `--ask-first` the twins give their opinion before anything changes. The option needs `--screen`; without `--element` the twins judge the request on the whole screen. The command says "I ask the twins for their opinion on the request before applying it.", shows the estimate of about 2 minutes and waits while the Studio makes one generation per twin. Then it prints what each twin thinks, under the reminder that the opinions are simulated, and asks what to do. "Apply anyway" applies the same request, "Change the request" asks you for a new text and applies that one, and "Cancel" ends with "Opinion recorded, no change applied." With `--yes` the command applies anyway. If the twins have already judged the same request on the same parts of the same version, the command spends nothing and shows that opinion again, with the line "The twins already gave their opinion on this request for this version of the design: I do not ask again, here it is."
+
+On 12 October the opinion on the second example, a red background with blue text on the bar at the top, was asked from the web ([Design and evaluation](../web/design.md)). From the terminal it would look like this, written as an example and never run. The lines in angle brackets stand for what each twin writes, and the "Try this" line appears only when a twin rewrites the request.
+
+```powershell
+ut design change "Change the background colour to red and the text to blue" --screen SCR-001 --element ZON-001 --ask-first
+```
+
+```text
+Targeted change to ZON-001 “Banco sotto casa …” of SCR-001
+I ask the twins for their opinion on the request before applying it.
+This generation runs on the Claude subscription: it spends no credit. Estimated time: about 2 min.
+The twins are giving their opinion on the request...
+…
+
+What the twins think before the change
+======================================
+The opinions of the twins are simulated by the model: hypotheses to verify with real people, not evidence.
+  <twin> · <Helps, Slows down or Blocks>
+    Why: <one to three sentences>
+    What to do: <one concrete step>
+    Try this: “<the request as the twin would write it>”
+  …
+
+What do you want to do?
+  1. Apply anyway
+  2. Change the request
+  3. Cancel
+Write the number of your choice:
+```
+
+The twins receive the palette of the design, the contrast thresholds in force and the ratios the Studio computed for red and blue. A warning about contrast can therefore quote numbers that come from the Studio and not from the model. In the run from the web all three twins gave that warning, quoting 2.15:1 against the thresholds of 4.5:1 and 3:1. The opinion before the change does not replace the review after it, and it never counts as a review of a version.
 
 ## Regenerating and going back
 
@@ -192,10 +269,10 @@ The twins are looking at the supplied design...
 The twins are looking at the supplied design: done in 1 min 49 s.
 ```
 
-All three twins answered "Blocks me" on both screens, since a shop window of products is no help when you need to work out a sum. They also named what was worth taking from it: the black background and the thin white type. The redraw started from the web with "Redraw as a mockup", took 5 min 41 s and became design 13 (see [Critique of an existing design](../design/critique.md)). From the terminal, `--redraw` was put to work the same evening on Bottega Vicina ("the shop next door"). There `ut design critique --redraw 2` failed at the first attempt after 9 min 23 s, because the model had described one change in more than 300 characters, and it succeeded at the second. On the same project the Amazon website would not let the automated Chrome photograph it: the capture came out white and the verdict was "Works for me", a defect that is on record. In cases like that, take the screenshots by hand and use `--image`.
+All three twins answered "Blocks me" on both screens, since a shop window of products is no help when you need to work out a sum. They also named what was worth taking from it: the black background and the thin white type. The redraw started from the web with "Redraw as a mockup", took 5 min 41 s and became design 13 (see [Critique of an existing design](../design/critique.md)). From the terminal, `--redraw` was put to work the same evening on Bottega Vicina. There `ut design critique --redraw 2` failed at the first attempt after 9 min 23 s, because the model had described one change in more than 300 characters, and it succeeded at the second. On the same project the Amazon website would not let the automated Chrome photograph it: the capture came out white and the verdict was "Works for me", a defect that is on record. In cases like that, take the screenshots by hand and use `--image`.
 
 ## The estimate and its limit
 
-With the subscription the estimate is only a time: 13 minutes for alternatives and mockups, 9 for a change with its review, 2 for a review, 3 for a critique. With pay-as-you-go billing it shows an amount as well. On 29 September 2026 the first design of the tip calculator was announced at 2.91-3.74 USD and 13 minutes, and it took 523.1 seconds.
+With the subscription the estimate is only a time: 13 minutes for alternatives and mockups, 9 for a change with its review, 2 for a review, 2 for the opinion before a change, 3 for a critique. With pay-as-you-go billing it shows an amount as well. On 29 September 2026 the first design of the tip calculator was announced at 2.91-3.74 USD and 13 minutes, and it took 523.1 seconds.
 
 The known limit has to do with the three alternatives. Since 10 October 2026 the Apple design system is the default and the first proposal draws three mockups, but the estimate of the first generation counts two (`FIRST_DESIGN_MOCKUPS` in `flows/design_generate.py`). The time, on the other hand, is a fixed figure, because the mockups are drawn together: on 10 October the gym project, with three alternatives, took 1,040.8 seconds against the 13 minutes printed. The defect in the estimate is recorded and not fixed yet.
